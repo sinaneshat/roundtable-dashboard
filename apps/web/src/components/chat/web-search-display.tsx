@@ -1,5 +1,6 @@
 import type { WebSearchStreamingStage } from '@roundtable/shared';
 import { ChainOfThoughtStepStatuses, WebSearchStreamingStages } from '@roundtable/shared';
+import { memo } from 'react';
 
 import {
   ChainOfThought,
@@ -42,7 +43,7 @@ function getStreamingStage(query: string | undefined, answer: string | null | un
   return WebSearchStreamingStages.SYNTHESIZE;
 }
 
-export function WebSearchDisplay({
+function WebSearchDisplayComponent({
   results,
   className,
   meta: _meta,
@@ -186,3 +187,5 @@ export function WebSearchDisplay({
     </AccordionEntrance>
   );
 }
+
+export const WebSearchDisplay = memo(WebSearchDisplayComponent);

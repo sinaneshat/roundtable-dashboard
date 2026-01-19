@@ -1,7 +1,10 @@
 /**
  * Version Management
  *
- * Simple version tracking for automatic updates and cache invalidation
+ * Version is injected at build time via wrangler's --define flag.
+ * Changesets automatically updates package.json versions based on commits.
  */
 
-export const APP_VERSION = process.env.APP_VERSION || '1.0.0';
+declare const __APP_VERSION__: string;
+
+export const APP_VERSION = typeof __APP_VERSION__ !== 'undefined' ? __APP_VERSION__ : '0.0.0-dev';

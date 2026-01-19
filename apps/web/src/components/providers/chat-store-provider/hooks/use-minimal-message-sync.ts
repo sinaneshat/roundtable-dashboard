@@ -14,15 +14,16 @@
  * 2. This hook watches AI SDK messages and syncs to store
  * 3. Store handles deduplication and content preservation
  * 4. Render layer reads from store (single source of truth)
+ *
+ * ✅ PERF FIX: Removed interval-based polling - uses stable throttle instead
  */
 
 import { MessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
-import { getRoundNumber, getUserMetadata, isModeratorMessage } from '@/lib/utils';
-import { rlog } from '@/lib/utils/dev-logger';
+import { getUserMetadata, isModeratorMessage } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseMinimalMessageSyncParams = {
@@ -34,47 +35,83 @@ type UseMinimalMessageSyncParams = {
 };
 
 // Throttle streaming updates to reduce store churn
-const STREAM_SYNC_THROTTLE_MS = 100;
+const STREAM_SYNC_THROTTLE_MS = 150; // Increased from 100ms to reduce updates
 
 /**
  * Minimal sync from AI SDK messages → Zustand store
  *
  * Replaces the 965-line use-message-sync.ts with a simple sync that trusts
  * the store's built-in deduplication and smart merging.
+ *
+ * ✅ PERF FIX: Uses stable throttle with trailing edge instead of interval polling
  */
 export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncParams) {
   const lastSyncRef = useRef<number>(0);
   const prevMessagesRef = useRef<UIMessage[]>([]);
   const hasHydratedRef = useRef<string | null>(null);
-  // ✅ FIX: Use ref to always access latest chatMessages in interval callback
-  // AI SDK mutates parts in-place without changing array reference, so closure captures stale data
-  const chatMessagesRef = useRef<UIMessage[]>([]);
+  const pendingSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const storeMessages = useStore(store, s => s.messages);
+  // ✅ PERF FIX: Use granular selectors instead of subscribing to full state
   const threadId = useStore(store, s => s.thread?.id);
   const isStreaming = useStore(store, s => s.isStreaming);
 
   const { messages: chatMessages, isStreaming: chatIsStreaming } = chat;
 
-  // Keep ref in sync with latest chatMessages
-  chatMessagesRef.current = chatMessages;
+  // ✅ PERF FIX: Memoized sync function that reads store state directly
+  const syncToStore = useCallback(() => {
+    const currentStoreMessages = store.getState().messages;
 
-  // Hydration: On mount or thread change, sync store messages to AI SDK
+    const filteredChatMessages = chatMessages.filter((m) => {
+      if (m.role !== MessageRoles.USER)
+        return true;
+      const userMeta = getUserMetadata(m.metadata);
+      return !userMeta?.isParticipantTrigger;
+    });
+
+    const chatMessageIds = new Set(filteredChatMessages.map(m => m.id));
+    const storeOnlyMessages = currentStoreMessages.filter((m) => {
+      if (chatMessageIds.has(m.id))
+        return false;
+      if (isModeratorMessage(m))
+        return true;
+      if (m.role === MessageRoles.USER) {
+        const userMeta = getUserMetadata(m.metadata);
+        if (!userMeta?.isParticipantTrigger) {
+          return true;
+        }
+      }
+      if (m.role === MessageRoles.ASSISTANT) {
+        return true;
+      }
+      return false;
+    });
+
+    const mergedMessages = structuredClone([...filteredChatMessages, ...storeOnlyMessages]);
+
+    // ✅ PERF FIX: Only update if messages actually changed
+    const messagesNeedUpdate = mergedMessages.length !== currentStoreMessages.length
+      || mergedMessages.some((m, i) => m.id !== currentStoreMessages[i]?.id);
+    if (messagesNeedUpdate) {
+      store.getState().setMessages(mergedMessages);
+    }
+  }, [chatMessages, store]);
+
+  // Hydration: On mount or thread change
   useEffect(() => {
     if (!threadId)
       return;
     if (hasHydratedRef.current === threadId)
       return;
 
+    const storeMessages = store.getState().messages;
     // Only hydrate if store has messages and AI SDK doesn't
     if (storeMessages.length > 0 && chatMessages.length === 0) {
-      // This is handled by initial messages prop - no action needed
       hasHydratedRef.current = threadId;
       return;
     }
 
     hasHydratedRef.current = threadId;
-  }, [threadId, storeMessages.length, chatMessages.length]);
+  }, [threadId, chatMessages.length, store]);
 
   // Reset hydration flag on thread change
   useEffect(() => {
@@ -83,65 +120,8 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
     }
   }, [threadId]);
 
-  // ✅ FIX: Interval-based sync during streaming to capture in-place mutations
-  // AI SDK mutates chatMessages[i].parts in place without changing array reference,
-  // which means React won't trigger re-render and useEffect won't re-run.
-  // Use interval to poll and sync during active streaming.
-  // ✅ FIX: Check both chatIsStreaming (from hook) AND isStreaming (from store)
-  // because they might be out of sync during state transitions.
-  const shouldSync = chatIsStreaming || isStreaming;
-  useEffect(() => {
-    if (!shouldSync || chatMessages.length === 0) {
-      return;
-    }
-
-    rlog.sync('interval-start', `msgs=${chatMessages.length}`);
-    const syncToStore = () => {
-      // ✅ FIX: Read from ref to get latest messages (not stale closure)
-      const currentChatMessages = chatMessagesRef.current;
-
-      const filteredChatMessages = currentChatMessages.filter((m) => {
-        if (m.role !== MessageRoles.USER)
-          return true;
-        const userMeta = getUserMetadata(m.metadata);
-        return !userMeta?.isParticipantTrigger;
-      });
-
-      const chatMessageIds = new Set(filteredChatMessages.map(m => m.id));
-      const currentStoreMessages = store.getState().messages;
-      const storeOnlyMessages = currentStoreMessages.filter((m) => {
-        if (chatMessageIds.has(m.id))
-          return false;
-        if (isModeratorMessage(m))
-          return true;
-        if (m.role === MessageRoles.USER) {
-          const userMeta = getUserMetadata(m.metadata);
-          if (!userMeta?.isParticipantTrigger) {
-            return true;
-          }
-        }
-        if (m.role === MessageRoles.ASSISTANT) {
-          return true;
-        }
-        return false;
-      });
-
-      const mergedMessages = structuredClone([...filteredChatMessages, ...storeOnlyMessages]);
-      store.getState().setMessages(mergedMessages);
-    };
-
-    // Initial sync
-    syncToStore();
-
-    // Poll every 100ms during streaming
-    const intervalId = setInterval(syncToStore, STREAM_SYNC_THROTTLE_MS);
-
-    return () => {
-      clearInterval(intervalId);
-    };
-  }, [shouldSync, chatIsStreaming, isStreaming, chatMessages.length, store]);
-
-  // Main sync: AI SDK messages → Store
+  // ✅ PERF FIX: Single throttled sync effect with trailing edge
+  // Replaces interval polling AND separate sync effect
   useEffect(() => {
     // Skip if no messages
     if (chatMessages.length === 0) {
@@ -149,127 +129,55 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
       return;
     }
 
-    // Detect if messages actually changed
-    // ✅ FIX: During streaming, AI SDK mutates parts array in-place without changing
-    // array reference or length. Check streaming status to force sync during active streams.
+    // Detect if messages actually changed (by reference or length)
     const messagesChanged = chatMessages !== prevMessagesRef.current
-      || chatMessages.length !== prevMessagesRef.current.length
-      || chatIsStreaming; // Force sync during streaming to capture in-place part updates
+      || chatMessages.length !== prevMessagesRef.current.length;
 
-    if (!messagesChanged)
+    if (!messagesChanged && !chatIsStreaming)
       return;
 
-    // Throttle during streaming
     const now = Date.now();
-    if (chatIsStreaming && now - lastSyncRef.current < STREAM_SYNC_THROTTLE_MS) {
+    const timeSinceLastSync = now - lastSyncRef.current;
+
+    // ✅ PERF FIX: Throttle with trailing edge - schedule pending sync if throttled
+    if (chatIsStreaming && timeSinceLastSync < STREAM_SYNC_THROTTLE_MS) {
+      // Clear any existing pending sync
+      if (pendingSyncRef.current) {
+        clearTimeout(pendingSyncRef.current);
+      }
+      // Schedule sync at end of throttle window (trailing edge)
+      pendingSyncRef.current = setTimeout(() => {
+        syncToStore();
+        lastSyncRef.current = Date.now();
+        pendingSyncRef.current = null;
+      }, STREAM_SYNC_THROTTLE_MS - timeSinceLastSync);
       return;
     }
 
-    // ✅ CRITICAL FIX: Filter out participant trigger messages from AI SDK
-    // These are internal messages created when triggering each participant.
-    // They should NOT be persisted to the store - only the original user message matters.
-    // Without this filter, trigger messages accumulate and pollute the messages array.
-    const filteredChatMessages = chatMessages.filter((m) => {
-      if (m.role !== MessageRoles.USER)
-        return true;
-      const userMeta = getUserMetadata(m.metadata);
-      return !userMeta?.isParticipantTrigger;
-    });
-
-    // Build merged messages:
-    // 1. Start with chat messages (AI SDK source of truth for streaming)
-    // 2. Preserve any store-only messages (e.g., moderator messages, persisted participants)
-    const chatMessageIds = new Set(filteredChatMessages.map(m => m.id));
-    const storeOnlyMessages = storeMessages.filter((m) => {
-      // Keep messages that are in store but not in AI SDK
-      if (chatMessageIds.has(m.id))
-        return false;
-
-      // Special case: preserve moderator messages
-      // During streaming, moderator messages might not be in AI SDK yet
-      if (isModeratorMessage(m))
-        return true;
-
-      // ✅ CRITICAL FIX: Preserve non-participant-trigger user messages
-      // AI SDK creates its own user message (isParticipantTrigger=true) for streaming.
-      // The original user message from form submission has a different ID and must be preserved.
-      // Without this, the original user message gets replaced by the participant trigger,
-      // which is then filtered out by deduplication, causing the user message to disappear.
-      if (m.role === MessageRoles.USER) {
-        const userMeta = getUserMetadata(m.metadata);
-        if (!userMeta?.isParticipantTrigger) {
-          return true; // Always preserve the original user message
-        }
-      }
-
-      // ✅ REFRESH FIX: Preserve assistant messages from previous rounds
-      // After page refresh, AI SDK may have only the SSR user message (e.g., round 0 user).
-      // The store has participant messages fetched from API (e.g., round 0 participants).
-      // These participant messages MUST be preserved - they represent completed work.
-      //
-      // Previous bug: Only preserved messages from rounds NOT in chatRounds.
-      // If chatRounds={0} (from user message), round 0 participants were DROPPED.
-      //
-      // Fix: Preserve ALL assistant messages not in AI SDK by ID.
-      // AI SDK only tracks the CURRENT streaming message. Store is source of truth
-      // for completed messages from previous participants.
-      if (m.role === MessageRoles.ASSISTANT) {
-        return true; // Preserve all assistant messages not in AI SDK
-      }
-
-      return false;
-    });
-
-    // Merge: chat messages first (for correct order), then store-only
-    // ✅ CRITICAL FIX: Deep clone messages before passing to store
-    // AI SDK messages and store messages share references. When Immer freezes
-    // the store state, it also freezes the AI SDK's internal message objects.
-    // This causes "Cannot add property 0, object is not extensible" errors
-    // when AI SDK tries to push streaming parts to a frozen parts array.
-    // structuredClone breaks the reference link, ensuring only copies get frozen.
-    const mergedMessages = structuredClone([...filteredChatMessages, ...storeOnlyMessages]);
-
-    // ✅ DEBUG: Log sync details to diagnose message loss
-    if (mergedMessages.length !== storeMessages.length) {
-      rlog.sync('merge', `chat=${filteredChatMessages.length} storeOnly=${storeOnlyMessages.length} merged=${mergedMessages.length} store=${storeMessages.length} chatRounds=[${[...new Set(filteredChatMessages.map(m => getRoundNumber(m.metadata)))]}]`);
-      // Log dropped messages
-      const mergedIds = new Set(mergedMessages.map(m => m.id));
-      const droppedMsgs = storeMessages.filter(m => !mergedIds.has(m.id));
-      if (droppedMsgs.length > 0) {
-        rlog.sync('dropped', `count=${droppedMsgs.length} ids=[${droppedMsgs.map(m => m.id.slice(-20)).join(',')}] rounds=[${droppedMsgs.map(m => getRoundNumber(m.metadata)).join(',')}]`);
-      }
-    }
-
-    // Update store (store's setMessages handles deduplication)
-    store.getState().setMessages(mergedMessages);
-
+    // Execute sync immediately
+    syncToStore();
     prevMessagesRef.current = chatMessages;
     lastSyncRef.current = now;
-  }, [chatMessages, chatIsStreaming, storeMessages, store]);
 
-  // Final sync on streaming end
+    // Cleanup pending sync on unmount
+    return () => {
+      if (pendingSyncRef.current) {
+        clearTimeout(pendingSyncRef.current);
+        pendingSyncRef.current = null;
+      }
+    };
+  }, [chatMessages, chatIsStreaming, syncToStore]);
+
+  // Final sync on streaming end - ensures we capture final state
   useEffect(() => {
     if (isStreaming && !chatIsStreaming && chatMessages.length > 0) {
+      // Clear any pending throttled sync
+      if (pendingSyncRef.current) {
+        clearTimeout(pendingSyncRef.current);
+        pendingSyncRef.current = null;
+      }
       // Streaming just ended - do final sync
-      store.getState().setMessages((prev) => {
-        // Merge any remaining messages
-        const prevIds = new Set(prev.map(m => m.id));
-        // ✅ CRITICAL FIX: Filter out participant trigger messages
-        const newMessages = chatMessages.filter((m) => {
-          if (prevIds.has(m.id))
-            return false;
-          if (m.role === MessageRoles.USER) {
-            const userMeta = getUserMetadata(m.metadata);
-            if (userMeta?.isParticipantTrigger)
-              return false;
-          }
-          return true;
-        });
-        if (newMessages.length === 0)
-          return prev;
-        // ✅ CRITICAL FIX: Clone newMessages to prevent Immer from freezing AI SDK's objects
-        return structuredClone([...prev, ...newMessages]);
-      });
+      syncToStore();
     }
-  }, [chatIsStreaming, isStreaming, chatMessages, store]);
+  }, [chatIsStreaming, isStreaming, chatMessages.length, syncToStore]);
 }

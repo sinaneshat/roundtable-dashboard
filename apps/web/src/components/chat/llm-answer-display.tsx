@@ -1,7 +1,7 @@
 import ReactMarkdown from 'react-markdown';
-import { Streamdown } from 'streamdown';
 
 import { Icons } from '@/components/icons';
+import { LazyStreamdown } from '@/components/markdown/lazy-streamdown';
 import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
 import { StreamingCursor } from '@/components/ui/streaming-text';
 import { FadeInText } from '@/components/ui/typing-text';
@@ -34,12 +34,12 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
         {isStreaming
           ? (
               <div>
-                <Streamdown
+                <LazyStreamdown
                   className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                   components={streamdownComponents}
                 >
                   {answer}
-                </Streamdown>
+                </LazyStreamdown>
                 <StreamingCursor />
               </div>
             )

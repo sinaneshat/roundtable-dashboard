@@ -35,7 +35,8 @@ export function PublicChatLayout({ children }: PublicChatLayoutProps) {
 
           <Button asChild size="sm" className="shrink-0">
             <Link
-              to="/auth/sign-up?utm_source=public_chat&utm_medium=header&utm_campaign=try_free"
+              to="/auth/sign-in"
+              search={{ utm_source: 'public_chat', utm_medium: 'header', utm_campaign: 'try_free' }}
               className="flex items-center gap-1.5"
             >
               <span>{t('chat.public.tryFree')}</span>

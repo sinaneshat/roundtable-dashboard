@@ -1,6 +1,5 @@
 import type { ErrorBoundaryContext } from '@roundtable/shared';
 import { ErrorBoundaryContexts } from '@roundtable/shared';
-import posthog from 'posthog-js';
 import type { ErrorInfo, ReactNode } from 'react';
 import React, { Component } from 'react';
 
@@ -182,13 +181,16 @@ export class UnifiedErrorBoundary extends Component<
       return;
     }
 
-    posthog.capture('$exception', {
-      $exception_message: error.message,
-      $exception_stack_trace_raw: error.stack,
-      $exception_type: error.name,
-      $exception_source: 'react_error_boundary',
-      context: this.state.context,
-      componentStack: errorInfo.componentStack,
+    // Dynamically import PostHog to avoid bundling in initial load
+    import('posthog-js').then((mod) => {
+      mod.default.capture('$exception', {
+        $exception_message: error.message,
+        $exception_stack_trace_raw: error.stack,
+        $exception_type: error.name,
+        $exception_source: 'react_error_boundary',
+        context: this.state.context,
+        componentStack: errorInfo.componentStack,
+      });
     });
   };
 

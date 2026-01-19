@@ -61,7 +61,7 @@ function CodeBlockComponent({
     <CodeBlockContext value={contextValue}>
       <div
         className={cn(
-          'group relative w-full overflow-hidden rounded-2xl border bg-background text-foreground',
+          'group relative min-w-0 w-full overflow-hidden rounded-2xl border bg-background text-foreground',
           className,
         )}
         {...props}
@@ -76,12 +76,12 @@ function CodeBlockComponent({
             : (
                 <>
                   <div
-                    className="overflow-hidden dark:hidden [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
+                    className="dark:hidden [&>pre]:m-0 [&>pre]:overflow-x-auto [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
                     // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for Shiki syntax highlighting output
                     dangerouslySetInnerHTML={{ __html: html }}
                   />
                   <div
-                    className="hidden overflow-hidden dark:block [&>pre]:m-0 [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
+                    className="hidden dark:block [&>pre]:m-0 [&>pre]:overflow-x-auto [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
                     // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for Shiki syntax highlighting output
                     dangerouslySetInnerHTML={{ __html: darkHtml }}
                   />

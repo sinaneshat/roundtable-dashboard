@@ -10,9 +10,5 @@ type GetUsageStatsResult = GetUsageStatsResponse | ServerFnErrorResponse;
 export const getUsageStats = createServerFn({ method: 'GET' })
   .middleware([cookieMiddleware])
   .handler(async ({ context }): Promise<GetUsageStatsResult> => {
-    try {
-      return await getUserUsageStatsService({ cookieHeader: context.cookieHeader });
-    } catch {
-      return { success: false as const, data: null };
-    }
+    return await getUserUsageStatsService({ cookieHeader: context.cookieHeader });
   });

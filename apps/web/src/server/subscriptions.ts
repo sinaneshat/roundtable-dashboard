@@ -10,9 +10,5 @@ type GetSubscriptionsResult = ListSubscriptionsResponse | ServerFnErrorResponse;
 export const getSubscriptions = createServerFn({ method: 'GET' })
   .middleware([cookieMiddleware])
   .handler(async ({ context }): Promise<GetSubscriptionsResult> => {
-    try {
-      return await getSubscriptionsService({ cookieHeader: context.cookieHeader });
-    } catch {
-      return { success: false as const, data: null };
-    }
+    return await getSubscriptionsService({ cookieHeader: context.cookieHeader });
   });

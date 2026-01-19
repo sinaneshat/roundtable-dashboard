@@ -1,6 +1,6 @@
 import { StripeSubscriptionStatuses, SubscriptionTiers, UIBillingIntervals } from '@roundtable/shared';
 import { Link, useNavigate } from '@tanstack/react-router';
-import { useState, useSyncExternalStore } from 'react';
+import { useState } from 'react';
 
 import { ChatPage } from '@/components/chat/chat-states';
 import { Icons } from '@/components/icons';
@@ -35,12 +35,6 @@ export function PublicPricingScreen() {
   const [cancelingSubscriptionId, setCancelingSubscriptionId] = useState<string | null>(null);
   const [showCancelDialog, setShowCancelDialog] = useState(false);
 
-  const hasMounted = useSyncExternalStore(
-    () => () => {},
-    () => true,
-    () => false,
-  );
-
   const { data: productsData, isLoading: isLoadingProducts, error: productsError } = useProductsQuery();
   const { data: subscriptionsData } = useSubscriptionsQuery();
   const createCheckoutMutation = useCreateCheckoutSessionMutation();
@@ -59,8 +53,11 @@ export function PublicPricingScreen() {
   const products = typedProductsData?.success ? typedProductsData.data?.items ?? [] : [];
 
   const hasValidProductData = typedProductsData?.success && !!typedProductsData.data?.items;
-  const shouldShowError = hasMounted && (productsError || (typedProductsData && !typedProductsData.success));
-  const shouldShowLoading = !hasMounted || isLoadingProducts || (!hasValidProductData && !shouldShowError);
+  // Trust SSR data - ensureQueryData in loader pre-populates cache before render
+  const shouldShowError = productsError || (typedProductsData && !typedProductsData.success);
+  // Show loading if: actively loading OR no valid data yet (and no error)
+  // This ensures we never render empty state - always show loading, error, or content
+  const shouldShowLoading = isLoadingProducts || (!hasValidProductData && !shouldShowError);
 
   const monthlyProducts = products
     .filter((product): product is typeof product & { prices: NonNullable<typeof product.prices> } => {
@@ -161,8 +158,8 @@ export function PublicPricingScreen() {
 
   if (shouldShowLoading) {
     return (
-      <ChatPage>
-        <div className="flex-1 overflow-y-auto flex items-center justify-center py-6">
+      <ChatPage className="h-full min-h-[calc(100vh-4rem)]">
+        <div className="flex-1 flex items-center justify-center min-h-[calc(100vh-8rem)]">
           <PricingContentSkeleton />
         </div>
       </ChatPage>

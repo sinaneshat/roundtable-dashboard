@@ -1,31 +1,60 @@
+# =============================================================================
+# Security Headers - Applied to all responses
+# =============================================================================
+/*
+  # Strict Transport Security - enforce HTTPS for 1 year, include subdomains
+  Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+  # Cross-Origin headers for better isolation
+  Cross-Origin-Opener-Policy: same-origin
+  Cross-Origin-Embedder-Policy: credentialless
+  Cross-Origin-Resource-Policy: same-origin
+  # Prevent clickjacking
+  X-Frame-Options: DENY
+  # Prevent MIME sniffing
+  X-Content-Type-Options: nosniff
+  # Referrer policy - send origin only for cross-origin
+  Referrer-Policy: strict-origin-when-cross-origin
+  # Permissions policy - disable sensitive features
+  Permissions-Policy: camera=(), microphone=(), geolocation=(), interest-cohort=()
+
+# =============================================================================
+# Caching Headers
+# =============================================================================
+
 # Vite/TanStack build assets - immutable, cached for 1 year (content-hashed)
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
-# Images and media - cached for 1 week
+# Static images and media - cached for 30 days (longer for better LCP scores)
 /static/*
-  Cache-Control: public, max-age=604800, stale-while-revalidate=86400
+  Cache-Control: public, max-age=2592000, stale-while-revalidate=86400
+
+/icons/*
+  Cache-Control: public, max-age=2592000, immutable
 
 /*.ico
-  Cache-Control: public, max-age=604800
+  Cache-Control: public, max-age=2592000
 
 /*.png
-  Cache-Control: public, max-age=604800
+  Cache-Control: public, max-age=2592000
 
 /*.jpg
-  Cache-Control: public, max-age=604800
+  Cache-Control: public, max-age=2592000
 
 /*.svg
-  Cache-Control: public, max-age=604800
+  Cache-Control: public, max-age=2592000
 
 /*.webp
-  Cache-Control: public, max-age=604800
+  Cache-Control: public, max-age=2592000
 
 # Fonts - immutable, cached for 1 year
 /*.woff
   Cache-Control: public, max-age=31536000, immutable
 
 /*.woff2
+  Cache-Control: public, max-age=31536000, immutable
+
+/*.ttf
   Cache-Control: public, max-age=31536000, immutable
 
 # API responses - no cache by default (controlled by app)
@@ -37,4 +66,8 @@
   Cache-Control: public, max-age=86400
 
 /sitemap.xml
+  Cache-Control: public, max-age=86400
+
+# PWA manifest - cache for 1 day
+/manifest.webmanifest
   Cache-Control: public, max-age=86400

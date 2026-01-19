@@ -1,5 +1,6 @@
 import type { AvatarSize } from '@roundtable/shared';
 import { AvatarSizeMetadata, AvatarSizes } from '@roundtable/shared';
+import { memo } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import type { ModelReference, ParticipantConfig } from '@/lib/schemas/participant-schemas';
@@ -17,7 +18,7 @@ type AvatarGroupProps = {
   showOverflow?: boolean;
 };
 
-export function AvatarGroup({
+function AvatarGroupComponent({
   participants,
   allModels,
   maxVisible = 3,
@@ -104,3 +105,5 @@ export function AvatarGroup({
     </div>
   );
 }
+
+export const AvatarGroup = memo(AvatarGroupComponent);

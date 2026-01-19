@@ -3,13 +3,13 @@ import { FinishReasons, isCompletionFinishReason, MessagePartTypes, MessageRoles
 import type { UIMessage } from 'ai';
 import { memo, useMemo, useRef } from 'react';
 import Markdown from 'react-markdown';
-import { Streamdown } from 'streamdown';
 
 import type { MessageAttachment } from '@/components/chat/message-attachment-preview';
 import { MessageAttachmentPreview } from '@/components/chat/message-attachment-preview';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
 import { ParticipantHeader } from '@/components/chat/participant-header';
 import { PreSearchCard } from '@/components/chat/pre-search-card';
+import { LazyStreamdown } from '@/components/markdown/lazy-streamdown';
 import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
 import { ScrollAwareParticipant, ScrollAwareUserMessage, ScrollFromTop } from '@/components/ui/motion';
 import { BRAND } from '@/constants';
@@ -963,13 +963,13 @@ export const ChatMessageList = memo(
                                     </Markdown>
                                   )
                                 : (
-                                    <Streamdown
+                                    <LazyStreamdown
                                       key={`${message.id}-text-${part.text.substring(0, 20)}`}
                                       className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                                       components={streamdownComponents}
                                     >
                                       {part.text}
-                                    </Streamdown>
+                                    </LazyStreamdown>
                                   );
                             }
                             return null;

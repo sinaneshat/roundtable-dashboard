@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 import { cloudflare } from '@cloudflare/vite-plugin';
@@ -8,6 +9,10 @@ import { visualizer } from 'rollup-plugin-visualizer';
 import type { Plugin } from 'vite';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
+
+// Read version from root package.json (single source of truth)
+const rootPkg = JSON.parse(readFileSync(path.resolve(__dirname, '../../package.json'), 'utf-8'));
+const APP_VERSION = rootPkg.version;
 
 // Paths for cross-package resolution
 const webSrcPath = path.resolve(__dirname, 'src');
@@ -47,16 +52,21 @@ export default defineConfig({
     tsconfigPaths(),
     tanstackStart({
       // SSG: Prerender static pages at build time
+      // NOTE: Pages with beforeLoad that call server functions CANNOT be prerendered
+      // - / redirects in beforeLoad (skip)
+      // - /auth/sign-in calls getSession() in beforeLoad (skip)
+      // - /public/pricing has loader but no beforeLoad (ok)
+      // - /legal/* are pure static with no loaders (ok)
       prerender: {
         enabled: true,
         crawlLinks: false, // Don't crawl - explicit routes only
         autoStaticPathsDiscovery: false, // Only prerender explicit pages
       },
-      // Specific pages to prerender
       pages: [
-        { path: '/', prerender: { enabled: true } },
-        { path: '/auth/sign-in', prerender: { enabled: true } },
-        { path: '/chat/pricing', prerender: { enabled: true } },
+        // Static pages with no loaders or beforeLoad server calls
+        // Note: /chat/pricing has a loader (products) so it uses ISR caching instead
+        { path: '/legal/terms', prerender: { enabled: true } },
+        { path: '/legal/privacy', prerender: { enabled: true } },
       ],
     }),
     viteReact(),
@@ -141,18 +151,24 @@ export default defineConfig({
             '@radix-ui/react-toggle',
             '@radix-ui/react-visually-hidden',
           ],
-          // Animation libraries - can be lazy loaded
-          'animation-vendor': ['motion', 'embla-carousel-react'],
+          // Animation - motion used in chat, load on demand
+          'animation-vendor': ['motion'],
+          // Chat-specific - carousel and fuzzy search only needed in chat
+          'chat-vendor': ['embla-carousel-react', 'fuse.js'],
           // Analytics - defer loading until after interaction
           'analytics-vendor': ['posthog-js'],
           // Forms - used in specific routes
           'form-vendor': ['react-hook-form', '@hookform/resolvers', 'zod'],
           // Utilities - shared utilities
           'utils-vendor': ['clsx', 'tailwind-merge', 'class-variance-authority', 'immer'],
-          // Content rendering - markdown and syntax highlighting
-          'content-vendor': ['react-markdown', 'shiki', 'streamdown'],
-          // Data utilities - date handling, search, etc.
-          'data-vendor': ['date-fns', 'fuse.js', 'chroma-js', 'randomcolor'],
+          // Markdown rendering - lightweight, no heavy dependencies
+          'markdown-vendor': ['react-markdown'],
+          // Mermaid diagrams - lazy loaded only when mermaid blocks detected
+          // Note: mermaid is dynamically imported, not bundled upfront
+          // Syntax highlighting - dynamically imported by code-block-highlighter
+          // Note: shiki core + selected languages loaded on demand
+          // Data utilities - date handling, colors
+          'data-vendor': ['date-fns', 'chroma-js', 'randomcolor'],
           // UI utilities - additional UI libraries
           'ui-utilities': ['cmdk', 'react-day-picker', 'vaul', 'use-stick-to-bottom', '@unpic/react', 'nuqs'],
         },
@@ -161,6 +177,7 @@ export default defineConfig({
   },
   define: {
     'process.env': {},
+    '__APP_VERSION__': JSON.stringify(APP_VERSION),
   },
   // Strip console.* and debugger in production builds
   esbuild: isProd

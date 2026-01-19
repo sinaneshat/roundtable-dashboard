@@ -15,8 +15,26 @@ import { Icons } from '@/components/icons';
 import { StructuredData } from '@/components/seo';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import type { SessionData } from '@/lib/auth';
 import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 import type { RouterContext } from '@/router';
+import { getSession } from '@/server/auth';
+
+// ============================================================================
+// SESSION CACHING - Single source of truth for auth state
+// ============================================================================
+
+/**
+ * Cached session on client to avoid server roundtrips during navigation.
+ * Session is validated once on initial page load; subsequent navigations reuse cache.
+ * Cookie validity is still enforced by the browser/Better Auth.
+ */
+let cachedClientSession: SessionData | null = null;
+
+/** Clear the cached session (call on sign out) */
+export function clearCachedSession() {
+  cachedClientSession = null;
+}
 
 /**
  * Root route with QueryClient context
@@ -27,6 +45,25 @@ const siteDescription = BRAND.description;
 const twitterHandle = BRAND.social.twitterHandle;
 
 export const Route = createRootRouteWithContext<RouterContext>()({
+  // ✅ ROOT SESSION CHECK: Single source of truth for auth state
+  // Runs on every navigation, uses cache on client to avoid server calls
+  // All child routes access session via context - no repeated getSession() calls
+  beforeLoad: async () => {
+    // Client-side: reuse cached session to avoid server function call
+    if (typeof window !== 'undefined' && cachedClientSession !== null) {
+      return { session: cachedClientSession };
+    }
+
+    // Server-side or first client load: fetch session
+    const session = await getSession();
+
+    // Cache on client for subsequent navigations
+    if (typeof window !== 'undefined') {
+      cachedClientSession = session;
+    }
+
+    return { session };
+  },
   head: () => {
     const siteUrl = getAppBaseUrl();
     return {
@@ -74,7 +111,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         { rel: 'icon', type: 'image/png', sizes: '192x192', href: '/icons/icon-192x192.png' },
         // Apple touch icon for iOS
         { rel: 'apple-touch-icon', sizes: '180x180', href: '/apple-touch-icon.png' },
-        { rel: 'canonical', href: siteUrl },
+        // Note: canonical URLs are set per-route, not in root layout
       ],
     };
   },

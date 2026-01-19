@@ -2,7 +2,7 @@ import { MessageRoles, MessageStatuses, TextPartStates } from '@roundtable/share
 import type { QueryClient } from '@tanstack/react-query';
 import { useQueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -62,31 +62,41 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const queryClientRef = useRef<QueryClient>(queryClient);
   const triggerModeratorRef = useRef<TriggerModeratorFn | null>(null);
 
+  // ✅ PERF FIX: Split selectors to prevent unnecessary re-renders
+  // CRITICAL: Do NOT include `messages` here - it changes on every stream chunk
+  // Components that need messages should subscribe directly via useChatStore
   const {
     thread,
     participants,
-    messages,
     enableWebSearch,
     createdThreadId,
     hasEarlyOptimisticMessage,
     streamResumptionPrefilled,
     pendingAttachmentIds,
     pendingFileParts,
-    clearAnimations,
-    completeAnimation,
   } = useStore(store, useShallow(s => ({
     thread: s.thread,
     participants: s.participants,
-    messages: s.messages,
     enableWebSearch: s.enableWebSearch,
     createdThreadId: s.createdThreadId,
     hasEarlyOptimisticMessage: s.hasEarlyOptimisticMessage,
     streamResumptionPrefilled: s.streamResumptionPrefilled,
     pendingAttachmentIds: s.pendingAttachmentIds,
     pendingFileParts: s.pendingFileParts,
-    clearAnimations: s.clearAnimations,
-    completeAnimation: s.completeAnimation,
   })));
+
+  // ✅ PERF FIX: Get stable action references separately (actions don't change)
+  const clearAnimations = useStore(store, s => s.clearAnimations);
+  const completeAnimation = useStore(store, s => s.completeAnimation);
+
+  // ✅ PERF FIX: Get messages via ref to avoid re-renders during streaming
+  // The AI SDK hook needs messages but we don't want provider to re-render
+  const messagesRef = useRef(store.getState().messages);
+  useEffect(() => {
+    return store.subscribe((state) => {
+      messagesRef.current = state.messages;
+    });
+  }, [store]);
 
   const effectiveThreadId = thread?.id || createdThreadId || '';
 
@@ -291,10 +301,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     }
   }, [store, waitForStoreSync]);
 
+  // ✅ PERF FIX: Use initialMessages from store snapshot to avoid re-renders
+  // The AI SDK will manage its own messages array during streaming
+  const [initialMessages] = useState(() => store.getState().messages);
+
   const chat = useMultiParticipantChat({
     threadId: effectiveThreadId,
     participants,
-    messages,
+    messages: initialMessages, // Use stable initial value, not live messages
     mode: thread?.mode,
     enableWebSearch,
     pendingAttachmentIds,

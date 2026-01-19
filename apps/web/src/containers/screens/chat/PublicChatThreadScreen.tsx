@@ -160,7 +160,8 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
                         </p>
                         <Button asChild>
                           <Link
-                            to="/auth/sign-up?utm_source=public_chat&utm_medium=bottom_cta&utm_campaign=try_free"
+                            to="/auth/sign-in"
+                            search={{ utm_source: 'public_chat', utm_medium: 'bottom_cta', utm_campaign: 'try_free' }}
                             className="flex items-center gap-2"
                           >
                             <span>{t('chat.public.getStartedFree')}</span>

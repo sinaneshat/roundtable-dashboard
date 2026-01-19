@@ -1,10 +1,16 @@
 /**
  * Optimized syntax highlighter
- * Bundles only commonly used languages (~2MB vs ~8MB with all languages)
- * Languages are imported directly to ensure they're bundled upfront
+ *
+ * PERFORMANCE: Uses shiki/core + JavaScript engine + individual imports.
+ * This avoids bundling:
+ * - All 200+ language grammars (~4MB)
+ * - Oniguruma WASM engine (~600KB)
+ *
+ * Only loads 16 common languages on demand (~200KB total).
+ * Uses JavaScript regex engine (smaller, no WASM needed).
  */
 
-import type { BundledLanguage, ShikiTransformer } from 'shiki';
+import type { HighlighterCore, ShikiTransformer } from 'shiki/core';
 
 const CORE_LANGUAGES = [
   'javascript',
@@ -54,13 +60,19 @@ function isSupportedLanguage(lang: string): lang is CoreLanguage {
   return SUPPORTED_LANGUAGES.has(lang.toLowerCase());
 }
 
-let highlighterPromise: Promise<Awaited<ReturnType<typeof import('shiki')['createHighlighter']>>> | null = null;
+let highlighterPromise: Promise<HighlighterCore> | null = null;
 
-async function getHighlighter() {
+async function getHighlighter(): Promise<HighlighterCore> {
   if (!highlighterPromise) {
     highlighterPromise = (async () => {
+      // Dynamic imports for fine-grained bundling
       const [
-        { createHighlighter },
+        { createHighlighterCore },
+        { createJavaScriptRegexEngine },
+        // Themes
+        oneDarkPro,
+        oneLight,
+        // Languages - only load what we need
         javascript,
         typescript,
         jsx,
@@ -69,7 +81,7 @@ async function getHighlighter() {
         yaml,
         markdown,
         bash,
-        shell,
+        shellscript,
         python,
         go,
         rust,
@@ -78,27 +90,36 @@ async function getHighlighter() {
         sql,
         diff,
       ] = await Promise.all([
-        import('shiki'),
-        import('shiki/langs/javascript.mjs'),
-        import('shiki/langs/typescript.mjs'),
-        import('shiki/langs/jsx.mjs'),
-        import('shiki/langs/tsx.mjs'),
-        import('shiki/langs/json.mjs'),
-        import('shiki/langs/yaml.mjs'),
-        import('shiki/langs/markdown.mjs'),
-        import('shiki/langs/bash.mjs'),
-        import('shiki/langs/shell.mjs'),
-        import('shiki/langs/python.mjs'),
-        import('shiki/langs/go.mjs'),
-        import('shiki/langs/rust.mjs'),
-        import('shiki/langs/html.mjs'),
-        import('shiki/langs/css.mjs'),
-        import('shiki/langs/sql.mjs'),
-        import('shiki/langs/diff.mjs'),
+        import('shiki/core'),
+        import('shiki/engine/javascript'),
+        // Themes - use shiki's dist paths
+        import('shiki/dist/themes/one-dark-pro.mjs'),
+        import('shiki/dist/themes/one-light.mjs'),
+        // Languages - use shiki's dist paths
+        import('shiki/dist/langs/javascript.mjs'),
+        import('shiki/dist/langs/typescript.mjs'),
+        import('shiki/dist/langs/jsx.mjs'),
+        import('shiki/dist/langs/tsx.mjs'),
+        import('shiki/dist/langs/json.mjs'),
+        import('shiki/dist/langs/yaml.mjs'),
+        import('shiki/dist/langs/markdown.mjs'),
+        import('shiki/dist/langs/bash.mjs'),
+        import('shiki/dist/langs/shellscript.mjs'),
+        import('shiki/dist/langs/python.mjs'),
+        import('shiki/dist/langs/go.mjs'),
+        import('shiki/dist/langs/rust.mjs'),
+        import('shiki/dist/langs/html.mjs'),
+        import('shiki/dist/langs/css.mjs'),
+        import('shiki/dist/langs/sql.mjs'),
+        import('shiki/dist/langs/diff.mjs'),
       ]);
 
-      return createHighlighter({
-        themes: ['one-light', 'one-dark-pro'],
+      return createHighlighterCore({
+        engine: createJavaScriptRegexEngine(),
+        themes: [
+          oneDarkPro.default,
+          oneLight.default,
+        ],
         langs: [
           javascript.default,
           typescript.default,
@@ -108,7 +129,7 @@ async function getHighlighter() {
           yaml.default,
           markdown.default,
           bash.default,
-          shell.default,
+          shellscript.default,
           python.default,
           go.default,
           rust.default,
@@ -125,7 +146,7 @@ async function getHighlighter() {
 
 async function highlightCode(
   code: string,
-  language: BundledLanguage | string,
+  language: string,
   showLineNumbers = false,
 ): Promise<[string, string]> {
   const transformers: ShikiTransformer[] = showLineNumbers ? [lineNumberTransformer] : [];
@@ -138,16 +159,21 @@ async function highlightCode(
 
   try {
     const highlighter = await getHighlighter();
-    const lang = isSupportedLanguage(language) ? language : 'text';
+    // Map 'shell' to 'shellscript' (shiki's name for shell)
+    let lang = language.toLowerCase();
+    if (lang === 'shell')
+      lang = 'shellscript';
+    if (!isSupportedLanguage(lang) && lang !== 'shellscript')
+      lang = 'text';
 
     const [light, dark] = await Promise.all([
       highlighter.codeToHtml(code, {
-        lang,
+        lang: lang as CoreLanguage,
         theme: 'one-light',
         transformers,
       }),
       highlighter.codeToHtml(code, {
-        lang,
+        lang: lang as CoreLanguage,
         theme: 'one-dark-pro',
         transformers,
       }),
@@ -160,4 +186,6 @@ async function highlightCode(
 }
 
 export { highlightCode };
-export type { BundledLanguage };
+
+// Re-export type for consumers
+export type { BundledLanguage } from 'shiki';

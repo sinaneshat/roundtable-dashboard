@@ -1,6 +1,6 @@
 import type { AuthErrorType } from '@roundtable/shared';
 import { AuthErrorTypes, DEFAULT_AUTH_ERROR_TYPE, isValidAuthErrorType } from '@roundtable/shared';
-import { Link, useSearch } from '@tanstack/react-router';
+import { getRouteApi, Link } from '@tanstack/react-router';
 import { Suspense } from 'react';
 
 import { Icons } from '@/components/icons';
@@ -31,9 +31,11 @@ const AUTH_ERROR_I18N_KEYS = {
   [AuthErrorTypes.DEFAULT]: { title: 'auth.errors.default', desc: 'auth.errors.defaultDesc' },
 } as const satisfies Record<AuthErrorType, { title: string; desc: string }>;
 
+const routeApi = getRouteApi('/auth/error');
+
 function AuthErrorContent() {
   const t = useTranslations();
-  const search = useSearch({ strict: false }) as Record<string, string | undefined>;
+  const search = routeApi.useSearch();
   const rawError = (search?.error || search?.failed)?.toLowerCase() ?? DEFAULT_AUTH_ERROR_TYPE;
   const errorType = isValidAuthErrorType(rawError) ? rawError : DEFAULT_AUTH_ERROR_TYPE;
 

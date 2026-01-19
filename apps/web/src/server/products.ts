@@ -8,10 +8,6 @@ type GetProductsResult = ListProductsResponse | ServerFnErrorResponse;
 
 export const getProducts = createServerFn({ method: 'GET' }).handler(
   async (): Promise<GetProductsResult> => {
-    try {
-      return await getProductsService();
-    } catch {
-      return { success: false as const, data: null };
-    }
+    return await getProductsService();
   },
 );

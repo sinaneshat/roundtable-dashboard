@@ -91,7 +91,11 @@
     "test:e2e": "playwright test",
     "test:e2e:ui": "playwright test --ui",
     "test:e2e:headed": "playwright test --headed",
-    "user:upgrade": "tsx scripts/user-upgrade.ts"
+    "user:upgrade": "tsx scripts/user-upgrade.ts",
+    "changeset": "changeset",
+    "changeset:version": "changeset version",
+    "changeset:tag": "changeset tag",
+    "release": "turbo run build lint check-types && changeset version"
   },
   "dependencies": {
     "@ai-sdk/react": "^3.0.7",
@@ -174,6 +178,8 @@
   },
   "devDependencies": {
     "@antfu/eslint-config": "^6.7.3",
+    "@changesets/changelog-github": "^0.5.2",
+    "@changesets/cli": "^2.29.8",
     "@cloudflare/workers-types": "^4.20260103.0",
     "@commitlint/cli": "^20.3.0",
     "@commitlint/config-conventional": "^20.3.0",

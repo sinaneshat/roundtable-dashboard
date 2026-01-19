@@ -965,10 +965,17 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
     ]);
   },
 
-  clearAnimations: () =>
+  clearAnimations: () => {
+    // ✅ PERF FIX: Only update if there's something to clear
+    const current = get();
+    if (current.pendingAnimations.size === 0 && current.animationResolvers.size === 0) {
+      return; // Nothing to clear, skip update
+    }
     set({
-      ...ANIMATION_DEFAULTS,
-    }, false, 'animation/clearAnimations'),
+      pendingAnimations: new Set<number>(),
+      animationResolvers: new Map<number, () => void>(),
+    }, false, 'animation/clearAnimations');
+  },
 });
 
 const createAttachmentsSlice: SliceCreator<AttachmentsSlice> = (set, get) => ({

@@ -3,15 +3,15 @@
 /* eslint-disable react-hooks-extra/no-direct-set-state-in-use-effect -- Animation demo requires setState in intervals/timeouts */
 import { MessageRoles, ModelIds, MODERATOR_NAME } from '@roundtable/shared';
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Streamdown } from 'streamdown';
 
 import { ParticipantHeader } from '@/components/chat/participant-header';
-import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { BRAND } from '@/constants';
 import { TYPING_CHARS_PER_FRAME, TYPING_FRAME_INTERVAL } from '@/lib/ui/animations';
 import { cn } from '@/lib/ui/cn';
 import { getAvatarPropsFromModelId } from '@/lib/utils/ai-display';
+
+import { SimpleMarkdown } from './demo-markdown-components';
 
 const DEMO_USER_MESSAGE = 'We\'re a B2B SaaS startup with $2M ARR considering enterprise expansion vs doubling down on SMB. Our sales cycle is 14 days with $8K ACV. What would you recommend?';
 
@@ -41,12 +41,7 @@ const UserMessage = memo(({ text }: { text: string }) => {
           'text-base leading-relaxed',
         )}
       >
-        <Streamdown
-          className="[&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-          components={streamdownComponents}
-        >
-          {text}
-        </Streamdown>
+        <SimpleMarkdown>{text}</SimpleMarkdown>
       </div>
     </div>
   );
@@ -79,14 +74,7 @@ const ParticipantMessage = memo(({
           isStreaming={isStreaming}
         />
         {text && (
-          <div dir="auto">
-            <Streamdown
-              className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-              components={streamdownComponents}
-            >
-              {text}
-            </Streamdown>
-          </div>
+          <SimpleMarkdown className="text-foreground">{text}</SimpleMarkdown>
         )}
       </div>
     </div>
@@ -110,14 +98,7 @@ const ModeratorMessage = memo(({
           isStreaming={isStreaming}
         />
         {text && (
-          <div dir="auto">
-            <Streamdown
-              className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
-              components={streamdownComponents}
-            >
-              {text}
-            </Streamdown>
-          </div>
+          <SimpleMarkdown className="text-foreground">{text}</SimpleMarkdown>
         )}
       </div>
     </div>

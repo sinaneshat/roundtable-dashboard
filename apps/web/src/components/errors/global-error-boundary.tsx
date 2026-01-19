@@ -1,4 +1,3 @@
-import posthog from 'posthog-js';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component } from 'react';
 
@@ -14,6 +13,24 @@ function isPostHogAvailable(): boolean {
   if (typeof window === 'undefined')
     return false;
   return getWebappEnv() !== WEBAPP_ENVS.LOCAL;
+}
+
+/**
+ * Track error to PostHog - dynamically imports to avoid loading 55KB on every page
+ */
+async function trackErrorToPostHog(error: Error, componentStack?: string) {
+  if (!isPostHogAvailable())
+    return;
+
+  const posthog = (await import('posthog-js')).default;
+  posthog.capture('$exception', {
+    $exception_message: error.message,
+    $exception_stack_trace_raw: error.stack,
+    $exception_type: error.name,
+    $exception_source: 'global_error_boundary',
+    componentStack,
+    url: typeof window !== 'undefined' ? window.location.href : '',
+  });
 }
 
 type Props = {
@@ -46,17 +63,8 @@ export class GlobalErrorBoundary extends Component<Props, State> {
   componentDidCatch(error: Error, errorInfo: ErrorInfo) {
     this.setState({ error, errorInfo });
 
-    // Track error to PostHog
-    if (isPostHogAvailable()) {
-      posthog.capture('$exception', {
-        $exception_message: error.message,
-        $exception_stack_trace_raw: error.stack,
-        $exception_type: error.name,
-        $exception_source: 'global_error_boundary',
-        componentStack: errorInfo.componentStack,
-        url: typeof window !== 'undefined' ? window.location.href : '',
-      });
-    }
+    // Track error to PostHog (async, lazy-loaded)
+    trackErrorToPostHog(error, errorInfo.componentStack ?? undefined);
   }
 
   handleReset = () => {

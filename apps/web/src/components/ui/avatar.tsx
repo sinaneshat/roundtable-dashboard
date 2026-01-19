@@ -80,6 +80,8 @@ function AvatarFallback({ ref, className, ...props }: ComponentPropsWithoutRef<t
       data-slot="avatar-fallback"
       className={cn(
         'bg-muted flex size-full items-center justify-center rounded-full',
+        // Blur effect for smooth loading transition
+        'backdrop-blur-sm animate-pulse',
         className,
       )}
       {...props}

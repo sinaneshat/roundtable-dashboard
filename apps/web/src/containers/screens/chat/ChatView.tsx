@@ -1,6 +1,7 @@
 import type { ChatMode, ScreenMode } from '@roundtable/shared';
 import { ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, RoundPhases, ScreenModes } from '@roundtable/shared';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import type { UIMessage } from 'ai';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { ChatInput } from '@/components/chat/chat-input';
@@ -40,7 +41,7 @@ import {
   isVisionRequiredMimeType,
 } from '@/lib/utils';
 import dynamic from '@/lib/utils/dynamic';
-import type { ApiChangelog, Model, RoundFeedbackData } from '@/services/api';
+import type { ApiChangelog, ApiParticipant, Model, RoundFeedbackData } from '@/services/api';
 import {
   useAutoModeAnalysis,
   useChatFormActions,
@@ -72,6 +73,15 @@ export type ChatViewProps = {
   onSubmit: (e: React.FormEvent) => Promise<void>;
   chatAttachments: UseChatAttachmentsReturn;
   threadId?: string;
+  /**
+   * SSR: Initial messages from route loader for first paint
+   * Store may be empty during SSR - use these for immediate content render
+   */
+  initialMessages?: UIMessage[];
+  /**
+   * SSR: Initial participants from route loader for first paint
+   */
+  initialParticipants?: ApiParticipant[];
 };
 
 export function ChatView({
@@ -81,6 +91,8 @@ export function ChatView({
   onSubmit,
   chatAttachments,
   threadId: serverThreadId,
+  initialMessages,
+  initialParticipants,
 }: ChatViewProps) {
   const t = useTranslations();
 
@@ -359,8 +371,14 @@ export function ChatView({
     incompatibleModelIdsRef.current = incompatibleModelIds;
   }, [incompatibleModelIds]);
 
+  // ✅ SSR FIX: Use initial data from props for first paint when store is empty
+  // Store hydration happens in useLayoutEffect (client-only), so server renders with empty store
+  // Fall back to initialMessages/initialParticipants for SSR content paint
+  const effectiveMessages = messages.length > 0 ? messages : (initialMessages ?? []);
+  const effectiveParticipants = contextParticipants.length > 0 ? contextParticipants : (initialParticipants ?? []);
+
   const timelineItems: TimelineItem[] = useThreadTimeline({
-    messages,
+    messages: effectiveMessages,
     changelog,
     preSearches,
   });
@@ -485,12 +503,35 @@ export function ChatView({
 
   const { showLoader } = useFlowLoading({ mode });
 
-  const isStoreReady = mode === ScreenModes.THREAD ? (hasInitiallyLoaded && messages.length > 0) : true;
+  // ✅ SSR FIX: Data is ready if store is hydrated OR initial data is available from props
+  // This allows SSR to render content immediately using initialMessages
+  const hasInitialDataFromProps = (initialMessages?.length ?? 0) > 0;
+  const isStoreReady = mode === ScreenModes.THREAD
+    ? ((hasInitiallyLoaded && messages.length > 0) || hasInitialDataFromProps)
+    : true;
 
-  useChatScroll({
+  const { scrollToBottom } = useChatScroll({
     messages,
     enableNearBottomDetection: true,
   });
+
+  // ✅ SCROLL FIX: Auto-scroll to absolute bottom on initial thread load
+  // Uses useLayoutEffect to scroll BEFORE browser paint - no flicker
+  const hasScrolledToBottomRef = useRef(false);
+  useLayoutEffect(() => {
+    // Only scroll on thread mode with ready data, and only once
+    if (
+      mode === ScreenModes.THREAD
+      && isStoreReady
+      && effectiveMessages.length > 0
+      && !hasScrolledToBottomRef.current
+    ) {
+      hasScrolledToBottomRef.current = true;
+      // useLayoutEffect runs synchronously after DOM mutations but before paint
+      // This ensures scroll happens before user sees the page
+      scrollToBottom('instant');
+    }
+  }, [mode, isStoreReady, effectiveMessages.length, scrollToBottom]);
 
   const isResumptionActive = preSearchResumption?.status === MessageStatuses.STREAMING
     || preSearchResumption?.status === MessageStatuses.PENDING
@@ -702,7 +743,7 @@ export function ChatView({
             <ThreadTimeline
               timelineItems={timelineItems}
               user={user}
-              participants={contextParticipants}
+              participants={effectiveParticipants}
               threadId={effectiveThreadId}
               threadTitle={thread?.title}
               isStreaming={isStreaming}

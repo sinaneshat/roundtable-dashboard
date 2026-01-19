@@ -27,7 +27,7 @@ import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls
 import { useTranslations } from '@/lib/i18n';
 import { showApiErrorToast } from '@/lib/toast';
 import dynamic from '@/lib/utils/dynamic';
-import { clearCachedSession } from '@/routes/_protected';
+import { clearCachedSession } from '@/routes/__root';
 import type { Subscription } from '@/types/billing';
 
 const CancelSubscriptionDialog = dynamic<CancelSubscriptionDialogProps>(

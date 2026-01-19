@@ -2,7 +2,6 @@ import type { MessageStatus } from '@roundtable/shared';
 import { MessagePartTypes, MessageStatuses, TextPartStates } from '@roundtable/shared';
 import { memo, useLayoutEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
-import { Streamdown } from 'streamdown';
 import { useShallow } from 'zustand/react/shallow';
 
 import { Actions } from '@/components/ai-elements/actions';
@@ -15,6 +14,7 @@ import { CustomDataPart } from '@/components/chat/custom-data-part';
 import { MessageErrorDetails } from '@/components/chat/message-error-details';
 import { ToolCallPart } from '@/components/chat/tool-call-part';
 import { ToolResultPart } from '@/components/chat/tool-result-part';
+import { LazyStreamdown } from '@/components/markdown/lazy-streamdown';
 import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
 import { useChatStoreOptional } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
@@ -329,12 +329,12 @@ export const ModelMessageCard = memo(({
                   <Markdown components={streamdownComponents}>{part.text}</Markdown>
                 )
               : (
-                  <Streamdown
+                  <LazyStreamdown
                     className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                     components={streamdownComponents}
                   >
                     {part.text}
-                  </Streamdown>
+                  </LazyStreamdown>
                 )}
           </div>
         );

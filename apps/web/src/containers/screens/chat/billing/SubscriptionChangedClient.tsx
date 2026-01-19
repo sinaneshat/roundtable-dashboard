@@ -1,6 +1,6 @@
 import type { SubscriptionChangeType, SubscriptionTier } from '@roundtable/shared';
 import { StripeSubscriptionStatuses, SubscriptionChangeTypes, SubscriptionChangeTypeSchema, SubscriptionTiers, SubscriptionTierSchema } from '@roundtable/shared';
-import { Link, useSearch } from '@tanstack/react-router';
+import { getRouteApi, Link } from '@tanstack/react-router';
 import { Suspense, useMemo } from 'react';
 
 import { Icons } from '@/components/icons';
@@ -52,14 +52,16 @@ function ChangeBadge(props: ChangeBadgeProps) {
   );
 }
 
+const routeApi = getRouteApi('/_protected/chat/billing/subscription-changed');
+
 function SubscriptionChangedContent() {
-  const searchParams = useSearch({ strict: false });
+  const searchParams = routeApi.useSearch();
   const t = useTranslations();
 
-  const changeTypeRaw = searchParams.get('changeType');
+  const changeTypeRaw = searchParams.changeType;
   const changeTypeResult = SubscriptionChangeTypeSchema.safeParse(changeTypeRaw);
   const changeType = changeTypeResult.success ? changeTypeResult.data : null;
-  const oldProductId = searchParams.get('oldProductId');
+  const oldProductId = searchParams.oldProductId;
 
   const { data: subscriptionData, isFetching: isSubscriptionsFetching } = useSubscriptionsQuery();
   const { data: usageStats, isFetching: isUsageStatsFetching } = useUsageStatsQuery();

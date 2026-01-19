@@ -10,9 +10,5 @@ type GetModelsResult = ListModelsResponse | ServerFnErrorResponse;
 export const getModels = createServerFn({ method: 'GET' })
   .middleware([cookieMiddleware])
   .handler(async ({ context }): Promise<GetModelsResult> => {
-    try {
-      return await listModelsService({ cookieHeader: context.cookieHeader });
-    } catch {
-      return { success: false as const, data: null };
-    }
+    return await listModelsService({ cookieHeader: context.cookieHeader });
   });

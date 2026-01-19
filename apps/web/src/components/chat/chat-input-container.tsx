@@ -190,7 +190,8 @@ export const ChatInputContainer = memo(({
         'rounded-2xl border shadow-lg',
         'bg-card',
         'transition-all duration-200',
-        styles?.border,
+        // Default to border-border, override with alert variant border if present
+        styles?.border ?? 'border-border',
         className,
       )}
     >

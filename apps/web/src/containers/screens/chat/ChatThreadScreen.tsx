@@ -359,6 +359,8 @@ export default function ChatThreadScreen({
         onSubmit={handlePromptSubmit}
         chatAttachments={chatAttachments}
         threadId={thread.id}
+        initialMessages={uiMessages}
+        initialParticipants={participants}
       />
 
       <ChatDeleteDialog

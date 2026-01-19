@@ -11,8 +11,8 @@
 import { CitationSegmentTypes } from '@roundtable/shared';
 import { useMemo } from 'react';
 import Markdown from 'react-markdown';
-import { Streamdown } from 'streamdown';
 
+import { LazyStreamdown } from '@/components/markdown/lazy-streamdown';
 import { cn } from '@/lib/ui/cn';
 import { parseCitations } from '@/lib/utils';
 import type { AvailableSource, DbCitation } from '@/services/api';
@@ -153,7 +153,7 @@ export function CitedMessageContent({
     if (skipTransitions) {
       return <Markdown components={streamdownComponents}>{content}</Markdown>;
     }
-    return <Streamdown components={streamdownComponents}>{content}</Streamdown>;
+    return <LazyStreamdown components={streamdownComponents}>{content}</LazyStreamdown>;
   };
 
   // No citations and no available sources - render plain markdown

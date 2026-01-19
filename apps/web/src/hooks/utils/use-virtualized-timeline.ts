@@ -1,7 +1,7 @@
 import type { Virtualizer } from '@tanstack/react-virtual';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import type { RefObject } from 'react';
-import { useCallback, useLayoutEffect, useRef, useState } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 
 import type { TimelineItem } from './use-thread-timeline';
 
@@ -42,6 +42,8 @@ export type UseVirtualizedTimelineResult = {
     options?: { align?: 'start' | 'center' | 'end' | 'auto'; behavior?: 'auto' | 'smooth' },
   ) => void;
   scrollToBottom: (options?: { behavior?: 'auto' | 'smooth' }) => void;
+  /** True when virtualization is active (client-side only) */
+  isVirtualizationEnabled: boolean;
 };
 
 /**
@@ -65,6 +67,14 @@ export function useVirtualizedTimeline({
   isStreaming = false,
   getIsStreamingFromStore,
 }: UseVirtualizedTimelineOptions): UseVirtualizedTimelineResult {
+  // ✅ SSR FIX: Detect client-side mount using useSyncExternalStore
+  // Window virtualizer requires window object - disable during SSR to render content
+  const hasMounted = useSyncExternalStore(
+    () => () => {},
+    () => true, // Client: mounted
+    () => false, // Server: not mounted
+  );
+
   // Track scrollMargin - ref first to avoid direct setState in effect
   const scrollMarginRef = useRef(0);
   const [, forceUpdate] = useState(0);
@@ -73,8 +83,9 @@ export function useVirtualizedTimeline({
   const isStreamingRef = useRef(isStreaming);
   isStreamingRef.current = isStreaming;
 
-  // Virtualizer enabled when data is ready
-  const shouldEnable = isDataReady && timelineItems.length > 0;
+  // ✅ SSR FIX: Only enable virtualization after client-side mount
+  // On SSR, hasMounted=false, so shouldEnable=false, allowing normal document flow render
+  const shouldEnable = hasMounted && isDataReady && timelineItems.length > 0;
 
   // Measure scrollMargin from listRef using ResizeObserver
   useLayoutEffect(() => {
@@ -185,5 +196,6 @@ export function useVirtualizedTimeline({
     scrollToIndex,
     scrollToOffset,
     scrollToBottom,
+    isVirtualizationEnabled: shouldEnable,
   };
 }

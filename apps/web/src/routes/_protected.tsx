@@ -13,7 +13,6 @@ import {
   subscriptionsQueryOptions,
   usageQueryOptions,
 } from '@/lib/data/query-options';
-import { getSession } from '@/server/auth';
 
 /**
  * Protected Layout Skeleton
@@ -49,47 +48,28 @@ function ProtectedLayoutSkeleton() {
   );
 }
 
-// ✅ OPTIMIZATION: Cache session on client to avoid server roundtrips during navigation
-// The session is validated on initial page load; subsequent navigations reuse cached session
-// Cookie validity is still enforced by the browser/Better Auth
-let cachedClientSession: Awaited<ReturnType<typeof getSession>> = null;
-
-/** Clear the cached session (call on sign out) */
-export function clearCachedSession() {
-  cachedClientSession = null;
-}
-
 export const Route = createFileRoute('/_protected')({
-  // NOTE: No route-level staleTime - TanStack Query manages data freshness
-  // @see https://tanstack.com/router/latest/docs/framework/react/guide/preloading#preloading-with-external-libraries
-  //
-  // Server-side auth check - TanStack Start pattern
-  // beforeLoad runs on both server (SSR) and client (navigation)
-  beforeLoad: async ({ location }) => {
-    // ✅ Client-side optimization: reuse cached session to avoid server function call
-    // This prevents redundant getSession() server calls on every client navigation
-    // Session validity is still ensured by cookie expiry and Better Auth
-    if (typeof window !== 'undefined' && cachedClientSession) {
-      return { session: cachedClientSession };
-    }
+  // ✅ LAYOUT ROUTE CACHING: Prevent loader re-runs on child route navigations
+  // Layout data (models, subscriptions, usage, threads) is cached by TanStack Query
+  // Route staleTime prevents the loader from executing unnecessarily
+  // This stops the pendingComponent from flashing on every /chat/* navigation
+  staleTime: 5 * 60 * 1000, // 5 minutes - layout data rarely needs refresh
 
-    const session = await getSession();
+  // ✅ AUTH CHECK: Uses session from root context (already cached)
+  // No duplicate getSession() call - root beforeLoad handles session fetching
+  // Redirects to sign-in if not authenticated (server-side redirect)
+  beforeLoad: async ({ location, context }) => {
+    // Session already fetched and cached by root beforeLoad
+    const { session } = context;
 
     if (!session) {
-      // Clear cache on logout/session expiry
-      cachedClientSession = null;
       throw redirect({
         to: '/auth/sign-in',
         search: { redirect: location.href },
       });
     }
 
-    // Cache on client for subsequent navigations
-    if (typeof window !== 'undefined') {
-      cachedClientSession = session;
-    }
-
-    // Pass session through context for child routes
+    // Pass session through for child routes
     return { session };
   },
   loader: async ({ context }) => {

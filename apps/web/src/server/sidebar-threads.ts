@@ -11,12 +11,8 @@ type GetSidebarThreadsResult = ListSidebarThreadsResponse | ServerFnErrorRespons
 export const getSidebarThreads = createServerFn({ method: 'GET' })
   .middleware([cookieMiddleware])
   .handler(async ({ context }): Promise<GetSidebarThreadsResult> => {
-    try {
-      return await listSidebarThreadsService(
-        { query: { limit: LIMITS.INITIAL_PAGE } },
-        { cookieHeader: context.cookieHeader },
-      );
-    } catch {
-      return { success: false as const, data: null };
-    }
+    return await listSidebarThreadsService(
+      { query: { limit: LIMITS.INITIAL_PAGE } },
+      { cookieHeader: context.cookieHeader },
+    );
   });

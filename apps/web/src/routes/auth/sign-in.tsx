@@ -10,9 +10,17 @@ import { getSession } from '@/server/auth';
 const pageTitle = 'Sign In - Roundtable';
 const pageDescription = 'Sign in to Roundtable - the collaborative AI brainstorming platform where multiple AI models work together to solve problems and generate ideas.';
 
-// Validate redirect search param
+// Validate search params (redirect for post-auth navigation, toast/message for user feedback)
 const signInSearchSchema = z.object({
   redirect: z.string().optional(),
+  toast: z.string().optional(),
+  message: z.string().optional(),
+  action: z.string().optional(),
+  from: z.string().optional(),
+  // UTM tracking params (passthrough)
+  utm_source: z.string().optional(),
+  utm_medium: z.string().optional(),
+  utm_campaign: z.string().optional(),
 });
 
 export const Route = createFileRoute('/auth/sign-in')({
@@ -28,6 +36,11 @@ export const Route = createFileRoute('/auth/sign-in')({
   validateSearch: signInSearchSchema,
   component: SignInPage,
   pendingComponent: AuthLoadingSkeleton,
+  // ✅ ISR: Static shell - cache for 1h at CDN, serve stale for 24h
+  // beforeLoad runs server-side so redirects work, but HTML shell is cacheable
+  headers: () => ({
+    'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
+  }),
   head: () => {
     const siteUrl = getAppBaseUrl();
     return {
@@ -51,6 +64,8 @@ export const Route = createFileRoute('/auth/sign-in')({
       ],
       links: [
         { rel: 'canonical', href: `${siteUrl}/auth/sign-in` },
+        // Preload LCP image for faster initial render
+        { rel: 'preload', href: '/static/logo.svg', as: 'image', type: 'image/svg+xml' },
       ],
     };
   },

@@ -1,4 +1,5 @@
 import { createServerFn } from '@tanstack/react-start';
+import { zodValidator } from '@tanstack/zod-adapter';
 
 import type {
   GetThreadBySlugResponse,
@@ -14,6 +15,8 @@ import {
 } from '@/services/api';
 import { cookieMiddleware } from '@/start';
 
+import { slugSchema, threadIdSchema } from './schemas';
+
 type ServerFnErrorResponse = { success: false; data: null };
 
 type GetThreadBySlugResult = GetThreadBySlugResponse | ServerFnErrorResponse;
@@ -23,56 +26,40 @@ type GetThreadFeedbackResult = GetThreadFeedbackResponse | ServerFnErrorResponse
 
 export const getThreadBySlug = createServerFn({ method: 'GET' })
   .middleware([cookieMiddleware])
-  .inputValidator((slug: string) => slug)
+  .inputValidator(zodValidator(slugSchema))
   .handler(async ({ data: slug, context }): Promise<GetThreadBySlugResult> => {
-    try {
-      return await getThreadBySlugService(
-        { param: { slug } },
-        { cookieHeader: context.cookieHeader },
-      );
-    } catch {
-      return { success: false as const, data: null };
-    }
+    return await getThreadBySlugService(
+      { param: { slug } },
+      { cookieHeader: context.cookieHeader },
+    );
   });
 
 export const getStreamResumptionState = createServerFn({ method: 'GET' })
   .middleware([cookieMiddleware])
-  .inputValidator((threadId: string) => threadId)
+  .inputValidator(zodValidator(threadIdSchema))
   .handler(async ({ data: threadId, context }): Promise<GetStreamResumptionStateResult> => {
-    try {
-      return await getThreadStreamResumptionStateService(
-        { param: { threadId } },
-        { cookieHeader: context.cookieHeader },
-      );
-    } catch {
-      return { success: false as const, data: null };
-    }
+    return await getThreadStreamResumptionStateService(
+      { param: { threadId } },
+      { cookieHeader: context.cookieHeader },
+    );
   });
 
 export const getThreadChangelog = createServerFn({ method: 'GET' })
   .middleware([cookieMiddleware])
-  .inputValidator((threadId: string) => threadId)
+  .inputValidator(zodValidator(threadIdSchema))
   .handler(async ({ data: threadId, context }): Promise<GetThreadChangelogResult> => {
-    try {
-      return await getThreadChangelogService(
-        { param: { id: threadId } },
-        { cookieHeader: context.cookieHeader },
-      );
-    } catch {
-      return { success: false as const, data: null };
-    }
+    return await getThreadChangelogService(
+      { param: { id: threadId } },
+      { cookieHeader: context.cookieHeader },
+    );
   });
 
 export const getThreadFeedback = createServerFn({ method: 'GET' })
   .middleware([cookieMiddleware])
-  .inputValidator((threadId: string) => threadId)
+  .inputValidator(zodValidator(threadIdSchema))
   .handler(async ({ data: threadId, context }): Promise<GetThreadFeedbackResult> => {
-    try {
-      return await getThreadFeedbackService(
-        { param: { id: threadId } },
-        { cookieHeader: context.cookieHeader },
-      );
-    } catch {
-      return { success: false as const, data: null };
-    }
+    return await getThreadFeedbackService(
+      { param: { id: threadId } },
+      { cookieHeader: context.cookieHeader },
+    );
   });

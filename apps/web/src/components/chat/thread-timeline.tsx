@@ -98,6 +98,7 @@ export function ThreadTimeline({
   const {
     virtualizer,
     measureElement,
+    isVirtualizationEnabled,
   } = useVirtualizedTimeline({
     timelineItems,
     listRef,
@@ -238,8 +239,11 @@ export function ThreadTimeline({
   };
 
   // Non-virtualized render: normal document flow, no absolute positioning
-  // Use this for read-only pages where SSR hydration causes measurement issues
-  if (disableVirtualization) {
+  // Use this for:
+  // 1. Read-only pages where SSR hydration causes measurement issues
+  // 2. SSR - window virtualizer requires window object, so render content normally on server
+  // After hydration, isVirtualizationEnabled becomes true and switches to virtualized render
+  if (disableVirtualization || !isVirtualizationEnabled) {
     return (
       <div data-timeline-container className="w-full">
         {timelineItems.map((item, index) => (

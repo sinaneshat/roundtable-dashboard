@@ -7,38 +7,27 @@ import { cookieMiddleware } from '@/start';
 export const getSession = createServerFn({ method: 'GET' })
   .middleware([cookieMiddleware])
   .handler(async ({ context }): Promise<SessionData | null> => {
-    try {
-      const result = await clientGetSession({
-        fetchOptions: {
-          headers: {
-            cookie: context.cookieHeader,
-          },
+    const result = await clientGetSession({
+      fetchOptions: {
+        headers: {
+          cookie: context.cookieHeader,
         },
-      });
+      },
+    });
 
-      return result.data ?? null;
-    } catch (error) {
-      if (import.meta.env.MODE === 'development') {
-        console.error('[Auth] getSession error:', error);
-      }
-      return null;
-    }
+    return result.data ?? null;
   });
 
 export const signOut = createServerFn({ method: 'POST' })
   .middleware([cookieMiddleware])
   .handler(async ({ context }) => {
-    try {
-      await clientSignOut({
-        fetchOptions: {
-          headers: {
-            cookie: context.cookieHeader,
-          },
+    await clientSignOut({
+      fetchOptions: {
+        headers: {
+          cookie: context.cookieHeader,
         },
-      });
+      },
+    });
 
-      return true;
-    } catch {
-      return false;
-    }
+    return true;
   });

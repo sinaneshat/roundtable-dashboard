@@ -14,9 +14,11 @@ import {
 import type { GetThreadBySlugResponse } from '@/services/api';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
-  // NOTE: No route-level staleTime - TanStack Query manages data freshness
-  // @see https://tanstack.com/router/latest/docs/framework/react/guide/preloading#preloading-with-external-libraries
-  //
+  // ✅ ROUTE-LEVEL CACHING: Match TanStack Query staleTime for efficient navigation
+  // Prevents loader from re-running when revisiting same thread within 2 minutes
+  // TanStack Query still manages actual data freshness; this prevents duplicate loader calls
+  staleTime: 2 * 60 * 1000, // 2 minutes - matches STALE_TIMES.threadDetail
+
   // Prefetch thread data and stream resumption state for SSR hydration
   // Uses shared queryOptions to ensure consistent caching between server and client
   loader: async ({ params, context }) => {

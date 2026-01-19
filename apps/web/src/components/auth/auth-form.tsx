@@ -3,7 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { AuthStep } from '@roundtable/shared';
 import { AuthSteps, DEFAULT_AUTH_STEP, ErrorSeverities } from '@roundtable/shared';
-import { useRouter, useSearch } from '@tanstack/react-router';
+import { getRouteApi, useRouter } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { Suspense, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -28,10 +28,12 @@ const magicLinkSchema = z.object({
 
 type MagicLinkFormData = z.infer<typeof magicLinkSchema>;
 
+const routeApi = getRouteApi('/auth/sign-in');
+
 function AuthFormContent() {
   const t = useTranslations();
   const router = useRouter();
-  const search = useSearch({ strict: false }) as Record<string, string | undefined>;
+  const search = routeApi.useSearch();
   const isLoading = useBoolean(false);
   const [step, setStep] = useState<AuthStep>(DEFAULT_AUTH_STEP);
   const [sentEmail, setSentEmail] = useState('');

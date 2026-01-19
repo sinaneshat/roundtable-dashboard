@@ -1,8 +1,26 @@
 import type { HTMLMotionProps, Variants } from 'motion/react';
 import { LayoutGroup, motion } from 'motion/react';
 import type { ReactNode } from 'react';
+import { useSyncExternalStore } from 'react';
 
 import { cn } from '@/lib/ui/cn';
+
+// =============================================================================
+// SSR DETECTION - Ensures content is visible on first paint
+// =============================================================================
+
+/**
+ * SSR-safe client detection using useSyncExternalStore.
+ * Returns false on server, true on client after hydration.
+ * Used to skip opacity:0 animations during SSR.
+ */
+function useIsClient(): boolean {
+  return useSyncExternalStore(
+    () => () => {},
+    () => true, // Client: mounted
+    () => false, // Server: not mounted
+  );
+}
 
 // Re-export LayoutGroup for use in parent components that need to coordinate animations
 export { LayoutGroup };
@@ -42,13 +60,17 @@ const VIEWPORT_THRESHOLD = 0.05;
 
 /**
  * User message - fade in when scrolled into view
+ * SSR-safe: renders visible content on server, animates on client
  */
 export function ScrollAwareUserMessage({
   children,
   className,
   skipAnimation = false,
 }: Omit<SimpleEntranceProps, 'index'>) {
-  if (skipAnimation) {
+  const isClient = useIsClient();
+
+  // SSR or skipAnimation: render visible immediately
+  if (!isClient || skipAnimation) {
     return <div className={cn('w-full', className)}>{children}</div>;
   }
 
@@ -67,6 +89,7 @@ export function ScrollAwareUserMessage({
 
 /**
  * Participant message - fade in when scrolled into view
+ * SSR-safe: renders visible content on server, animates on client
  */
 export function ScrollAwareParticipant({
   children,
@@ -74,7 +97,10 @@ export function ScrollAwareParticipant({
   skipAnimation = false,
   index = 0,
 }: SimpleEntranceProps) {
-  if (skipAnimation) {
+  const isClient = useIsClient();
+
+  // SSR or skipAnimation: render visible immediately
+  if (!isClient || skipAnimation) {
     return <div className={cn('w-full', className)}>{children}</div>;
   }
 
@@ -93,13 +119,17 @@ export function ScrollAwareParticipant({
 
 /**
  * PreSearch card - fade in when scrolled into view
+ * SSR-safe: renders visible content on server, animates on client
  */
 export function ScrollFromTop({
   children,
   className,
   skipAnimation = false,
 }: Omit<SimpleEntranceProps, 'index'>) {
-  if (skipAnimation) {
+  const isClient = useIsClient();
+
+  // SSR or skipAnimation: render visible immediately
+  if (!isClient || skipAnimation) {
     return <div className={cn('w-full', className)}>{children}</div>;
   }
 
@@ -118,13 +148,17 @@ export function ScrollFromTop({
 
 /**
  * Accordion card entrance - fade in when scrolled into view
+ * SSR-safe: renders visible content on server, animates on client
  */
 export function AccordionEntrance({
   children,
   className,
   skipAnimation = false,
 }: Omit<SimpleEntranceProps, 'index'>) {
-  if (skipAnimation) {
+  const isClient = useIsClient();
+
+  // SSR or skipAnimation: render visible immediately
+  if (!isClient || skipAnimation) {
     return <div className={cn(className)}>{children}</div>;
   }
 
@@ -363,13 +397,20 @@ export function PageTransition({ children, className }: { children: ReactNode; c
   );
 }
 
+/**
+ * Scroll fade entrance - fade in when scrolled into view
+ * SSR-safe: renders visible content on server, animates on client
+ */
 export function ScrollFadeEntrance({
   children,
   className,
   skipAnimation = false,
   index = 0,
 }: SimpleEntranceProps) {
-  if (skipAnimation) {
+  const isClient = useIsClient();
+
+  // SSR or skipAnimation: render visible immediately
+  if (!isClient || skipAnimation) {
     return <div className={cn('w-full', className)}>{children}</div>;
   }
 
