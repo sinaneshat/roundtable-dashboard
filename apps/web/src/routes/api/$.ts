@@ -33,7 +33,10 @@ function getBackendOrigin(): string {
  */
 async function proxyRequest(request: Request, path: string): Promise<Response> {
   const backendOrigin = getBackendOrigin();
-  const targetUrl = `${backendOrigin}/api/${path}`;
+  // Preserve query string from original request
+  const url = new URL(request.url);
+  const queryString = url.search; // Includes the '?' if present
+  const targetUrl = `${backendOrigin}/api/${path}${queryString}`;
 
   // Clone headers, removing host (will be set by fetch)
   const headers = new Headers(request.headers);
