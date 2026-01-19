@@ -105,7 +105,7 @@ class StripeService {
     if (!this.stripe) {
       throw createError.internal(
         'Stripe client initialization failed',
-        { errorType: 'initialization', service: 'stripe' },
+        { errorType: 'configuration', service: 'stripe' },
       );
     }
     return this.stripe;

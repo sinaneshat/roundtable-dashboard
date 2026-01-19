@@ -11,17 +11,6 @@ type ThreadListItemSkeletonProps = {
   widthVariant?: number;
 } & ComponentProps<'div'>;
 
-/**
- * ThreadListItemSkeleton - Reusable skeleton for sidebar thread list items
- *
- * Matches the structure of thread items in the chat sidebar.
- * Supports multiple items with varying widths and fade-out effect for bottom items.
- * Uses shared skeleton utilities for consistent width/opacity calculations.
- *
- * @param props.count - Number of skeleton items to render
- * @param props.animated - Whether to apply pulse animation
- * @param props.widthVariant - Index to determine width from preset array (cycles if not provided)
- */
 export function ThreadListItemSkeleton({
   count = 1,
   animated = false,

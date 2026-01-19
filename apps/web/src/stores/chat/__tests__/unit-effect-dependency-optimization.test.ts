@@ -52,6 +52,8 @@ vi.mock('@tanstack/react-query', () => ({
     setQueriesData: vi.fn(),
     invalidateQueries: vi.fn(),
   })),
+  queryOptions: (opts: unknown) => opts,
+  infiniteQueryOptions: (opts: unknown) => opts,
 }));
 
 // Mock session

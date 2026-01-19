@@ -8,15 +8,6 @@ type ChatInputSkeletonProps = {
   showHeader?: boolean;
 } & ComponentProps<'div'>;
 
-/**
- * ChatInputSkeleton - Inline chat input skeleton (non-sticky)
- *
- * For sticky input with header, use StickyInputSkeleton instead.
- * This component is for inline/embedded chat input areas.
- *
- * @param props.showToolbar - Whether to show toolbar buttons
- * @param props.showHeader - Whether to show header section
- */
 export function ChatInputSkeleton({
   showToolbar = true,
   showHeader = false,

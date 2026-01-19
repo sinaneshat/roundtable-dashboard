@@ -8,15 +8,6 @@ type HeaderSkeletonProps = {
   showTrigger?: boolean;
 } & ComponentProps<'header'>;
 
-/**
- * HeaderSkeleton - Reusable skeleton for page/layout headers
- *
- * Matches various header layouts across the application.
- * Used in layout shells, route loading states, and page headers.
- *
- * @param props.variant - Layout variant: simple (mobile trigger only), with-breadcrumb, with-actions
- * @param props.showTrigger - Whether to show sidebar trigger skeleton (mobile only)
- */
 export function HeaderSkeleton({
   variant = 'simple',
   showTrigger = true,

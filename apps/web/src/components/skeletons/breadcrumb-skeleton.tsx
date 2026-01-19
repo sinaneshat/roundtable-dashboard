@@ -7,11 +7,6 @@ type BreadcrumbSkeletonProps = {
   count?: number;
 } & ComponentProps<'nav'>;
 
-/**
- * BreadcrumbSkeleton - Skeleton for navigation breadcrumbs
- *
- * @param props.count - Number of breadcrumb items (default 2)
- */
 export function BreadcrumbSkeleton({
   count = 2,
   className,

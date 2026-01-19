@@ -8,15 +8,6 @@ type NavUserSkeletonProps = {
   collapsed?: boolean;
 } & ComponentProps<'div'>;
 
-/**
- * NavUserSkeleton - Skeleton for user account area in navigation
- *
- * Matches NavUser component structure with avatar, name, email.
- * Used in sidebar footer and navigation areas.
- *
- * @param props.showChevron - Whether to show dropdown chevron
- * @param props.collapsed - Whether sidebar is collapsed (icon-only mode)
- */
 export function NavUserSkeleton({
   showChevron = true,
   collapsed = false,

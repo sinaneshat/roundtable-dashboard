@@ -15,15 +15,6 @@ const sizeClasses = {
   large: 'h-20 w-20 sm:h-24 sm:w-24',
 } as const;
 
-/**
- * LogoAreaSkeleton - Skeleton for logo/brand areas
- *
- * Used in welcome screens, auth pages, and branding areas.
- *
- * @param props.size - Logo size variant
- * @param props.showTitle - Whether to show title skeleton
- * @param props.showTagline - Whether to show tagline skeleton
- */
 export function LogoAreaSkeleton({
   size = 'large',
   showTitle = true,

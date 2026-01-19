@@ -26,7 +26,7 @@ packages/shared/dist/
 apps/web/.tanstack/
 
 # Generated files (rebuilt on each build)
-**/og-assets.generated.ts
+# og-assets.generated.ts is committed - 460KB base64 assets needed for OG images
 apps/web/src/routeTree.gen.ts
 
 # Turbo
@@ -79,7 +79,8 @@ packages/*/.wrangler/
 
 # Wrangler generated types (regenerated via cf-typegen)
 apps/web/worker-configuration.d.ts
-apps/api/cloudflare-env.d.ts
+# Note: apps/api/cloudflare-env.d.ts is committed - wrangler types reads .dev.vars for secret types
+# CI doesn't have .dev.vars, so we commit the generated file
 
 # Context/reference docs (cached, not source)
 .context/

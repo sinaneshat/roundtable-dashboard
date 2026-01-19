@@ -136,17 +136,17 @@ describe('pricing.tsx route - uses shared queryOptions', () => {
     expect(fileContent).not.toMatch(/import\s*\{[^}]*getSubscriptions[^}]*\}\s*from\s*['"]@\/server\/subscriptions['"]/);
   });
 
-  it('should NOT use inline staleTime in prefetchQuery (uses queryOptions instead)', () => {
+  it('should NOT use inline staleTime in ensureQueryData (uses queryOptions instead)', () => {
     const fileContent = readHookFile('routes/_protected/chat/pricing.tsx');
-    // The loader should use prefetchQuery(productsQueryOptions) not prefetchQuery({ staleTime: ... })
+    // The loader should use ensureQueryData(productsQueryOptions) not ensureQueryData({ staleTime: ... })
     // Check that staleTime is NOT specified inline in the loader
-    expect(fileContent).not.toMatch(/prefetchQuery\(\s*\{[\s\S]*staleTime:/);
+    expect(fileContent).not.toMatch(/ensureQueryData\(\s*\{[\s\S]*staleTime:/);
   });
 
-  it('should use prefetchQuery with shared queryOptions', () => {
+  it('should use ensureQueryData with shared queryOptions', () => {
     const fileContent = readHookFile('routes/_protected/chat/pricing.tsx');
-    expect(fileContent).toMatch(/prefetchQuery\(productsQueryOptions\)/);
-    expect(fileContent).toMatch(/prefetchQuery\(subscriptionsQueryOptions\)/);
+    expect(fileContent).toMatch(/ensureQueryData\(productsQueryOptions\)/);
+    expect(fileContent).toMatch(/ensureQueryData\(subscriptionsQueryOptions\)/);
   });
 });
 

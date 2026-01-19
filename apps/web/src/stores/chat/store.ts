@@ -14,7 +14,7 @@
  * - context.ts: useChatStore hook with zustand useStore
  */
 
-import type { ChatMode, ScreenMode } from '@roundtable/shared';
+import type { ChatMode, FeedbackType, ScreenMode } from '@roundtable/shared';
 import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, ScreenModes, StreamStatuses, TextPartStates, UploadStatuses, WebSearchDepths } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { castDraft, enableMapSet } from 'immer';
@@ -29,7 +29,7 @@ import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { getEnabledSortedParticipants, getParticipantIndex, getRoundNumber, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant, ChatThread, PreSearchQuery, PreSearchResult, StoredPreSearch, WebSearchResultItem } from '@/services/api';
+import type { ChatParticipant, ChatThread, PreSearchQuery, PreSearchResult, RoundFeedbackData, StoredPreSearch, WebSearchResultItem } from '@/services/api';
 
 import type { SendMessage, StartRound } from './store-action-types';
 import { isUpsertOptions } from './store-action-types';
@@ -164,9 +164,11 @@ const createFeedbackSlice: SliceCreator<FeedbackSlice> = set => ({
     }, false, 'feedback/setFeedback'),
   setPendingFeedback: feedback =>
     set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
-  loadFeedbackFromServer: (data) => {
+  loadFeedbackFromServer: (data: RoundFeedbackData[]) => {
     set({
-      feedbackByRound: new Map(data.map(f => [f.roundNumber, f.feedbackType])),
+      feedbackByRound: new Map<number, FeedbackType | null>(
+        data.map(f => [f.roundNumber, f.feedbackType]),
+      ),
       hasLoadedFeedback: true,
     }, false, 'feedback/loadFeedbackFromServer');
   },
