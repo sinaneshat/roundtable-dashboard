@@ -31,7 +31,7 @@ import { getAllowedOriginsFromContext } from '@/lib/config/base-urls';
 import type { ApiEnv } from '@/types';
 
 import { createOpenApiApp } from './core/app';
-import { attachSession, csrfProtection, errorLogger, performanceTracking, RateLimiterFactory } from './middleware';
+import { attachSession, csrfProtection, errorLogger, performanceTracking, RateLimiterFactory, requestLogger } from './middleware';
 
 // ============================================================================
 // Environment Detection (sync, build-time check)
@@ -366,6 +366,9 @@ export async function createApp() {
 
   // Performance tracking (preview/local only)
   app.use('*', performanceTracking);
+
+  // Request logging (all environments - structured JSON for Cloudflare Workers Logs)
+  app.use('*', requestLogger);
 
   // Core middleware
   app.use('*', contextStorage());
@@ -773,25 +776,25 @@ export async function createApp() {
 
   const rootApp = new Hono<ApiEnv>();
 
-  // Better Auth CORS
-  rootApp.use('/api/auth/*', async (c, next) => {
-    const allowedOrigins = getAllowedOriginsFromContext(c);
-
-    const middleware = cors({
-      origin: (origin) => {
-        if (!origin)
-          return origin;
-        return allowedOrigins.includes(origin) ? origin : null;
-      },
-      credentials: true,
-      allowMethods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS', 'PATCH'],
-      allowHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept', 'Origin', 'Cache-Control', 'Pragma'],
-    });
-    return middleware(c, next);
-  });
-
-  // Better Auth handler
+  // Better Auth handler with inline CORS
   rootApp.all('/api/auth/*', async (c) => {
+    // Handle CORS
+    const allowedOrigins = getAllowedOriginsFromContext(c);
+    const origin = c.req.header('origin');
+
+    if (origin && allowedOrigins.includes(origin)) {
+      c.header('Access-Control-Allow-Origin', origin);
+      c.header('Access-Control-Allow-Credentials', 'true');
+      c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+      c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma');
+    }
+
+    // Handle OPTIONS preflight
+    if (c.req.method === 'OPTIONS') {
+      return c.body(null, 204);
+    }
+
+    // Auth handler
     const { auth } = await import('@/lib/auth/server');
     return auth.handler(c.req.raw);
   });

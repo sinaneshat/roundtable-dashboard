@@ -17,4 +17,5 @@ export {
   withDbTiming,
 } from './performance-tracking';
 export { RateLimiterFactory } from './rate-limiter-factory';
+export { authRequestLogger, requestLogger } from './request-logger';
 export { ensureStripeInitialized } from './stripe';

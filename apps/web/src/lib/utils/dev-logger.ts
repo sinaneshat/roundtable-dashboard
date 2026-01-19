@@ -24,7 +24,11 @@ const EXCESSIVE_UPDATE_THRESHOLD = 10;
 const logCache = new Map<string, LogEntry>();
 const updateCounts = new Map<string, UpdateTracker>();
 
-const isDev = import.meta.env.MODE === 'development';
+// Enable client-side logging in development AND preview environments (not production)
+// VITE_WEBAPP_ENV is set at build time: 'local', 'preview', or 'prod'
+const isDev = import.meta.env.MODE === 'development'
+  || import.meta.env.VITE_WEBAPP_ENV === 'local'
+  || import.meta.env.VITE_WEBAPP_ENV === 'preview';
 
 /* eslint-disable no-console */
 function getConsoleMethod(level: DevLogLevel): typeof console.debug {

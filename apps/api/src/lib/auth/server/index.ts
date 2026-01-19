@@ -22,7 +22,7 @@ function isProductionMode(): boolean {
   } catch {
     // Workers env not available
   }
-  return isProductionMode();
+  return process.env.NODE_ENV === 'production';
 }
 
 /**
@@ -37,7 +37,7 @@ function isDevelopmentMode(): boolean {
   } catch {
     // Workers env not available
   }
-  return isDevelopmentMode();
+  return process.env.NODE_ENV === 'development';
 }
 
 /**
