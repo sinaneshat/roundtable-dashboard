@@ -776,27 +776,87 @@ export async function createApp() {
 
   const rootApp = new Hono<ApiEnv>();
 
-  // Better Auth handler with inline CORS
-  rootApp.all('/api/auth/*', async (c) => {
-    // Handle CORS
-    const allowedOrigins = getAllowedOriginsFromContext(c);
-    const origin = c.req.header('origin');
+  // Debug endpoint for preview troubleshooting
+  rootApp.get('/debug/env', (c) => {
+    const nodeEnv = c.env?.NODE_ENV || process.env.NODE_ENV;
+    const webappEnv = c.env?.WEBAPP_ENV || process.env.WEBAPP_ENV;
+    const betterAuthUrl = c.env?.BETTER_AUTH_URL || process.env.BETTER_AUTH_URL;
 
+    return c.json({
+      nodeEnv,
+      webappEnv,
+      betterAuthUrl,
+      isProductionMode: nodeEnv === 'production',
+      allowedOrigins: getAllowedOriginsFromContext(c),
+      timestamp: new Date().toISOString(),
+    });
+  });
+
+  // Debug cookie test endpoint - sets a test cookie
+  rootApp.get('/debug/cookie-test', (c) => {
+    const origin = c.req.header('origin');
+    const allowedOrigins = getAllowedOriginsFromContext(c);
+
+    // Set CORS headers
     if (origin && allowedOrigins.includes(origin)) {
       c.header('Access-Control-Allow-Origin', origin);
       c.header('Access-Control-Allow-Credentials', 'true');
-      c.header('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-      c.header('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma');
     }
+
+    // Set a test cookie with same settings as Better Auth
+    const nodeEnv = c.env?.NODE_ENV || process.env.NODE_ENV;
+    const isProduction = nodeEnv === 'production';
+
+    c.header(
+      'Set-Cookie',
+      `test-cookie=hello-${Date.now()}; Path=/; ${isProduction ? 'Secure; ' : ''}SameSite=Lax; Domain=${isProduction ? '.roundtable.now' : ''}; HttpOnly`,
+    );
+
+    return c.json({
+      message: 'Cookie set',
+      isProduction,
+      domain: isProduction ? '.roundtable.now' : 'none',
+      requestCookies: c.req.header('cookie') || 'none',
+    });
+  });
+
+  // Better Auth handler with inline CORS
+  // IMPORTANT: We must add CORS headers to Better Auth's response, not the Hono context,
+  // because we return Better Auth's Response directly
+  rootApp.all('/api/auth/*', async (c) => {
+    const allowedOrigins = getAllowedOriginsFromContext(c);
+    const origin = c.req.header('origin');
 
     // Handle OPTIONS preflight
     if (c.req.method === 'OPTIONS') {
-      return c.body(null, 204);
+      const headers = new Headers();
+      if (origin && allowedOrigins.includes(origin)) {
+        headers.set('Access-Control-Allow-Origin', origin);
+        headers.set('Access-Control-Allow-Credentials', 'true');
+        headers.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+        headers.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma');
+      }
+      return new Response(null, { status: 204, headers });
     }
 
-    // Auth handler
+    // Get response from Better Auth
     const { auth } = await import('@/lib/auth/server');
-    return auth.handler(c.req.raw);
+    const response = await auth.handler(c.req.raw);
+
+    // Clone the response and add CORS headers
+    const newHeaders = new Headers(response.headers);
+    if (origin && allowedOrigins.includes(origin)) {
+      newHeaders.set('Access-Control-Allow-Origin', origin);
+      newHeaders.set('Access-Control-Allow-Credentials', 'true');
+      newHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+      newHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma');
+    }
+
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders,
+    });
   });
 
   // Mount API routes

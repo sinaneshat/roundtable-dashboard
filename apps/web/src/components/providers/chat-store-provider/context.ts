@@ -58,6 +58,21 @@ export function useChatStore<T>(selector: (store: ChatStore) => T): T {
 }
 
 /**
+ * Noop placeholder store for read-only contexts without ChatStoreProvider.
+ * Satisfies Zustand's StoreApi interface but returns empty state.
+ * This prevents "getState is not a function" errors when useStore is called.
+ *
+ * Note: Type assertion used because ChatStoreApi includes devtools middleware
+ * but this placeholder is only used when context is undefined (we return undefined anyway).
+ */
+const NOOP_STORE = {
+  getState: () => ({}) as ChatStore,
+  getInitialState: () => ({}) as ChatStore,
+  setState: () => {},
+  subscribe: () => () => {},
+} as unknown as ChatStoreApi;
+
+/**
  * Optional chat store hook for read-only contexts (e.g., public pages)
  * Returns undefined when outside ChatStoreProvider instead of throwing
  *
@@ -76,10 +91,10 @@ export function useChatStore<T>(selector: (store: ChatStore) => T): T {
 export function useChatStoreOptional<T>(selector: (store: ChatStore) => T): T | undefined {
   const context = use(ChatStoreContext);
 
-  // Use placeholder context to avoid conditional hook call
-  // When context is undefined, we still call useStore but return undefined
-  const placeholderStore = context ?? ({} as ChatStoreApi);
-  const value = useStore(placeholderStore, selector);
+  // Use NOOP_STORE when context is unavailable to avoid conditional hook calls
+  // and satisfy Zustand's StoreApi interface requirements
+  const storeToUse = context ?? NOOP_STORE;
+  const value = useStore(storeToUse, selector);
 
   if (!context) {
     return undefined;
