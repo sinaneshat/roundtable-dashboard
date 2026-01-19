@@ -68,42 +68,32 @@ export function BillingSuccessClient() {
   const [syncError, setSyncError] = useState(false);
 
   // Initiate sync on mount - call service directly to avoid mutation hook's async onSuccess issues
+  // Note: No isMounted check needed - React 18 handles setState on unmounted components gracefully,
+  // and removing it fixes StrictMode double-mount issues where the ref persists but isMounted doesn't
   useEffect(() => {
-    if (!hasInitiatedSync.current && !syncComplete) {
-      hasInitiatedSync.current = true;
+    if (hasInitiatedSync.current || syncComplete)
+      return;
 
-      let isMounted = true;
+    hasInitiatedSync.current = true;
 
-      syncAfterCheckoutService()
-        .then((data) => {
-          if (!isMounted)
-            return;
+    syncAfterCheckoutService()
+      .then((data) => {
+        const result = data as SyncAfterCheckoutResponse;
+        syncResultStorage.set(result);
+        setStoredResult(result);
+        setSyncComplete(true);
+        setIsLoading(false);
 
-          const result = data as SyncAfterCheckoutResponse;
-          syncResultStorage.set(result);
-          setStoredResult(result);
-          setSyncComplete(true);
-          setIsLoading(false);
-
-          queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
-          queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
-          queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
-        })
-        .catch((error) => {
-          if (!isMounted)
-            return;
-
-          console.error('[BillingSuccessClient] Sync failed:', error);
-          syncResultStorage.clear();
-          setSyncError(true);
-          setIsLoading(false);
-        });
-
-      return () => {
-        isMounted = false;
-      };
-    }
-    return undefined;
+        queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
+        queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
+      })
+      .catch((error) => {
+        console.error('[BillingSuccessClient] Sync failed:', error);
+        syncResultStorage.clear();
+        setSyncError(true);
+        setIsLoading(false);
+      });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -136,7 +126,10 @@ export function BillingSuccessClient() {
     );
   }
 
-  if (syncResult?.data?.purchaseType === PurchaseTypes.NONE) {
+  // Check if user already has an active subscription (handles revisit scenario)
+  const hasExistingSubscription = displaySubscription?.status === StripeSubscriptionStatuses.ACTIVE;
+
+  if (syncResult?.data?.purchaseType === PurchaseTypes.NONE && !hasExistingSubscription) {
     return (
       <StatusPage
         variant={StatusVariants.ERROR}
@@ -152,8 +145,10 @@ export function BillingSuccessClient() {
     );
   }
 
+  // Determine if user is on a paid plan - check multiple sources for resilience
   const isPaidPlan = (syncedTier !== undefined && syncedTier !== SubscriptionTiers.FREE)
-    || (syncedTier === undefined && usageStats?.data?.plan?.type === PlanTypes.PAID);
+    || (syncedTier === undefined && usageStats?.data?.plan?.type === PlanTypes.PAID)
+    || hasExistingSubscription;
   const tierName = isPaidPlan ? t('subscription.tiers.pro.name') : t('subscription.tiers.free.name');
 
   const successTitle = t('billing.success.title');

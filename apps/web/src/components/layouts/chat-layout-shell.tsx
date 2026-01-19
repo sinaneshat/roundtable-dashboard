@@ -1,17 +1,14 @@
 import type React from 'react';
 
 import { ChatHeaderSwitch } from '@/components/chat/chat-header-switch';
+import { AppSidebar } from '@/components/chat/chat-nav';
 import { ThreadHeaderProvider } from '@/components/chat/thread-header-context';
-import { SidebarLoadingFallback } from '@/components/loading';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import type { SessionData } from '@/lib/auth';
-import dynamic from '@/lib/utils/dynamic';
 
-// Dynamic import with ssr:false prevents hydration mismatch from React Query cache
-const AppSidebar = dynamic(
-  () => import('@/components/chat/chat-nav').then(m => ({ default: m.AppSidebar })),
-  { ssr: false, loading: () => <SidebarLoadingFallback count={10} /> },
-);
+// ✅ SSR: Direct import - sidebar renders on server with prefetched data
+// Data is prefetched in _protected.tsx loader via ensureInfiniteQueryData(sidebarThreadsQueryOptions)
+// The shared queryOptions ensure SSR/client cache consistency
 
 type ChatLayoutShellProps = {
   children: React.ReactNode;

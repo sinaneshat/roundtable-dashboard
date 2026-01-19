@@ -3,7 +3,7 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import type { AuthStep } from '@roundtable/shared';
 import { AuthSteps, DEFAULT_AUTH_STEP, ErrorSeverities } from '@roundtable/shared';
-import { useSearch } from '@tanstack/react-router';
+import { useRouter, useSearch } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import { Suspense, useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
@@ -30,6 +30,7 @@ type MagicLinkFormData = z.infer<typeof magicLinkSchema>;
 
 function AuthFormContent() {
   const t = useTranslations();
+  const router = useRouter();
   const search = useSearch({ strict: false }) as Record<string, string | undefined>;
   const isLoading = useBoolean(false);
   const [step, setStep] = useState<AuthStep>(DEFAULT_AUTH_STEP);
@@ -49,17 +50,17 @@ function AuthFormContent() {
         showApiInfoToast(t('auth.errors.notice'), message);
       }
 
-      if (window.history.replaceState) {
-        // Reading current URL to clean up query params (not navigating)
-        const url = new URL(window.location.href);
-        url.searchParams.delete('toast');
-        url.searchParams.delete('message');
-        url.searchParams.delete('action');
-        url.searchParams.delete('from');
-        window.history.replaceState({}, '', url.toString());
-      }
+      // ✅ TanStack Router: Clear query params properly
+      router.navigate({
+        to: '.',
+        search: (prev: Record<string, unknown>) => {
+          const { toast: _toast, message: _message, action: _action, from: _from, ...rest } = prev;
+          return rest;
+        },
+        replace: true,
+      });
     }
-  }, [search, t]);
+  }, [search, t, router]);
 
   const form = useForm<MagicLinkFormData>({
     resolver: zodResolver(magicLinkSchema),

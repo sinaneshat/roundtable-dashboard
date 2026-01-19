@@ -15,7 +15,7 @@ import { ChatInput } from '@/components/chat/chat-input';
 import { ChatInputContainer } from '@/components/chat/chat-input-container';
 import { ChatInputHeader } from '@/components/chat/chat-input-header';
 import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu';
-import { QuickStartSkeleton } from '@/components/chat/chat-quick-start';
+import { ChatQuickStart } from '@/components/chat/chat-quick-start';
 import { ChatThreadActions } from '@/components/chat/chat-thread-actions';
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
 import type { ModelSelectionModalProps } from '@/components/chat/model-selection-modal';
@@ -69,12 +69,8 @@ import {
 
 import { ChatView } from './ChatView';
 
-// Dynamic imports with ssr:false prevent hydration mismatch from React Query cache
-const ChatQuickStart = dynamic(
-  () => import('@/components/chat/chat-quick-start').then(m => ({ default: m.ChatQuickStart })),
-  { ssr: false, loading: () => <QuickStartSkeleton /> },
-);
-
+// ✅ SSR: ChatQuickStart imported directly above for server rendering
+// Dialogs can stay dynamic since they're hidden initially (not part of SSR content)
 const ChatDeleteDialog = dynamic(
   () => import('@/components/chat/chat-delete-dialog').then(m => ({ default: m.ChatDeleteDialog })),
   { ssr: false },

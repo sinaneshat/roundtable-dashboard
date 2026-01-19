@@ -19,7 +19,7 @@ import { getModels } from '@/server/models';
 import { getProducts } from '@/server/products';
 import { getSidebarThreads } from '@/server/sidebar-threads';
 import { getSubscriptions } from '@/server/subscriptions';
-import { getThreadBySlug } from '@/server/thread';
+import { getThreadBySlug, getThreadChangelog, getThreadFeedback } from '@/server/thread';
 import { getUsageStats } from '@/server/usage-stats';
 
 import { queryKeys } from './query-keys';
@@ -150,6 +150,55 @@ export function threadBySlugQueryOptions(slug: string) {
     queryKey: queryKeys.threads.bySlug(slug),
     queryFn: () => getThreadBySlug({ data: slug }),
     staleTime: STALE_TIMES.threadDetail,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: false,
+  });
+}
+
+/**
+ * Thread changelog query options factory
+ *
+ * Used by:
+ * - _protected/chat/$slug.tsx loader (ensureQueryData)
+ * - useThreadChangelogQuery hook (useQuery)
+ *
+ * Server function getThreadChangelog() works both server-side and client-side:
+ * - Server: Runs directly, forwards cookies
+ * - Client: Makes RPC call to server function
+ *
+ * IMPORTANT: staleTime is Infinity - changelog uses ONE-WAY DATA FLOW pattern.
+ * Updates come from mutations, not polling/refetching.
+ */
+export function threadChangelogQueryOptions(threadId: string) {
+  return queryOptions({
+    queryKey: queryKeys.threads.changelog(threadId),
+    queryFn: () => getThreadChangelog({ data: threadId }),
+    staleTime: STALE_TIMES.threadChangelog, // Infinity
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: false,
+  });
+}
+
+/**
+ * Thread feedback query options factory
+ *
+ * Used by:
+ * - _protected/chat/$slug.tsx loader (ensureQueryData)
+ * - useThreadFeedbackQuery hook (useQuery)
+ *
+ * Server function getThreadFeedback() works both server-side and client-side:
+ * - Server: Runs directly, forwards cookies
+ * - Client: Makes RPC call to server function
+ *
+ * IMPORTANT: staleTime is Infinity - feedback is invalidated only on mutation.
+ */
+export function threadFeedbackQueryOptions(threadId: string) {
+  return queryOptions({
+    queryKey: queryKeys.threads.feedback(threadId),
+    queryFn: () => getThreadFeedback({ data: threadId }),
+    staleTime: STALE_TIMES.threadFeedback, // Infinity
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     retry: false,

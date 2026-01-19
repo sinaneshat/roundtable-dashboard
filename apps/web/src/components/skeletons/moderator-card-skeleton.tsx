@@ -12,7 +12,7 @@ import { cn } from '@/lib/ui/cn';
 export function ModeratorCardSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div className={cn('mt-6', className)} {...props}>
-      <div className="rounded-2xl bg-card/50 backdrop-blur-sm p-4 space-y-4 border border-border/50">
+      <div className="rounded-2xl bg-card/50 backdrop-blur-sm p-4 space-y-4">
         <div className="flex items-center gap-2">
           <Skeleton className="size-4 rounded" />
           <Skeleton className="h-4 w-32" />

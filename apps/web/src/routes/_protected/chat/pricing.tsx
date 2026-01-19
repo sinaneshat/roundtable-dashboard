@@ -3,9 +3,9 @@ import { createFileRoute } from '@tanstack/react-router';
 import { ChatPageHeader } from '@/components/chat/chat-header';
 import { ChatPage } from '@/components/chat/chat-states';
 import { PricingContentSkeleton } from '@/components/pricing/pricing-content-skeleton';
+import PricingScreen from '@/containers/screens/chat/billing/PricingScreen';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { productsQueryOptions, subscriptionsQueryOptions } from '@/lib/data/query-options';
-import dynamic from '@/lib/utils/dynamic';
 
 const pageTitle = 'Pricing & Plans - Roundtable';
 const pageDescription = 'Choose the perfect plan for your AI collaboration needs. Compare features, credits, and pricing for Roundtable - from free tier to enterprise.';
@@ -26,29 +26,27 @@ function PricingMainSkeleton() {
   );
 }
 
-// ✅ SSR ENABLED: Pricing page renders on server with prefetched data
-// Data is prefetched in loader (productsQueryOptions, subscriptionsQueryOptions)
-// No ssr:false - component renders immediately with cached data, no skeleton flash
-const DynamicPricingScreen = dynamic(
-  () => import('@/containers/screens/chat/billing/PricingScreen'),
-  { loading: () => <PricingMainSkeleton /> },
-);
-
 export const Route = createFileRoute('/_protected/chat/pricing')({
   // SSR: Prefetch products and subscriptions for page load
   // Uses shared queryOptions to ensure SSR/client cache key consistency
+  // ensureQueryData waits for data before rendering - no skeleton flash
   loader: async ({ context }) => {
     const { queryClient } = context;
 
-    // Prefetch both products and subscriptions in parallel using shared queryOptions
+    // ensureQueryData waits for data and returns it - ensures data is ready before render
+    // This is the key difference from prefetchQuery - it BLOCKS rendering until data is available
     await Promise.all([
-      queryClient.prefetchQuery(productsQueryOptions),
-      queryClient.prefetchQuery(subscriptionsQueryOptions),
+      queryClient.ensureQueryData(productsQueryOptions),
+      queryClient.ensureQueryData(subscriptionsQueryOptions),
     ]);
 
     return {};
   },
-  component: PricingRoute,
+  // ✅ SSR: Direct import - component renders on server with prefetched data
+  // NO dynamic import - React.lazy doesn't work on server, causes skeleton flash
+  component: PricingScreen,
+  // Skeleton only shown during route transitions (client-side navigation)
+  pendingComponent: PricingMainSkeleton,
   headers: () => ({
     'Cache-Control': 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800',
   }),
@@ -79,7 +77,3 @@ export const Route = createFileRoute('/_protected/chat/pricing')({
     };
   },
 });
-
-function PricingRoute() {
-  return <DynamicPricingScreen />;
-}

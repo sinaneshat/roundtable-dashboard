@@ -170,6 +170,7 @@ export function WebSearchResultItem({
                   alt={img.alt || result.title}
                   className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                   loading="lazy"
+                  decoding="async"
                   referrerPolicy="no-referrer"
                   onError={(e) => {
                     e.currentTarget.style.display = 'none';

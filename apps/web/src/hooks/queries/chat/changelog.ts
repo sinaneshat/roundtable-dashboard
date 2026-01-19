@@ -4,22 +4,25 @@
  * TanStack Query hooks for thread configuration changelog operations
  * Following patterns from TanStack Query v5 documentation
  *
- * IMPORTANT: staleTime values MUST match server-side prefetch values
- * See: docs/react-query-ssr-patterns.md
+ * IMPORTANT: Uses shared queryOptions from query-options.ts to ensure
+ * SSR prefetch and client useQuery use the SAME configuration.
+ * This prevents hydration mismatches and redundant client fetches.
  */
 
 import { useQuery } from '@tanstack/react-query';
 
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
+import { threadChangelogQueryOptions } from '@/lib/data/query-options';
 import { GC_TIMES, STALE_TIMES } from '@/lib/data/stale-times';
-import { getThreadChangelogService, getThreadRoundChangelogService } from '@/services/api';
+import { getThreadRoundChangelogService } from '@/services/api';
 
 /**
  * Hook to fetch thread configuration changelog
  * Returns configuration changes ordered by creation time (newest first)
  * Protected endpoint - requires authentication
  *
+ * ✅ SSR: Uses shared queryOptions for consistent SSR hydration
  * ✅ OPTIMIZED: No automatic refetching - changelog updates are triggered by mutations
  * Changelog only changes when user modifies participants, so we don't need polling
  *
@@ -29,17 +32,15 @@ import { getThreadChangelogService, getThreadRoundChangelogService } from '@/ser
 export function useThreadChangelogQuery(threadId: string, enabled?: boolean) {
   const { isAuthenticated } = useAuthCheck();
 
+  // ✅ SSR: Use shared queryOptions - MUST match loader prefetch
+  const options = threadChangelogQueryOptions(threadId);
+
   return useQuery({
-    queryKey: queryKeys.threads.changelog(threadId),
-    queryFn: () => getThreadChangelogService({ param: { id: threadId } }),
-    staleTime: STALE_TIMES.threadChangelog, // Infinity - ONE-WAY DATA FLOW
+    ...options,
     gcTime: GC_TIMES.INFINITE, // Match staleTime: Infinity pattern
-    // ✅ STREAMING PROTECTION: All refetch settings now handled globally
-    // See query-client.ts for global defaults (all disabled)
     // Preserve previous data during refetches to prevent flickering
     placeholderData: previousData => previousData,
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!threadId),
-    retry: false,
     throwOnError: false,
   });
 }

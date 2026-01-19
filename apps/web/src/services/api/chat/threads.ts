@@ -164,8 +164,11 @@ export async function getThreadMessagesService(data: GetThreadMessagesRequest) {
   return parseResponse(client.chat.threads[':id'].messages.$get(data));
 }
 
-export async function getThreadChangelogService(data: GetThreadChangelogRequest) {
-  const client = createApiClient();
+export async function getThreadChangelogService(
+  data: GetThreadChangelogRequest,
+  options?: { cookieHeader?: string },
+) {
+  const client = createApiClient({ cookieHeader: options?.cookieHeader });
   return parseResponse(client.chat.threads[':id'].changelog.$get(data));
 }
 

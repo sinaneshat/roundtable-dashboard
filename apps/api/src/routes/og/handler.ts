@@ -11,7 +11,7 @@
 
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { ChatMode } from '@roundtable/shared';
-import { and, eq } from 'drizzle-orm';
+import { eq, or } from 'drizzle-orm';
 
 import { createHandler } from '@/core';
 import { chatMessage, chatParticipant, chatThread, getDbAsync } from '@/db';
@@ -106,6 +106,34 @@ async function generateOgImage(params: {
           position: 'relative',
         },
         children: [
+          // Rainbow gradient accent - top right
+          {
+            type: 'div',
+            props: {
+              style: {
+                position: 'absolute',
+                top: 0,
+                right: 0,
+                width: '400px',
+                height: '300px',
+                background: 'radial-gradient(circle at 100% 0%, rgba(236, 72, 153, 0.3) 0%, rgba(139, 92, 246, 0.15) 50%, transparent 70%)',
+              },
+            },
+          },
+          // Rainbow gradient accent - bottom left
+          {
+            type: 'div',
+            props: {
+              style: {
+                position: 'absolute',
+                bottom: 0,
+                left: 0,
+                width: '400px',
+                height: '230px',
+                background: 'radial-gradient(circle at 0% 100%, rgba(6, 182, 212, 0.25) 0%, rgba(34, 197, 94, 0.1) 50%, transparent 70%)',
+              },
+            },
+          },
           // Header with logo
           {
             type: 'div',
@@ -117,16 +145,33 @@ async function generateOgImage(params: {
                 gap: '16px',
               },
               children: [
-                // Logo image (circular to match roundtable.now)
+                // Logo image (circular with glass container)
                 logoBase64 && {
-                  type: 'img',
+                  type: 'div',
                   props: {
-                    src: logoBase64,
-                    width: 56,
-                    height: 56,
                     style: {
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '60px',
+                      height: '60px',
                       borderRadius: '50%',
+                      backgroundColor: OG_COLORS.glassBackground,
+                      border: `1px solid ${OG_COLORS.glassBorder}`,
                     },
+                    children: [
+                      {
+                        type: 'img',
+                        props: {
+                          src: logoBase64,
+                          width: 56,
+                          height: 56,
+                          style: {
+                            borderRadius: '50%',
+                          },
+                        },
+                      },
+                    ],
                   },
                 },
                 // Brand name
@@ -302,7 +347,7 @@ async function generateOgImage(params: {
                   },
                 },
 
-                // Model icons row (only if we have icons)
+                // Model icons row - each in separate glass container (NOT overlapping)
                 modelIcons.length > 0 && {
                   type: 'div',
                   props: {
@@ -310,44 +355,53 @@ async function generateOgImage(params: {
                       display: 'flex',
                       alignItems: 'center',
                       marginTop: '32px',
-                      gap: '8px',
+                      gap: '12px',
                     },
                     children: [
-                      // Stacked model icons (overlapping style)
-                      {
+                      // Model icons in separate glass containers
+                      ...modelIcons.map(iconBase64 => ({
                         type: 'div',
                         props: {
                           style: {
                             display: 'flex',
                             alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '12px',
+                            backgroundColor: OG_COLORS.glassBackground,
+                            border: `1px solid ${OG_COLORS.glassBorder}`,
                           },
-                          children: modelIcons.map((iconBase64, index) => ({
-                            type: 'img',
-                            props: {
-                              src: iconBase64,
-                              width: 40,
-                              height: 40,
-                              style: {
-                                borderRadius: '50%',
-                                border: `2px solid ${OG_COLORS.background}`,
-                                marginLeft: index === 0 ? '0' : '-12px',
-                                boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                          children: [
+                            {
+                              type: 'img',
+                              props: {
+                                src: iconBase64,
+                                width: 36,
+                                height: 36,
                               },
                             },
-                          })),
+                          ],
                         },
-                      },
+                      })),
                       // "+N more" indicator if there are more participants
                       participantCount > MAX_MODEL_ICONS && {
                         type: 'div',
                         props: {
                           style: {
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                            width: '56px',
+                            height: '56px',
+                            borderRadius: '12px',
+                            backgroundColor: OG_COLORS.glassBackground,
+                            border: `1px solid ${OG_COLORS.glassBorder}`,
                             fontSize: '16px',
-                            fontWeight: 500,
+                            fontWeight: 600,
                             color: OG_COLORS.textSecondary,
-                            marginLeft: '8px',
                           },
-                          children: `+${participantCount - MAX_MODEL_ICONS} more`,
+                          children: `+${participantCount - MAX_MODEL_ICONS}`,
                         },
                       },
                     ].filter(Boolean),
@@ -426,6 +480,12 @@ async function svgToPng(svg: string): Promise<Uint8Array | null> {
 /**
  * Generate simple SVG for local development (no satori/WASM required)
  * Mimics the production OG image layout using raw SVG
+ *
+ * Design matches static og-image.png:
+ * - Rainbow logo next to brand name
+ * - Mode icon next to mode text
+ * - Each model icon in separate rounded square glass container (NOT overlapping)
+ * - Rainbow gradient accents in corners
  */
 function generateSimpleOgSvg(params: {
   title: string;
@@ -440,75 +500,79 @@ function generateSimpleOgSvg(params: {
   // Truncate title if too long
   const displayTitle = title.length > 80 ? `${title.slice(0, 77)}...` : title;
 
-  // Get model icons for display (up to 5)
+  // Get logo and mode icon
+  const logoBase64 = getLogoBase64Sync();
+  const modeIconBase64 = mode ? getModeIconBase64Sync(mode) : null;
+
+  // Get model icons for display (up to 6 to match static design)
+  const maxIcons = 6;
   const modelIcons = participantModelIds
-    .slice(0, MAX_MODEL_ICONS)
+    .slice(0, maxIcons)
     .map(modelId => getModelIconBase64Sync(modelId))
     .filter(Boolean);
 
-  // Icon dimensions
-  const iconSize = 48;
-  const iconSpacing = 36; // Overlapping spacing
-  const iconY = 460;
-  const glassWrapperPadding = 16;
+  // Model icon container dimensions (separate glass containers, not overlapping)
+  const containerSize = 56; // Square container size
+  const iconSize = 36; // Icon inside container
+  const iconPadding = (containerSize - iconSize) / 2;
+  const containerSpacing = 12; // Gap between containers
+  const iconsY = 430;
+  const iconsStartX = 60;
 
-  // Calculate glass wrapper dimensions
-  const iconsWidth = modelIcons.length > 0 ? iconSize + (modelIcons.length - 1) * iconSpacing : 0;
-  const glassWrapperWidth = iconsWidth + glassWrapperPadding * 2;
-  const glassWrapperHeight = iconSize + glassWrapperPadding * 2;
-  const glassWrapperX = 60 - glassWrapperPadding;
-  const glassWrapperY = iconY - glassWrapperPadding;
-
-  // Build clip-path definitions for circular icons
-  const clipPathDefs = modelIcons.map((_, index) => `
-    <clipPath id="icon-clip-${index}">
-      <circle cx="${60 + index * iconSpacing + iconSize / 2}" cy="${iconY + iconSize / 2}" r="${iconSize / 2}"/>
-    </clipPath>
-  `).join('');
-
-  // Build model icons SVG elements with proper circular clipping and borders
+  // Build model icons - each in its own glass container
   const modelIconsElements = modelIcons.map((iconBase64, index) => {
-    const x = 60 + index * iconSpacing;
+    const containerX = iconsStartX + index * (containerSize + containerSpacing);
+    const iconX = containerX + iconPadding;
+    const iconY = iconsY + iconPadding;
+
     return `
-    <!-- Icon ${index} background circle (border effect) -->
-    <circle cx="${x + iconSize / 2}" cy="${iconY + iconSize / 2}" r="${iconSize / 2 + 2}" fill="${OG_COLORS.background}"/>
-    <!-- Icon ${index} image -->
-    <image
-      href="${iconBase64}"
-      x="${x}"
-      y="${iconY}"
-      width="${iconSize}"
-      height="${iconSize}"
-      clip-path="url(#icon-clip-${index})"
-      preserveAspectRatio="xMidYMid slice"
-    />
-    <!-- Icon ${index} border ring -->
-    <circle cx="${x + iconSize / 2}" cy="${iconY + iconSize / 2}" r="${iconSize / 2}" fill="none" stroke="${OG_COLORS.glassBorder}" stroke-width="2"/>
-    `;
-  }).join('');
-
-  // Extra participants indicator
-  const extraParticipantsX = 60 + modelIcons.length * iconSpacing + 16;
-  const extraParticipants = participantCount > MAX_MODEL_ICONS
-    ? `<text x="${extraParticipantsX}" y="${iconY + iconSize / 2 + 6}" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="500">+${participantCount - MAX_MODEL_ICONS} more</text>`
-    : '';
-
-  // Glass wrapper for model icons (only if icons exist)
-  const glassWrapper = modelIcons.length > 0
-    ? `
-    <!-- Glass wrapper for model icons -->
+    <!-- Model ${index} glass container -->
     <rect
-      x="${glassWrapperX}"
-      y="${glassWrapperY}"
-      width="${glassWrapperWidth + (participantCount > MAX_MODEL_ICONS ? 80 : 0)}"
-      height="${glassWrapperHeight}"
-      rx="32"
-      fill="${OG_COLORS.background}"
-      fill-opacity="0.4"
+      x="${containerX}"
+      y="${iconsY}"
+      width="${containerSize}"
+      height="${containerSize}"
+      rx="12"
+      fill="${OG_COLORS.glassBackground}"
       stroke="${OG_COLORS.glassBorder}"
       stroke-width="1"
     />
-  `
+    <!-- Model ${index} icon -->
+    <image
+      href="${iconBase64}"
+      x="${iconX}"
+      y="${iconY}"
+      width="${iconSize}"
+      height="${iconSize}"
+      preserveAspectRatio="xMidYMid meet"
+    />`;
+  }).join('');
+
+  // Extra participants indicator
+  const extraCount = participantCount - maxIcons;
+  const extraParticipantsX = iconsStartX + modelIcons.length * (containerSize + containerSpacing);
+  const extraParticipants = extraCount > 0
+    ? `
+    <!-- Extra participants container -->
+    <rect
+      x="${extraParticipantsX}"
+      y="${iconsY}"
+      width="${containerSize}"
+      height="${containerSize}"
+      rx="12"
+      fill="${OG_COLORS.glassBackground}"
+      stroke="${OG_COLORS.glassBorder}"
+      stroke-width="1"
+    />
+    <text
+      x="${extraParticipantsX + containerSize / 2}"
+      y="${iconsY + containerSize / 2 + 6}"
+      fill="${OG_COLORS.textSecondary}"
+      font-family="system-ui, -apple-system, sans-serif"
+      font-size="16"
+      font-weight="600"
+      text-anchor="middle"
+    >+${extraCount}</text>`
     : '';
 
   return `<?xml version="1.0" encoding="UTF-8"?>
@@ -518,69 +582,114 @@ function generateSimpleOgSvg(params: {
       <stop offset="0%" style="stop-color:${OG_COLORS.backgroundGradientStart}"/>
       <stop offset="100%" style="stop-color:${OG_COLORS.backgroundGradientEnd}"/>
     </linearGradient>
-    ${clipPathDefs}
+    <!-- Rainbow gradient for logo glow -->
+    <radialGradient id="rainbow-glow-tr" cx="100%" cy="0%" r="50%">
+      <stop offset="0%" style="stop-color:#ec4899;stop-opacity:0.3"/>
+      <stop offset="50%" style="stop-color:#8b5cf6;stop-opacity:0.15"/>
+      <stop offset="100%" style="stop-color:transparent;stop-opacity:0"/>
+    </radialGradient>
+    <radialGradient id="rainbow-glow-bl" cx="0%" cy="100%" r="50%">
+      <stop offset="0%" style="stop-color:#06b6d4;stop-opacity:0.25"/>
+      <stop offset="50%" style="stop-color:#22c55e;stop-opacity:0.1"/>
+      <stop offset="100%" style="stop-color:transparent;stop-opacity:0"/>
+    </radialGradient>
+    <clipPath id="logo-clip">
+      <circle cx="100" cy="70" r="28"/>
+    </clipPath>
   </defs>
 
   <!-- Background -->
   <rect width="100%" height="100%" fill="url(#bg-gradient)"/>
 
-  <!-- Header with brand -->
-  <text x="60" y="90" fill="${OG_COLORS.textPrimary}" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="600">${BRAND.name}</text>
+  <!-- Rainbow gradient accents in corners -->
+  <rect x="800" y="0" width="400" height="300" fill="url(#rainbow-glow-tr)"/>
+  <rect x="0" y="400" width="400" height="230" fill="url(#rainbow-glow-bl)"/>
 
-  <!-- Mode badge -->
+  <!-- Header with logo and brand -->
+  <g>
+    ${logoBase64
+      ? `
+    <!-- Logo circle background -->
+    <circle cx="100" cy="70" r="30" fill="${OG_COLORS.glassBackground}" stroke="${OG_COLORS.glassBorder}" stroke-width="1"/>
+    <!-- Logo image -->
+    <image
+      href="${logoBase64}"
+      x="72"
+      y="42"
+      width="56"
+      height="56"
+      clip-path="url(#logo-clip)"
+      preserveAspectRatio="xMidYMid slice"
+    />`
+      : ''}
+    <!-- Brand name -->
+    <text x="${logoBase64 ? '145' : '60'}" y="82" fill="${OG_COLORS.textPrimary}" font-family="system-ui, -apple-system, sans-serif" font-size="28" font-weight="600">${BRAND.name}</text>
+  </g>
+
+  <!-- Mode badge with icon -->
   ${mode
     ? `
-  <text x="60" y="200" fill="${modeColor}" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="600" text-transform="capitalize">${mode.charAt(0).toUpperCase() + mode.slice(1)}</text>
-  `
+  <g>
+    ${modeIconBase64
+      ? `<image href="${modeIconBase64}" x="60" y="165" width="24" height="24" preserveAspectRatio="xMidYMid meet"/>`
+      : ''}
+    <text x="${modeIconBase64 ? '92' : '60'}" y="185" fill="${modeColor}" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="600">${mode.charAt(0).toUpperCase() + mode.slice(1)}</text>
+  </g>`
     : ''}
 
   <!-- Title -->
-  <text x="60" y="${mode ? '280' : '240'}" fill="${OG_COLORS.textPrimary}" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="700">
+  <text x="60" y="${mode ? '270' : '220'}" fill="${OG_COLORS.textPrimary}" font-family="system-ui, -apple-system, sans-serif" font-size="52" font-weight="700">
     <tspan>${displayTitle}</tspan>
   </text>
 
   <!-- Stats -->
-  <text x="60" y="380" fill="${modeColor}" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="700">${participantCount}</text>
-  <text x="60" y="410" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="500">${participantCount === 1 ? 'AI Model' : 'AI Models'}</text>
+  <g>
+    <text x="60" y="370" fill="${modeColor || OG_COLORS.primary}" font-family="system-ui, -apple-system, sans-serif" font-size="44" font-weight="700">${participantCount}</text>
+    <text x="60" y="400" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="500">${participantCount === 1 ? 'AI Model' : 'AI Models'}</text>
 
-  <text x="200" y="380" fill="${OG_COLORS.textPrimary}" font-family="system-ui, -apple-system, sans-serif" font-size="48" font-weight="700">${messageCount}</text>
-  <text x="200" y="410" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="500">${messageCount === 1 ? 'Message' : 'Messages'}</text>
+    <text x="180" y="370" fill="${OG_COLORS.textPrimary}" font-family="system-ui, -apple-system, sans-serif" font-size="44" font-weight="700">${messageCount}</text>
+    <text x="180" y="400" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="16" font-weight="500">${messageCount === 1 ? 'Message' : 'Messages'}</text>
+  </g>
 
-  <!-- Glass wrapper and Model Icons -->
-  ${glassWrapper}
-  ${modelIconsElements}
-  ${extraParticipants}
+  <!-- Model Icons in separate glass containers -->
+  <g>
+    ${modelIconsElements}
+    ${extraParticipants}
+  </g>
 
   <!-- Footer line -->
-  <line x1="60" y1="550" x2="1140" y2="550" stroke="${OG_COLORS.glassBorder}" stroke-width="2"/>
+  <line x1="60" y1="540" x2="1140" y2="540" stroke="${OG_COLORS.glassBorder}" stroke-width="1"/>
 
   <!-- Tagline -->
-  <text x="60" y="590" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="20" font-weight="500">${BRAND.tagline}</text>
+  <text x="60" y="580" fill="${OG_COLORS.textSecondary}" font-family="system-ui, -apple-system, sans-serif" font-size="18" font-weight="500">${BRAND.tagline}</text>
 </svg>`;
 }
 
 /**
- * Fetch public thread data from database
+ * Fetch thread data from database for OG image generation
+ * For public threads: returns full data
+ * For private threads in dev mode: still returns data for preview (with debug info)
+ *
+ * IMPORTANT: Also checks previousSlug for backwards compatibility when threads are renamed
  */
-async function getPublicThread(slug: string) {
+async function getThreadForOgImage(slug: string, isLocalDev: boolean) {
   try {
     const db = await getDbAsync();
 
-    // Fetch thread
+    // Query thread by slug OR previousSlug (handles renamed threads)
     const threadResult = await db
       .select()
       .from(chatThread)
-      .where(
-        and(
-          eq(chatThread.slug, slug),
-          eq(chatThread.isPublic, true),
-        ),
-      )
+      .where(or(
+        eq(chatThread.slug, slug),
+        eq(chatThread.previousSlug, slug),
+      ))
       .limit(1);
 
     const thread = threadResult[0];
+
     if (!thread) {
-      return null;
+      return { found: false, isPublic: false, thread: null, participantCount: 0, participantModelIds: [], messageCount: 0 };
     }
 
     // Fetch participants with their model IDs
@@ -595,14 +704,23 @@ async function getPublicThread(slug: string) {
       .from(chatMessage)
       .where(eq(chatMessage.threadId, thread.id));
 
+    // In local dev, always return data for preview (helps with testing)
+    // In production, only return data if thread is public
+    if (!thread.isPublic && !isLocalDev) {
+      return { found: true, isPublic: false, thread: null, participantCount: 0, participantModelIds: [], messageCount: 0 };
+    }
+
     return {
+      found: true,
+      isPublic: thread.isPublic,
       thread,
       participantCount: participants.length,
       participantModelIds: participants.map(p => p.modelId),
       messageCount: messages.length,
     };
-  } catch {
-    return null;
+  } catch (error) {
+    console.error('[OG-IMAGE] getThreadForOgImage error:', error);
+    return { found: false, isPublic: false, thread: null, participantCount: 0, participantModelIds: [], messageCount: 0 };
   }
 }
 
@@ -627,17 +745,33 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
       let participantCount = 3;
       let messageCount = 10;
       let participantModelIds: string[] = [];
+      let debugInfo = '';
 
       // Fetch thread data if slug provided
       if (slug) {
-        const threadData = await getPublicThread(slug);
-        if (threadData) {
+        const threadData = await getThreadForOgImage(slug, isLocalDev);
+
+        if (isLocalDev) {
+          // Add debug info to title in local dev to help diagnose issues
+          debugInfo = threadData.found
+            ? (threadData.isPublic ? '' : ' [NOT PUBLIC]')
+            : ' [NOT FOUND]';
+        }
+
+        if (threadData.thread) {
           title = threadData.thread.title || title;
           mode = threadData.thread.mode as ChatMode;
           participantCount = threadData.participantCount || participantCount;
           messageCount = threadData.messageCount || messageCount;
           participantModelIds = threadData.participantModelIds || [];
         }
+      } else if (isLocalDev) {
+        debugInfo = ' [NO SLUG]';
+      }
+
+      // Append debug info in local dev
+      if (isLocalDev && debugInfo) {
+        title = `${title}${debugInfo}`;
       }
 
       // Local dev: Generate simple SVG without satori (WASM not available)

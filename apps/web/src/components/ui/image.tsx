@@ -5,10 +5,14 @@
  * TanStack Start recommended replacement for next/image.
  *
  * Features:
- * - Automatic lazy loading
- * - Responsive sizing
- * - Blur placeholder support
- * - CDN-aware optimization
+ * - Automatic lazy loading with native browser support
+ * - Responsive srcset/sizes generation
+ * - LQIP blur placeholder via Unpic's background prop
+ * - CDN-aware optimization (Cloudinary, Imgix, Shopify, etc.)
+ * - WebP/AVIF format delivery when supported
+ * - No build step required - works with any image CDN
+ *
+ * @see https://unpic.pics/img/react/
  */
 
 import type { ImagePlaceholderType } from '@roundtable/shared/enums';
@@ -16,7 +20,6 @@ import { ImagePlaceholderTypes } from '@roundtable/shared/enums';
 import type { ImageProps as UnpicImageProps } from '@unpic/react';
 import { Image as UnpicImage } from '@unpic/react';
 import type { CSSProperties, ImgHTMLAttributes } from 'react';
-import { useState } from 'react';
 
 import { cn } from '@/lib/ui/cn';
 
@@ -28,7 +31,20 @@ type ImageProps = {
   fill?: boolean;
   priority?: boolean;
   quality?: number;
+  /**
+   * Placeholder strategy:
+   * - 'blur': Uses blurDataURL or auto-generated LQIP
+   * - 'empty': No placeholder
+   */
   placeholder?: ImagePlaceholderType;
+  /**
+   * LQIP data URI, color, gradient, or 'auto' for CDN-generated placeholder.
+   * When placeholder='blur', this sets the background.
+   * - 'auto': CDN generates low-res placeholder (Cloudinary, Imgix, etc.)
+   * - '#hex' or 'rgb()': Solid color placeholder
+   * - 'linear-gradient(...)': Gradient placeholder
+   * - 'data:image/...': Custom LQIP data URI
+   */
   blurDataURL?: string;
   /** Skip @unpic optimization - use native img */
   unoptimized?: boolean;
@@ -36,8 +52,8 @@ type ImageProps = {
   className?: string;
 } & Omit<ImgHTMLAttributes<HTMLImageElement>, 'src' | 'width' | 'height' | 'placeholder'>;
 
-// Tiny 1x1 transparent placeholder for blur effect
-const BLUR_PLACEHOLDER = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==';
+// Default muted gray placeholder for blur effect
+const DEFAULT_BLUR_BG = '#27272a';
 
 /**
  * Optimized image component with @unpic/react
@@ -51,8 +67,16 @@ const BLUR_PLACEHOLDER = 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAAB
  * <Image src="/bg.jpg" alt="Background" fill />
  *
  * @example
- * // With blur placeholder
- * <Image src="/photo.jpg" alt="Photo" placeholder="blur" width={400} height={300} />
+ * // With blur placeholder (auto-generated from CDN)
+ * <Image src="https://res.cloudinary.com/demo/image/upload/sample.jpg" alt="Photo" placeholder="blur" blurDataURL="auto" width={400} height={300} />
+ *
+ * @example
+ * // With custom LQIP data URI
+ * <Image src="/photo.jpg" alt="Photo" placeholder="blur" blurDataURL="data:image/jpeg;base64,..." width={400} height={300} />
+ *
+ * @example
+ * // With color placeholder
+ * <Image src="/photo.jpg" alt="Photo" placeholder="blur" blurDataURL="#3b82f6" width={400} height={300} />
  */
 export default function Image({
   src,
@@ -66,16 +90,13 @@ export default function Image({
   unoptimized,
   style,
   className,
-  onLoad,
   ...props
 }: ImageProps) {
-  const [isLoaded, setIsLoaded] = useState(false);
-
   // Convert width/height to numbers for @unpic
   const numWidth = typeof width === 'string' ? parseInt(width, 10) : width;
   const numHeight = typeof height === 'string' ? parseInt(height, 10) : height;
 
-  // Fill mode styles
+  // Fill mode styles for native img
   const fillStyle: CSSProperties = fill
     ? {
         position: 'absolute',
@@ -87,21 +108,10 @@ export default function Image({
       }
     : {};
 
-  // Blur placeholder background
-  const blurStyle: CSSProperties = placeholder === ImagePlaceholderTypes.BLUR && !isLoaded
-    ? {
-        backgroundImage: `url(${blurDataURL || BLUR_PLACEHOLDER})`,
-        backgroundSize: 'cover',
-        backgroundPosition: 'center',
-        filter: 'blur(20px)',
-        transform: 'scale(1.1)',
-      }
-    : {};
-
-  const handleLoad = (e: React.SyntheticEvent<HTMLImageElement>) => {
-    setIsLoaded(true);
-    onLoad?.(e);
-  };
+  // Determine background for Unpic (native LQIP support)
+  const background = placeholder === ImagePlaceholderTypes.BLUR
+    ? (blurDataURL || DEFAULT_BLUR_BG)
+    : undefined;
 
   // Use native img for unoptimized or data URIs
   if (unoptimized || src.startsWith('data:')) {
@@ -115,24 +125,15 @@ export default function Image({
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
         className={className}
-        onLoad={handleLoad}
         {...props}
       />
     );
   }
 
-  // Combined wrapper styles for blur effect and custom styles
-  const wrapperStyle: CSSProperties = {
-    ...(placeholder === ImagePlaceholderTypes.BLUR ? blurStyle : {}),
-    ...style,
-  };
-
-  // Create className with fill styles since @unpic/react doesn't accept style prop
+  // Create className with fill styles
   const imageClassName = cn(
     className,
     fill && 'absolute top-0 left-0 w-full h-full object-cover',
-    placeholder === ImagePlaceholderTypes.BLUR && 'transition-opacity duration-300 ease-in-out',
-    placeholder === ImagePlaceholderTypes.BLUR && !isLoaded && 'opacity-0',
   );
 
   // Render different variants based on fill mode to satisfy @unpic discriminated union types
@@ -140,15 +141,15 @@ export default function Image({
     return (
       <div
         className={cn('relative overflow-hidden w-full h-full')}
-        style={Object.keys(wrapperStyle).length > 0 ? wrapperStyle : undefined}
+        style={style}
       >
         <UnpicImage
           src={src}
           alt={alt}
           layout="fullWidth"
           fetchPriority={priority ? 'high' : undefined}
+          background={background}
           className={imageClassName}
-          onLoad={handleLoad}
           {...props}
         />
       </div>
@@ -156,21 +157,20 @@ export default function Image({
   }
 
   // Non-fill mode: must provide explicit width/height for @unpic discriminated union
-  // Type cast: Our ImageProps extends ImgHTMLAttributes, but @unpic accepts a subset
   const unpicProps = {
     src,
     alt,
     width: numWidth,
     height: numHeight,
     fetchPriority: priority ? 'high' : undefined,
+    background,
     className: imageClassName,
-    onLoad: handleLoad,
   } as UnpicImageProps;
 
   return (
     <div
       className={cn('relative overflow-hidden')}
-      style={Object.keys(wrapperStyle).length > 0 ? wrapperStyle : undefined}
+      style={style}
     >
       <UnpicImage {...unpicProps} />
     </div>

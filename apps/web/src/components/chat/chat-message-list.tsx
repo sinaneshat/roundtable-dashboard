@@ -1651,8 +1651,26 @@ export const ChatMessageList = memo(
     }
 
     // ✅ BUG FIX: Re-render if completedRoundNumbers changes (new summaries completed)
-    if (prevProps.completedRoundNumbers !== nextProps.completedRoundNumbers) {
-      return false;
+    // ✅ PERF FIX: Do shallow Set comparison, not just reference equality
+    // Even with stable refs from ChatView, verify contents are actually equal
+    const prevCompleted = prevProps.completedRoundNumbers;
+    const nextCompleted = nextProps.completedRoundNumbers;
+    if (prevCompleted !== nextCompleted) {
+      // Handle undefined cases
+      if (!prevCompleted || !nextCompleted) {
+        return false;
+      }
+      // Quick size check first
+      if (prevCompleted.size !== nextCompleted.size) {
+        return false;
+      }
+      // Content check - only re-render if contents actually differ
+      for (const num of nextCompleted) {
+        if (!prevCompleted.has(num)) {
+          return false;
+        }
+      }
+      // Contents are equal despite different references - skip re-render
     }
 
     // ✅ MODERATOR FLAG: Re-render if moderator streaming state changes

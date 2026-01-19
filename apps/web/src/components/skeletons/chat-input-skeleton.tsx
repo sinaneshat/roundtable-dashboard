@@ -25,9 +25,9 @@ export function ChatInputSkeleton({
 }: ChatInputSkeletonProps) {
   return (
     <div className={cn('w-full', className)} {...props}>
-      <div className="rounded-2xl bg-card border border-border/50 shadow-lg overflow-hidden">
+      <div className="rounded-2xl bg-card/80 shadow-lg overflow-hidden">
         {showHeader && (
-          <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
+          <div className="flex items-center justify-between px-4 py-3 border-b border-border/10">
             <Skeleton className="h-5 w-24" />
             <Skeleton className="h-8 w-20 rounded-full" />
           </div>

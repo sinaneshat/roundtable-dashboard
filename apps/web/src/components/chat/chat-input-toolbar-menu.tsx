@@ -88,21 +88,10 @@ export const ChatInputToolbarMenu = memo(({
     onAttachmentClick?.();
   }, [onAttachmentClick]);
 
-  if (!isMounted) {
-    return (
-      <Button
-        type="button"
-        variant={ComponentVariants.GLASS}
-        size={ComponentSizes.ICON}
-        disabled={disabled}
-        className="size-8"
-      >
-        <Icons.moreHorizontal className="size-4" />
-      </Button>
-    );
-  }
-
-  if (isDesktop) {
+  // SSR and pre-mount: Render mobile structure (Drawer is the default)
+  // This ensures hydration matches because we can't know viewport on server
+  // After mount, switch to desktop layout if appropriate
+  if (isMounted && isDesktop) {
     return (
       <TooltipProvider delayDuration={800}>
         <div className="flex items-center gap-2">

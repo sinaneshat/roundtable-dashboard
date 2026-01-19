@@ -46,13 +46,21 @@ export function ShareDialog({
   const [ogRevision, setOgRevision] = useState(0);
   const prevOpenRef = useRef(open);
   const prevIsPublicRef = useRef(isPublic);
+  const prevIsLoadingRef = useRef(isLoading);
 
-  // Increment revision when dialog opens with public thread, or thread transitions to public
+  // Increment revision when:
+  // 1. Dialog opens with public thread (not loading)
+  // 2. Loading completes while thread is public (mutation finished)
   // This is an intentional state synchronization from props - not a derived value
   useEffect(() => {
     const dialogJustOpened = open && !prevOpenRef.current;
-    const justBecamePublic = isPublic && !prevIsPublicRef.current;
-    const shouldRefresh = !isLoading && ((dialogJustOpened && isPublic) || justBecamePublic);
+    const loadingJustFinished = !isLoading && prevIsLoadingRef.current;
+
+    // Refresh when dialog opens with public thread or when loading finishes with public thread
+    const shouldRefresh = isPublic && (
+      (dialogJustOpened && !isLoading) // Dialog opens with already-public thread
+      || loadingJustFinished // Mutation completed (thread is now public in DB)
+    );
 
     if (shouldRefresh) {
       // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional cache bust on dialog/visibility state change
@@ -61,14 +69,16 @@ export function ShareDialog({
 
     prevOpenRef.current = open;
     prevIsPublicRef.current = isPublic;
+    prevIsLoadingRef.current = isLoading;
   }, [open, isPublic, isLoading]);
 
   const baseUrl = getAppBaseUrl();
   const shareUrl = `${baseUrl}/public/chat/${slug}`;
-  // OG image from API endpoint - revision param for cache busting
+  // OG image from API endpoint - always include cache busting to ensure fresh data
   const ogImageUrl = useMemo(() => {
     const basePath = `${baseUrl}/api/v1/og/chat?slug=${slug}`;
-    return ogRevision > 0 ? `${basePath}&v=${ogRevision}-${Date.now()}` : basePath;
+    // Always add cache busting param to ensure fresh OG image after making thread public
+    return `${basePath}&v=${ogRevision}-${Date.now()}`;
   }, [baseUrl, slug, ogRevision]);
 
   useEffect(() => {

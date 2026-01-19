@@ -165,12 +165,52 @@ export function ChatView({
   const effectiveThreadId = serverThreadId || thread?.id || createdThreadId || '';
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 
-  // ✅ PERF: Detect initial creation flow to skip unnecessary queries
-  // During initial creation (overview -> thread), changelog/feedback don't exist yet
-  // Only fetch these when viewing an established thread OR after first round completes
+  // ✅ MOVED UP: Need completedRoundNumbers early for shouldSkipAuxiliaryQueries
+  // ✅ PERF FIX: Use ref to stabilize Set reference - only create new Set when contents change
+  // Previously, useMemo created a new Set on every messages change, causing ChatMessageList
+  // memo comparison to always fail (reference inequality) even when contents were identical.
+  // This caused unnecessary re-renders and the "round flash" at round completion.
+  const completedRoundNumbersRef = useRef<Set<number>>(new Set());
+  const completedRoundNumbers = useMemo(() => {
+    const completed = new Set<number>();
+    messages.forEach((msg) => {
+      if (isModeratorMessage(msg)) {
+        const moderatorMeta = getModeratorMetadata(msg.metadata);
+        if (moderatorMeta?.finishReason) {
+          const roundNum = getRoundNumber(msg.metadata);
+          if (roundNum !== null) {
+            completed.add(roundNum);
+          }
+        }
+      }
+    });
+    // ✅ REFRESH FIX: When server prefills currentResumptionPhase=COMPLETE after SSR refresh,
+    // treat that round as complete even before fresh messages load (moderator msg may be absent)
+    // This prevents participants from entering "thinking mode" on page refresh
+    if (currentResumptionPhase === RoundPhases.COMPLETE && resumptionRoundNumber !== null) {
+      completed.add(resumptionRoundNumber);
+    }
+
+    // ✅ STABLE REFERENCE: Only return new Set if contents actually changed
+    const prevSet = completedRoundNumbersRef.current;
+    if (prevSet.size === completed.size && [...prevSet].every(n => completed.has(n))) {
+      return prevSet; // Contents unchanged - return stable reference
+    }
+    completedRoundNumbersRef.current = completed;
+    return completed;
+  }, [messages, currentResumptionPhase, resumptionRoundNumber]);
+
+  // ✅ PERF: Detect when auxiliary queries should be skipped
+  // Changelog/feedback data only exists AFTER a round completes, so skip when:
+  // 1. Initial creation flow (just created from overview, streaming round 0)
+  // 2. First round is currently streaming
+  // 3. No completed rounds yet (navigating to existing thread mid-first-round)
   const isInitialCreationFlow = Boolean(createdThreadId) && streamingRoundNumber === 0;
   const isFirstRoundStreaming = streamingRoundNumber === 0 && (isStreaming || isModeratorStreaming || waitingToStartStreaming);
-  const shouldSkipAuxiliaryQueries = isInitialCreationFlow || isFirstRoundStreaming;
+  // ✅ FIX: Also skip if thread has no completed rounds - no data exists yet to fetch
+  // This handles navigation to existing thread where first round is in progress
+  const hasNoCompletedRounds = completedRoundNumbers.size === 0;
+  const shouldSkipAuxiliaryQueries = isInitialCreationFlow || isFirstRoundStreaming || hasNoCompletedRounds;
 
   const { data: modelsData, isLoading: isModelsLoading } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(isModelModalOpen.value && !isStreaming);
@@ -226,28 +266,6 @@ export function ChatView({
       return true;
     });
   }, [changelogResponse]);
-
-  const completedRoundNumbers = useMemo(() => {
-    const completed = new Set<number>();
-    messages.forEach((msg) => {
-      if (isModeratorMessage(msg)) {
-        const moderatorMeta = getModeratorMetadata(msg.metadata);
-        if (moderatorMeta?.finishReason) {
-          const roundNum = getRoundNumber(msg.metadata);
-          if (roundNum !== null) {
-            completed.add(roundNum);
-          }
-        }
-      }
-    });
-    // ✅ REFRESH FIX: When server prefills currentResumptionPhase=COMPLETE after SSR refresh,
-    // treat that round as complete even before fresh messages load (moderator msg may be absent)
-    // This prevents participants from entering "thinking mode" on page refresh
-    if (currentResumptionPhase === RoundPhases.COMPLETE && resumptionRoundNumber !== null) {
-      completed.add(resumptionRoundNumber);
-    }
-    return completed;
-  }, [messages, currentResumptionPhase, resumptionRoundNumber]);
 
   const orderedModels = useOrderedModels({
     selectedParticipants,
@@ -351,7 +369,7 @@ export function ChatView({
 
   const lastLoadedFeedbackRef = useRef<string>('');
   useEffect(() => {
-    if (feedbackSuccess && feedbackData?.success && feedbackData.data) {
+    if (feedbackSuccess && feedbackData?.success && feedbackData.data && Array.isArray(feedbackData.data)) {
       const feedbackArray: RoundFeedbackData[] = feedbackData.data as RoundFeedbackData[];
       const feedbackKey = feedbackArray.map((feedback) => {
         const fb = feedback as Record<string, unknown>;

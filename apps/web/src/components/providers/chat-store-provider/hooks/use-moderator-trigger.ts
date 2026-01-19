@@ -162,8 +162,18 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       if (contentType.includes('application/json')) {
         // Could be either: existing moderator message OR 202 polling response
         // Parse JSON to check if it's a polling response that needs retry
-        const jsonData = await response.json() as { data?: { status?: string; retryAfterMs?: number; message?: string } };
-        rlog.sync('moderator-json', `status=${response.status} data=${JSON.stringify(jsonData?.data ?? {})}`);
+        const jsonData = await response.json() as {
+          // Polling response shape
+          data?: { status?: string; retryAfterMs?: number; message?: string };
+          // Existing message shape (returned by Responses.raw)
+          id?: string;
+          role?: string;
+          parts?: Array<{ type: string; text?: string }>;
+          metadata?: Record<string, unknown>;
+          roundNumber?: number;
+        };
+        rlog.sync('moderator-json', `status=${response.status} data=${JSON.stringify(jsonData ?? {})}`);
+
         if (response.status === 202 || jsonData?.data?.status === 'pending') {
           retryCountRef.current += 1;
           if (retryCountRef.current >= MAX_202_RETRIES) {
@@ -188,9 +198,24 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
           await triggerModerator(roundNumber, participantMessageIds, true);
           return;
         }
+
         // Success - reset retry counter
         retryCountRef.current = 0;
-        // Message already exists - no streaming needed
+
+        // ✅ FIX: Handle existing moderator message returned from backend
+        // Backend returns message shape: { id, role, parts, metadata, roundNumber }
+        if (jsonData?.id && jsonData?.parts && Array.isArray(jsonData.parts)) {
+          const existingText = jsonData.parts
+            .filter((p): p is { type: string; text: string } => p.type === MessagePartTypes.TEXT && typeof p.text === 'string')
+            .map(p => p.text)
+            .join('');
+
+          if (existingText) {
+            rlog.sync('moderator-exists-hydrate', `found existing message with ${existingText.length} chars`);
+            accumulatedText = existingText;
+          }
+        }
+
         rlog.sync('moderator-exists', `message already exists, no streaming needed`);
       } else {
         rlog.sync('moderator-stream-start', `starting stream read, contentType=${contentType}`);

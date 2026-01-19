@@ -7,6 +7,7 @@
  */
 
 export * from './browser-timing';
+export * from './cloudflare-images';
 export { cn } from './cn';
 export * from './color-extraction';
 export * from './fonts';

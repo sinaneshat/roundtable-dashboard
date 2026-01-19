@@ -1,6 +1,7 @@
 import type { ChatMode } from '@roundtable/shared';
 import { MessagePartTypes, MessageRoles } from '@roundtable/shared';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
 import { useCallback } from 'react';
 import { z } from 'zod';
 import { useShallow } from 'zustand/react/shallow';
@@ -13,6 +14,7 @@ import {
 } from '@/hooks/mutations';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
 import { isListOrSidebarQuery, queryKeys } from '@/lib/data/query-keys';
+import { threadBySlugQueryOptions } from '@/lib/data/query-options';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
@@ -59,6 +61,7 @@ export type UseChatFormActionsReturn = {
  */
 export function useChatFormActions(): UseChatFormActionsReturn {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const storeApi = useChatStoreApi();
 
   const formState = useChatStore(useShallow(s => ({
@@ -199,12 +202,36 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         },
       );
 
+      // ✅ PERF: Pre-populate threadBySlug cache to prevent fetch on later navigation
+      // When user navigates to /chat/{slug}, the route loader will find this fresh data
+      // and skip the server fetch (see $slug.tsx loader's hasFreshCache check)
+      // Note: Must include all required fields from ThreadDetailPayloadSchema
+      const threadBySlugOptions = threadBySlugQueryOptions(thread.slug);
+      const threadDetailCache = {
+        success: true as const,
+        data: {
+          thread: threadWithDates,
+          participants: participantsWithDates,
+          messages: messagesWithDates,
+          changelog: [], // New thread has no changelog
+          feedback: [], // New thread has no feedback
+          preSearches: [], // New thread has no pre-searches
+          user: { id: thread.userId, name: '', image: null as string | null }, // Minimal user data (actual user info loaded on next fetch)
+        },
+      };
+      queryClient.setQueryData(threadBySlugOptions.queryKey, threadDetailCache);
+
+      // Also populate the thread detail by ID cache for components using useThreadQuery
+      queryClient.setQueryData(queryKeys.threads.detail(thread.id), threadDetailCache);
+
+      // ✅ TanStack Router: Navigate properly to avoid SSR re-trigger
+      // Cache is already populated above, so loader will find fresh data and skip fetch
       queueMicrotask(() => {
-        window.history.replaceState(
-          window.history.state,
-          '',
-          `/chat/${thread.slug}`,
-        );
+        router.navigate({
+          to: '/chat/$slug',
+          params: { slug: thread.slug },
+          replace: true,
+        });
       });
 
       actions.setInputValue('');
@@ -236,6 +263,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     createThreadMutation,
     actions,
     queryClient,
+    router,
   ]);
 
   const handleUpdateThreadAndSend = useCallback(async (threadId: string, attachmentIds?: string[], attachmentInfos?: AttachmentInfo[]) => {

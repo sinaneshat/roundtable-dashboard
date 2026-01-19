@@ -59,7 +59,7 @@ export const streamdownComponents = {
   td: ({ children, className }: ComponentPropsWithoutRef<'td'>) => <td dir="auto" className={cn('px-4 py-3 text-sm text-foreground', className)}>{children}</td>,
 
   img: ({ src, alt, className, ...props }: ComponentPropsWithoutRef<'img'>) => (
-    <img src={src} alt={alt || ''} className={cn('max-w-full h-auto rounded-2xl my-4', className)} loading="lazy" referrerPolicy="no-referrer" {...props} />
+    <img src={src} alt={alt || ''} className={cn('max-w-full h-auto rounded-2xl my-4', className)} loading="lazy" decoding="async" referrerPolicy="no-referrer" {...props} />
   ),
 };
 

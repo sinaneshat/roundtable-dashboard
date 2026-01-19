@@ -100,6 +100,7 @@ function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
                   src={preview.url}
                   alt={file.name}
                   className="object-cover size-full rounded-md"
+                  decoding="async"
                 />
               )
             : (

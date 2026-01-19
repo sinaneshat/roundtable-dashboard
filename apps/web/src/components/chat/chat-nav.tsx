@@ -296,19 +296,34 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                   </SidebarGroup>
                 )}
 
-                {isLoading && (
-                  <SidebarGroup className="pt-4 group-data-[collapsible=icon]:hidden">
-                    <SidebarGroupLabel className="px-4">
-                      <span className="text-sm font-medium truncate">
-                        {t('navigation.chats')}
-                      </span>
-                    </SidebarGroupLabel>
-                    <SidebarThreadSkeletons count={10} animated />
-                  </SidebarGroup>
-                )}
+                {/* Chats section - unified structure to prevent hydration mismatch */}
+                {/* SSR may render loading state while client has hydrated data */}
+                <SidebarGroup className="group/chats pt-4 group-data-[collapsible=icon]:hidden">
+                  <SidebarGroupLabel
+                    className={cn(
+                      'flex items-center gap-0.5 px-4',
+                      !isLoading && !isError && nonFavoriteChats.length > 0 && 'cursor-pointer',
+                    )}
+                    onClick={!isLoading && !isError && nonFavoriteChats.length > 0 ? () => setIsChatsCollapsed(!isChatsCollapsed) : undefined}
+                  >
+                    <span className="text-sm font-medium truncate">
+                      {t('navigation.chats')}
+                    </span>
+                    {!isLoading && !isError && nonFavoriteChats.length > 0 && (
+                      <Icons.chevronRight className={cn(
+                        'size-3 shrink-0 transition-all duration-200',
+                        !isChatsCollapsed && 'rotate-90',
+                        !isChatsCollapsed && 'opacity-0 group-hover/chats:opacity-100',
+                      )}
+                      />
+                    )}
+                  </SidebarGroupLabel>
 
-                {isError && (
-                  <SidebarGroup className="group-data-[collapsible=icon]:hidden">
+                  {/* Loading state */}
+                  {isLoading && <SidebarThreadSkeletons count={10} animated />}
+
+                  {/* Error state */}
+                  {isError && (
                     <div className="py-6 text-center">
                       <p className="text-sm font-medium text-destructive mb-1">
                         {t('states.error.default')}
@@ -317,54 +332,33 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                         {error?.message || t('states.error.description')}
                       </p>
                     </div>
-                  </SidebarGroup>
-                )}
+                  )}
 
-                {!isLoading && !isError && chats.length === 0 && (
-                  <SidebarGroup className="pt-4 group-data-[collapsible=icon]:hidden">
-                    <SidebarGroupLabel className="px-4">
-                      <span className="text-sm font-medium truncate">
-                        {t('navigation.chats')}
-                      </span>
-                    </SidebarGroupLabel>
-                    <div className="px-4 pb-3 pt-2">
-                      <p className="text-xs text-muted-foreground">
-                        {t('chat.emptyStateSubtext')}
-                        ,
-                        <br />
-                        {t('chat.emptyStateTitle')}
-                      </p>
-                    </div>
-                    <SidebarThreadSkeletons count={7} />
-                  </SidebarGroup>
-                )}
+                  {/* Empty state */}
+                  {!isLoading && !isError && chats.length === 0 && (
+                    <>
+                      <div className="px-4 pb-3 pt-2">
+                        <p className="text-xs text-muted-foreground">
+                          {t('chat.emptyStateSubtext')}
+                          ,
+                          <br />
+                          {t('chat.emptyStateTitle')}
+                        </p>
+                      </div>
+                      <SidebarThreadSkeletons count={7} />
+                    </>
+                  )}
 
-                {!isLoading && !isError && nonFavoriteChats.length > 0 && (
-                  <SidebarGroup className="group/chats pt-4 group-data-[collapsible=icon]:hidden">
-                    <SidebarGroupLabel
-                      className="flex items-center gap-0.5 px-4 cursor-pointer"
-                      onClick={() => setIsChatsCollapsed(!isChatsCollapsed)}
-                    >
-                      <span className="text-sm font-medium truncate">
-                        {t('navigation.chats')}
-                      </span>
-                      <Icons.chevronRight className={cn(
-                        'size-3 shrink-0 transition-all duration-200',
-                        !isChatsCollapsed && 'rotate-90',
-                        !isChatsCollapsed && 'opacity-0 group-hover/chats:opacity-100',
+                  {/* Chat list */}
+                  {!isLoading && !isError && nonFavoriteChats.length > 0 && !isChatsCollapsed && (
+                    <>
+                      <ChatList chats={nonFavoriteChats} onShareClick={handleShareClick} />
+                      {isFetchingNextPage && (
+                        <ChatSidebarPaginationSkeleton count={20} />
                       )}
-                      />
-                    </SidebarGroupLabel>
-                    {!isChatsCollapsed && (
-                      <>
-                        <ChatList chats={nonFavoriteChats} onShareClick={handleShareClick} />
-                        {isFetchingNextPage && (
-                          <ChatSidebarPaginationSkeleton count={20} />
-                        )}
-                      </>
-                    )}
-                  </SidebarGroup>
-                )}
+                    </>
+                  )}
+                </SidebarGroup>
               </div>
             </ScrollArea>
           </SidebarContent>

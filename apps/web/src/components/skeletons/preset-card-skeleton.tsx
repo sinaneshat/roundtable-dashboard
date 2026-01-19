@@ -12,7 +12,7 @@ import { cn } from '@/lib/ui/cn';
 export function PresetCardSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
     <div
-      className={cn('rounded-2xl border border-border/50 bg-card p-4 space-y-3', className)}
+      className={cn('rounded-2xl bg-card/80 p-4 space-y-3', className)}
       {...props}
     >
       <div className="flex items-start justify-between gap-2">

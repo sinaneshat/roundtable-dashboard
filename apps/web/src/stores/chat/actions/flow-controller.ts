@@ -7,6 +7,7 @@
 
 import { ScreenModes } from '@roundtable/shared';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -26,6 +27,7 @@ export type UseFlowControllerOptions = {
 export function useFlowController(options: UseFlowControllerOptions = {}) {
   const { enabled = true } = options;
   const queryClient = useQueryClient();
+  const router = useRouter();
   const { data: session } = useSession();
 
   // Use store API for imperative access inside effects (avoids dependency loops)
@@ -318,13 +320,14 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
         });
       }, 3000);
 
-      // Replace URL in background without navigation
+      // ✅ TanStack Router: Navigate properly to update URL
+      // Cache is populated, so route loader will find fresh data and skip fetch
       queueMicrotask(() => {
-        window.history.replaceState(
-          window.history.state,
-          '',
-          `/chat/${slugData.slug}`,
-        );
+        router.navigate({
+          to: '/chat/$slug',
+          params: { slug: slugData.slug },
+          replace: true,
+        });
       });
     }
 
@@ -343,6 +346,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     threadState,
     queryClient,
     hasUpdatedThread,
+    router,
   ]);
 
   // ============================================================================

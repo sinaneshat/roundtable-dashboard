@@ -471,27 +471,51 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
   },
   async (c) => {
     const { user } = c.auth();
+    const db = await getDbAsync();
+
+    // Helper: get current tier and balance for fallback responses
+    const getCurrentState = async () => {
+      const [usage, balance] = await Promise.all([
+        db.query.userChatUsage.findFirst({
+          where: eq(tables.userChatUsage.userId, user.id),
+          columns: { subscriptionTier: true },
+        }),
+        getUserCreditBalance(user.id).catch(() => ({ available: 0 })),
+      ]);
+      return {
+        tier: usage?.subscriptionTier || SubscriptionTiers.FREE,
+        balance: balance.available,
+      };
+    };
+
+    // Helper: check for existing active subscription
+    const getExistingSubscription = async (customerId: string) => {
+      return db.query.stripeSubscription.findFirst({
+        where: and(
+          eq(tables.stripeSubscription.customerId, customerId),
+          eq(tables.stripeSubscription.status, StripeSubscriptionStatuses.ACTIVE),
+        ),
+      });
+    };
 
     try {
-      const db = await getDbAsync();
-
       // Theo pattern: KV cache first, then DB fallback
       const customerId = await getCustomerIdByUserId(user.id);
 
       if (!customerId) {
-        const balance = await getUserCreditBalance(user.id);
+        const { tier, balance } = await getCurrentState();
         return Responses.ok(c, {
           synced: false,
           purchaseType: PurchaseTypes.NONE,
           subscription: null,
           creditPurchase: null,
           tierChange: {
-            previousTier: SubscriptionTiers.FREE,
-            newTier: SubscriptionTiers.FREE,
+            previousTier: tier,
+            newTier: tier,
             previousPriceId: null,
             newPriceId: null,
           },
-          creditsBalance: balance.available,
+          creditsBalance: balance,
         });
       }
 
@@ -532,19 +556,47 @@ export const syncAfterCheckoutHandler: RouteHandler<typeof syncAfterCheckoutRout
         creditsBalance: balance.available,
       });
     } catch {
-      const balance = await getUserCreditBalance(user.id).catch(() => ({ available: 0 }));
+      // On sync failure, check if user already has active subscription (revisit scenario)
+      const customerId = await getCustomerIdByUserId(user.id).catch(() => null);
+
+      if (customerId) {
+        const existingSub = await getExistingSubscription(customerId).catch(() => null);
+        if (existingSub) {
+          // User already has active subscription - return success state
+          const { tier, balance } = await getCurrentState();
+          return Responses.ok(c, {
+            synced: true,
+            purchaseType: PurchaseTypes.SUBSCRIPTION,
+            subscription: {
+              status: existingSub.status,
+              subscriptionId: existingSub.id,
+            },
+            creditPurchase: null,
+            tierChange: {
+              previousTier: tier,
+              newTier: tier,
+              previousPriceId: null,
+              newPriceId: null,
+            },
+            creditsBalance: balance,
+          });
+        }
+      }
+
+      // No existing subscription found - return error state
+      const { tier, balance } = await getCurrentState();
       return Responses.ok(c, {
         synced: false,
         purchaseType: PurchaseTypes.NONE,
         subscription: null,
         creditPurchase: null,
         tierChange: {
-          previousTier: SubscriptionTiers.FREE,
-          newTier: SubscriptionTiers.FREE,
+          previousTier: tier,
+          newTier: tier,
           previousPriceId: null,
           newPriceId: null,
         },
-        creditsBalance: balance.available,
+        creditsBalance: balance,
       });
     }
   },

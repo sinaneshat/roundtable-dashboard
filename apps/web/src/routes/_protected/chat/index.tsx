@@ -1,16 +1,14 @@
 import { createFileRoute } from '@tanstack/react-router';
 
 import { MainContentSkeleton } from '@/components/skeletons';
-import dynamic from '@/lib/utils/dynamic';
-
-// Dynamic import with ssr:false - shows skeleton during SSR and until component loads
-const DynamicChatOverviewScreen = dynamic(
-  () => import('@/containers/screens/chat/ChatOverviewScreen'),
-  { ssr: false, loading: () => <MainContentSkeleton /> },
-);
+import ChatOverviewScreen from '@/containers/screens/chat/ChatOverviewScreen';
 
 export const Route = createFileRoute('/_protected/chat/')({
-  component: ChatOverviewRoute,
+  // ✅ SSR: Direct import - component renders on server
+  // NO dynamic import - React.lazy doesn't work on server, causes skeleton flash
+  component: ChatOverviewScreen,
+  // pendingComponent shown during route transitions (client-side navigation)
+  pendingComponent: MainContentSkeleton,
   // Protected routes should not be indexed
   head: () => ({
     meta: [
@@ -20,7 +18,3 @@ export const Route = createFileRoute('/_protected/chat/')({
     ],
   }),
 });
-
-function ChatOverviewRoute() {
-  return <DynamicChatOverviewScreen />;
-}

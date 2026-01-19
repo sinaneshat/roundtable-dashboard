@@ -210,71 +210,46 @@ export function ChatList({
     return null;
   }
 
+  // Unified structure to prevent hydration mismatch
+  // Animation is controlled via variants, not conditional wrapper
   return (
     <>
-      {shouldAnimate
-        ? (
-            <motion.div
-              initial="initial"
-              animate="animate"
-              variants={{
-                initial: {},
-                animate: {
-                  transition: {
-                    staggerChildren: 0.02,
-                    delayChildren: 0.05,
-                  },
-                },
-              }}
-            >
-              <SidebarMenu>
-                {chats.map((chat) => {
-                  const isActive = isChatActive(chat, pathname);
-                  const isThisChatEditing = editingChatId === chat.id;
-                  return (
-                    <ChatItem
-                      key={isThisChatEditing ? `${chat.id}-editing` : chat.id}
-                      chat={chat}
-                      isActive={isActive}
-                      onDeleteClick={handleDeleteClick}
-                      onPinClick={handlePinClick}
-                      onRenameClick={handleRenameClick}
-                      onShareClick={onShareClick}
-                      isEditing={isThisChatEditing}
-                      isRenaming={isThisChatEditing && updateThreadMutation.isPending}
-                      onRenameSubmit={handleRenameSubmit}
-                      onRenameCancel={handleRenameCancel}
-                      disableAnimation={false}
-                    />
-                  );
-                })}
-              </SidebarMenu>
-            </motion.div>
-          )
-        : (
-            <SidebarMenu>
-              {chats.map((chat) => {
-                const isActive = isChatActive(chat, pathname);
-                const isThisChatEditing = editingChatId === chat.id;
-                return (
-                  <ChatItem
-                    key={isThisChatEditing ? `${chat.id}-editing` : chat.id}
-                    chat={chat}
-                    isActive={isActive}
-                    onDeleteClick={handleDeleteClick}
-                    onPinClick={handlePinClick}
-                    onRenameClick={handleRenameClick}
-                    onShareClick={onShareClick}
-                    isEditing={isThisChatEditing}
-                    isRenaming={isThisChatEditing && updateThreadMutation.isPending}
-                    onRenameSubmit={handleRenameSubmit}
-                    onRenameCancel={handleRenameCancel}
-                    disableAnimation={true}
-                  />
-                );
-              })}
-            </SidebarMenu>
-          )}
+      <motion.div
+        initial={shouldAnimate ? 'initial' : false}
+        animate={shouldAnimate ? 'animate' : false}
+        variants={{
+          initial: {},
+          animate: {
+            transition: {
+              staggerChildren: 0.02,
+              delayChildren: 0.05,
+            },
+          },
+        }}
+      >
+        <SidebarMenu>
+          {chats.map((chat) => {
+            const isActive = isChatActive(chat, pathname);
+            const isThisChatEditing = editingChatId === chat.id;
+            return (
+              <ChatItem
+                key={isThisChatEditing ? `${chat.id}-editing` : chat.id}
+                chat={chat}
+                isActive={isActive}
+                onDeleteClick={handleDeleteClick}
+                onPinClick={handlePinClick}
+                onRenameClick={handleRenameClick}
+                onShareClick={onShareClick}
+                isEditing={isThisChatEditing}
+                isRenaming={isThisChatEditing && updateThreadMutation.isPending}
+                onRenameSubmit={handleRenameSubmit}
+                onRenameCancel={handleRenameCancel}
+                disableAnimation={!shouldAnimate}
+              />
+            );
+          })}
+        </SidebarMenu>
+      </motion.div>
       <ChatDeleteDialog
         isOpen={!!chatToDelete}
         onOpenChange={handleDeleteDialogClose}

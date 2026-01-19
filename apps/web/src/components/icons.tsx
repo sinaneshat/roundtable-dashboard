@@ -43,6 +43,7 @@ import {
   GraduationCap,
   GripVertical,
   Hammer,
+  House,
   Image,
   Infinity as InfinityIcon,
   Info,
@@ -117,6 +118,7 @@ export const Icons = {
   chevronRight: ChevronRight,
   chevronUp: ChevronUp,
   chevronsUpDown: ChevronsUpDown,
+  home: House,
 
   // Actions
   check: Check,

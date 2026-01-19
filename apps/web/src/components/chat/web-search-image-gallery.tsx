@@ -2,6 +2,7 @@ import { motion } from 'motion/react';
 import { useMemo, useState } from 'react';
 
 import { Icons } from '@/components/icons';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { safeExtractDomain } from '@/lib/utils';
@@ -24,6 +25,11 @@ export type WebSearchImageGalleryProps = {
 export function WebSearchImageGallery({ results, className }: WebSearchImageGalleryProps) {
   const tImages = useTranslations('chat.tools.webSearch.images');
   const [failedImages, setFailedImages] = useState(() => new Set<string>());
+  const [loadedImages, setLoadedImages] = useState(() => new Set<string>());
+
+  const handleImageLoad = (url: string) => {
+    setLoadedImages(prev => new Set([...prev, url]));
+  };
 
   const allImages: WebSearchImageItem[] = results.flatMap((result) => {
     const images: WebSearchImageItem[] = [];
@@ -108,6 +114,7 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
                 alt={image.alt || image.title}
                 className="object-cover size-full group-hover:scale-105 transition-transform duration-200"
                 loading="lazy"
+                decoding="async"
                 referrerPolicy="no-referrer"
                 onError={() => handleImageError(image.url)}
               />

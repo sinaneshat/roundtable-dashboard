@@ -826,8 +826,10 @@
   "pages": {
     "notFound": {
       "description": "The page you were looking for could not be found. Please check the URL or try navigating back to the homepage.",
+      "errorCode": "Error code:",
+      "goBack": "Go Back",
       "goHome": "Go to Homepage",
-      "title": "Oops, page not found!"
+      "title": "Page Not Found"
     }
   },
   "plans": {

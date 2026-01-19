@@ -2,7 +2,6 @@ import { createFileRoute } from '@tanstack/react-router';
 
 import { PublicChatSkeleton } from '@/components/loading';
 import PublicChatThreadScreen from '@/containers/screens/chat/PublicChatThreadScreen';
-import { usePublicThreadQuery } from '@/hooks/queries';
 import { getApiBaseUrl, getAppBaseUrl } from '@/lib/config/base-urls';
 import { queryKeys } from '@/lib/data/query-keys';
 import { GC_TIMES, STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
@@ -10,22 +9,21 @@ import type { PublicThreadData } from '@/services/api';
 import { getPublicThreadService } from '@/services/api';
 
 export const Route = createFileRoute('/public/chat/$slug')({
-  // Prefetch public thread into QueryClient cache for SSR hydration
+  // ✅ SSR: Use ensureQueryData to guarantee data is available before rendering
+  // prefetchQuery doesn't guarantee data and can cause "not found" flash during hydration
   loader: async ({ params, context }) => {
     const { queryClient } = context;
 
-    // Prefetch into TanStack Query cache - component will use same queryKey
-    await queryClient.prefetchQuery({
+    // ensureQueryData guarantees data is in cache before component renders
+    // This prevents the "content not found" flash during SSR hydration
+    const response = await queryClient.ensureQueryData({
       queryKey: queryKeys.threads.public(params.slug),
       queryFn: () => getPublicThreadService({ param: { slug: params.slug } }),
       staleTime: STALE_TIMES.publicThreadDetail,
     });
 
-    // Return cached data for head() metadata
-    const cachedData = queryClient.getQueryData(queryKeys.threads.public(params.slug));
-    // Type guard: check if cached data has expected shape
-    const hasData = cachedData && typeof cachedData === 'object' && 'success' in cachedData && 'data' in cachedData;
-    const initialData: PublicThreadData | null = hasData && cachedData.success ? cachedData.data as PublicThreadData : null;
+    // Extract data for head() metadata and component props
+    const initialData: PublicThreadData | null = response?.success ? response.data : null;
     return { initialData };
   },
   // ISR: Cache for 1 hour, allow stale for 7 days while revalidating
@@ -89,10 +87,10 @@ export const Route = createFileRoute('/public/chat/$slug')({
 
 function PublicChatThread() {
   const { slug } = Route.useParams();
+  const { initialData } = Route.useLoaderData();
 
-  // Use query hook - data is already in cache from loader prefetch
-  const { data: queryData } = usePublicThreadQuery(slug);
-  const threadData = queryData?.success ? queryData.data : null;
-
-  return <PublicChatThreadScreen slug={slug} initialData={threadData} />;
+  // ✅ SSR HYDRATION: Use loader data directly - no client query needed
+  // Data is guaranteed by ensureQueryData in loader, avoiding hydration flash
+  // The screen component can still call usePublicThreadQuery for client-side updates
+  return <PublicChatThreadScreen slug={slug} initialData={initialData} />;
 }

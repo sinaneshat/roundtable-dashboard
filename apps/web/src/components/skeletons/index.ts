@@ -46,6 +46,8 @@ export { QuickStartSkeleton } from './quick-start-skeleton';
 // Utilities (internal use - export for sidebar-loading-fallback)
 export { getSkeletonOpacity, getSkeletonWidth, SIDEBAR_SKELETON_WIDTHS } from './skeleton-utils';
 export { StatCardSkeleton } from './stat-card-skeleton';
+// Status Pages (billing success/failure)
+export { StatusPageSkeleton } from './status-page-skeleton';
 export { StickyInputSkeleton } from './sticky-input-skeleton';
 export { SubscriptionSkeleton } from './subscription-skeleton';
 export { TableRowSkeleton } from './table-row-skeleton';

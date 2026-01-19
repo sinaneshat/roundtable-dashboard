@@ -4,18 +4,19 @@
  * TanStack Query hooks for thread feedback and custom role template operations
  * Following patterns from TanStack Query v5 infinite query documentation
  *
- * Merged from chat-feedback.ts and chat-roles.ts for better organization
- * Both are small (~50-100 lines each) and related to user interactions
+ * IMPORTANT: Uses shared queryOptions from query-options.ts to ensure
+ * SSR prefetch and client useQuery use the SAME configuration.
+ * This prevents hydration mismatches and redundant client fetches.
  */
 
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
-import { GC_TIMES, STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
+import { threadFeedbackQueryOptions } from '@/lib/data/query-options';
+import { GC_TIMES, STALE_TIME_PRESETS } from '@/lib/data/stale-times';
 import {
   getCustomRoleService,
-  getThreadFeedbackService,
   getUserPresetService,
   listCustomRolesService,
   listUserPresetsService,
@@ -30,23 +31,22 @@ import {
  * Returns feedback submitted by users for each round
  * Protected endpoint - requires authentication
  *
+ * ✅ SSR: Uses shared queryOptions for consistent SSR hydration
+ *
  * @param threadId - Thread ID
  * @param enabled - Optional control over whether to fetch (default: true)
  */
 export function useThreadFeedbackQuery(threadId: string, enabled = true) {
   const { isAuthenticated } = useAuthCheck();
 
+  // ✅ SSR: Use shared queryOptions - MUST match loader prefetch
+  const options = threadFeedbackQueryOptions(threadId);
+
   return useQuery({
-    queryKey: queryKeys.threads.feedback(threadId),
-    queryFn: () => getThreadFeedbackService({ param: { id: threadId } }),
-    staleTime: STALE_TIMES.threadFeedback, // Never stale - invalidated only on mutation
+    ...options,
     gcTime: GC_TIMES.INFINITE, // Match staleTime: Infinity pattern
     placeholderData: previousData => previousData,
     enabled: isAuthenticated && !!threadId && enabled,
-    refetchOnMount: false,
-    refetchOnWindowFocus: false,
-    refetchOnReconnect: false,
-    retry: false,
     throwOnError: false,
   });
 }

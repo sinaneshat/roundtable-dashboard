@@ -126,18 +126,29 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // No client-side fetch-fresh needed - proper SSR paint guaranteed
 
   // ✅ PERF: Get streaming state to skip pre-search orchestrator during initial creation
-  const { streamingRoundNumber, createdThreadId } = useChatStore(useShallow(s => ({
+  const { streamingRoundNumber, createdThreadId, messages: storeMessages } = useChatStore(useShallow(s => ({
     streamingRoundNumber: s.streamingRoundNumber,
     createdThreadId: s.createdThreadId,
+    messages: s.messages,
   })));
 
-  // ✅ PERF: Skip pre-search query during initial creation flow
+  // ✅ PERF: Skip pre-search query during initial creation flow or when no completed rounds
   // Pre-searches are created during streaming - no point fetching on first round
+  // Also skip when navigating to existing thread mid-first-round (no data exists yet)
   const isInitialCreationFlow = Boolean(createdThreadId) && streamingRoundNumber === 0;
+
+  // ✅ FIX: Check if any rounds have completed by looking for moderator finish messages
+  // Pre-search data only exists after a round completes
+  const hasCompletedRounds = storeMessages.some((msg) => {
+    const metadata = msg.metadata as Record<string, unknown> | undefined;
+    return metadata?.role === 'moderator' && metadata?.finishReason;
+  });
+
   const preSearchOrchestratorEnabled = mode === ScreenModes.THREAD
     && Boolean(thread?.id)
     && enableOrchestrator
-    && !isInitialCreationFlow;
+    && !isInitialCreationFlow
+    && hasCompletedRounds;
 
   getPreSearchOrchestrator({
     threadId: thread?.id || '',

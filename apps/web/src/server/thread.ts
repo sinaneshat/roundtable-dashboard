@@ -1,7 +1,12 @@
 import { createServerFn } from '@tanstack/react-start';
 import { getRequest } from '@tanstack/react-start/server';
 
-import { getThreadBySlugService, getThreadStreamResumptionStateService } from '@/services/api';
+import {
+  getThreadBySlugService,
+  getThreadChangelogService,
+  getThreadFeedbackService,
+  getThreadStreamResumptionStateService,
+} from '@/services/api';
 
 /**
  * Fetch thread by slug for SSR.
@@ -38,6 +43,48 @@ export const getStreamResumptionState = createServerFn({ method: 'GET' })
 
       return await getThreadStreamResumptionStateService(
         { param: { threadId } },
+        { cookieHeader: cookie },
+      );
+    } catch {
+      return { success: false, data: null };
+    }
+  });
+
+/**
+ * Fetch thread changelog for SSR.
+ * Protected endpoint - forwards cookies for authentication.
+ * Returns FULL API response for consistent hydration.
+ */
+export const getThreadChangelog = createServerFn({ method: 'GET' })
+  .inputValidator((threadId: string) => threadId)
+  .handler(async ({ data: threadId }) => {
+    try {
+      const request = getRequest();
+      const cookie = request.headers.get('cookie') || '';
+
+      return await getThreadChangelogService(
+        { param: { id: threadId } },
+        { cookieHeader: cookie },
+      );
+    } catch {
+      return { success: false, data: null };
+    }
+  });
+
+/**
+ * Fetch thread feedback for SSR.
+ * Protected endpoint - forwards cookies for authentication.
+ * Returns FULL API response for consistent hydration.
+ */
+export const getThreadFeedback = createServerFn({ method: 'GET' })
+  .inputValidator((threadId: string) => threadId)
+  .handler(async ({ data: threadId }) => {
+    try {
+      const request = getRequest();
+      const cookie = request.headers.get('cookie') || '';
+
+      return await getThreadFeedbackService(
+        { param: { id: threadId } },
         { cookieHeader: cookie },
       );
     } catch {

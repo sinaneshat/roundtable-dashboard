@@ -1,8 +1,8 @@
 import type { ComponentProps } from 'react';
 
-import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/ui/cn';
 
+import { ChatInputSkeleton } from './chat-input-skeleton';
 import { LogoAreaSkeleton } from './logo-area-skeleton';
 import { QuickStartSkeleton } from './quick-start-skeleton';
 
@@ -12,7 +12,7 @@ import { QuickStartSkeleton } from './quick-start-skeleton';
  * Matches ChatOverviewScreen initial UI layout EXACTLY for seamless transition.
  * Container max-w-4xl matches actual content for consistent width.
  *
- * Uses shared skeleton components for maximum reusability.
+ * Uses shared skeleton components for maximum reusability and single source of truth.
  */
 export function MainContentSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
@@ -27,32 +27,14 @@ export function MainContentSkeleton({ className, ...props }: ComponentProps<'div
 
               {/* Quick start: w-full mt-6 sm:mt-8 */}
               <div className="w-full mt-6 sm:mt-8">
-                <div className="rounded-2xl bg-card/50 overflow-hidden border border-border/30">
+                <div className="rounded-2xl bg-card/50 overflow-hidden">
                   <QuickStartSkeleton count={4} />
                 </div>
               </div>
 
-              {/* Input container: w-full mt-14 */}
+              {/* Input container: w-full mt-14 - uses shared ChatInputSkeleton */}
               <div className="w-full mt-14">
-                {/* Match ChatInputContainer: rounded-2xl border shadow-lg bg-card */}
-                <div className="rounded-2xl border border-border/50 shadow-lg bg-card overflow-hidden">
-                  {/* Header skeleton */}
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-border/30">
-                    <Skeleton className="h-5 w-24" />
-                    <Skeleton className="h-8 w-20 rounded-full" />
-                  </div>
-                  {/* Input area skeleton */}
-                  <div className="p-4">
-                    <Skeleton className="h-12 w-full rounded-xl" />
-                    <div className="flex items-center justify-between mt-3">
-                      <div className="flex items-center gap-2">
-                        <Skeleton className="size-6 rounded" />
-                        <Skeleton className="size-6 rounded" />
-                      </div>
-                      <Skeleton className="size-8 rounded-full" />
-                    </div>
-                  </div>
-                </div>
+                <ChatInputSkeleton showHeader showToolbar />
               </div>
             </div>
           </div>

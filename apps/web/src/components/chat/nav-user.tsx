@@ -153,41 +153,24 @@ export function NavUser({ initialSession }: NavUserProps) {
     }
   };
 
+  // Track mount state for client-only functionality (dropdown opening)
+  // SSR renders the same structure - dropdown just won't open until mounted
   const mounted = useBoolean(false);
   useEffect(() => {
     mounted.onTrue();
   // eslint-disable-next-line react-hooks/exhaustive-deps -- onTrue is stable, mounted object changes on each render
   }, []);
 
-  if (!mounted.value) {
-    return (
-      <button
-        type="button"
-        data-sidebar="menu-button"
-        data-size="lg"
-        className="peer/menu-button flex w-full min-w-0 items-center gap-2.5 overflow-hidden rounded-md p-2 text-left outline-hidden transition-[width,height,padding] h-12 text-sm"
-      >
-        <Avatar className="h-8 w-8 rounded-full">
-          <AvatarImage
-            src={user?.image || undefined}
-            alt={displayName}
-          />
-          <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
-        </Avatar>
-        <div className="grid flex-1 text-left text-sm leading-tight group-data-[collapsible=icon]:hidden">
-          <span className="truncate font-semibold">
-            {displayName}
-          </span>
-          <span className="truncate text-xs">{displayEmail}</span>
-        </div>
-        <Icons.chevronsUpDown className="ml-auto size-4 group-data-[collapsible=icon]:hidden" />
-      </button>
-    );
-  }
+  // Handler that only works after mount (prevents SSR/hydration issues with dropdown)
+  const handleDropdownOpenChange = (open: boolean) => {
+    if (mounted.value) {
+      setIsDropdownOpen(open);
+    }
+  };
 
   return (
     <>
-      <DropdownMenu open={isDropdownOpen} onOpenChange={setIsDropdownOpen}>
+      <DropdownMenu open={isDropdownOpen} onOpenChange={handleDropdownOpenChange}>
         {/* Remove asChild to avoid React 19 + Radix compose-refs infinite loop */}
         {/* SidebarMenuButton styles applied directly to trigger */}
         <DropdownMenuTrigger

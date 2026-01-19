@@ -265,9 +265,9 @@ export function validateLogContext(context: unknown): LogContext | null {
 // ============================================================================
 
 // Export individual context schemas for direct use
-export { RequestLogContextSchema, DatabaseLogContextSchema, AuthLogContextSchema };
-export { ValidationLogContextSchema, PerformanceLogContextSchema, ApiLogContextSchema };
-export { OperationLogContextSchema, SystemLogContextSchema, EdgeCaseLogContextSchema };
+export { AuthLogContextSchema, DatabaseLogContextSchema, RequestLogContextSchema };
+export { ApiLogContextSchema, PerformanceLogContextSchema, ValidationLogContextSchema };
+export { EdgeCaseLogContextSchema, OperationLogContextSchema, SystemLogContextSchema };
 
 // Schema-specific inferred types for each log context
 export type RequestLogContext = z.infer<typeof RequestLogContextSchema>;
@@ -280,27 +280,27 @@ export type OperationLogContext = z.infer<typeof OperationLogContextSchema>;
 export type SystemLogContext = z.infer<typeof SystemLogContextSchema>;
 export type EdgeCaseLogContext = z.infer<typeof EdgeCaseLogContextSchema>;
 
-// Input schemas without the discriminator field
-const RequestLogInputSchema = RequestLogContextSchema.omit({ logType: true });
-const DatabaseLogInputSchema = DatabaseLogContextSchema.omit({ logType: true });
-const AuthLogInputSchema = AuthLogContextSchema.omit({ logType: true });
-const ValidationLogInputSchema = ValidationLogContextSchema.omit({ logType: true });
-const PerformanceLogInputSchema = PerformanceLogContextSchema.omit({ logType: true });
-const ApiLogInputSchema = ApiLogContextSchema.omit({ logType: true });
-const OperationLogInputSchema = OperationLogContextSchema.omit({ logType: true });
-const SystemLogInputSchema = SystemLogContextSchema.omit({ logType: true });
-const EdgeCaseLogInputSchema = EdgeCaseLogContextSchema.omit({ logType: true });
+// Input schemas without the discriminator field (prefixed _ as only used for type inference)
+const _RequestLogInputSchema = RequestLogContextSchema.omit({ logType: true });
+const _DatabaseLogInputSchema = DatabaseLogContextSchema.omit({ logType: true });
+const _AuthLogInputSchema = AuthLogContextSchema.omit({ logType: true });
+const _ValidationLogInputSchema = ValidationLogContextSchema.omit({ logType: true });
+const _PerformanceLogInputSchema = PerformanceLogContextSchema.omit({ logType: true });
+const _ApiLogInputSchema = ApiLogContextSchema.omit({ logType: true });
+const _OperationLogInputSchema = OperationLogContextSchema.omit({ logType: true });
+const _SystemLogInputSchema = SystemLogContextSchema.omit({ logType: true });
+const _EdgeCaseLogInputSchema = EdgeCaseLogContextSchema.omit({ logType: true });
 
 // Input types inferred from schemas
-type RequestLogInput = z.input<typeof RequestLogInputSchema>;
-type DatabaseLogInput = z.input<typeof DatabaseLogInputSchema>;
-type AuthLogInput = z.input<typeof AuthLogInputSchema>;
-type ValidationLogInput = z.input<typeof ValidationLogInputSchema>;
-type PerformanceLogInput = z.input<typeof PerformanceLogInputSchema>;
-type ApiLogInput = z.input<typeof ApiLogInputSchema>;
-type OperationLogInput = z.input<typeof OperationLogInputSchema>;
-type SystemLogInput = z.input<typeof SystemLogInputSchema>;
-type EdgeCaseLogInput = z.input<typeof EdgeCaseLogInputSchema>;
+type RequestLogInput = z.input<typeof _RequestLogInputSchema>;
+type DatabaseLogInput = z.input<typeof _DatabaseLogInputSchema>;
+type AuthLogInput = z.input<typeof _AuthLogInputSchema>;
+type ValidationLogInput = z.input<typeof _ValidationLogInputSchema>;
+type PerformanceLogInput = z.input<typeof _PerformanceLogInputSchema>;
+type ApiLogInput = z.input<typeof _ApiLogInputSchema>;
+type OperationLogInput = z.input<typeof _OperationLogInputSchema>;
+type SystemLogInput = z.input<typeof _SystemLogInputSchema>;
+type EdgeCaseLogInput = z.input<typeof _EdgeCaseLogInputSchema>;
 
 /**
  * Type-safe log context factory using Zod schemas

@@ -23,7 +23,7 @@ export function QuickStartSkeleton({ count = 3, className, ...props }: QuickStar
       {Array.from({ length: count }, (_, i) => (
         <div
           key={i}
-          className={cn('px-4 py-3', i < count - 1 && 'border-b border-border/50')}
+          className={cn('px-4 py-3', i < count - 1 && 'border-b border-border/10')}
         >
           <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5 sm:gap-3">
             <Skeleton className="h-4 sm:h-5 w-full sm:w-3/4" />

@@ -94,10 +94,16 @@ export function useAuthCheck(): UseAuthCheckReturn {
     }
   }, [navigate]);
 
+  // ✅ SSR HYDRATION: On server, assume authenticated since beforeLoad already validated session
+  // Protected routes can't be accessed without valid auth (beforeLoad redirects to sign-in)
+  // On client, use normal auth check with session data
+  const isServer = typeof window === 'undefined';
+
   return useMemo(() => ({
-    isAuthenticated: !isPending && !!session?.user?.id,
-    isPending,
+    // Server: always true (beforeLoad already validated), Client: check session
+    isAuthenticated: isServer || (!isPending && !!session?.user?.id),
+    isPending: isServer ? false : isPending,
     userId: session?.user?.id,
     handleAuthError,
-  }), [session?.user?.id, isPending, handleAuthError]);
+  }), [session?.user?.id, isPending, handleAuthError, isServer]);
 }

@@ -40,7 +40,10 @@ export function getSkeletonOpacity(index: number): number {
 
 /**
  * Get width value from preset array for a given index
+ * Wraps around the preset array using modulo for consistent variety
  */
 export function getSkeletonWidth(index: number): string {
-  return SIDEBAR_SKELETON_WIDTHS[index % SIDEBAR_SKELETON_WIDTHS.length];
+  const safeIndex = index % SIDEBAR_SKELETON_WIDTHS.length;
+  // Safe access - modulo guarantees index is within bounds
+  return SIDEBAR_SKELETON_WIDTHS[safeIndex] ?? '70%';
 }

@@ -13,14 +13,14 @@
 
 import type { MessageBatch } from '@cloudflare/workers-types';
 
+// Import the pre-configured app (synchronous, no factory pattern)
+import rootApp from './src/index';
+
 // Re-export AppType for client type inference (static type, no runtime cost)
 export type { AppType } from './src/index';
 
 // Export Durable Object classes (lightweight, no heavy dependencies)
 export { UploadCleanupScheduler } from './src/workers/upload-cleanup-scheduler';
-
-// Import the pre-configured app (synchronous, no factory pattern)
-import rootApp from './src/index';
 
 // Export the main worker handler with queue support
 export default {
