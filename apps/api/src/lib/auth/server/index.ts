@@ -156,6 +156,7 @@ function createAuth() {
   return betterAuth({
     secret: getAuthSecret(),
     baseURL: getBetterAuthUrl(),
+    basePath: '/api/auth', // Explicit basePath to match Hono route
     database: createAuthAdapter(),
 
     // Email domain restriction for local and preview environments
@@ -205,19 +206,21 @@ function createAuth() {
 
     // Security configuration
     advanced: {
+      // Enable cross-subdomain cookies for preview/prod (app-preview.* and api-preview.* share cookies)
+      // Local dev uses separate ports on localhost, so no cross-subdomain needed
       crossSubDomainCookies: {
-        enabled: false,
+        enabled: isProductionMode(),
+        domain: isProductionMode() ? '.roundtable.now' : undefined,
       },
       // Use secure cookies only in production (HTTPS)
-      // Localhost/development requires non-secure cookies for HTTP
       useSecureCookies: isProductionMode(),
-      // Cookie configuration for cross-origin (TanStack Start: web on 5173, API on 8787)
-      // SameSite=Lax for OAuth redirects (works without Secure flag)
-      // In production with HTTPS, we use 'none' for cross-origin requests
+      // Cookie configuration for OAuth flow
+      // SameSite=Lax allows OAuth redirects to work properly
+      // In prod/preview with HTTPS and cross-subdomain, use 'lax' for OAuth compatibility
       defaultCookieAttributes: {
-        sameSite: isProductionMode() ? 'none' : 'lax',
+        sameSite: 'lax', // 'lax' works better for OAuth redirects than 'none'
         secure: isProductionMode(),
-        path: '/', // Ensure cookies are sent for all paths
+        path: '/',
       },
       database: {
         generateId: () => crypto.randomUUID(),
