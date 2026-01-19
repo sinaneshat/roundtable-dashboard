@@ -222,8 +222,6 @@
     "knip": "^5.80.0",
     "lint-staged": "^16.2.7",
     "prettier": "^3.7.4",
-    "puppeteer": "^24.34.0",
-    "puppeteer-core": "^24.34.0",
     "rimraf": "^6.1.2",
     "shadcn": "^3.6.2",
     "sharp": "^0.34.5",

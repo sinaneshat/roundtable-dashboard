@@ -11,13 +11,8 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { queryKeys } from '@/lib/data/query-keys';
-import {
-  cancelSubscriptionService,
-  getUserUsageStatsService,
-  listModelsService,
-  switchSubscriptionService,
-} from '@/services/api';
+import { billingInvalidationHelpers } from '@/lib/data/query-keys';
+import { cancelSubscriptionService, switchSubscriptionService } from '@/services/api';
 
 /**
  * Hook to switch subscription to a different price plan
@@ -34,25 +29,8 @@ export function useSwitchSubscriptionMutation() {
   return useMutation({
     mutationFn: switchSubscriptionService,
     onSuccess: async () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.subscriptions.all,
-      });
-
-      // ⚠️ CRITICAL: Bypass HTTP cache for usage and models after plan switch
-      // Tier changes affect quotas and available models
-      try {
-        const freshUsageData = await getUserUsageStatsService({ bypassCache: true });
-        queryClient.setQueryData(queryKeys.usage.stats(), freshUsageData);
-      } catch {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
-      }
-
-      try {
-        const freshModelsData = await listModelsService({ bypassCache: true });
-        queryClient.setQueryData(queryKeys.models.list(), freshModelsData);
-      } catch {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
-      }
+      // Use shared helper: invalidates subscriptions, bypasses HTTP cache for usage/models
+      await billingInvalidationHelpers.invalidateAfterBillingChange(queryClient);
     },
     retry: false,
     throwOnError: false,
@@ -73,25 +51,8 @@ export function useCancelSubscriptionMutation() {
   return useMutation({
     mutationFn: cancelSubscriptionService,
     onSuccess: async () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.subscriptions.all,
-      });
-
-      // ⚠️ CRITICAL: Bypass HTTP cache for usage and models after cancellation
-      // Cancellation affects quotas and available models
-      try {
-        const freshUsageData = await getUserUsageStatsService({ bypassCache: true });
-        queryClient.setQueryData(queryKeys.usage.stats(), freshUsageData);
-      } catch {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
-      }
-
-      try {
-        const freshModelsData = await listModelsService({ bypassCache: true });
-        queryClient.setQueryData(queryKeys.models.list(), freshModelsData);
-      } catch {
-        void queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
-      }
+      // Use shared helper: invalidates subscriptions, bypasses HTTP cache for usage/models
+      await billingInvalidationHelpers.invalidateAfterBillingChange(queryClient);
     },
     retry: false,
     throwOnError: false,

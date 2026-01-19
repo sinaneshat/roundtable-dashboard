@@ -39,7 +39,7 @@ export function useProjectsQuery(search?: string) {
   const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({
-    queryKey: [...queryKeys.projects.lists(search)],
+    queryKey: queryKeys.projects.lists(search),
     queryFn: async ({ pageParam }) => {
       // ✅ Use centralized limits - clean semantic names
       const limit = search

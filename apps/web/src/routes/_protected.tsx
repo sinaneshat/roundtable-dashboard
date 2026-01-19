@@ -13,7 +13,6 @@ import {
   subscriptionsQueryOptions,
   usageQueryOptions,
 } from '@/lib/data/query-options';
-import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getSession } from '@/server/auth';
 
 /**
@@ -61,9 +60,9 @@ export function clearCachedSession() {
 }
 
 export const Route = createFileRoute('/_protected')({
-  // ✅ PERF: staleTime prevents loader re-execution on client navigations
-  // Use the shortest stale time among our queries to ensure all data is fresh
-  staleTime: STALE_TIMES.threadsSidebar, // 30s - shortest of our prefetched data
+  // NOTE: No route-level staleTime - TanStack Query manages data freshness
+  // @see https://tanstack.com/router/latest/docs/framework/react/guide/preloading#preloading-with-external-libraries
+  //
   // Server-side auth check - TanStack Start pattern
   // beforeLoad runs on both server (SSR) and client (navigation)
   beforeLoad: async ({ location }) => {
@@ -96,49 +95,21 @@ export const Route = createFileRoute('/_protected')({
   loader: async ({ context }) => {
     const { queryClient } = context;
 
-    // ✅ PERF: Check if we have fresh cached data before fetching
-    // On client navigation, skip fetch if data is within staleTime
-    const isClient = typeof window !== 'undefined';
-    const modelsState = queryClient.getQueryState(modelsQueryOptions.queryKey);
-    const subsState = queryClient.getQueryState(subscriptionsQueryOptions.queryKey);
-    const usageState = queryClient.getQueryState(usageQueryOptions.queryKey);
-    const sidebarState = queryClient.getQueryState(sidebarThreadsQueryOptions.queryKey);
-
-    // Check if all data is fresh (within their stale times)
-    const now = Date.now();
-    const modelsFresh = modelsState?.dataUpdatedAt && (modelsState.dataUpdatedAt > now - STALE_TIMES.models || STALE_TIMES.models === Infinity);
-    const subsFresh = subsState?.dataUpdatedAt && subsState.dataUpdatedAt > now - STALE_TIMES.subscriptions;
-    const usageFresh = usageState?.dataUpdatedAt && usageState.dataUpdatedAt > now - 30_000; // usageQueryOptions uses 30s
-    const sidebarFresh = sidebarState?.dataUpdatedAt && sidebarState.dataUpdatedAt > now - STALE_TIMES.threadsSidebar;
-
-    // If on client and all data is fresh, skip the fetch entirely
-    if (isClient && modelsFresh && subsFresh && usageFresh && sidebarFresh) {
-      return {};
-    }
-
     // ensureQueryData ensures data is available before rendering
+    // It internally checks staleTime and only fetches if data is stale/missing
     // Using shared queryOptions guarantees same config in loader and hooks
-    // This prevents the "content flash" where SSR content disappears into loading state
+    // This prevents "content flash" where SSR content disappears into loading state
     //
-    // Pattern from TanStack Start docs:
-    // - ensureQueryData returns cached data if available, otherwise fetches
+    // Pattern from TanStack docs:
+    // - ensureQueryData returns cached data if fresh, otherwise fetches
     // - Same queryOptions in hooks means useQuery uses cached data immediately
-    // - No stale check on hydration = no refetch = no flash
-    //
-    // ✅ PERF: Only fetch queries that are stale/missing
-    const promises: Promise<unknown>[] = [];
-    if (!modelsFresh)
-      promises.push(queryClient.ensureQueryData(modelsQueryOptions));
-    if (!subsFresh)
-      promises.push(queryClient.ensureQueryData(subscriptionsQueryOptions));
-    if (!usageFresh)
-      promises.push(queryClient.ensureQueryData(usageQueryOptions));
-    if (!sidebarFresh)
-      promises.push(queryClient.ensureInfiniteQueryData(sidebarThreadsQueryOptions));
-
-    if (promises.length > 0) {
-      await Promise.all(promises);
-    }
+    // @see https://tanstack.com/router/latest/docs/framework/react/guide/external-data-loading
+    await Promise.all([
+      queryClient.ensureQueryData(modelsQueryOptions),
+      queryClient.ensureQueryData(subscriptionsQueryOptions),
+      queryClient.ensureQueryData(usageQueryOptions),
+      queryClient.ensureInfiniteQueryData(sidebarThreadsQueryOptions),
+    ]);
 
     return {};
   },

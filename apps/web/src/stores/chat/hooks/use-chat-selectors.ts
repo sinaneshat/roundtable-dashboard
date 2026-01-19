@@ -12,6 +12,7 @@
  * Location: /src/stores/chat/hooks/use-chat-selectors.ts
  */
 
+import { MessageStatuses } from '@roundtable/shared';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore } from '@/components/providers/chat-store-provider/context';
@@ -106,7 +107,7 @@ export function useIsBusy() {
         || s.waitingToStartStreaming
         || s.isCreatingThread
         || s.streamingRoundNumber !== null
-        || s.preSearches.some(ps => ps.status === 'pending' || ps.status === 'streaming'),
+        || s.preSearches.some(ps => ps.status === MessageStatuses.PENDING || ps.status === MessageStatuses.STREAMING),
     })),
   );
 }

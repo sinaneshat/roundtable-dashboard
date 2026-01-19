@@ -1,10 +1,12 @@
 import { UNKNOWN_DOMAIN } from '@roundtable/shared';
+import { useState } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useBoolean } from '@/hooks/utils';
 import { formatRelativeTime } from '@/lib/format';
 import { useTranslations } from '@/lib/i18n';
@@ -28,6 +30,16 @@ export function WebSearchResultItem({
   const faviconError = useBoolean(false);
   const fallbackFaviconError = useBoolean(false);
   const isExpanded = useBoolean(false);
+  const [loadedImages, setLoadedImages] = useState(() => new Set<string>());
+  const [failedImages, setFailedImages] = useState(() => new Set<string>());
+
+  const handleImageLoad = (url: string) => {
+    setLoadedImages(prev => new Set([...prev, url]));
+  };
+
+  const handleInlineImageError = (url: string) => {
+    setFailedImages(prev => new Set([...prev, url]));
+  };
 
   const domain = result.domain || safeExtractDomain(result.url, UNKNOWN_DOMAIN);
   const cleanDomain = domain.replace('www.', '');
@@ -155,29 +167,43 @@ export function WebSearchResultItem({
 
         {allImages.length > 0 && (
           <div className="mt-2.5 flex gap-1.5 flex-wrap">
-            {allImages.slice(0, 4).map((img, idx) => (
-              <a
-                // eslint-disable-next-line react/no-array-index-key -- images may have duplicate URLs, idx ensures uniqueness
-                key={`${img.url}-${idx}`}
-                href={result.url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex-shrink-0 w-12 h-9 rounded-md overflow-hidden bg-muted/30 border border-border/20 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer group"
-                title={`View on ${cleanDomain}`}
-              >
-                <img
-                  src={img.url}
-                  alt={img.alt || result.title}
-                  className="w-full h-full object-cover group-hover:scale-105 transition-transform"
-                  loading="lazy"
-                  decoding="async"
-                  referrerPolicy="no-referrer"
-                  onError={(e) => {
-                    e.currentTarget.style.display = 'none';
-                  }}
-                />
-              </a>
-            ))}
+            {allImages.slice(0, 4).map((img, idx) => {
+              const isLoaded = loadedImages.has(img.url);
+              const isFailed = failedImages.has(img.url);
+
+              if (isFailed)
+                return null;
+
+              return (
+                <a
+                  // eslint-disable-next-line react/no-array-index-key -- images may have duplicate URLs, idx ensures uniqueness
+                  key={`${img.url}-${idx}`}
+                  href={result.url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="relative flex-shrink-0 w-12 h-9 rounded-md overflow-hidden bg-muted/30 border border-border/20 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer group"
+                  title={`View on ${cleanDomain}`}
+                >
+                  {!isLoaded && (
+                    <Skeleton className="absolute inset-0 rounded-none" />
+                  )}
+                  <img
+                    src={img.url}
+                    alt={img.alt || result.title}
+                    className={cn(
+                      'w-full h-full object-cover group-hover:scale-105 transition-all duration-300',
+                      !isLoaded && 'opacity-0',
+                      isLoaded && 'opacity-100',
+                    )}
+                    loading="lazy"
+                    decoding="async"
+                    referrerPolicy="no-referrer"
+                    onLoad={() => handleImageLoad(img.url)}
+                    onError={() => handleInlineImageError(img.url)}
+                  />
+                </a>
+              );
+            })}
             {allImages.length > 4 && (
               <a
                 href={result.url}

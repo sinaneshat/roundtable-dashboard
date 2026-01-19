@@ -18,7 +18,7 @@ import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
-import { getCurrentRoundNumber, getParticipantIndex as getParticipantIndexFromMetadata, getRoundNumber, isModeratorMessage } from '@/lib/utils';
+import { getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex as getParticipantIndexFromMetadata, getRoundNumber, isModeratorMessage } from '@/lib/utils';
 import type { ChatParticipant } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { shouldWaitForPreSearch } from '@/stores/chat';
@@ -302,19 +302,22 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
               return;
             }
 
+            // ✅ PARTICIPANT MISMATCH FIX: Filter to enabled participants
+            const pollEnabledParticipants = getEnabledParticipants(pollParticipants);
+
             // ✅ CACHE MISMATCH FIX: Validate server's nextParticipantToTrigger
             const pollServerNextIndex = getParticipantIndex(pollNextParticipant);
             const pollCorrectedNextIndex = validateAndCorrectNextParticipant(
               pollServerNextIndex,
               pollMessages,
-              pollParticipants,
+              pollEnabledParticipants,
               pollRound,
             );
             const pollCorrectedParticipant = pollCorrectedNextIndex === pollServerNextIndex
               ? pollNextParticipant
               : typeof pollNextParticipant === 'number'
                 ? pollCorrectedNextIndex
-                : { index: pollCorrectedNextIndex, participantId: pollParticipants[pollCorrectedNextIndex]?.id ?? '' };
+                : { index: pollCorrectedNextIndex, participantId: pollEnabledParticipants[pollCorrectedNextIndex]?.id ?? '' };
 
             // Generate resumption key and check for duplicates
             const pollThreadId = pollThread?.id || 'unknown';
@@ -328,7 +331,8 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
             // ✅ CRITICAL FIX: Pass pollMessages to ensure correct userMessageId for backend lookup
             // Without this, continueFromParticipant uses stale AI SDK messages instead of
             // the freshly-persisted messages from PATCH, causing "User message not found" errors
-            chat.continueFromParticipant(pollCorrectedParticipant, pollParticipants, pollMessages);
+            // ✅ FIX: Pass pollEnabledParticipants (not full array)
+            chat.continueFromParticipant(pollCorrectedParticipant, pollEnabledParticipants, pollMessages);
           };
 
           retryTimeoutRef.current = setTimeout(pollUntilReady, 100);
@@ -345,19 +349,22 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
           return;
         }
 
+        // ✅ PARTICIPANT MISMATCH FIX: Filter to enabled participants
+        const latestEnabledParticipants = getEnabledParticipants(latestParticipants);
+
         // ✅ CACHE MISMATCH FIX: Validate server's nextParticipantToTrigger
         const serverNextIndex = getParticipantIndex(latestNextParticipant);
         const correctedNextIndex = validateAndCorrectNextParticipant(
           serverNextIndex,
           latestMessages,
-          latestParticipants,
+          latestEnabledParticipants,
           currentRound,
         );
         const correctedParticipant = correctedNextIndex === serverNextIndex
           ? latestNextParticipant
           : typeof latestNextParticipant === 'number'
             ? correctedNextIndex
-            : { index: correctedNextIndex, participantId: latestParticipants[correctedNextIndex]?.id ?? '' };
+            : { index: correctedNextIndex, participantId: latestEnabledParticipants[correctedNextIndex]?.id ?? '' };
 
         // Generate resumption key and check for duplicates
         const threadId = latestThread?.id || 'unknown';
@@ -370,7 +377,8 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         resumptionTriggeredRef.current = retryResumptionKey;
         // ✅ TYPE-SAFE: Pass full object with participantId for validation against config changes
         // ✅ CRITICAL FIX: Pass latestMessages to ensure correct userMessageId for backend lookup
-        chat.continueFromParticipant(correctedParticipant, latestParticipants, latestMessages);
+        // ✅ FIX: Pass latestEnabledParticipants (not full array)
+        chat.continueFromParticipant(correctedParticipant, latestEnabledParticipants, latestMessages);
       }, 100); // Small delay for AI SDK hydration to complete
       return;
     }
@@ -385,6 +393,13 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
       return;
     }
 
+    // ✅ PARTICIPANT MISMATCH FIX: Filter to enabled participants BEFORE index calculations
+    // validateAndCorrectNextParticipant and continueFromParticipant both expect indices
+    // into the ENABLED participants array, not the full participants array.
+    // Previously we passed storeParticipants (full array) which caused index mismatches
+    // when some participants were disabled (e.g., index 2 in full array != index 2 in enabled array)
+    const enabledParticipants = getEnabledParticipants(storeParticipants);
+
     // ✅ CACHE MISMATCH FIX: Validate server's nextParticipantToTrigger against actual messages
     // Server prefill uses live DB, but SSR messages may be cached. If mismatch detected,
     // correct the next participant to ensure proper streaming order (p0 → p1 → p2).
@@ -392,16 +407,17 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     const correctedNextIndex = validateAndCorrectNextParticipant(
       serverNextIndex,
       storeMessages,
-      storeParticipants,
+      enabledParticipants,
       currentRound,
     );
 
     // Build corrected participant trigger value
+    // ✅ FIX: Use enabledParticipants to get the correct participant ID at the corrected index
     const correctedParticipant = correctedNextIndex === serverNextIndex
       ? nextParticipantToTrigger
       : typeof nextParticipantToTrigger === 'number'
         ? correctedNextIndex
-        : { index: correctedNextIndex, participantId: storeParticipants[correctedNextIndex]?.id ?? '' };
+        : { index: correctedNextIndex, participantId: enabledParticipants[correctedNextIndex]?.id ?? '' };
 
     // Update resumption key to reflect corrected participant
     const correctedResumptionKey = `${storeThread?.id || 'unknown'}-r${currentRound}-p${correctedNextIndex}`;
@@ -414,7 +430,8 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     // ✅ CRITICAL FIX: Pass storeMessages to ensure correct userMessageId for backend lookup
     // Without this, continueFromParticipant uses stale AI SDK messages instead of
     // the freshly-persisted messages from PATCH, causing "User message not found" errors
-    chat.continueFromParticipant(correctedParticipant, storeParticipants, storeMessages);
+    // ✅ FIX: Pass enabledParticipants (not full array) to match the index calculations
+    chat.continueFromParticipant(correctedParticipant, enabledParticipants, storeMessages);
 
     // Cleanup
     return () => {

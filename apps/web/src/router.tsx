@@ -37,6 +37,11 @@ export function getRouter() {
     routeTree,
     scrollRestoration: true,
     defaultPreload: 'intent',
+    // ✅ CRITICAL: When using TanStack Query as external cache, set to 0
+    // This ensures Router's internal cache doesn't conflict with Query's cache
+    // All preloads are marked stale, allowing Query to manage data freshness
+    // @see https://tanstack.com/router/latest/docs/framework/react/guide/preloading#preloading-with-external-libraries
+    defaultPreloadStaleTime: 0,
     context: { queryClient },
     defaultNotFoundComponent: NotFoundScreen,
     // ✅ SSR: Dehydrate QueryClient state on server for transfer to client

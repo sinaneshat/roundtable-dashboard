@@ -6,8 +6,8 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { queryKeys } from '@/lib/data/query-keys';
-import { createCheckoutSessionService, getSubscriptionsService, getUserUsageStatsService, listModelsService, syncAfterCheckoutService } from '@/services/api';
+import { billingInvalidationHelpers, queryKeys } from '@/lib/data/query-keys';
+import { createCheckoutSessionService, getSubscriptionsService, syncAfterCheckoutService } from '@/services/api';
 
 /**
  * Hook to create Stripe checkout session
@@ -48,59 +48,26 @@ export function useSyncAfterCheckoutMutation() {
   return useMutation({
     mutationFn: syncAfterCheckoutService,
     onSuccess: async () => {
-      // Invalidate all billing queries and force immediate refetch
-      // Using refetchType: 'all' to refetch both active and inactive queries
-      // This ensures queries on the success page refetch even if not yet active
-
-      // Product queries
+      // Invalidate product queries
       queryClient.invalidateQueries({
         queryKey: queryKeys.products.all,
         refetchType: 'all',
       });
 
-      // Subscription queries - critical for success page
-      // ⚠️ CRITICAL: Must bypass HTTP cache to get fresh subscription data
+      // Refresh subscriptions with cache bypass (critical for success page)
       try {
         const freshSubscriptionsData = await getSubscriptionsService({ bypassCache: true });
         queryClient.setQueryData(queryKeys.subscriptions.current(), freshSubscriptionsData);
       } catch (error) {
         console.error('[Checkout] Failed to refresh subscriptions after checkout:', error);
-        // Fallback: invalidate and let normal refetch handle it
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.subscriptions.all,
-          refetchType: 'all',
-        });
+        billingInvalidationHelpers.invalidateSubscriptions(queryClient);
       }
 
-      // Usage queries - reflect new quota limits from subscription
-      // ⚠️ CRITICAL: Usage stats API has HTTP caching (2min browser)
-      // Must bypass cache to get fresh data with updated quota limits
-      try {
-        const freshUsageData = await getUserUsageStatsService({ bypassCache: true });
-        queryClient.setQueryData(queryKeys.usage.stats(), freshUsageData);
-      } catch (error) {
-        console.error('[Checkout] Failed to refresh usage stats after checkout:', error);
-        // Fallback: invalidate and let normal refetch handle it
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.usage.all,
-          refetchType: 'all',
-        });
-      }
-
-      // Models query - tier-based access needs immediate refresh
-      // ⚠️ CRITICAL: Models API has aggressive HTTP caching (1hr browser, 24hr CDN)
-      // Must bypass cache to get fresh data with updated tier restrictions
-      try {
-        const freshModelsData = await listModelsService({ bypassCache: true });
-        queryClient.setQueryData(queryKeys.models.list(), freshModelsData);
-      } catch (error) {
-        console.error('[Checkout] Failed to refresh models after checkout:', error);
-        // Fallback: invalidate and let normal refetch handle it
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.models.all,
-          refetchType: 'all',
-        });
-      }
+      // Use shared helper for usage and models refresh (bypasses HTTP cache)
+      await Promise.all([
+        billingInvalidationHelpers.refreshUsageStats(queryClient),
+        billingInvalidationHelpers.refreshModels(queryClient),
+      ]);
     },
     retry: false,
     throwOnError: false,

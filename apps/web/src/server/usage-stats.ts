@@ -1,22 +1,14 @@
 import { createServerFn } from '@tanstack/react-start';
-import { getRequest } from '@tanstack/react-start/server';
 
 import { getUserUsageStatsService } from '@/services/api';
+import { cookieMiddleware } from '@/start';
 
-/**
- * Fetch usage stats for SSR.
- * Protected endpoint - forwards cookies for authentication.
- * Returns FULL API response to match client queryFn (prevents hydration refetch).
- */
-export const getUsageStats = createServerFn({ method: 'GET' }).handler(
-  async () => {
+export const getUsageStats = createServerFn({ method: 'GET' })
+  .middleware([cookieMiddleware])
+  .handler(async ({ context }) => {
     try {
-      const request = getRequest();
-      const cookie = request.headers.get('cookie') || '';
-
-      return await getUserUsageStatsService({ cookieHeader: cookie });
+      return await getUserUsageStatsService({ cookieHeader: context.cookieHeader });
     } catch {
       return { success: false, data: null };
     }
-  },
-);
+  });

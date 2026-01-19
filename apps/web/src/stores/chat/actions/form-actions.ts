@@ -19,7 +19,6 @@ import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant } from '@/services/api';
 
 import { createOptimisticUserMessage, createPlaceholderPreSearch } from '../utils/placeholder-factories';
 import { validateInfiniteQueryCache } from './types';
@@ -299,7 +298,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     }
 
     const { updateResult, updatePayloads, optimisticParticipants } = prepareParticipantUpdate(
-      freshParticipants as ChatParticipant[],
+      freshParticipants,
       freshSelectedParticipants,
       threadId,
     );
@@ -334,7 +333,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       return [...currentMessages, optimisticMessage];
     });
     actions.setStreamingRoundNumber(nextRoundNumber);
-    const effectiveParticipants = hasParticipantChanges ? optimisticParticipants : (freshParticipants as ChatParticipant[]);
+    const effectiveParticipants = hasParticipantChanges ? optimisticParticipants : freshParticipants;
     actions.setExpectedParticipantIds(getEnabledParticipantModelIds(effectiveParticipants));
 
     if (hasParticipantChanges) {

@@ -1,18 +1,17 @@
 import { createServerFn } from '@tanstack/react-start';
 
+import type { ListProductsResponse } from '@/services/api/billing/products';
 import { getProductsService } from '@/services/api';
 
-/**
- * Fetch products for SSR.
- * Public endpoint - no authentication required.
- * Returns FULL API response to match client queryFn (prevents hydration refetch).
- */
+type ServerFnErrorResponse = { success: false; data: null };
+type GetProductsResult = ListProductsResponse | ServerFnErrorResponse;
+
 export const getProducts = createServerFn({ method: 'GET' }).handler(
-  async () => {
+  async (): Promise<GetProductsResult> => {
     try {
       return await getProductsService();
     } catch {
-      return { success: false, data: null };
+      return { success: false as const, data: null };
     }
   },
 );

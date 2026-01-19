@@ -4,11 +4,14 @@ import { PublicChatSkeleton } from '@/components/loading';
 import PublicChatThreadScreen from '@/containers/screens/chat/PublicChatThreadScreen';
 import { getApiBaseUrl, getAppBaseUrl } from '@/lib/config/base-urls';
 import { queryKeys } from '@/lib/data/query-keys';
-import { GC_TIMES, STALE_TIME_PRESETS, STALE_TIMES } from '@/lib/data/stale-times';
+import { STALE_TIMES } from '@/lib/data/stale-times';
 import type { PublicThreadData } from '@/services/api';
 import { getPublicThreadService } from '@/services/api';
 
 export const Route = createFileRoute('/public/chat/$slug')({
+  // NOTE: No route-level staleTime/gcTime - TanStack Query manages data freshness
+  // @see https://tanstack.com/router/latest/docs/framework/react/guide/preloading#preloading-with-external-libraries
+  //
   // ✅ SSR: Use ensureQueryData to guarantee data is available before rendering
   // prefetchQuery doesn't guarantee data and can cause "not found" flash during hydration
   loader: async ({ params, context }) => {
@@ -16,6 +19,7 @@ export const Route = createFileRoute('/public/chat/$slug')({
 
     // ensureQueryData guarantees data is in cache before component renders
     // This prevents the "content not found" flash during SSR hydration
+    // TanStack Query's staleTime controls when data needs refetching
     const response = await queryClient.ensureQueryData({
       queryKey: queryKeys.threads.public(params.slug),
       queryFn: () => getPublicThreadService({ param: { slug: params.slug } }),
@@ -30,9 +34,6 @@ export const Route = createFileRoute('/public/chat/$slug')({
   headers: () => ({
     'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=604800',
   }),
-  // Client-side caching
-  staleTime: STALE_TIME_PRESETS.long, // 5 minutes client-side fresh data
-  gcTime: GC_TIMES.LONG, // 10 minutes garbage collection
   pendingComponent: PublicChatSkeleton,
   head: ({ loaderData, params }) => {
     const thread = loaderData?.initialData?.thread;

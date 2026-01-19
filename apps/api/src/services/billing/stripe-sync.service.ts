@@ -93,7 +93,7 @@ export async function syncStripeDataFromStripe(
 
   let subscriptions: Stripe.ApiList<Stripe.Subscription>;
   try {
-    const stripe = stripeService.getClient();
+    const stripe = await stripeService.ensureClient();
     subscriptions = await stripe.subscriptions.list({
       customer: customerId,
       limit: 1,
@@ -168,7 +168,7 @@ export async function syncStripeDataFromStripe(
     }
   }
 
-  const stripe = stripeService.getClient();
+  const stripe = await stripeService.ensureClient();
 
   let invoices: Stripe.ApiList<Stripe.Invoice>;
   let paymentMethods: Stripe.ApiList<Stripe.PaymentMethod>;

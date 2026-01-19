@@ -1,22 +1,18 @@
 import { createServerFn } from '@tanstack/react-start';
-import { getRequest } from '@tanstack/react-start/server';
 
+import type { ListModelsResponse } from '@/services/api';
 import { listModelsService } from '@/services/api';
+import { cookieMiddleware } from '@/start';
 
-/**
- * Fetch AI models for SSR.
- * Protected endpoint - forwards cookies for authentication.
- * Returns FULL API response to match client queryFn (prevents hydration refetch).
- */
-export const getModels = createServerFn({ method: 'GET' }).handler(
-  async () => {
+type ServerFnErrorResponse = { success: false; data: null };
+type GetModelsResult = ListModelsResponse | ServerFnErrorResponse;
+
+export const getModels = createServerFn({ method: 'GET' })
+  .middleware([cookieMiddleware])
+  .handler(async ({ context }): Promise<GetModelsResult> => {
     try {
-      const request = getRequest();
-      const cookie = request.headers.get('cookie') || '';
-
-      return await listModelsService({ cookieHeader: cookie });
+      return await listModelsService({ cookieHeader: context.cookieHeader });
     } catch {
-      return { success: false, data: null };
+      return { success: false as const, data: null };
     }
-  },
-);
+  });

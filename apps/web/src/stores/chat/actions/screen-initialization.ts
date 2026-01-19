@@ -9,6 +9,7 @@ import { useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider/context';
+import { getModeratorMetadata } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/services/api';
 
@@ -41,7 +42,6 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   const actions = useChatStore(useShallow(s => ({
     setScreenMode: s.setScreenMode,
     initializeThread: s.initializeThread,
-    prefillStreamResumptionState: s.prefillStreamResumptionState,
     setThread: s.setThread,
     setParticipants: s.setParticipants,
     setMessages: s.setMessages,
@@ -80,24 +80,15 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
 
     rlog.init('effect', `t=${threadId?.slice(-8) ?? '-'} rdy=${isReady ? 1 : 0} initd=${alreadyInitialized ? 1 : 0} parts=${participants.length} msgs=${initialMessages?.length ?? 0} phase=${streamResumptionState?.currentPhase ?? '-'} patch=${freshIsPatchInProgress ? 1 : 0}`);
 
-    // ✅ CRITICAL FIX: Do NOT prefill resumption state when a form submission is in progress
-    // handleUpdateThreadAndSend calls clearStreamResumption() to clear stale state
-    // But if SSR returns stream-status data, prefillStreamResumptionState would re-set it
-    // This causes the cleared state to be restored, breaking the new submission flow
+    // ✅ DEDUP FIX: prefillStreamResumptionState is now called ONLY in useSyncHydrateStore
+    // (runs in useLayoutEffect, before this useEffect). Calling it here caused duplicate logs
+    // and redundant state updates. We just check if prefill already happened.
     const skipPrefillDueToFormSubmission = freshIsPatchInProgress
       || freshConfigChangeRoundNumber !== null
       || freshIsWaitingForChangelog
       || freshPendingMessage !== null;
 
-    // ✅ CRITICAL FIX: Prefill stream resumption state BEFORE initializeThread
-    // This was previously done in a separate effect that could fire AFTER initializeThread,
-    // causing initializeThread to check streamResumptionPrefilled=false and wipe messages.
-    // Now we prefill synchronously BEFORE initializeThread checks the flag.
-    if (threadId && streamResumptionState && !alreadyInitialized && !skipPrefillDueToFormSubmission) {
-      actions.prefillStreamResumptionState(threadId, streamResumptionState);
-    }
-
-    // Re-read the flag after potential prefill (Zustand updates are sync)
+    // Check if prefill already happened (from useSyncHydrateStore) or should happen
     const isResumption = freshState.streamResumptionPrefilled
       || (streamResumptionState && !streamResumptionState.roundComplete && !skipPrefillDueToFormSubmission);
     const hasActiveFormSubmission
@@ -140,8 +131,8 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // ✅ FIX: Check if any rounds have completed by looking for moderator finish messages
   // Pre-search data only exists after a round completes
   const hasCompletedRounds = storeMessages.some((msg) => {
-    const metadata = msg.metadata as Record<string, unknown> | undefined;
-    return metadata?.role === 'moderator' && metadata?.finishReason;
+    const metadata = getModeratorMetadata(msg.metadata);
+    return metadata && metadata.finishReason;
   });
 
   const preSearchOrchestratorEnabled = mode === ScreenModes.THREAD

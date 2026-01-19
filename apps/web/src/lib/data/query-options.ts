@@ -23,7 +23,7 @@ import { getThreadBySlug, getThreadChangelog, getThreadFeedback } from '@/server
 import { getUsageStats } from '@/server/usage-stats';
 
 import { queryKeys } from './query-keys';
-import { STALE_TIMES } from './stale-times';
+import { GC_TIMES, STALE_TIMES } from './stale-times';
 
 /**
  * Models query options
@@ -39,7 +39,8 @@ import { STALE_TIMES } from './stale-times';
 export const modelsQueryOptions = queryOptions({
   queryKey: queryKeys.models.list(),
   queryFn: () => getModels(),
-  staleTime: STALE_TIMES.models,
+  staleTime: STALE_TIMES.models, // Infinity - never auto-refetch
+  gcTime: GC_TIMES.INFINITE, // Infinity - keep in cache forever (matches staleTime)
   refetchOnWindowFocus: false,
   refetchOnMount: false,
   retry: 2,
@@ -98,7 +99,7 @@ export const subscriptionsQueryOptions = queryOptions({
 export const usageQueryOptions = queryOptions({
   queryKey: queryKeys.usage.stats(),
   queryFn: () => getUsageStats(),
-  staleTime: 30 * 1000, // 30 seconds - prevent immediate refetch on hydration
+  staleTime: STALE_TIMES.threadsSidebar, // 30s - prevent immediate refetch on hydration
   refetchOnWindowFocus: false,
   refetchOnMount: false,
   retry: 1,

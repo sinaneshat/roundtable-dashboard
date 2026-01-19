@@ -48,7 +48,7 @@ export function useSubscriptionQuery(subscriptionId: string) {
   return useQuery({
     queryKey: queryKeys.subscriptions.detail(subscriptionId),
     queryFn: () => getSubscriptionService({ param: { id: subscriptionId } }),
-    staleTime: STALE_TIMES.subscriptions, // ⚠️ NO CACHE (0) - always fresh
+    staleTime: STALE_TIMES.subscriptions, // 1 minute - fresh after mutations via invalidation
     gcTime: GC_TIMES.STANDARD, // 5 minutes - keep in memory for instant UI
     enabled: isAuthenticated && !!subscriptionId,
     retry: false,

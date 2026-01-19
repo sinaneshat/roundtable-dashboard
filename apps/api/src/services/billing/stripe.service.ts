@@ -73,7 +73,7 @@ class StripeService {
   /**
    * Lazy-load Stripe client on first use
    */
-  private async ensureClient(): Promise<Stripe> {
+  async ensureClient(): Promise<Stripe> {
     if (this.stripe) {
       return this.stripe;
     }
@@ -106,19 +106,6 @@ class StripeService {
       throw createError.internal(
         'Stripe client initialization failed',
         { errorType: 'initialization', service: 'stripe' },
-      );
-    }
-    return this.stripe;
-  }
-
-  /**
-   * @deprecated Use ensureClient() instead for lazy loading
-   */
-  getClient(): Stripe {
-    if (!this.stripe) {
-      throw createError.internal(
-        'Stripe service not initialized. Call ensureClient() first.',
-        { errorType: 'configuration', service: 'stripe' },
       );
     }
     return this.stripe;

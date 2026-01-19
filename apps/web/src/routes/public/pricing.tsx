@@ -5,6 +5,7 @@ import { PublicChatLayout } from '@/components/layouts/public-chat-layout';
 import { PricingContentSkeleton } from '@/components/pricing';
 import { PublicPricingScreen } from '@/containers/screens/chat/billing/PublicPricingScreen';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
+import { productsQueryOptions } from '@/lib/data/query-options';
 
 const pageTitle = 'Pricing - Roundtable';
 const pageDescription = 'Choose your Roundtable plan - collaborative AI brainstorming with multiple AI models working together.';
@@ -23,6 +24,14 @@ function PublicPricingLoadingSkeleton() {
 }
 
 export const Route = createFileRoute('/public/pricing')({
+  // ✅ SSR: Prefetch products for page load
+  // Uses shared queryOptions to ensure SSR/client cache key consistency
+  // ensureQueryData waits for data before rendering - prevents client-side waterfall
+  loader: async ({ context }) => {
+    const { queryClient } = context;
+    await queryClient.ensureQueryData(productsQueryOptions);
+    return {};
+  },
   validateSearch: pricingSearchSchema,
   component: PublicPricingPage,
   pendingComponent: PublicPricingLoadingSkeleton,

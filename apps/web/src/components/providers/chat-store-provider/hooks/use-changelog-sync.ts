@@ -46,6 +46,12 @@ export function useChangelogSync({
   );
 
   useEffect(() => {
+    // ✅ EARLY BAIL: Skip entirely when no config change is pending
+    // This prevents unnecessary effect runs and logging when configChangeRoundNumber is null
+    if (configChangeRoundNumber === null || !isWaitingForChangelog) {
+      return;
+    }
+
     rlog.changelog('effect-run', `r${configChangeRoundNumber} fetching=${roundChangelogFetching} success=${roundChangelogSuccess} waiting=${isWaitingForChangelog} shouldFetch=${shouldFetch}`);
 
     if (roundChangelogFetching) {
@@ -54,10 +60,6 @@ export function useChangelogSync({
     }
     if (!roundChangelogSuccess || !roundChangelogData?.success) {
       rlog.changelog('skip-no-data', `r${configChangeRoundNumber} success=${roundChangelogSuccess} dataSuccess=${roundChangelogData?.success}`);
-      return;
-    }
-    if (configChangeRoundNumber === null || !isWaitingForChangelog) {
-      rlog.changelog('skip-flags', `configChangeRoundNumber=${configChangeRoundNumber} isWaitingForChangelog=${isWaitingForChangelog}`);
       return;
     }
 

@@ -279,27 +279,23 @@ export async function generateSearchQuery(
 /**
  * Initialize browser for search and content extraction
  *
- * **CLOUDFLARE WORKERS** (deployed):
- * - Uses `@cloudflare/puppeteer` with Browser binding
- * - Pass env.BROWSER directly to launch()
- * - Optionally use keep_alive for session persistence
- * - Ref: https://developers.cloudflare.com/browser-rendering/puppeteer/
+ * Uses Cloudflare Browser Rendering (`@cloudflare/puppeteer`) for all environments.
+ * Works both in production and local development via wrangler dev.
  *
- * **LOCAL DEVELOPMENT**:
- * - Uses standard `puppeteer` package with bundled Chromium
- * - Launches with headless mode and sandbox disabled for compatibility
+ * - Pass env.BROWSER binding directly to launch()
+ * - Uses keep_alive for session persistence (10 min idle timeout)
+ * - Falls back to fetch-based search if browser unavailable
  *
+ * @see https://developers.cloudflare.com/browser-rendering/puppeteer/
  * @param env - Cloudflare environment bindings
  * @returns Browser instance or null
  */
-// Browser Type Definitions (Zod-derived types)
+// Browser Type Definitions (Cloudflare Browser Rendering only)
 
 type CloudflareBrowser = Awaited<ReturnType<typeof import('@cloudflare/puppeteer').default.launch>>;
-type LocalBrowser = Awaited<ReturnType<typeof import('puppeteer').default.launch>>;
 
 type BrowserResult
   = | { type: typeof BrowserEnvironments.CLOUDFLARE; browser: CloudflareBrowser }
-    | { type: typeof BrowserEnvironments.LOCAL; browser: LocalBrowser }
     | null;
 
 const _PageOperationConfigSchema = z.object({
@@ -344,54 +340,7 @@ type ExtractedSearchResult = z.infer<typeof _ExtractedSearchResultSchema>;
 // Browser Operation Helpers
 
 async function extractWithCloudflareBrowser(
-  browser: CloudflareBrowser | LocalBrowser,
-  config: PageOperationConfig,
-  extractFormat: string,
-): Promise<ExtractedContent> {
-  const page = await browser.newPage();
-
-  try {
-    if (config.viewport) {
-      await page.setViewport(config.viewport);
-    }
-
-    if (config.blockResourceTypes?.length) {
-      await page.setRequestInterception(true);
-      page.on('request', (req: PuppeteerRequestHandler) => {
-        if (req.isInterceptResolutionHandled())
-          return;
-        if (config.blockResourceTypes?.includes(req.resourceType())) {
-          req.abort();
-        } else {
-          req.continue();
-        }
-      });
-    }
-
-    await page.goto(config.url, {
-      waitUntil: config.waitUntil,
-      timeout: config.timeout,
-    });
-
-    if (config.waitForSelector) {
-      try {
-        await page.waitForSelector(config.waitForSelector, {
-          timeout: config.selectorTimeout ?? 3000,
-        });
-      } catch {}
-    }
-
-    const extracted = await (page.evaluate as (fn: unknown, arg: string) => Promise<ExtractedContent>)(createContentExtractor(), extractFormat);
-    await page.close();
-    return extracted;
-  } catch {
-    await page.close();
-    throw new Error('Content extraction failed');
-  }
-}
-
-async function extractWithLocalBrowser(
-  browser: CloudflareBrowser | LocalBrowser,
+  browser: CloudflareBrowser,
   config: PageOperationConfig,
   extractFormat: string,
 ): Promise<ExtractedContent> {
@@ -438,31 +387,7 @@ async function extractWithLocalBrowser(
 }
 
 async function searchWithCloudflareBrowser(
-  browser: CloudflareBrowser | LocalBrowser,
-  searchUrl: string,
-  maxResults: number,
-  userAgent: string,
-): Promise<ExtractedSearchResult[]> {
-  const page = await browser.newPage();
-
-  try {
-    await page.setUserAgent(userAgent);
-    await page.goto(searchUrl, {
-      waitUntil: PageWaitStrategies.DOM_CONTENT_LOADED,
-      timeout: 15000,
-    });
-
-    const results = await (page.evaluate as (fn: unknown, arg: number) => Promise<ExtractedSearchResult[]>)(createSearchExtractor(), maxResults);
-    await page.close();
-    return results;
-  } catch {
-    await page.close();
-    throw new Error('Search extraction failed');
-  }
-}
-
-async function searchWithLocalBrowser(
-  browser: CloudflareBrowser | LocalBrowser,
+  browser: CloudflareBrowser,
   searchUrl: string,
   maxResults: number,
   userAgent: string,
@@ -693,7 +618,8 @@ function createSearchExtractor(): (max: number) => ExtractedSearchResult[] {
 }
 
 async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {
-  // CLOUDFLARE WORKERS: Use @cloudflare/puppeteer with BROWSER binding
+  // Use Cloudflare Browser Rendering for all environments (works with wrangler dev too)
+  // The BROWSER binding connects to Cloudflare's remote Browser Rendering service
   if (env.BROWSER) {
     try {
       const cfPuppeteer = await import('@cloudflare/puppeteer');
@@ -704,35 +630,12 @@ async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {
       });
       return { type: BrowserEnvironments.CLOUDFLARE, browser };
     } catch (error) {
-      console.error('[Browser] Cloudflare puppeteer launch failed:', error);
-      return null;
+      console.error('[Browser] Cloudflare puppeteer failed:', error instanceof Error ? error.message : error);
+      // Fall through to fetch-based fallback
     }
   }
 
-  // LOCAL DEVELOPMENT ONLY: Use standard puppeteer with bundled Chromium
-  // Skip in production/Cloudflare to avoid bundling 8MB+ of puppeteer/typescript
-  if (process.env.NODE_ENV === 'development') {
-    try {
-      // Use variable to prevent static analysis by bundler
-      const puppeteerPkg = 'puppeteer';
-      const puppeteer = await import(/* webpackIgnore: true */ puppeteerPkg);
-      const browser = await puppeteer.default.launch({
-        headless: true,
-        args: [
-          '--no-sandbox',
-          '--disable-setuid-sandbox',
-          '--disable-dev-shm-usage',
-          '--disable-gpu',
-          '--disable-software-rasterizer',
-        ],
-      });
-      return { type: BrowserEnvironments.LOCAL, browser };
-    } catch (error) {
-      console.error('[Browser] Local puppeteer launch failed:', error);
-    }
-  }
-
-  // No browser available in production without Cloudflare Browser binding
+  // No browser available - will use fetch-based fallback
   return null;
 }
 
@@ -742,15 +645,16 @@ async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {
  * Extract metadata from HTML using regex (no browser required)
  * Used as fallback when Puppeteer isn't available
  */
-async function extractLightweightMetadata(url: string): Promise<{
+async function extractLightweightContent(url: string): Promise<{
   imageUrl?: string;
   faviconUrl?: string;
   description?: string;
   title?: string;
+  content?: string;
 }> {
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
 
     const response = await fetch(url, {
       signal: controller.signal,
@@ -766,7 +670,7 @@ async function extractLightweightMetadata(url: string): Promise<{
       return {};
     }
 
-    // Only read first 50KB to find meta tags (they're in <head>)
+    // Read up to 200KB to get body content (not just head)
     const reader = response.body?.getReader();
     if (!reader) {
       return {};
@@ -775,7 +679,7 @@ async function extractLightweightMetadata(url: string): Promise<{
     let html = '';
     const decoder = new TextDecoder();
     let bytesRead = 0;
-    const maxBytes = 50000;
+    const maxBytes = 200000;
 
     while (bytesRead < maxBytes) {
       const { done, value } = await reader.read();
@@ -784,10 +688,6 @@ async function extractLightweightMetadata(url: string): Promise<{
       }
       html += decoder.decode(value, { stream: true });
       bytesRead += value.length;
-      // Stop after </head> if found
-      if (html.includes('</head>')) {
-        break;
-      }
     }
 
     reader.cancel();
@@ -831,11 +731,54 @@ async function extractLightweightMetadata(url: string): Promise<{
     const domain = new URL(url).hostname;
     const faviconUrl = `https://www.google.com/s2/favicons?domain=${domain}&sz=64`;
 
+    // Extract body content as text (fallback when browser unavailable)
+    let content = '';
+    const bodyMatch = html.match(/<body[^>]*>([\s\S]*?)(?:<\/body>|$)/i);
+    if (bodyMatch?.[1]) {
+      content = bodyMatch[1]
+        // Remove script tags and content
+        .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+        // Remove style tags and content
+        .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+        // Remove noscript tags
+        .replace(/<noscript[^>]*>[\s\S]*?<\/noscript>/gi, '')
+        // Remove nav, footer, aside (typically non-content)
+        .replace(/<nav[^>]*>[\s\S]*?<\/nav>/gi, '')
+        .replace(/<footer[^>]*>[\s\S]*?<\/footer>/gi, '')
+        .replace(/<aside[^>]*>[\s\S]*?<\/aside>/gi, '')
+        // Remove comments
+        .replace(/<!--[\s\S]*?-->/g, '')
+        // Convert headers to text with newlines
+        .replace(/<h[1-6][^>]*>([\s\S]*?)<\/h[1-6]>/gi, '\n$1\n')
+        // Convert paragraphs and divs to text with newlines
+        .replace(/<\/?(p|div|br|li|tr)[^>]*>/gi, '\n')
+        // Remove all remaining HTML tags
+        .replace(/<[^>]+>/g, ' ')
+        // Decode common HTML entities
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#39;/g, '\'')
+        // Normalize whitespace
+        .replace(/\s+/g, ' ')
+        .replace(/\n\s+/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    }
+
+    // Limit content to ~50k chars (enough for AI context)
+    if (content.length > 50000) {
+      content = `${content.substring(0, 50000)}...`;
+    }
+
     return {
       imageUrl: imageUrl || twitterImageMatch?.[1],
       faviconUrl,
       description: descMatch?.[1]?.substring(0, 300),
       title: titleMatch?.[1]?.substring(0, 200),
+      content: content || undefined,
     };
   } catch {
     return {};
@@ -883,18 +826,21 @@ async function extractPageContent(
 }> {
   const browserResult = await initBrowser(env);
 
-  // Fallback if no browser available - use lightweight extraction
+  // Fallback if no browser available - use lightweight extraction with content
   if (!browserResult) {
-    const lightMeta = await extractLightweightMetadata(url);
+    const lightContent = await extractLightweightContent(url);
+    const content = lightContent.content || '';
+    const wordCount = content.split(/\s+/).filter(Boolean).length;
     return {
-      content: '',
+      content,
+      rawContent: content, // Use same content for rawContent in fallback
       metadata: {
-        title: lightMeta.title,
-        description: lightMeta.description,
-        imageUrl: lightMeta.imageUrl,
-        faviconUrl: lightMeta.faviconUrl,
-        wordCount: 0,
-        readingTime: 0,
+        title: lightContent.title,
+        description: lightContent.description,
+        imageUrl: lightContent.imageUrl,
+        faviconUrl: lightContent.faviconUrl,
+        wordCount,
+        readingTime: Math.ceil(wordCount / 200),
       },
     };
   }
@@ -911,21 +857,12 @@ async function extractPageContent(
   };
 
   try {
-    // Use discriminated union to call type-specific helper
-    const extracted: ExtractedContent = await (async () => {
-      if (browserResult.type === BrowserEnvironments.CLOUDFLARE) {
-        return await extractWithCloudflareBrowser(
-          browserResult.browser,
-          config,
-          format,
-        );
-      }
-      return await extractWithLocalBrowser(
-        browserResult.browser,
-        config,
-        format,
-      );
-    })();
+    // Use Cloudflare Browser Rendering for content extraction
+    const extracted: ExtractedContent = await extractWithCloudflareBrowser(
+      browserResult.browser,
+      config,
+      format,
+    );
     await browserResult.browser.close();
 
     // Convert raw HTML to markdown if format is 'markdown'
@@ -959,11 +896,8 @@ async function extractPageContent(
 /**
  * Perform web search using headless browser (DuckDuckGo)
  *
- * Uses Puppeteer to scrape DuckDuckGo search results.
- * Works in both local development and Cloudflare Workers.
- *
- * LOCAL: Uses `puppeteer` package with bundled Chromium
- * CLOUDFLARE: Uses `@cloudflare/puppeteer` with Browser binding
+ * Uses Cloudflare Browser Rendering to scrape DuckDuckGo search results.
+ * Works in both local development (wrangler dev) and production.
  *
  * @param query - Search query string
  * @param maxResults - Maximum number of results to return
@@ -1012,7 +946,7 @@ async function searchWithBrowser(
 
   const browserResult = await initBrowser(env);
   if (!browserResult) {
-    console.error('[Browser] Failed to initialize browser - falling back to fetch');
+    // Fallback to fetch-based search when browser unavailable
     return searchWithFetch(finalQuery, maxResults);
   }
 
@@ -1022,22 +956,13 @@ async function searchWithBrowser(
 
   try {
     // Use discriminated union to call type-specific helper
-    const results: ExtractedSearchResult[] = await (async () => {
-      if (browserResult.type === BrowserEnvironments.CLOUDFLARE) {
-        return await searchWithCloudflareBrowser(
-          browserResult.browser,
-          searchUrl,
-          maxResults,
-          userAgent,
-        );
-      }
-      return await searchWithLocalBrowser(
-        browserResult.browser,
-        searchUrl,
-        maxResults,
-        userAgent,
-      );
-    })();
+    // Use Cloudflare Browser Rendering for search
+    const results: ExtractedSearchResult[] = await searchWithCloudflareBrowser(
+      browserResult.browser,
+      searchUrl,
+      maxResults,
+      userAgent,
+    );
     await browserResult.browser.close();
 
     return results;
@@ -1135,7 +1060,7 @@ async function searchWithFetch(
 
     return results;
   } catch (error) {
-    console.error('[Fetch] Search failed:', error);
+    console.error('[Fetch] Search failed:', error instanceof Error ? error.message : error);
     return [];
   }
 }

@@ -6,6 +6,10 @@
  * Prevents cache mismatches and enables hierarchical invalidation
  */
 
+import type { QueryClient } from '@tanstack/react-query';
+
+import { getUserUsageStatsService, listModelsService } from '@/services/api';
+
 /**
  * Factory functions for type-safe query key generation
  */
@@ -304,6 +308,85 @@ export const invalidationPatterns = {
     queryKeys.threads.preSearches(threadId),
     queryKeys.threads.feedback(threadId),
   ],
+} as const;
+
+// ============================================================================
+// Billing Invalidation Helpers
+// ============================================================================
+
+/**
+ * Shared billing invalidation helpers
+ *
+ * Consolidates the duplicated cache invalidation logic used across:
+ * - useSyncAfterCheckoutMutation
+ * - useSwitchSubscriptionMutation
+ * - useCancelSubscriptionMutation
+ * - BillingSuccessClient
+ *
+ * These mutations all need to:
+ * 1. Invalidate subscription queries
+ * 2. Bypass HTTP cache for usage stats (quota limits tied to tier)
+ * 3. Bypass HTTP cache for models (tier-based access restrictions)
+ */
+export const billingInvalidationHelpers = {
+  /**
+   * Invalidate subscription queries after billing changes
+   */
+  invalidateSubscriptions: (queryClient: QueryClient) => {
+    return queryClient.invalidateQueries({
+      queryKey: queryKeys.subscriptions.all,
+      refetchType: 'all',
+    });
+  },
+
+  /**
+   * Refresh usage stats with HTTP cache bypass
+   * Falls back to invalidation if direct fetch fails
+   */
+  refreshUsageStats: async (queryClient: QueryClient) => {
+    try {
+      const freshUsageData = await getUserUsageStatsService({ bypassCache: true });
+      queryClient.setQueryData(queryKeys.usage.stats(), freshUsageData);
+    } catch (error) {
+      console.error('[Billing] Failed to refresh usage stats:', error);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
+    }
+  },
+
+  /**
+   * Refresh models with HTTP cache bypass
+   * Falls back to invalidation if direct fetch fails
+   */
+  refreshModels: async (queryClient: QueryClient) => {
+    try {
+      const freshModelsData = await listModelsService({ bypassCache: true });
+      queryClient.setQueryData(queryKeys.models.list(), freshModelsData);
+    } catch (error) {
+      console.error('[Billing] Failed to refresh models:', error);
+      void queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
+    }
+  },
+
+  /**
+   * Full billing state refresh after subscription changes
+   *
+   * Use this after:
+   * - Checkout completion (sync)
+   * - Plan switch (upgrade/downgrade)
+   * - Subscription cancellation
+   *
+   * Bypasses HTTP cache for usage/models to ensure fresh tier data
+   */
+  invalidateAfterBillingChange: async (queryClient: QueryClient) => {
+    // Invalidate subscriptions first
+    billingInvalidationHelpers.invalidateSubscriptions(queryClient);
+
+    // Refresh usage and models in parallel with cache bypass
+    await Promise.all([
+      billingInvalidationHelpers.refreshUsageStats(queryClient),
+      billingInvalidationHelpers.refreshModels(queryClient),
+    ]);
+  },
 } as const;
 
 // ============================================================================

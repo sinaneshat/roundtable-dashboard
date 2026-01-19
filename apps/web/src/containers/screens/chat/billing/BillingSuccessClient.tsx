@@ -1,15 +1,13 @@
 import { PlanTypes, PurchaseTypes, StatusVariants, StripeSubscriptionStatuses, SubscriptionTiers } from '@roundtable/shared';
-import { useQueryClient } from '@tanstack/react-query';
 import { useEffect, useMemo, useRef, useState } from 'react';
 
 import { StatusPage, StatusPageActions } from '@/components/billing';
+import { useSyncAfterCheckoutMutation } from '@/hooks/mutations';
 import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
-import { queryKeys } from '@/lib/data/query-keys';
 import { useTranslations } from '@/lib/i18n';
 import { createStorageHelper } from '@/lib/utils/safe-storage';
 import type { SyncAfterCheckoutResponse } from '@/services/api';
-import { syncAfterCheckoutService } from '@/services/api';
 import type { Subscription } from '@/types/billing';
 
 type ApiResponse<T> = { success: boolean; data?: T };
@@ -18,8 +16,8 @@ const syncResultStorage = createStorageHelper<SyncAfterCheckoutResponse>('billin
 
 export function BillingSuccessClient() {
   const t = useTranslations();
-  const queryClient = useQueryClient();
 
+  const syncMutation = useSyncAfterCheckoutMutation();
   const subscriptionsQuery = useSubscriptionsQuery();
   const usageStatsQuery = useUsageStatsQuery();
 
@@ -67,7 +65,7 @@ export function BillingSuccessClient() {
   // Track sync errors
   const [syncError, setSyncError] = useState(false);
 
-  // Initiate sync on mount - call service directly to avoid mutation hook's async onSuccess issues
+  // Initiate sync on mount using mutation hook for consistent invalidation logic
   // Note: No isMounted check needed - React 18 handles setState on unmounted components gracefully,
   // and removing it fixes StrictMode double-mount issues where the ref persists but isMounted doesn't
   useEffect(() => {
@@ -76,24 +74,22 @@ export function BillingSuccessClient() {
 
     hasInitiatedSync.current = true;
 
-    syncAfterCheckoutService()
-      .then((data) => {
+    syncMutation.mutate(undefined, {
+      onSuccess: (data) => {
         const result = data as SyncAfterCheckoutResponse;
         syncResultStorage.set(result);
         setStoredResult(result);
         setSyncComplete(true);
         setIsLoading(false);
-
-        queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
-        queryClient.invalidateQueries({ queryKey: queryKeys.models.all });
-      })
-      .catch((error) => {
+        // Note: Cache invalidation is handled by the mutation hook's onSuccess
+      },
+      onError: (error) => {
         console.error('[BillingSuccessClient] Sync failed:', error);
         syncResultStorage.clear();
         setSyncError(true);
         setIsLoading(false);
-      });
+      },
+    });
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

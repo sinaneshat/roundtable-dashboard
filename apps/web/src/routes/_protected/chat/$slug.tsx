@@ -10,44 +10,31 @@ import {
   threadChangelogQueryOptions,
   threadFeedbackQueryOptions,
 } from '@/lib/data/query-options';
-import { STALE_TIMES } from '@/lib/data/stale-times';
 import { getStreamResumptionState } from '@/server/thread';
 import type { GetThreadBySlugResponse, ThreadStreamResumptionState } from '@/services/api';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
-  // ✅ PERF: staleTime prevents loader re-execution on quick client navigations
-  // Data is considered fresh for 2 minutes (matches threadDetail staleTime)
-  // This eliminates duplicate fetches when navigating between threads
-  staleTime: STALE_TIMES.threadDetail,
+  // NOTE: No route-level staleTime - TanStack Query manages data freshness
+  // @see https://tanstack.com/router/latest/docs/framework/react/guide/preloading#preloading-with-external-libraries
+  //
   // Prefetch thread data and stream resumption state for SSR hydration
   // Uses shared queryOptions to ensure consistent caching between server and client
   loader: async ({ params, context }) => {
     const { queryClient } = context;
     const options = threadBySlugQueryOptions(params.slug);
 
-    // ✅ PERF: Check if we have fresh cached data before fetching
-    // This prevents unnecessary server function calls on client navigation
-    const existingState = queryClient.getQueryState(options.queryKey);
-    const hasFreshCache = existingState?.data
-      && existingState.dataUpdatedAt > Date.now() - STALE_TIMES.threadDetail;
+    // ensureQueryData internally checks staleTime and only fetches if data is stale/missing
+    // @see https://tanstack.com/router/latest/docs/framework/react/guide/external-data-loading
+    await queryClient.ensureQueryData(options);
 
-    // Only fetch if cache is stale or missing
-    if (!hasFreshCache) {
-      await queryClient.ensureQueryData(options);
-    }
-
-    // Get thread ID from cached data for stream status fetch
+    // Get thread ID from cached data for auxiliary fetches
     const cachedData = queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey);
     const threadId = cachedData?.success && cachedData.data?.thread?.id;
     const threadTitle = cachedData?.success && cachedData.data?.thread?.title ? cachedData.data.thread.title : null;
 
-    // ✅ PERF: Skip auxiliary fetches on client navigation when cache is fresh
-    // The flow-controller pre-populates this data during thread creation
-    // Only fetch on SSR (first load) or when cache was stale
+    // Prefetch auxiliary data in parallel - ensureQueryData handles freshness checks
     let streamResumptionState: ThreadStreamResumptionState | null = null;
-    if (threadId && !hasFreshCache) {
-      // ✅ SSR: Prefetch changelog and feedback in parallel with stream status
-      // This ensures data is in cache before component renders, preventing client refetch
+    if (threadId) {
       const changelogOptions = threadChangelogQueryOptions(threadId);
       const feedbackOptions = threadFeedbackQueryOptions(threadId);
 

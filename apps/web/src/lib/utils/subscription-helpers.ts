@@ -1,11 +1,15 @@
 import { StripeSubscriptionStatuses } from '@roundtable/shared';
 
+import { isObject } from '@/lib/utils/type-guards';
 import type { Subscription } from '@/services/api';
 
 export function isSubscriptionActive(subscription: Subscription | unknown): boolean {
-  const sub = subscription as Record<string, unknown>;
-  const status = sub.status as string;
-  const cancelAtPeriodEnd = sub.cancelAtPeriodEnd as boolean;
+  if (!isObject(subscription)) {
+    return false;
+  }
+
+  const status = subscription.status;
+  const cancelAtPeriodEnd = subscription.cancelAtPeriodEnd;
 
   const isActive = status === StripeSubscriptionStatuses.ACTIVE
     || status === StripeSubscriptionStatuses.TRIALING;

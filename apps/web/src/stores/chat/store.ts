@@ -14,7 +14,7 @@
  * - context.ts: useChatStore hook with zustand useStore
  */
 
-import type { ChatMode, FeedbackType, ScreenMode } from '@roundtable/shared';
+import type { ChatMode, ScreenMode } from '@roundtable/shared';
 import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, ScreenModes, StreamStatuses, TextPartStates, UploadStatuses, WebSearchDepths } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { castDraft, enableMapSet } from 'immer';
@@ -166,10 +166,7 @@ const createFeedbackSlice: SliceCreator<FeedbackSlice> = set => ({
     set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
   loadFeedbackFromServer: (data) => {
     set({
-      feedbackByRound: new Map(data.map((f) => {
-        const feedback = f as { roundNumber: number; feedbackType: FeedbackType | null };
-        return [feedback.roundNumber, feedback.feedbackType];
-      })),
+      feedbackByRound: new Map(data.map(f => [f.roundNumber, f.feedbackType])),
       hasLoadedFeedback: true,
     }, false, 'feedback/loadFeedbackFromServer');
   },
@@ -1097,8 +1094,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
               return aRound - bRound;
             if (a.role !== b.role)
               return a.role === MessageRoles.USER ? -1 : 1;
-            const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
-            const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
+            const aPIdx = getParticipantIndex(a.metadata) ?? 999;
+            const bPIdx = getParticipantIndex(b.metadata) ?? 999;
             return aPIdx - bPIdx;
           });
         } else {
@@ -1132,8 +1129,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
                 return aRound - bRound;
               if (a.role !== b.role)
                 return a.role === MessageRoles.USER ? -1 : 1;
-              const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
-              const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
+              const aPIdx = getParticipantIndex(a.metadata) ?? 999;
+              const bPIdx = getParticipantIndex(b.metadata) ?? 999;
               return aPIdx - bPIdx;
             });
           } else {
@@ -1167,8 +1164,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
                 return aRound - bRound;
               if (a.role !== b.role)
                 return a.role === MessageRoles.USER ? -1 : 1;
-              const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
-              const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
+              const aPIdx = getParticipantIndex(a.metadata) ?? 999;
+              const bPIdx = getParticipantIndex(b.metadata) ?? 999;
               return aPIdx - bPIdx;
             });
           } else {

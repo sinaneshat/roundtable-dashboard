@@ -91,18 +91,6 @@ export async function performanceTracking(c: Context, next: Next): Promise<void 
 }
 
 /**
- * Legacy wrapper for withDbTiming (no-op when context unavailable)
- * @deprecated Use withDbTimingContext with context instead
- */
-export function withDbTiming<T>(
-  _queryName: string,
-  fn: () => Promise<T>,
-): Promise<T> {
-  // Without context, just run the function (no tracking)
-  return fn();
-}
-
-/**
  * Format performance metrics for API response
  * Returns object to be included in response meta
  */

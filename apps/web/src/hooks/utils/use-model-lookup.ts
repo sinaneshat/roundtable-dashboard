@@ -67,18 +67,25 @@ export function useModelLookup(options?: UseModelLookupOptions): UseModelLookupR
   const { data: modelsData, isLoading } = useModelsQuery({ enabled: options?.enabled ?? true });
 
   const allModels = useMemo(() => {
-    const data = modelsData?.data as { items?: Model[] } | undefined;
-    return data?.items || [];
-  }, [modelsData?.data]);
+    if (!modelsData?.success || !modelsData.data) {
+      return [];
+    }
+    return modelsData.data.items ?? [];
+  }, [modelsData]);
 
-  const defaultModelId = (modelsData?.data as { default_model_id?: string } | undefined)?.default_model_id;
+  const defaultModelId = useMemo(() => {
+    if (!modelsData?.success || !modelsData.data) {
+      return undefined;
+    }
+    return modelsData.data.default_model_id;
+  }, [modelsData]);
 
   const findModel = useMemo(() => {
     return (modelId: string | undefined): Model | undefined => {
       if (!modelId) {
         return undefined;
       }
-      return allModels.find(m => m.id === modelId);
+      return allModels.find((m: Model) => m.id === modelId);
     };
   }, [allModels]);
 

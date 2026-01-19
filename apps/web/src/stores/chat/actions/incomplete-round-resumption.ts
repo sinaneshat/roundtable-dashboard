@@ -21,7 +21,6 @@ import {
   hasError as checkHasError, // eslint-disable-line perfectionist/sort-named-imports -- simple-import-sort conflicts with perfectionist on aliased imports
 } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant } from '@/services/api';
 
 import {
   getMessageStreamingStatus,
@@ -1234,7 +1233,7 @@ export function useIncompleteRoundResumption(
     // If server says "moderator phase" but participants aren't complete, redirect to participants.
     const participantCompletionCheck = getParticipantCompletionStatus(
       messages,
-      participants as ChatParticipant[],
+      participants,
       resumptionRoundNumber,
     );
 
@@ -1273,7 +1272,7 @@ export function useIncompleteRoundResumption(
 
     const completionStatus = getParticipantCompletionStatus(
       messages,
-      participants as ChatParticipant[],
+      participants,
       resumptionRoundNumber,
     );
 
@@ -1388,7 +1387,7 @@ export function useIncompleteRoundResumption(
     // Check if all participants have completed
     const completionStatus = getParticipantCompletionStatus(
       messages,
-      participants as ChatParticipant[],
+      participants,
       currentRoundNumber,
     );
 

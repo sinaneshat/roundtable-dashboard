@@ -35,32 +35,24 @@ type CloudflareImageOptions = {
  * Build Cloudflare Image Resizing URL options string
  */
 function buildOptionsString(options: CloudflareImageOptions): string {
-  const parts: string[] = [];
+  const optionEntries: [string, unknown][] = [
+    ['width', options.width],
+    ['height', options.height],
+    ['fit', options.fit],
+    ['quality', options.quality],
+    ['format', options.format],
+    ['blur', options.blur],
+    ['gravity', options.gravity],
+    ['dpr', options.dpr],
+    ['sharpen', options.sharpen],
+    ['brightness', options.brightness],
+    ['contrast', options.contrast],
+  ];
 
-  if (options.width)
-    parts.push(`width=${options.width}`);
-  if (options.height)
-    parts.push(`height=${options.height}`);
-  if (options.fit)
-    parts.push(`fit=${options.fit}`);
-  if (options.quality)
-    parts.push(`quality=${options.quality}`);
-  if (options.format)
-    parts.push(`format=${options.format}`);
-  if (options.blur)
-    parts.push(`blur=${options.blur}`);
-  if (options.gravity)
-    parts.push(`gravity=${options.gravity}`);
-  if (options.dpr)
-    parts.push(`dpr=${options.dpr}`);
-  if (options.sharpen)
-    parts.push(`sharpen=${options.sharpen}`);
-  if (options.brightness)
-    parts.push(`brightness=${options.brightness}`);
-  if (options.contrast)
-    parts.push(`contrast=${options.contrast}`);
-
-  return parts.join(',');
+  return optionEntries
+    .filter(([, value]) => value !== undefined && value !== null)
+    .map(([key, value]) => `${key}=${value}`)
+    .join(',');
 }
 
 /**

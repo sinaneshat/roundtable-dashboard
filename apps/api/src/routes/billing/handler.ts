@@ -668,7 +668,7 @@ export const switchSubscriptionHandler: RouteHandler<typeof switchSubscriptionRo
       }
 
       // Update subscription in Stripe
-      const stripe = stripeService.getClient();
+      const stripe = await stripeService.ensureClient();
       const stripeSubscription = await stripe.subscriptions.retrieve(subscriptionId);
       const subscriptionItemId = stripeSubscription.items.data[0]?.id;
 

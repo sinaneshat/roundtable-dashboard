@@ -1,37 +1,17 @@
-/**
- * Server-side Auth Functions for TanStack Start
- *
- * Uses getRequest() to access the full Request object with headers/cookies.
- * This is the correct approach for TanStack Start server functions.
- *
- * For client-side auth, use useSession/getSession from @/lib/auth/client
- *
- * @see https://www.better-auth.com/docs/integrations/tanstack
- */
-
 import { createServerFn } from '@tanstack/react-start';
-import { getRequest } from '@tanstack/react-start/server';
 
 import { getSession as clientGetSession, signOut as clientSignOut } from '@/lib/auth/client';
 import type { SessionData } from '@/lib/auth/types';
+import { cookieMiddleware } from '@/start';
 
-/**
- * Get the current session from Better Auth.
- * Server-side function for SSR auth checks.
- * Uses getRequest() to access the full Request object with cookies.
- */
-export const getSession = createServerFn({ method: 'GET' }).handler(
-  async (): Promise<SessionData | null> => {
+export const getSession = createServerFn({ method: 'GET' })
+  .middleware([cookieMiddleware])
+  .handler(async ({ context }): Promise<SessionData | null> => {
     try {
-      const request = getRequest();
-      const cookieHeader = request.headers.get('cookie') || '';
-
-      // Better Auth pattern: pass headers through fetchOptions
-      // @see https://www.better-auth.com/docs/integrations/tanstack
       const result = await clientGetSession({
         fetchOptions: {
           headers: {
-            cookie: cookieHeader,
+            cookie: context.cookieHeader,
           },
         },
       });
@@ -43,28 +23,22 @@ export const getSession = createServerFn({ method: 'GET' }).handler(
       }
       return null;
     }
-  },
-);
+  });
 
-/**
- * Sign out the current user.
- * Uses getRequest() to access cookies for signout.
- */
-export const signOut = createServerFn({ method: 'POST' }).handler(async () => {
-  try {
-    const request = getRequest();
-    const cookieHeader = request.headers.get('cookie') || '';
-
-    await clientSignOut({
-      fetchOptions: {
-        headers: {
-          cookie: cookieHeader,
+export const signOut = createServerFn({ method: 'POST' })
+  .middleware([cookieMiddleware])
+  .handler(async ({ context }) => {
+    try {
+      await clientSignOut({
+        fetchOptions: {
+          headers: {
+            cookie: context.cookieHeader,
+          },
         },
-      },
-    });
+      });
 
-    return true;
-  } catch {
-    return false;
-  }
-});
+      return true;
+    } catch {
+      return false;
+    }
+  });

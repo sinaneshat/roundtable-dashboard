@@ -630,6 +630,9 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
       headers.set('content-disposition', `inline; filename="${encodeURIComponent(uploadRecord.filename)}"`);
       headers.set('cache-control', cacheControl);
       headers.set('x-content-type-options', 'nosniff');
+      // ✅ CORS FIX: Required for cross-origin embedding (images in <img> tags, etc.)
+      // Without this, browser blocks response with ERR_BLOCKED_BY_RESPONSE.NotSameOrigin
+      headers.set('cross-origin-resource-policy', 'cross-origin');
 
       return new Response(result.body, { headers });
     };

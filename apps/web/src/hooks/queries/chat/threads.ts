@@ -36,7 +36,7 @@ export function useThreadsQuery(search?: string) {
   const { isAuthenticated } = useAuthCheck();
 
   return useInfiniteQuery({
-    queryKey: [...queryKeys.threads.lists(search)],
+    queryKey: queryKeys.threads.lists(search),
     queryFn: async ({ pageParam }) => {
       // ✅ Use centralized limits - clean semantic names
       const limit = search

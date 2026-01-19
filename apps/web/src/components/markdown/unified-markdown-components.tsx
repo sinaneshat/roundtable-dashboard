@@ -5,6 +5,7 @@ import type { Components } from 'react-markdown';
 
 import { Icons } from '@/components/icons';
 import { MarkdownCode, MarkdownPre } from '@/components/markdown/markdown-code-block';
+import { BlurThumbnail } from '@/components/ui/smart-image';
 import { cn } from '@/lib/ui/cn';
 
 /**
@@ -58,8 +59,13 @@ export const streamdownComponents = {
   th: ({ children, className }: ComponentPropsWithoutRef<'th'>) => <th dir="auto" className={cn('px-4 py-3 text-start text-xs font-semibold uppercase tracking-wider text-muted-foreground border-b border-border', className)}>{children}</th>,
   td: ({ children, className }: ComponentPropsWithoutRef<'td'>) => <td dir="auto" className={cn('px-4 py-3 text-sm text-foreground', className)}>{children}</td>,
 
-  img: ({ src, alt, className, ...props }: ComponentPropsWithoutRef<'img'>) => (
-    <img src={src} alt={alt || ''} className={cn('max-w-full h-auto rounded-2xl my-4', className)} loading="lazy" decoding="async" referrerPolicy="no-referrer" {...props} />
+  img: ({ src, alt, className }: ComponentPropsWithoutRef<'img'>) => (
+    <BlurThumbnail
+      src={src || ''}
+      alt={alt || ''}
+      className={cn('max-w-full h-auto rounded-2xl', className)}
+      containerClassName="my-4"
+    />
   ),
 };
 

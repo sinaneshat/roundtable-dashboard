@@ -7,7 +7,6 @@ import { createHandler, Responses } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
-import { withDbTiming } from '@/middleware';
 import type { ApiEnv } from '@/types';
 
 import type { benchmarkRoute, clearCacheRoute, detailedHealthRoute, healthRoute } from './route';
@@ -66,17 +65,13 @@ export const detailedHealthHandler: RouteHandler<typeof detailedHealthRoute, Api
 
 /**
  * Check database connectivity
- * Uses withDbTiming to track query performance in preview/local
  */
 async function checkDatabase(_c: HealthCheckContext) {
   const startTime = Date.now();
 
   try {
-    // Use withDbTiming to track this query for performance monitoring
-    await withDbTiming('health:SELECT_1', async () => {
-      const db = await getDbAsync();
-      await db.run('SELECT 1');
-    });
+    const db = await getDbAsync();
+    await db.run('SELECT 1');
 
     return {
       status: HealthStatuses.HEALTHY,
