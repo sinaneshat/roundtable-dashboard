@@ -7,13 +7,13 @@
  */
 
 import { SidebarLoadingFallback } from '@/components/loading/sidebar-loading-fallback';
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   QuickStartSkeleton,
   StickyInputSkeleton,
   ThreadMessagesSkeleton,
-} from '@/components/ui/skeleton';
+} from '@/components/skeletons';
+import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
+import { Skeleton } from '@/components/ui/skeleton';
 
 /**
  * Full page skeleton for chat thread route
@@ -74,7 +74,7 @@ export function ChatOverviewSkeleton() {
 
         {/* Main content: Welcome + Quick Start + Input */}
         <div className="flex-1 flex flex-col items-center justify-center px-4">
-          <div className="w-full max-w-2xl space-y-8">
+          <div className="w-full max-w-4xl space-y-8">
             {/* Logo/Welcome area */}
             <div className="text-center space-y-4">
               <div className="size-16 rounded-2xl bg-accent animate-pulse mx-auto" />

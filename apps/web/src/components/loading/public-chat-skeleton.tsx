@@ -5,7 +5,8 @@
  * Matches the layout structure of PublicChatThreadScreen
  */
 
-import { Skeleton, ThreadMessagesSkeleton } from '@/components/ui/skeleton';
+import { ThreadMessagesSkeleton } from '@/components/skeletons';
+import { Skeleton } from '@/components/ui/skeleton';
 
 /**
  * Loading skeleton for public chat thread page

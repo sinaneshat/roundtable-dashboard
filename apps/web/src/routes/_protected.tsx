@@ -3,8 +3,9 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
 import { SidebarLoadingFallback } from '@/components/loading';
 import { ChatLayoutProviders, PreferencesStoreProvider } from '@/components/providers';
+import { QuickStartSkeleton, StickyInputSkeleton } from '@/components/skeletons';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { QuickStartSkeleton, Skeleton, StickyInputSkeleton } from '@/components/ui/skeleton';
+import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/auth/client';
 import {
   modelsQueryOptions,
@@ -34,7 +35,7 @@ function ProtectedLayoutSkeleton() {
 
         {/* Main content skeleton - matches ChatOverviewScreen layout */}
         <div className="flex-1 flex flex-col items-center justify-center px-4">
-          <div className="w-full max-w-2xl space-y-8">
+          <div className="w-full max-w-4xl space-y-8">
             {/* Logo/Welcome area */}
             <div className="text-center space-y-4">
               <div className="size-16 rounded-2xl bg-accent animate-pulse mx-auto" />

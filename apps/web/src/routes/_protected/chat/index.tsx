@@ -1,6 +1,6 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { MainContentSkeleton } from '@/components/layouts/chat-layout-shell';
+import { MainContentSkeleton } from '@/components/skeletons';
 import dynamic from '@/lib/utils/dynamic';
 
 // Dynamic import with ssr:false - shows skeleton during SSR and until component loads

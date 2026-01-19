@@ -26,7 +26,7 @@ export function ChatInputSkeleton({
   ...props
 }: ChatInputSkeletonProps) {
   const content = (
-    <div className="rounded-2xl bg-card border shadow-lg p-4">
+    <div className="rounded-2xl bg-card border border-border/50 shadow-lg p-4">
       <Skeleton className="h-12 w-full rounded-xl" />
       {showToolbar && (
         <div className="flex items-center justify-between mt-3">

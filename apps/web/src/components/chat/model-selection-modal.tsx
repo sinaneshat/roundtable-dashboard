@@ -16,6 +16,7 @@ import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Icons } from '@/components/icons';
+import { PresetCardSkeleton } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -27,7 +28,6 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { PresetCardSkeleton } from '@/components/ui/skeleton';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   useCreateCustomRoleMutation,

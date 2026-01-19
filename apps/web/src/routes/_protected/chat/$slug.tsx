@@ -2,7 +2,7 @@ import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMemo } from 'react';
 
-import { ThreadContentSkeleton } from '@/components/layouts/chat-layout-shell';
+import { ThreadContentSkeleton } from '@/components/skeletons';
 import { useSession } from '@/lib/auth/client';
 import { threadBySlugQueryOptions } from '@/lib/data/query-options';
 import dynamic from '@/lib/utils/dynamic';
