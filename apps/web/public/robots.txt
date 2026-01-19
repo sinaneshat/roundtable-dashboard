@@ -1,5 +1,5 @@
 # Roundtable - Preview Environment
-# https://app-preview.roundtable.now
+# https://web-preview.roundtable.now
 
 User-agent: *
 Disallow: /

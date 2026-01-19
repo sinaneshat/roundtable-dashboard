@@ -56,7 +56,7 @@ In the Cloudflare Dashboard, connect your repository to **4 Workers**.
 |--------|---------------|
 | `roundtable-api-preview` | `api-preview.roundtable.now` |
 | `roundtable-api-production` | `api.roundtable.now` |
-| `roundtable-web-preview` | `app-preview.roundtable.now` |
+| `roundtable-web-preview` | `web-preview.roundtable.now` |
 | `roundtable-web` | `roundtable.now` |
 
 ### Step 2: Configure Build Watch Paths

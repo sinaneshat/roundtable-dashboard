@@ -60,7 +60,7 @@ export function isWebappEnv(value: unknown): value is WebappEnv {
  *
  * ARCHITECTURE (TanStack Start + Separate API):
  * - Local: Web on 5173 (Vite), API on 8787 (Wrangler)
- * - Preview: Web on app-preview.roundtable.now, API on api-preview.roundtable.now
+ * - Preview: Web on web-preview.roundtable.now, API on api-preview.roundtable.now
  * - Prod: Web on roundtable.now, API on api.roundtable.now
  */
 export const BASE_URLS: Record<WebappEnv, { app: string; api: string }> = {
@@ -69,7 +69,7 @@ export const BASE_URLS: Record<WebappEnv, { app: string; api: string }> = {
     api: 'http://localhost:8787/api/v1',
   },
   [WEBAPP_ENVS.PREVIEW]: {
-    app: 'https://app-preview.roundtable.now',
+    app: 'https://web-preview.roundtable.now',
     api: 'https://api-preview.roundtable.now/api/v1',
   },
   [WEBAPP_ENVS.PROD]: {
