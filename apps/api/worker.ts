@@ -7,32 +7,57 @@
  * - Durable Objects for scheduling
  * - Queue handlers for async tasks
  *
- * IMPORTANT: All routes use createOpenApiApp() pattern for RPC type safety.
- * Routes are registered at module level for optimal Cloudflare Workers performance.
+ * IMPORTANT: Uses lazy loading to reduce worker startup CPU time.
+ * The full app is loaded on first request, not at module initialization.
  */
 
 import type { MessageBatch } from '@cloudflare/workers-types';
 
-// Import the pre-configured app (synchronous, no factory pattern)
-import rootApp from './src/index';
-
-// Re-export AppType for client type inference (static type, no runtime cost)
+// Type-only import for AppType (no runtime cost)
 export type { AppType } from './src/index';
 
 // Export Durable Object classes (lightweight, no heavy dependencies)
 export { UploadCleanupScheduler } from './src/workers/upload-cleanup-scheduler';
 
+// Lazy-loaded app cache - using unknown to avoid importing heavy types at startup
+let _rootApp: unknown = null;
+
+type HonoFetch = (request: Request, env: CloudflareEnv, ctx: ExecutionContext) => Promise<Response>;
+
+async function getRootApp(): Promise<{ fetch: HonoFetch }> {
+  if (!_rootApp) {
+    // Dynamic import - not evaluated at worker startup!
+    const module = await import('./src/index');
+    _rootApp = module.default;
+  }
+  return _rootApp as { fetch: HonoFetch };
+}
+
 // Export the main worker handler with queue support
 export default {
   /**
    * HTTP request handler.
-   * App is already initialized at module level.
+   * Lazily loads the full app on first request.
    */
   async fetch(
     request: Request,
     env: CloudflareEnv,
     ctx: ExecutionContext,
   ): Promise<Response> {
+    // Quick health check without loading the full app
+    const url = new URL(request.url);
+    if (url.pathname === '/health' || url.pathname === '/api/v1/health') {
+      return new Response(JSON.stringify({
+        status: 'ok',
+        timestamp: new Date().toISOString(),
+        service: 'roundtable-api',
+      }), {
+        headers: { 'Content-Type': 'application/json' },
+      });
+    }
+
+    // Load full app for all other routes
+    const rootApp = await getRootApp();
     return rootApp.fetch(request, env, ctx);
   },
 
