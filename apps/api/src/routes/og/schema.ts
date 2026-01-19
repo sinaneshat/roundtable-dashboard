@@ -5,7 +5,7 @@
  * Images are generated server-side using satori and returned as PNG buffers.
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 // Request query parameters
 export const OgImageQuerySchema = z.object({

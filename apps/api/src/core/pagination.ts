@@ -25,7 +25,7 @@ import type { SortDirection } from '@roundtable/shared/enums';
 import { SortDirections, SortDirectionSchema } from '@roundtable/shared/enums';
 import type { AnyColumn, SQL } from 'drizzle-orm';
 import { and, asc, desc, gt, lt } from 'drizzle-orm';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { API } from '@/constants';
 

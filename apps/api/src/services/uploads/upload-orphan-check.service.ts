@@ -9,7 +9,7 @@
 
 import { eq } from 'drizzle-orm';
 import { drizzle } from 'drizzle-orm/d1';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import * as chatTables from '@/db/tables/chat';
 import * as projectTables from '@/db/tables/project';

@@ -10,7 +10,7 @@
  * @module lib/schemas/participant-schemas
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { chatParticipantSelectSchema } from '@/db/validation/chat';
 import { ParticipantSettingsSchema } from '@/lib/config/participant-settings';

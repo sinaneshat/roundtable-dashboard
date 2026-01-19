@@ -4,9 +4,18 @@ import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { mapStatusCode } from '@/core';
-import { auth } from '@/lib/auth/server';
 import type { Session, User } from '@/lib/auth/types';
 import type { ApiEnv } from '@/types';
+
+// Lazy load auth to reduce worker startup CPU time
+let authModule: typeof import('@/lib/auth/server') | null = null;
+
+async function getAuth() {
+  if (!authModule) {
+    authModule = await import('@/lib/auth/server');
+  }
+  return authModule.auth;
+}
 
 /**
  * Shared authentication helper - extracts session from request headers
@@ -27,6 +36,9 @@ async function authenticateSession(c: Context<ApiEnv>): Promise<{
   session: Session | null;
   user: User | null;
 }> {
+  // Lazy load auth module to reduce worker startup CPU time
+  const auth = await getAuth();
+
   // Better Auth's getSession() automatically handles:
   // - Session cookies (standard web authentication + queue consumers)
   // - API keys (when sessionForAPIKeys: true is enabled)

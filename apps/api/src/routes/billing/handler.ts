@@ -2,7 +2,7 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import { isActiveSubscriptionStatus, PlanTypes, PurchaseTypes, StripeBillingReasons, StripeProratioBehaviors, StripeSubscriptionStatuses, SubscriptionTiers } from '@roundtable/shared/enums';
 import { and, eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { ErrorContextBuilders } from '@/common/error-contexts';
 import { AppError, createError } from '@/common/error-handling';

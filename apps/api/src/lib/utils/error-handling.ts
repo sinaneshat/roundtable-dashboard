@@ -1,6 +1,6 @@
 import type { ErrorCode } from '@roundtable/shared/enums';
 import { ERROR_CODES } from '@roundtable/shared/enums';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import type { ValidationError } from '@/core/schemas';
 import { ValidationErrorSchema } from '@/core/schemas';

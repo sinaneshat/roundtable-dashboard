@@ -5,7 +5,7 @@
  * Single source of truth for form option validation.
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 // ============================================================================
 // FORM OPTION (Generic select/radio option)

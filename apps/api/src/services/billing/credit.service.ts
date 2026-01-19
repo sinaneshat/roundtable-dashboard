@@ -21,7 +21,7 @@ import {
 } from '@roundtable/shared/enums';
 import { and, desc, eq, sql } from 'drizzle-orm';
 import { ulid } from 'ulid';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { invalidateCreditBalanceCache } from '@/common/cache-utils';
 import { createError } from '@/common/error-handling';

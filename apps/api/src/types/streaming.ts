@@ -19,7 +19,7 @@ import {
   StreamStatusSchema,
 } from '@roundtable/shared/enums';
 import type { ExecutionContext } from 'hono';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import type { ApiEnv } from '@/types';
 import { TypedLoggerSchema } from '@/types/logger';

@@ -22,7 +22,7 @@
 import { MessageRoles } from '@roundtable/shared/enums';
 import type { LanguageModelUsage } from 'ai';
 import { ulid } from 'ulid';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { getPostHogClient } from '@/lib/analytics/posthog-server';
 import { isObject, isTransientErrorFromObject } from '@/lib/utils';

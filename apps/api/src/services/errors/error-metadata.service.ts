@@ -18,7 +18,7 @@ import {
   ErrorCategorySchema,
   FinishReasons,
 } from '@roundtable/shared/enums';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
 import { isTransientError } from '@/lib/utils/error-metadata-builders';

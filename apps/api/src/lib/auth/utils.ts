@@ -7,7 +7,7 @@
 import { BETTER_AUTH_SESSION_COOKIE_NAME } from '@roundtable/shared/enums';
 import { APIError } from 'better-auth/api';
 import { env as workersEnv } from 'cloudflare:workers';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { isWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 

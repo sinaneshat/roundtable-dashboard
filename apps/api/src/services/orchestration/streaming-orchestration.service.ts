@@ -23,7 +23,7 @@ import {
 } from '@roundtable/shared/enums';
 import type { ModelMessage, UIMessage } from 'ai';
 import { and, asc, eq, inArray } from 'drizzle-orm';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { createError } from '@/common/error-handling';
 import { getErrorMessage } from '@/common/error-types';

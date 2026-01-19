@@ -8,7 +8,7 @@
  * @see https://developers.cloudflare.com/r2/api/workers/workers-multipart-usage/
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 // ============================================================================
 // CONSTANTS

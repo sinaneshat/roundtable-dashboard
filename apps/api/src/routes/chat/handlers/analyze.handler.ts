@@ -27,7 +27,7 @@ import {
 } from '@roundtable/shared/enums';
 import { streamSSE } from 'hono/streaming';
 import { ulid } from 'ulid';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { createHandler } from '@/core';
 import { PROMPT_ANALYSIS_MODEL_ID } from '@/core/ai-models';

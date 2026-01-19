@@ -8,7 +8,7 @@
 import type { ApiErrorSeverity, ErrorCategory, ErrorCode } from '@roundtable/shared/enums';
 import { ApiErrorSeverities, ApiErrorSeveritySchema, ErrorCategories, ErrorCategorySchema, ErrorCodes, ErrorCodeSchema } from '@roundtable/shared/enums';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import type { ErrorContext } from '@/core/schemas';
 import { ErrorContextSchema } from '@/core/schemas';

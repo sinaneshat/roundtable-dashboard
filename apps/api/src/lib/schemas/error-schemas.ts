@@ -9,7 +9,7 @@
 
 import type { ErrorCategory, UIMessageErrorType } from '@roundtable/shared/enums';
 import { ErrorCategorySchema, UIMessageErrorTypeSchema } from '@roundtable/shared/enums';
-import { z } from 'zod';
+import * as z from 'zod';
 
 // ============================================================================
 // ERROR METADATA

@@ -24,7 +24,7 @@ import {
   LogFormatSchema,
   LogLevels,
 } from '@roundtable/shared/enums';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { APP_VERSION } from '@/constants/version';
 

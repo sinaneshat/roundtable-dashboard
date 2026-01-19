@@ -1,5 +1,5 @@
 import type { Hook } from '@hono/zod-openapi';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import type { ApiEnv } from '@/types';
 

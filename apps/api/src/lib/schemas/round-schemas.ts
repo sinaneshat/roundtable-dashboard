@@ -10,7 +10,7 @@
  * DO NOT create round number schemas or defaults anywhere else.
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 // ============================================================================
 // CONSTANTS - Single Source of Truth for Defaults

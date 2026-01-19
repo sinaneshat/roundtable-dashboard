@@ -2,7 +2,7 @@ import { ChangelogChangeTypes, ChangelogTypes, ChangelogTypeSchema, LogTypes } f
 import { eq } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import { ulid } from 'ulid';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { normalizeError } from '@/common/error-handling';
 import type { DbType } from '@/db';

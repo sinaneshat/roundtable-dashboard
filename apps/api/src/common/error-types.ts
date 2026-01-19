@@ -8,7 +8,7 @@
  * Reference: /docs/type-inference-patterns.md - Anti-Patterns section
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 // ============================================================================
 // Error Shape Schemas (Runtime Validation)

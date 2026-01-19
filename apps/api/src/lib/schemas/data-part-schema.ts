@@ -4,7 +4,7 @@
  * @module lib/schemas/data-part-schema
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 // ============================================================================
 // DATA PART SCHEMA - Single Source of Truth

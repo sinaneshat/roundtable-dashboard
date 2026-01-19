@@ -16,7 +16,7 @@
 
 import { MessageRoles, ParticipantStreamStatuses, RoundExecutionPhases, RoundExecutionStatuses } from '@roundtable/shared/enums';
 import { and, eq } from 'drizzle-orm';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';

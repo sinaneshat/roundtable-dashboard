@@ -10,7 +10,7 @@
  * @module lib/schemas/model-schemas
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
 import { EnhancedModelSchema } from '@/routes/models/schema';

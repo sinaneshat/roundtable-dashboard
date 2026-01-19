@@ -12,7 +12,7 @@
 import { FinishReasons, FinishReasonSchema, MessagePartTypes, MessageRoles } from '@roundtable/shared/enums';
 import { eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { invalidateMessagesCache } from '@/common/cache-utils';
 import { CoreSchemas } from '@/core/schemas';

@@ -1,9 +1,4 @@
-import * as fs from 'node:fs';
-import * as path from 'node:path';
-
-import Database from 'better-sqlite3';
 import { env as workersEnv } from 'cloudflare:workers';
-import { drizzle as drizzleBetter } from 'drizzle-orm/better-sqlite3';
 import { drizzle as drizzleD1 } from 'drizzle-orm/d1';
 
 import { CloudflareKVCache } from './cache/cloudflare-kv-cache';
@@ -27,15 +22,20 @@ const schema = {
   ...usage,
 };
 
-// Database configuration
+// Database configuration - path is computed lazily in getLocalDbPath()
 const LOCAL_DB_DIR = '.wrangler/state/v3/d1/miniflare-D1DatabaseObject';
-const LOCAL_DB_PATH = path.join(process.cwd(), LOCAL_DB_DIR);
 
 /**
- * Gets the path to the local SQLite database file
+ * Gets the path to the local SQLite database file (async to lazy load Node.js modules)
  * Creates the directory if it doesn't exist and returns the path to the database file
  */
-function getLocalDbPath(): string {
+async function getLocalDbPath(): Promise<string> {
+  // Lazy load Node.js modules - only used in local development
+  const fs = await import('node:fs');
+  const path = await import('node:path');
+
+  const LOCAL_DB_PATH = path.join(process.cwd(), LOCAL_DB_DIR);
+
   // Create directory if it doesn't exist
   if (!fs.existsSync(LOCAL_DB_PATH)) {
     fs.mkdirSync(LOCAL_DB_PATH, { recursive: true });
@@ -59,9 +59,15 @@ function getLocalDbPath(): string {
 
 /**
  * Initialize local SQLite database connection for development with performance optimizations
+ * Async to lazy load Node.js-only modules (better-sqlite3, drizzle-orm/better-sqlite3)
  */
-function initLocalDb() {
-  const dbPath = getLocalDbPath();
+async function initLocalDb() {
+  // Lazy load Node.js modules - only used in local development
+  const fs = await import('node:fs');
+  const { default: Database } = await import('better-sqlite3');
+  const { drizzle: drizzleBetter } = await import('drizzle-orm/better-sqlite3');
+
+  const dbPath = await getLocalDbPath();
 
   if (!fs.existsSync(dbPath)) {
     throw new Error(
@@ -126,10 +132,10 @@ export function getDb() {
 }
 
 /**
- * Async version of getDb - same implementation for Workers
+ * Async version of getDb - uses async initialization for local SQLite
  */
 export async function getDbAsync() {
-  return createDbInstance();
+  return createDbInstanceAsync();
 }
 
 /**
@@ -154,52 +160,54 @@ function isCloudflareWorkersRuntime(): boolean {
   return false;
 }
 
+// Type for local SQLite database instance (used for type inference)
+type LocalDbInstance = Awaited<ReturnType<typeof initLocalDb>>;
+type D1DbInstance = ReturnType<typeof drizzleD1<typeof schema>>;
+type DbInstance = D1DbInstance | LocalDbInstance;
+
 /**
- * Create database instance for the global db Proxy
- *
- * Environment Detection Priority:
- * 1. Cloudflare Workers → D1 with batch operations
- * 2. Local development → Local SQLite with transactions
+ * Create D1 database instance for Cloudflare Workers (synchronous)
+ * This is the fast path used in production/preview deployments
  */
-function createDbInstance(): ReturnType<typeof drizzleD1<typeof schema>> | ReturnType<typeof drizzleBetter<typeof schema>> {
-  // In Cloudflare Workers, we MUST use D1 - no fallback to local SQLite
-  // because fs module is not available in Workers runtime
-  if (isCloudflareWorkersRuntime()) {
-    const d1Database = getD1Binding();
-    if (d1Database) {
-      const kvBinding = getKVBinding();
-      const kvCache = kvBinding
-        ? new CloudflareKVCache({
-            kv: kvBinding,
-            global: false,
-            defaultTtl: 300,
-          })
-        : undefined;
-
-      return drizzleD1(d1Database, {
-        schema,
-        logger: false, // Disable logging in Workers
-        cache: kvCache,
-      });
-    }
-
-    // In Workers without D1, throw error - cannot fallback to local SQLite
+function createD1Instance(): D1DbInstance {
+  const d1Database = getD1Binding();
+  if (!d1Database) {
     throw new Error(
       'D1 database binding not available in Cloudflare Workers. '
       + 'Ensure DB binding is configured in wrangler.jsonc',
     );
   }
 
-  // Node.js environment (local development)
-  const isDev = process.env.NODE_ENV === 'development';
-  const isLocal = process.env.WEBAPP_ENV === 'local';
+  const kvBinding = getKVBinding();
+  const kvCache = kvBinding
+    ? new CloudflareKVCache({
+        kv: kvBinding,
+        global: false,
+        defaultTtl: 300,
+      })
+    : undefined;
 
-  // Use local SQLite for development (supports transactions)
-  if (isDev || isLocal) {
-    return initLocalDb();
+  return drizzleD1(d1Database, {
+    schema,
+    logger: false, // Disable logging in Workers
+    cache: kvCache,
+  });
+}
+
+/**
+ * Create database instance for the global db Proxy
+ *
+ * Environment Detection Priority:
+ * 1. Cloudflare Workers → D1 with batch operations (sync)
+ * 2. Local development → Local SQLite with transactions (async, lazy-loaded)
+ */
+function createDbInstance(): DbInstance {
+  // In Cloudflare Workers, we MUST use D1 - fast synchronous path
+  if (isCloudflareWorkersRuntime()) {
+    return createD1Instance();
   }
 
-  // Try to get D1 binding
+  // Node.js environment (local development) - try D1 first
   const d1Database = getD1Binding();
   if (d1Database) {
     const kvBinding = getKVBinding();
@@ -218,7 +226,40 @@ function createDbInstance(): ReturnType<typeof drizzleD1<typeof schema>> | Retur
     });
   }
 
-  // Final fallback to local SQLite
+  // Local SQLite - this path is only reached in local dev without D1
+  // We throw here and handle async initialization separately
+  throw new Error('Local SQLite requires async initialization. Use getDbAsync() instead.');
+}
+
+/**
+ * Create database instance asynchronously (for local development)
+ */
+async function createDbInstanceAsync(): Promise<DbInstance> {
+  // In Cloudflare Workers, use sync D1 path
+  if (isCloudflareWorkersRuntime()) {
+    return createD1Instance();
+  }
+
+  // Try D1 first
+  const d1Database = getD1Binding();
+  if (d1Database) {
+    const kvBinding = getKVBinding();
+    const kvCache = kvBinding
+      ? new CloudflareKVCache({
+          kv: kvBinding,
+          global: false,
+          defaultTtl: 300,
+        })
+      : undefined;
+
+    return drizzleD1(d1Database, {
+      schema,
+      logger: process.env.NODE_ENV !== 'production',
+      cache: kvCache,
+    });
+  }
+
+  // Local SQLite for development
   return initLocalDb();
 }
 

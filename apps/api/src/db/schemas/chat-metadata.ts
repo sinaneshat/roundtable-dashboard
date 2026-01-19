@@ -29,7 +29,7 @@ import {
   WebSearchContentTypeSchema,
   WebSearchDepthSchema,
 } from '@roundtable/shared/enums';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
 

@@ -16,7 +16,7 @@ import {
   WebSearchContentTypeSchema,
   WebSearchDepthSchema,
 } from '@roundtable/shared/enums';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import type { DbMessageMetadata as MessageMetadata } from '@/db/schemas/chat-metadata';
 import {

@@ -10,7 +10,7 @@
  * @see https://developers.cloudflare.com/workers/platform/limits/
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 // ============================================================================
 // CONSTANTS - Memory Limits

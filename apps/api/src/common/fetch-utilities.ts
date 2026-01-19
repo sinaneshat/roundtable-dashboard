@@ -7,7 +7,7 @@
 
 import { CircuitBreakerStates, CircuitBreakerStateSchema } from '@roundtable/shared/enums';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import type { EnhancedHTTPException } from '@/core';
 import { HTTPExceptionFactory } from '@/core';

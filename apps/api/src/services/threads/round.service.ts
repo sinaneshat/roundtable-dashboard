@@ -1,6 +1,6 @@
 import { MessageRoles } from '@roundtable/shared/enums';
 import { and, desc, eq } from 'drizzle-orm';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { createError } from '@/common/error-handling';
 import type { ErrorContext } from '@/core';

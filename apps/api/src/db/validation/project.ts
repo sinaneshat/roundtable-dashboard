@@ -8,7 +8,7 @@
  */
 
 import { createInsertSchema, createSelectSchema, createUpdateSchema } from 'drizzle-zod';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { chatProject, projectAttachment, projectMemory } from '@/db/tables/project';
 

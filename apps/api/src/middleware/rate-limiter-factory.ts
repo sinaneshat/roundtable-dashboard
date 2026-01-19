@@ -11,7 +11,7 @@ import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import type { ApiEnv } from '@/types';
 

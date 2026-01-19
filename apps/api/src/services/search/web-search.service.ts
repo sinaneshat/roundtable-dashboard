@@ -31,7 +31,7 @@ import {
   streamText,
 } from 'ai';
 import { ulid } from 'ulid';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { createError, normalizeError } from '@/common/error-handling';
 import type { ErrorContext } from '@/core';

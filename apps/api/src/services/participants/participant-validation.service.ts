@@ -1,5 +1,5 @@
 import type { SubscriptionTier } from '@roundtable/shared/enums';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { createError } from '@/common/error-handling';
 import type { getDbAsync } from '@/db';

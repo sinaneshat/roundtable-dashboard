@@ -18,7 +18,7 @@
 
 import { MessageRoles } from '@roundtable/shared/enums';
 import type { UIMessage } from 'ai';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import type {
   DbAssistantMessageMetadata,

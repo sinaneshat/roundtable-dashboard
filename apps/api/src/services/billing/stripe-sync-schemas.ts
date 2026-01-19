@@ -6,7 +6,7 @@
  */
 
 import { StripeSubscriptionStatusSchema, SyncedSubscriptionStatuses } from '@roundtable/shared/enums';
-import { z } from 'zod';
+import * as z from 'zod';
 
 /**
  * Payment method details

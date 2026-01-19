@@ -5,7 +5,7 @@
  * Following the type-inference-patterns.md pattern
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { chatMessageSelectSchema } from '@/db/validation/chat';
 

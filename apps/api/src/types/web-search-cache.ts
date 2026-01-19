@@ -10,7 +10,7 @@
  * @see /docs/type-inference-patterns.md for type safety patterns
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { WebSearchResultSchema } from '@/routes/chat/schema';
 

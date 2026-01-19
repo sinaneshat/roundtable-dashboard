@@ -17,7 +17,7 @@ import {
   SubscriptionTiers,
   SubscriptionTierSchema,
 } from '@roundtable/shared/enums';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { CREDIT_CONFIG, SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 // Direct import to avoid barrel export pulling in server-only slug-generator.service.ts

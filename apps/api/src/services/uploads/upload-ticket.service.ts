@@ -10,7 +10,7 @@
 
 import type { Context } from 'hono';
 import { jwtVerify, SignJWT } from 'jose';
-import { z } from 'zod';
+import * as z from 'zod';
 
 import { createError } from '@/common/error-handling';
 import type { ErrorContext } from '@/core';

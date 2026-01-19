@@ -4,7 +4,7 @@
  * Zod schemas used by both API and web packages.
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 // Import billing schemas from enums (single source of truth)
 import { BillingIntervalSchema } from '../enums/billing';

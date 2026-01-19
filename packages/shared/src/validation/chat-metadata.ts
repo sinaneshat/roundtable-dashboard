@@ -9,7 +9,7 @@
  * - Frontend: Type-safe metadata access in UI components
  */
 
-import { z } from 'zod';
+import * as z from 'zod';
 
 import {
   ChatModeSchema,
