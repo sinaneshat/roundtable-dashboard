@@ -231,10 +231,11 @@ export function createEnvironmentValidationMiddleware() {
       return;
     }
 
-    // Skip validation in test environment
-    // NODE_ENV is inlined at build time, so process.env is acceptable here
-    // env.NODE_ENV is typed as 'development' | 'production' from wrangler vars
-    if (process.env.NODE_ENV === 'test') {
+    // Skip validation in test environment (vitest sets NODE_ENV='test')
+    // Cast to string since cloudflare types only define 'development' | 'production'
+    // but vitest runtime can set 'test'
+    const nodeEnv = process.env.NODE_ENV as string | undefined;
+    if (nodeEnv === 'test') {
       await next();
       return;
     }

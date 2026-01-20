@@ -14,10 +14,11 @@ export * from './validation';
 export * from './version';
 
 // Environment detection - uses WEBAPP_ENV (set by each package's runtime)
-export const WEBAPP_ENV = process.env.WEBAPP_ENV || 'development';
-export const IS_PRODUCTION = WEBAPP_ENV === 'prod' || WEBAPP_ENV === 'production';
+// WEBAPP_ENV values: 'local' | 'preview' | 'prod' (from wrangler.jsonc)
+export const WEBAPP_ENV = process.env.WEBAPP_ENV || 'local';
+export const IS_PRODUCTION = WEBAPP_ENV === 'prod';
 export const IS_PREVIEW = WEBAPP_ENV === 'preview';
-export const IS_LOCAL = WEBAPP_ENV === 'local' || WEBAPP_ENV === 'development';
+export const IS_LOCAL = WEBAPP_ENV === 'local';
 export const IS_DEV_ENVIRONMENT = IS_LOCAL || IS_PREVIEW;
 
 // API configuration

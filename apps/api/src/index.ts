@@ -279,9 +279,10 @@ import {
 
 // ============================================================================
 // Environment Detection (sync, build-time check)
+// WEBAPP_ENV values: 'local' | 'preview' | 'prod' (from wrangler.jsonc)
 // ============================================================================
-const WEBAPP_ENV = process.env.WEBAPP_ENV || process.env.NEXT_PUBLIC_WEBAPP_ENV || 'development';
-const IS_DEV_ENVIRONMENT = WEBAPP_ENV === 'local' || WEBAPP_ENV === 'development' || WEBAPP_ENV === 'preview';
+const WEBAPP_ENV = process.env.WEBAPP_ENV || 'local';
+const IS_DEV_ENVIRONMENT = WEBAPP_ENV === 'local' || WEBAPP_ENV === 'preview';
 
 // ============================================================================
 // Step 1: Create the main OpenAPIHono app with defaultHook (following docs)

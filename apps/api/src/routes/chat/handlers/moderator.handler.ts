@@ -93,6 +93,14 @@ const MODERATOR_PARTICIPANT_INDEX = NO_PARTICIPANT_SENTINEL;
 // ============================================================================
 
 /**
+ * Minimal ExecutionContext type for waitUntil operations
+ * (cloudflare-env.d.ts has a stricter type, but Hono's c.executionCtx is simpler)
+ */
+type MinimalExecutionContext = {
+  waitUntil: (promise: Promise<unknown>) => void;
+};
+
+/**
  * Extended config for council moderator generation
  * Combines schema-validated prompt config with runtime context
  */
@@ -102,7 +110,7 @@ type ModeratorGenerationConfig = {
   threadId: string;
   userId: string;
   sessionId?: string;
-  executionCtx?: ExecutionContext;
+  executionCtx?: MinimalExecutionContext;
 } & ModeratorPromptConfig;
 
 /**

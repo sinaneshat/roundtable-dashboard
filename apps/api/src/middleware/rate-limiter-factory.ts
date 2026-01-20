@@ -116,8 +116,10 @@ let cleanupInterval: NodeJS.Timeout | null = null;
  * Note: In test environment, cleanup is managed manually via stopCleanup()
  */
 function startCleanup() {
-  // Skip cleanup in test environment (detected at runtime via env)
-  if (cleanupInterval || process.env.NODE_ENV === 'test') {
+  // Skip cleanup in test environment (vitest sets NODE_ENV='test')
+  // Cast to string since cloudflare types only define 'development' | 'production'
+  const nodeEnv = process.env.NODE_ENV as string | undefined;
+  if (cleanupInterval || nodeEnv === 'test') {
     return;
   }
 

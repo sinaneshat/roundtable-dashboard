@@ -35,11 +35,12 @@ export type PerformanceMetrics = {
 
 /**
  * Check if performance tracking should be enabled
- * Only in preview/local/development environments
+ * Only in preview/local environments (not prod)
+ * WEBAPP_ENV values: 'local' | 'preview' | 'prod' (from wrangler.jsonc)
  */
 function isPerformanceTrackingEnabled(): boolean {
-  const env = process.env.WEBAPP_ENV || 'development';
-  return env === 'local' || env === 'preview' || env === 'development';
+  const env = process.env.WEBAPP_ENV || 'local';
+  return env === 'local' || env === 'preview';
 }
 
 /**
