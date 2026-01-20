@@ -87,7 +87,7 @@ export default function ChatThreadScreen({
   user,
   streamResumptionState,
   initialPreSearches,
-  initialChangelog: _initialChangelog,
+  initialChangelog,
   initialFeedback: _initialFeedback,
 }: ChatThreadScreenProps) {
   const t = useTranslations();
@@ -372,6 +372,7 @@ export default function ChatThreadScreen({
         initialMessages={uiMessages}
         initialParticipants={participants}
         initialPreSearches={initialPreSearches}
+        initialChangelog={initialChangelog}
       />
 
       <ChatDeleteDialog

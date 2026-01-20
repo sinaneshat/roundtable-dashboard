@@ -222,6 +222,15 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
     // Skip conditions (minimal logging) - use fresh state values
     if (freshIsStreaming) {
+      // ✅ PREFILLED RESUMPTION FIX: Don't clear flags if this is a prefilled resumption
+      // During prefilled resumption, AI SDK may resume a different participant's stream
+      // than what we need to trigger. We shouldn't clear the flags yet.
+      const freshStreamResumptionPrefilled = freshState.streamResumptionPrefilled;
+      const freshCurrentResumptionPhase = freshState.currentResumptionPhase;
+      if (freshStreamResumptionPrefilled && freshCurrentResumptionPhase === 'participants') {
+        return;
+      }
+
       rlog.resume('round-resum', 'EXIT: already streaming - clearing wait flags');
       store.getState().setWaitingToStartStreaming(false);
       store.getState().setNextParticipantToTrigger(null);

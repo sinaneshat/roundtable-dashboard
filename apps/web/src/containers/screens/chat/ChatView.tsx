@@ -31,6 +31,7 @@ import { useTranslations } from '@/lib/i18n';
 import { isFilePart } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { toastManager } from '@/lib/toast';
+import { rlog } from '@/lib/utils/dev-logger';
 import {
   getDetailedIncompatibleModelIds,
   getModeratorMetadata,
@@ -87,6 +88,11 @@ export type ChatViewProps = {
    * Store may be empty during SSR - use these for immediate content render
    */
   initialPreSearches?: StoredPreSearch[];
+  /**
+   * SSR: Initial changelog from route loader for first paint
+   * Ensures changelog accordion shows on SSR without waiting for client-side query
+   */
+  initialChangelog?: ApiChangelog[];
 };
 
 export function ChatView({
@@ -99,6 +105,7 @@ export function ChatView({
   initialMessages,
   initialParticipants,
   initialPreSearches,
+  initialChangelog,
 }: ChatViewProps) {
   const t = useTranslations();
 
@@ -210,11 +217,20 @@ export function ChatView({
     effectiveMessages.forEach((msg) => {
       if (isModeratorMessage(msg)) {
         const moderatorMeta = getModeratorMetadata(msg.metadata);
-        if (moderatorMeta?.finishReason) {
-          const roundNum = getRoundNumber(msg.metadata);
-          if (roundNum !== null) {
-            completed.add(roundNum);
-          }
+        const roundNum = getRoundNumber(msg.metadata);
+
+        // ✅ CHANGELOG FIX: Count round as complete if moderator has either:
+        // 1. finishReason (explicit completion signal from backend), OR
+        // 2. Non-streaming text content (message is complete even if finishReason missing)
+        // This fixes changelog not showing on SSR when finishReason isn't in metadata
+        const hasFinishReason = !!moderatorMeta?.finishReason;
+        const hasNonStreamingContent = msg.parts?.some(
+          p => p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0
+            && (!('state' in p) || p.state !== 'streaming'),
+        ) ?? false;
+
+        if ((hasFinishReason || hasNonStreamingContent) && roundNum !== null) {
+          completed.add(roundNum);
         }
       }
     });
@@ -245,6 +261,14 @@ export function ChatView({
   // This handles navigation to existing thread where first round is in progress
   const hasNoCompletedRounds = completedRoundNumbers.size === 0;
   const shouldSkipAuxiliaryQueries = isInitialCreationFlow || isFirstRoundStreaming || hasNoCompletedRounds;
+
+  // ✅ RESUMPTION DEBUG: Track changelog query enabled state
+  useEffect(() => {
+    if (mode === ScreenModes.THREAD && effectiveThreadId) {
+      rlog.resume('changelog-query', `t=${effectiveThreadId.slice(-8)} skip=${shouldSkipAuxiliaryQueries ? 1 : 0} (create=${isInitialCreationFlow ? 1 : 0} firstStream=${isFirstRoundStreaming ? 1 : 0} noRounds=${hasNoCompletedRounds ? 1 : 0}) completed=[${[...completedRoundNumbers]}] msgs=${effectiveMessages.length}`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, effectiveThreadId, shouldSkipAuxiliaryQueries, completedRoundNumbers.size, effectiveMessages.length]);
 
   const { data: modelsData, isLoading: isModelsLoading } = useModelsQuery();
   const { data: customRolesData } = useCustomRolesQuery(isModelModalOpen.value && !isStreaming);
@@ -288,10 +312,12 @@ export function ChatView({
   }, [modelsData]);
 
   const changelog: ApiChangelog[] = useMemo(() => {
-    if (!changelogResponse?.success || !changelogResponse.data) {
-      return [];
-    }
-    const items = changelogResponse.data.items;
+    // ✅ SSR FIX: Use query response if available, otherwise fall back to initialChangelog
+    // This ensures changelog shows on first SSR paint without waiting for client query
+    const queryItems = changelogResponse?.success ? changelogResponse.data?.items : undefined;
+    const items = queryItems ?? initialChangelog ?? [];
+
+    // Deduplicate by ID
     const seen = new Set<string>();
     return items.filter((item: ApiChangelog) => {
       if (seen.has(item.id))
@@ -299,7 +325,19 @@ export function ChatView({
       seen.add(item.id);
       return true;
     });
-  }, [changelogResponse]);
+  }, [changelogResponse, initialChangelog]);
+
+  // ✅ RESUMPTION DEBUG: Track changelog data availability and source
+  useEffect(() => {
+    if (mode === ScreenModes.THREAD && effectiveThreadId) {
+      const rounds = [...new Set(changelog.map(c => c.roundNumber))];
+      const queryItems = changelogResponse?.success ? changelogResponse.data?.items?.length ?? 0 : 0;
+      const initialItems = initialChangelog?.length ?? 0;
+      const source = queryItems > 0 ? 'query' : (initialItems > 0 ? 'ssr' : 'none');
+      rlog.resume('changelog-data', `t=${effectiveThreadId.slice(-8)} items=${changelog.length} rounds=[${rounds}] src=${source} (query=${queryItems} ssr=${initialItems})`);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, effectiveThreadId, changelog.length, changelogResponse?.success, initialChangelog?.length]);
 
   const orderedModels = useOrderedModels({
     selectedParticipants,

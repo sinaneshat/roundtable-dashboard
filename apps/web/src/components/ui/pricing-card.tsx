@@ -2,6 +2,7 @@ import type { UIBillingInterval } from '@roundtable/shared';
 import { motion } from 'motion/react';
 
 import { Icons } from '@/components/icons';
+import { useIsMounted } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
@@ -59,6 +60,10 @@ export function PricingCard({
   disabled = false,
 }: PricingCardProps) {
   const t = useTranslations();
+  const isMounted = useIsMounted();
+
+  // SSR-safe: disable animations on server to prevent invisible content
+  const isServer = !isMounted;
 
   const handleAction = () => {
     if (isCurrentPlan && onCancel) {
@@ -97,7 +102,7 @@ export function PricingCard({
 
   return (
     <motion.div
-      initial={{ opacity: 0, y: 20 }}
+      initial={isServer ? false : { opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       transition={{
         duration: 0.5,
@@ -108,7 +113,7 @@ export function PricingCard({
     >
       {isCurrentPlan && (
         <motion.div
-          initial={{ opacity: 0, scale: 0.8 }}
+          initial={isServer ? false : { opacity: 0, scale: 0.8 }}
           animate={{ opacity: 1, scale: 1 }}
           transition={{ delay: delay + 0.2, duration: 0.3 }}
           className="absolute -top-3 left-1/2 z-20 -translate-x-1/2"
@@ -134,7 +139,7 @@ export function PricingCard({
         <div className="relative flex h-full flex-col overflow-hidden rounded-xl border border-white/20 dark:border-white/10 bg-background/50 backdrop-blur-sm p-6 dark:shadow-[0px_0px_27px_0px_#2D2D2D]">
           <div className="relative flex flex-1 flex-col gap-6">
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
+              initial={isServer ? false : { opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: delay + 0.1, duration: 0.4 }}
               className="text-center"
@@ -145,7 +150,7 @@ export function PricingCard({
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
+              initial={isServer ? false : { opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: delay + 0.15, duration: 0.4 }}
               className="text-center"
@@ -169,14 +174,14 @@ export function PricingCard({
             </motion.div>
 
             <motion.div
-              initial={{ opacity: 0 }}
+              initial={isServer ? false : { opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ delay: delay + 0.25, duration: 0.4 }}
               className="w-full h-px bg-gradient-to-r from-transparent via-border to-transparent"
             />
 
             <motion.ul
-              initial="hidden"
+              initial={isServer ? false : 'hidden'}
               animate="show"
               variants={{
                 hidden: { opacity: 0 },
@@ -193,7 +198,7 @@ export function PricingCard({
               {VALUE_PROPS.map(prop => (
                 <motion.li
                   key={prop.key}
-                  variants={{
+                  variants={isServer ? undefined : {
                     hidden: { opacity: 0, x: -10 },
                     show: { opacity: 1, x: 0 },
                   }}
@@ -220,7 +225,7 @@ export function PricingCard({
             </motion.ul>
 
             <motion.div
-              initial={{ opacity: 0, y: 10 }}
+              initial={isServer ? false : { opacity: 0, y: 10 }}
               animate={{ opacity: 1, y: 0 }}
               transition={{ delay: delay + 0.5, duration: 0.4 }}
               className="space-y-3 pt-2"

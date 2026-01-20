@@ -144,7 +144,10 @@ export function ChatList({
 
   const hasTriggeredAnimationRef = useRef(false);
   const [hasAnimated, setHasAnimated] = useState(false);
-  const shouldAnimate = !disableAnimations && !hasAnimated;
+  // Disable stagger animations on SSR - StaggerItem uses opacity:0 initial state
+  // which makes items invisible until client-side animation runs
+  const isServer = typeof window === 'undefined';
+  const shouldAnimate = !isServer && !disableAnimations && !hasAnimated;
 
   // Auto-close sidebar on mobile when navigating to a thread
   const prevPathnameRef = useRef(pathname);

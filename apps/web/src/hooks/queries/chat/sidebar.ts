@@ -21,8 +21,13 @@ import { listSidebarThreadsService } from '@/services/api';
  * Hook to fetch sidebar threads with lightweight payload
  * Returns only essential fields: id, title, slug, previousSlug, isFavorite, isPublic, timestamps
  *
- * ✅ SSR HYDRATION: Uses shared queryOptions for non-search queries (SSR prefetched)
- * Search queries use client-only fetching (not SSR prefetched)
+ * ✅ SSR HYDRATION: Non-search queries DON'T use `enabled` gating
+ * - Route loader (_protected.tsx) already verified auth in beforeLoad
+ * - Data is SSR prefetched using sidebarThreadsQueryOptions
+ * - Using `enabled: isAuthenticated` causes hydration mismatch when useSession isPending
+ * - Disabled queries return isLoading:false with no data → shows empty state instead of skeletons
+ *
+ * Search queries still use `enabled` since they're client-only (not SSR prefetched)
  *
  * @param search - Optional search query to filter threads by title
  */
@@ -54,9 +59,12 @@ export function useSidebarThreadsQuery(search?: string) {
             return lastPage.data?.pagination?.nextCursor;
           },
           staleTime: STALE_TIMES.threadsSidebar,
+          // Search queries are client-only, gate on auth
+          enabled: isAuthenticated,
         }
       : sidebarThreadsQueryOptions),
-    enabled: isAuthenticated,
+    // Non-search queries: DON'T gate on auth - SSR prefetched on protected route
+    // Search queries: already have enabled in the options above
     retry: false,
     throwOnError: false,
   });

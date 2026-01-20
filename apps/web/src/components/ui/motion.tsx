@@ -212,6 +212,7 @@ type AnimatedStreamingItemProps = {
 
 /**
  * Individual streaming item - fade in only, no height animations
+ * SSR-safe: renders visible content on server, animates on client
  */
 export function AnimatedStreamingItem({
   children,
@@ -221,7 +222,10 @@ export function AnimatedStreamingItem({
   staggerDelay = 0.03,
   skipAnimation = false,
 }: AnimatedStreamingItemProps) {
-  if (skipAnimation) {
+  const isClient = useIsClient();
+
+  // SSR or skipAnimation: render visible immediately
+  if (!isClient || skipAnimation) {
     return <div className={cn(className)}>{children}</div>;
   }
 
@@ -300,6 +304,7 @@ type MotionComponentProps = {
 
 /**
  * Simple fade in
+ * SSR-safe: renders visible content on server, animates on client
  */
 export function FadeIn({
   children,
@@ -308,6 +313,13 @@ export function FadeIn({
   duration = 0.2,
   ...props
 }: MotionComponentProps) {
+  const isClient = useIsClient();
+
+  // SSR: render visible immediately
+  if (!isClient) {
+    return <div className={cn(className)}>{children}</div>;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0 }}
@@ -324,6 +336,7 @@ export function FadeIn({
 
 /**
  * Scale in animation
+ * SSR-safe: renders visible content on server, animates on client
  */
 export function ScaleIn({
   children,
@@ -332,6 +345,13 @@ export function ScaleIn({
   duration = 0.2,
   ...props
 }: MotionComponentProps) {
+  const isClient = useIsClient();
+
+  // SSR: render visible immediately
+  if (!isClient) {
+    return <div className={cn(className)}>{children}</div>;
+  }
+
   return (
     <motion.div
       initial={{ opacity: 0, scale: 0.95 }}
@@ -348,12 +368,20 @@ export function ScaleIn({
 
 /**
  * Stagger container
+ * SSR-safe: renders visible content on server, animates on client
  */
 export function StaggerContainer({
   children,
   className,
   ...props
 }: MotionComponentProps & { staggerDelay?: number; delayChildren?: number }) {
+  const isClient = useIsClient();
+
+  // SSR: render visible immediately
+  if (!isClient) {
+    return <div className={cn(className)}>{children}</div>;
+  }
+
   return (
     <motion.div
       initial="initial"
@@ -369,12 +397,20 @@ export function StaggerContainer({
 
 /**
  * Stagger item
+ * SSR-safe: renders visible content on server, animates on client
  */
 export function StaggerItem({
   children,
   className,
   ...props
 }: MotionComponentProps) {
+  const isClient = useIsClient();
+
+  // SSR: render visible immediately
+  if (!isClient) {
+    return <div className={cn('w-full', className)}>{children}</div>;
+  }
+
   return (
     <motion.div
       variants={staggerItemVariants}

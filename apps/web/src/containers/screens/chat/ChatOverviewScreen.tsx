@@ -26,8 +26,7 @@ import {
   useChatStoreApi,
   useModelPreferencesStore,
 } from '@/components/providers';
-import { LogoGlow } from '@/components/ui/logo-glow';
-import { LogoShader } from '@/components/ui/logo-shader';
+import { LogoHolosphere } from '@/components/ui/logo-holosphere';
 import { BRAND } from '@/constants';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
 import {
@@ -945,6 +944,9 @@ export default function ChatOverviewScreen() {
 
   const showChatView = !showInitialUI && (currentThread || createdThreadId);
 
+  // Disable motion animations on SSR to prevent opacity:0 initial state
+  const isServer = typeof window === 'undefined';
+
   return (
     <>
       <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
@@ -955,7 +957,7 @@ export default function ChatOverviewScreen() {
                 <div className="container max-w-4xl mx-auto px-5 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-4">
                   <motion.div
                     key="initial-ui"
-                    initial={{ opacity: 0 }}
+                    initial={isServer ? false : { opacity: 0 }}
                     animate={{ opacity: 1 }}
                     exit={{ opacity: 0, y: -20 }}
                     transition={{ duration: 0.4, ease: 'easeOut' }}
@@ -963,27 +965,20 @@ export default function ChatOverviewScreen() {
                   >
                     <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
                       <motion.div
-                        className="relative h-20 w-20 sm:h-24 sm:w-24"
-                        initial={{ opacity: 0 }}
-                        animate={{ opacity: 1 }}
+                        className="relative flex items-center justify-center overflow-visible"
+                        style={{ width: 210, height: 210, marginBottom: -35 }}
+                        initial={isServer ? false : { opacity: 0, scale: 0.8 }}
+                        animate={{ opacity: 1, scale: 1 }}
                         exit={{ scale: 0.5, opacity: 0, y: -50 }}
-                        transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
+                        transition={{ delay: 0.1, duration: 0.6, ease: 'easeOut' }}
                       >
-                        <LogoGlow />
-                        <div className="relative w-full h-full">
-                          <LogoShader
-                            src={BRAND.logos.main}
-                            width={96}
-                            height={96}
-                            className="w-full h-full"
-                          />
-                        </div>
+                        <LogoHolosphere width={140} height={140} />
                       </motion.div>
 
                       <div className="flex flex-col items-center gap-1.5">
                         <motion.h1
                           className="text-3xl sm:text-4xl font-semibold text-foreground px-4 leading-tight"
-                          initial={{ opacity: 0, y: 10 }}
+                          initial={isServer ? false : { opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -30 }}
                           transition={{ delay: 0.25, duration: 0.4, ease: 'easeOut' }}
@@ -993,7 +988,7 @@ export default function ChatOverviewScreen() {
 
                         <motion.p
                           className="text-sm sm:text-base text-muted-foreground max-w-2xl px-4 leading-relaxed"
-                          initial={{ opacity: 0, y: 10 }}
+                          initial={isServer ? false : { opacity: 0, y: 10 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0, y: -30 }}
                           transition={{ delay: 0.35, duration: 0.4, ease: 'easeOut' }}
@@ -1004,7 +999,7 @@ export default function ChatOverviewScreen() {
 
                       <motion.div
                         className="w-full mt-6 sm:mt-8"
-                        initial={{ opacity: 0, y: 10 }}
+                        initial={isServer ? false : { opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ delay: 0.45, duration: 0.4, ease: 'easeOut' }}
@@ -1015,7 +1010,7 @@ export default function ChatOverviewScreen() {
                       {!isMobile && (
                         <motion.div
                           className="w-full mt-14"
-                          initial={{ opacity: 0, y: 15 }}
+                          initial={isServer ? false : { opacity: 0, y: 15 }}
                           animate={{ opacity: 1, y: 0 }}
                           exit={{ opacity: 0 }}
                           transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
@@ -1046,7 +1041,7 @@ export default function ChatOverviewScreen() {
                 <div className="sticky bottom-0 z-30 bg-gradient-to-t from-background via-background to-transparent pt-4">
                   <div className="container max-w-4xl mx-auto px-5 pb-4">
                     <motion.div
-                      initial={{ opacity: 0, y: 15 }}
+                      initial={isServer ? false : { opacity: 0, y: 15 }}
                       animate={{ opacity: 1, y: 0 }}
                       exit={{ opacity: 0 }}
                       transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}

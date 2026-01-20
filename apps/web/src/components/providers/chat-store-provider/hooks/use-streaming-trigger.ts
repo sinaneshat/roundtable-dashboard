@@ -300,7 +300,14 @@ export function useStreamingTrigger({
   useEffect(() => {
     const freshState = store.getState();
     if (freshState.waitingToStartStreaming && freshState.isStreaming) {
-      rlog.trigger('streaming-trigger', 'clearing wait - streaming started');
+      // ✅ PREFILLED RESUMPTION FIX: Don't clear flags if this is a prefilled resumption
+      // During prefilled resumption (phase=participants), AI SDK may resume a different
+      // participant's stream than what we need to trigger. We shouldn't clear the flags
+      // because our target participant (nextParticipantToTrigger) hasn't been triggered yet.
+      if (freshState.streamResumptionPrefilled && freshState.currentResumptionPhase === 'participants') {
+        return;
+      }
+
       freshState.setWaitingToStartStreaming(false);
       freshState.setHasSentPendingMessage(true);
       // ✅ FIX: Also clear nextParticipantToTrigger to prevent re-trigger after stream ends

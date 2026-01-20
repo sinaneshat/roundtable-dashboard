@@ -1082,6 +1082,9 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
         // Insert changelog entries if any changes exist
         if (changelogEntries.length > 0) {
           await db.insert(tables.chatThreadChangelog).values(changelogEntries);
+          // ✅ CACHE FIX: Invalidate changelog cache after inserting entries
+          // Without this, the changelog query returns stale/empty data from cache
+          await invalidateMessagesCache(db, id);
         }
       }
     }
@@ -1157,6 +1160,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           // ✅ SERVICE LAYER: Use thread-changelog.service for new changelog creation
           await logModeChange(id, nextRoundNumber, thread.mode, body.mode);
         }
+        // ✅ CACHE FIX: Invalidate changelog cache after mode change entries
+        await invalidateMessagesCache(db, id);
       }
     }
 
@@ -1230,6 +1235,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           // ✅ SERVICE LAYER: Use thread-changelog.service for new changelog creation
           await logWebSearchToggle(id, nextRoundNumber, body.enableWebSearch);
         }
+        // ✅ CACHE FIX: Invalidate changelog cache after web search toggle entries
+        await invalidateMessagesCache(db, id);
       }
     }
 

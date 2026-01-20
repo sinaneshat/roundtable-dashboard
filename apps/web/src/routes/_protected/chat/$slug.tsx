@@ -1,4 +1,4 @@
-import { useSuspenseQuery } from '@tanstack/react-query';
+import { useQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMemo } from 'react';
 
@@ -36,6 +36,15 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
   // Uses shared queryOptions to ensure consistent caching between server and client
   loader: async ({ params, context }) => {
     const { queryClient } = context;
+
+    // ✅ GUARD: Handle undefined slug gracefully during route preloading
+    // TanStack Router may call loader during preload before params are fully resolved
+    // Return empty data instead of throwing - component will handle missing data
+    if (!params.slug) {
+      console.warn('[ChatThread] Loader called without slug - likely preloading race condition');
+      return { threadTitle: null, threadId: null, preSearches: undefined, changelog: undefined, feedback: undefined, streamResumption: undefined };
+    }
+
     const options = threadBySlugQueryOptions(params.slug);
     const isServer = typeof window === 'undefined';
 
@@ -143,30 +152,32 @@ function ChatThreadRoute() {
   const { data: session } = useSession();
   const loaderData = Route.useLoaderData();
 
-  // ✅ SSR FIX: Use useSuspenseQuery with ensureQueryData pattern from TanStack Router docs
-  // - Loader uses ensureQueryData to prefetch + dehydrate data to client
-  // - useSuspenseQuery guarantees data is available (suspends if not, but never happens with ensureQueryData)
-  // - No isPending check needed - data is always available after SSR hydration
-  // - Errors are caught by route errorComponent
-  const { data: queryData } = useSuspenseQuery(threadBySlugQueryOptions(slug));
+  // ✅ HOOKS FIX: Call all hooks unconditionally to comply with Rules of Hooks
+  // useQuery with enabled:false won't fetch but satisfies hook ordering requirements
+  const { data: queryData, isLoading } = useQuery({
+    ...threadBySlugQueryOptions(slug ?? ''),
+    enabled: !!slug, // Only fetch when slug is defined
+  });
 
-  // ✅ ANTI-PATTERN FIX: Use loaderData directly instead of useQuery
-  // TanStack Router integration automatically dehydrates/hydrates query cache
-  // Using useQuery here is redundant and causes unnecessary client-side fetches
-  // The loader already ensureQueryData for all auxiliary data, so just use loaderData
-  // React Query cache is already hydrated - mutations will invalidate as needed
+  // ✅ loaderData for auxiliary data (already prefetched in loader)
   const streamResumptionState = loaderData?.streamResumption ?? null;
   const changelog = loaderData?.changelog;
   const feedback = loaderData?.feedback;
   const preSearches = loaderData?.preSearches;
-
-  const threadData = queryData?.success ? queryData.data : null;
 
   const user = useMemo(() => ({
     id: session?.user?.id ?? '',
     name: session?.user?.name || 'You',
     image: session?.user?.image || null,
   }), [session?.user?.id, session?.user?.name, session?.user?.image]);
+
+  // ✅ Conditional rendering AFTER all hooks are called
+  // Show skeleton while slug is undefined or data is loading
+  if (!slug || isLoading) {
+    return <ThreadContentSkeleton />;
+  }
+
+  const threadData = queryData?.success ? queryData.data : null;
 
   // Handle case where API returned success: false or unexpected data structure
   if (!threadData) {

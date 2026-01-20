@@ -150,6 +150,11 @@ export function useIncompleteRoundResumption(
   // Refs don't trigger re-renders, so the main resumption effect never re-runs
   // after the 100ms timeout sets the ref. Using state ensures re-render.
   const [activeStreamCheckComplete, setActiveStreamCheckComplete] = useState(false);
+  // ✅ STREAM SETTLING FIX: Track when streaming just ended
+  // When isStreaming goes false, AI SDK's onFinish hasn't run yet (message parts still have state='streaming').
+  // Wait 50ms before allowing resumption triggers to let onFinish update message state.
+  const [isStreamSettling, setIsStreamSettling] = useState(false);
+  const streamSettlingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // ✅ UNIFIED PHASES: Phase-based resumption tracking
   const preSearchPhaseResumptionAttemptedRef = useRef<string | null>(null);
   const moderatorPhaseResumptionAttemptedRef = useRef<string | null>(null);
@@ -273,6 +278,53 @@ export function useIncompleteRoundResumption(
     return () => clearTimeout(timeoutId);
   }, [isStreaming, waitingToStartStreaming, pendingMessage, hasEarlyOptimisticMessage, actions]);
 
+  // ============================================================================
+  // ✅ STREAM SETTLING FIX: Delay resumption after streaming ends
+  // ============================================================================
+  // Problem: When isStreaming goes true→false, AI SDK's onFinish hasn't run yet.
+  // The message parts still have `state: 'streaming'`, so the hook sees "incomplete round"
+  // and incorrectly tries to re-trigger the participant that just finished.
+  //
+  // Fix: Track isStreaming transitions. When it goes false, enter a "settling" period
+  // of 50ms before allowing resumption triggers. This gives onFinish time to run.
+  const wasStreamingRef = useRef(false);
+
+  useEffect(() => {
+    // Clear any pending timeout when effect re-runs
+    if (streamSettlingTimeoutRef.current) {
+      clearTimeout(streamSettlingTimeoutRef.current);
+      streamSettlingTimeoutRef.current = null;
+    }
+
+    if (isStreaming) {
+      // Streaming is active - track it and ensure not in settling state
+      wasStreamingRef.current = true;
+      if (isStreamSettling) {
+        setIsStreamSettling(false);
+      }
+    } else if (wasStreamingRef.current) {
+      // Just transitioned from streaming to not streaming
+      wasStreamingRef.current = false;
+
+      // Enter settling period
+      setIsStreamSettling(true);
+      rlog.resume('settle-start', `streaming ended, waiting 50ms for onFinish`);
+
+      // Clear settling after delay
+      streamSettlingTimeoutRef.current = setTimeout(() => {
+        setIsStreamSettling(false);
+        rlog.resume('settle-end', `settling complete, resumption allowed`);
+      }, 50);
+    }
+
+    return () => {
+      if (streamSettlingTimeoutRef.current) {
+        clearTimeout(streamSettlingTimeoutRef.current);
+        streamSettlingTimeoutRef.current = null;
+      }
+    };
+  }, [isStreaming, isStreamSettling]);
+
   const currentRoundNumber = messages.length > 0 ? getCurrentRoundNumber(messages) : null;
 
   // ✅ ORPHANED PRE-SEARCH DETECTION
@@ -333,6 +385,8 @@ export function useIncompleteRoundResumption(
   const inProgressParticipantIndices = new Set<number>();
 
   if (currentRoundNumber !== null) {
+    // ✅ RESUMPTION DEBUG: Track messages being evaluated for detection
+    const detectionMsgLog: string[] = [];
     messages.forEach((msg) => {
       if (msg.role === MessageRoles.ASSISTANT) {
         const msgRound = getRoundNumber(msg.metadata);
@@ -386,6 +440,7 @@ export function useIncompleteRoundResumption(
             if (modelId) {
               respondedModelIds.add(modelId);
             }
+            detectionMsgLog.push(`P${participantIndex}:done`);
           } else if (hasStreamingParts && hasTextContent) {
             // ✅ Message has STREAMING parts with content
             // This participant is "in progress" - the message exists with partial content
@@ -401,12 +456,20 @@ export function useIncompleteRoundResumption(
             if (modelId) {
               respondedModelIds.add(modelId);
             }
+            detectionMsgLog.push(`P${participantIndex}:streaming`);
+          } else {
+            // Message exists but is incomplete/empty - will need re-trigger
+            detectionMsgLog.push(`P${participantIndex}:incomplete(complete=${messageComplete ? 1 : 0},empty=${isEmptyInterruptedResponse ? 1 : 0},streaming=${hasStreamingParts ? 1 : 0},text=${hasTextContent ? 1 : 0})`);
           }
           // If message is incomplete without streaming parts (empty or interrupted),
           // don't count it - participant needs to be re-triggered
         }
       }
     });
+    // ✅ RESUMPTION DEBUG: Log what messages were detected for this round
+    if (detectionMsgLog.length > 0) {
+      rlog.resume('msg-scan', `r${currentRoundNumber} msgs: ${detectionMsgLog.join(', ')}`);
+    }
   }
 
   // ✅ CRITICAL FIX: Detect participant configuration changes
@@ -421,6 +484,12 @@ export function useIncompleteRoundResumption(
   const currentModelIds = getEnabledParticipantModelIdSet(participants);
   const participantsChangedSinceRound = respondedModelIds.size > 0
     && [...respondedModelIds].some(modelId => !currentModelIds.has(modelId));
+
+  // ✅ RESUMPTION DEBUG: Log participant config change detection
+  if (participantsChangedSinceRound && currentRoundNumber !== null) {
+    const missingModels = [...respondedModelIds].filter(m => !currentModelIds.has(m));
+    rlog.resume('chg-detect', `r${currentRoundNumber} responded=[${[...respondedModelIds]}] current=[${[...currentModelIds]}] missing=[${missingModels}]`);
+  }
 
   // ✅ INFINITE LOOP FIX: Detect when a submission is in progress
   // When user submits, these flags indicate the submission flow is active:
@@ -542,6 +611,13 @@ export function useIncompleteRoundResumption(
     sawStreamingRef.current = false;
     // ✅ DOUBLE-TRIGGER FIX: Reset round-level guard
     roundTriggerInProgressRef.current = null;
+    // ✅ STREAM SETTLING FIX: Reset settling state on navigation
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
+    setIsStreamSettling(false);
+    if (streamSettlingTimeoutRef.current) {
+      clearTimeout(streamSettlingTimeoutRef.current);
+      streamSettlingTimeoutRef.current = null;
+    }
   }, [threadId]);
 
   // ============================================================================
@@ -798,6 +874,13 @@ export function useIncompleteRoundResumption(
       return;
     }
 
+    // ✅ STREAM SETTLING FIX: Skip during settling period after streaming ends
+    // When isStreaming goes false, AI SDK's onFinish hasn't run yet. Wait 50ms.
+    if (isStreamSettling) {
+      rlog.resume('settle-block', `blocking resumption during settling period`);
+      return;
+    }
+
     // ✅ UNIFIED PHASES: Skip if server prefilled a different phase
     // When prefilled, phase-specific effects handle resumption
     if (streamResumptionPrefilled && currentResumptionPhase) {
@@ -1010,6 +1093,8 @@ export function useIncompleteRoundResumption(
     streamResumptionPrefilled,
     // ✅ FIX: Now using state instead of ref, so it's in deps and triggers re-runs
     activeStreamCheckComplete,
+    // ✅ STREAM SETTLING FIX: Include settling state so effect re-runs after settling completes
+    isStreamSettling,
     // ✅ CHANGELOG BLOCKING FIX: Include changelog flags so effect re-runs when cleared
     configChangeRoundNumber,
     isWaitingForChangelog,

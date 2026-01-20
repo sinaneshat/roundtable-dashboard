@@ -451,6 +451,8 @@ export function useMultiParticipantChat(
     rlog.trigger('check', `r${currentRound} idx=${currentIndexRef.current} total=${totalParticipants} assistInRnd=${assistantMsgsInRound.length}`);
 
     const participantIndicesWithCompleteMessages = new Set<number>();
+    // ✅ RESUMPTION DEBUG: Track what messages the orchestrator sees
+    const orchestratorMsgLog: string[] = [];
     for (const msg of messagesRef.current) {
       if (msg.role !== MessageRoles.ASSISTANT)
         continue;
@@ -462,8 +464,14 @@ export function useMultiParticipantChat(
         continue;
       // Check if message is for current round
       const msgRound = 'roundNumber' in metadata ? metadata.roundNumber : null;
-      if (msgRound !== currentRound)
+      const pIdx = 'participantIndex' in metadata && typeof metadata.participantIndex === 'number' ? metadata.participantIndex : null;
+      if (msgRound !== currentRound) {
+        // Log skipped messages from other rounds for debugging
+        if (pIdx !== null) {
+          orchestratorMsgLog.push(`P${pIdx}:r${msgRound}(skip)`);
+        }
         continue;
+      }
 
       // ✅ FIX: Check if message is COMPLETE, not just exists
       // A message is incomplete ONLY if:
@@ -479,13 +487,21 @@ export function useMultiParticipantChat(
       const isIncomplete = hasError === true || hasStreamingParts === true;
 
       if (isIncomplete) {
+        if (pIdx !== null) {
+          orchestratorMsgLog.push(`P${pIdx}:incomplete(err=${hasError ? 1 : 0},stream=${hasStreamingParts ? 1 : 0})`);
+        }
         continue;
       }
 
       // Get participant index for complete messages only
-      if ('participantIndex' in metadata && typeof metadata.participantIndex === 'number') {
-        participantIndicesWithCompleteMessages.add(metadata.participantIndex);
+      if (pIdx !== null) {
+        participantIndicesWithCompleteMessages.add(pIdx);
+        orchestratorMsgLog.push(`P${pIdx}:done`);
       }
+    }
+    // Log what orchestrator sees vs what it marks as done
+    if (orchestratorMsgLog.length > 0 || participantIndicesWithCompleteMessages.size === 0) {
+      rlog.resume('orch-scan', `r${currentRound} sdkMsgs=${messagesRef.current.length} found=[${orchestratorMsgLog.join(',')}] done=[${[...participantIndicesWithCompleteMessages]}]`);
     }
 
     // Find first participant without a COMPLETE message (0 to totalParticipants-1)
@@ -532,7 +548,8 @@ export function useMultiParticipantChat(
     }
 
     // More participants to process - trigger next one
-    rlog.trigger('next', `P${nextIndex} r${currentRound} done=[${[...participantIndicesWithCompleteMessages]}]`);
+    // ✅ RESUMPTION DEBUG: Log why this participant is being triggered
+    rlog.trigger('next', `P${nextIndex} r${currentRound} done=[${[...participantIndicesWithCompleteMessages]}] queuedThis=[${[...queuedParticipantsThisRoundRef.current]}]`);
     isTriggeringRef.current = true;
 
     // Race condition fix: Check if participant is already queued
@@ -2075,6 +2092,86 @@ export function useMultiParticipantChat(
                 : m,
             )),
           );
+        });
+      }
+    }
+
+    // =========================================================================
+    // ✅ P0 RE-STREAMING FIX: Sync earlier participants' messages to AI SDK
+    // =========================================================================
+    // Problem: When resuming from P1, the orchestrator scans messagesRef.current
+    // (AI SDK's internal state) to find which participants are complete. But AI SDK
+    // may not have P0's message if it wasn't hydrated or was reset on navigation.
+    //
+    // Fix: Before starting P1, sync earlier participants' complete messages from
+    // messagesOverride to AI SDK. This ensures the orchestrator sees P0 as done
+    // when P1 finishes, preventing P0 from being re-triggered.
+    //
+    // Also sync the user message for the current round - the orchestrator needs it
+    // to find the user text for triggering subsequent participants.
+    if (fromIndexToUse > 0 && effectiveThreadId) {
+      const currentSdkMessages = messagesRef.current;
+      const messagesToMerge: UIMessage[] = [];
+
+      // Sync user message if missing
+      const userMsgExistsInSdk = currentSdkMessages.some(
+        m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === roundNumber,
+      );
+      if (!userMsgExistsInSdk && lastUserMessage) {
+        messagesToMerge.push(lastUserMessage);
+        rlog.resume('sdk-sync', `user msg r${roundNumber} missing from SDK, syncing`);
+      }
+
+      // Sync earlier participants' messages
+      for (let i = 0; i < fromIndexToUse; i++) {
+        const expectedMsgId = `${effectiveThreadId}_r${roundNumber}_p${i}`;
+        const existsInSdk = currentSdkMessages.some(m => m.id === expectedMsgId);
+
+        if (!existsInSdk) {
+          // Find in messagesOverride or messagesToSearch
+          const msgFromStore = messagesToSearch.find(m => m.id === expectedMsgId);
+          if (msgFromStore) {
+            // Verify it has content (truly complete)
+            const hasContent = msgFromStore.parts?.some(
+              p => p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
+            );
+            if (hasContent) {
+              messagesToMerge.push(msgFromStore);
+              rlog.resume('sdk-sync', `P${i} missing from SDK, syncing from store`);
+            }
+          }
+        }
+      }
+
+      // If we have messages to merge, sync them to AI SDK
+      if (messagesToMerge.length > 0) {
+        rlog.resume('sdk-merge', `syncing ${messagesToMerge.length} msgs to AI SDK before P${fromIndexToUse}`);
+        // ✅ CRITICAL: Use flushSync to ensure AI SDK sees merged state BEFORE streaming
+        // eslint-disable-next-line react-dom/no-flush-sync -- Required: orchestrator must see earlier participants as complete
+        flushSync(() => {
+          setMessages(currentMessages => {
+            // Clone to break Immer freeze
+            const merged = structuredClone([...currentMessages]);
+            for (const msg of messagesToMerge) {
+              // Only add if not already present (defensive)
+              if (!merged.some(m => m.id === msg.id)) {
+                merged.push(structuredClone(msg));
+              }
+            }
+            // Sort by role (user first), then round, then participant index
+            merged.sort((a, b) => {
+              // User messages come first
+              if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER) return -1;
+              if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER) return 1;
+              const aRound = getRoundNumber(a.metadata) ?? 0;
+              const bRound = getRoundNumber(b.metadata) ?? 0;
+              if (aRound !== bRound) return aRound - bRound;
+              const aIdx = getParticipantIndex(a.metadata) ?? 999;
+              const bIdx = getParticipantIndex(b.metadata) ?? 999;
+              return aIdx - bIdx;
+            });
+            return merged;
+          });
         });
       }
     }
