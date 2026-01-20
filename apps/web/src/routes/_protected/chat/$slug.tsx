@@ -95,6 +95,8 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
         // Prefetch missing data in background (non-blocking)
         if (!cachedStream)
           queryClient.prefetchQuery(streamOptions);
+        if (!cachedChangelog)
+          queryClient.prefetchQuery(changelogOptions);
         if (!cachedFeedback)
           queryClient.prefetchQuery(feedbackOptions);
         if (!cachedPreSearches)

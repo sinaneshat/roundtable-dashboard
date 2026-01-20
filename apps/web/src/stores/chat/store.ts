@@ -392,6 +392,9 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
     set({ startRound: fn }, false, 'thread/setStartRound'),
   setChatSetMessages: (fn?: ((messages: UIMessage[]) => void)) =>
     set({ chatSetMessages: fn }, false, 'thread/setChatSetMessages'),
+  // ✅ NAVIGATION CLEANUP: Store AI SDK's stop function to abort streaming on route change
+  setChatStop: (fn?: () => void) =>
+    set({ chatStop: fn }, false, 'thread/setChatStop'),
   checkStuckStreams: () =>
     set((state) => {
       if (!state.isStreaming)
@@ -1055,6 +1058,9 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
   resetForThreadNavigation: () => {
     const state = get();
+    // ✅ NAVIGATION CLEANUP: Stop any active streaming BEFORE clearing messages
+    // This prevents in-flight callbacks from firing after navigation
+    state.chatStop?.();
     state.chatSetMessages?.([]);
 
     set({
@@ -1072,6 +1078,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
   resetToOverview: () => {
     const state = get();
+    // ✅ NAVIGATION CLEANUP: Stop any active streaming BEFORE clearing messages
+    state.chatStop?.();
     state.chatSetMessages?.([]);
 
     set({
@@ -1103,7 +1111,12 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     // Without this, the AI SDK still has old thread's messages, and useMinimalMessageSync
     // will merge them back into the store, causing stale data to flash briefly on navigation.
     // Must happen BEFORE we set new messages to prevent the sync hook from mixing threads.
-    if (!isSameThread && currentState.chatSetMessages) {
+    //
+    // ✅ EXCEPTION: Don't clear when resuming stream (isResumingStream=true)
+    // On page refresh, store is empty so isSameThread=false, but we're resuming the SAME thread.
+    // Clearing AI SDK messages would lose any in-progress streaming content.
+    // The prefilled resumption state tells us we should preserve AI SDK data.
+    if (!isSameThread && !isResumingStream && currentState.chatSetMessages) {
       currentState.chatSetMessages([]);
     }
 
@@ -1446,6 +1459,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
   resetToNewChat: (preferences?: ResetFormPreferences) => {
     const state = get();
+    // ✅ NAVIGATION CLEANUP: Stop any active streaming BEFORE clearing messages
+    state.chatStop?.();
     state.chatSetMessages?.([]);
 
     const selectedParticipants = preferences?.selectedModelIds?.length

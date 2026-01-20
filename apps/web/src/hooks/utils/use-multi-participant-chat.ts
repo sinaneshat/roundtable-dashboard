@@ -177,6 +177,11 @@ type UseMultiParticipantChatReturn = {
    * Used by provider to delay continueFromParticipant until SDK is initialized
    */
   isReady: boolean;
+  /**
+   * Stop any active streaming (for navigation cleanup)
+   * Used by store's reset functions to stop streaming before clearing state
+   */
+  stop: () => void;
 };
 
 /**
@@ -357,6 +362,12 @@ export function useMultiParticipantChat(
   // This prevents duplicate triggerNextParticipantWithRefs() calls before round completes
   // Key format: "r{round}_p{participantIndex}"
   const triggeredNextForRef = useRef<Set<string>>(new Set());
+
+  // ✅ STALE STREAM STOP GUARD: Track when we intentionally stopped a stale AI SDK stream
+  // When stopAiSdk() is called due to server prefill, AI SDK's onFinish fires.
+  // We need to skip processing in onFinish to avoid clearing waitingToStartStreaming
+  // and preventing the moderator from being triggered.
+  const stoppedStaleStreamRef = useRef<boolean>(false);
 
   // ✅ CRITICAL FIX: Track expected user message ID for backend lookup
   // AI SDK's sendMessage creates messages with its own nanoid-style IDs, but user messages
@@ -842,6 +853,7 @@ export function useMultiParticipantChat(
     status,
     error: chatError,
     setMessages,
+    stop: stopAiSdk,
   } = useChat({
     // ✅ CRITICAL FIX: Pass undefined instead of empty string when no thread ID
     // AI SDK's Chat class expects either valid ID or undefined, not empty string
@@ -1060,6 +1072,16 @@ export function useMultiParticipantChat(
       const availableSources = getAvailableSources(data.message?.metadata);
       const hasAvail = availableSources?.length ?? 0;
       rlog.stream('end', `r${rndMatch?.[1] ?? '-'} p${pIdxMatch?.[1] ?? '-'} reason=${data.finishReason ?? '-'} parts=${data.message?.parts?.length ?? 0} avail=${hasAvail}`);
+
+      // ✅ STALE STREAM STOP GUARD: Skip processing if we intentionally stopped a stale stream
+      // When stopAiSdk() is called due to server prefill, AI SDK's onFinish fires.
+      // Processing this would clear waitingToStartStreaming and prevent moderator trigger.
+      // Reset the flag after skipping so future legitimate onFinish calls are processed.
+      if (stoppedStaleStreamRef.current) {
+        rlog.stream('end', `SKIP: stale stream stop - letting custom resumption handle`);
+        stoppedStaleStreamRef.current = false; // Reset for future use
+        return;
+      }
 
       // ✅ Skip phantom resume completions (no active stream to resume)
       const notOurMessageId = !data.message?.id?.includes('_r');
@@ -1668,6 +1690,17 @@ export function useMultiParticipantChat(
 
       // Reset hydration flag to allow re-hydration on next thread
       hasHydratedRef.current = false;
+
+      // ✅ STALE STREAM GUARD: Reset the stoppedStaleStreamRef for the new thread
+      stoppedStaleStreamRef.current = false;
+
+      // ✅ CRITICAL FIX: Reset AI SDK's internal messages on navigation
+      // Without this, AI SDK retains messages from the previous thread, causing:
+      // 1. Wrong round number calculations (using old messages)
+      // 2. Stale participant data being processed
+      // 3. Infinite loops replaying old content
+      // The AI SDK needs to be re-hydrated from scratch when switching threads.
+      setMessages([]);
 
       // Reset state synchronously on navigation - legitimate useLayoutEffect pattern
       // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
@@ -2649,20 +2682,33 @@ export function useMultiParticipantChat(
       return false; // Normal round transition, not a page refresh
     }
 
+    // ✅ STALE STREAM FIX: When server has prefilled resumption state, STOP the AI SDK's stale stream
+    // Problem: AI SDK auto-resumes any active stream for this chat ID via `resume: true`.
+    // But this might be a STALE stream from a previous session (wrong round, wrong participant).
+    // Server's prefill state tells us the CORRECT participant to trigger.
+    //
+    // Example: Server says r0 nextP=0, but AI SDK resumed a stale r1 p1 stream.
+    // Without stopping, AI SDK continues streaming r1 p1 content, corrupting the conversation.
+    //
+    // Solution: Stop AI SDK's auto-resumed stream and DON'T set streaming state.
+    // Let custom resumption (use-round-resumption) trigger the correct participant.
+    //
+    // ✅ GUARD: Set stoppedStaleStreamRef BEFORE calling stop() so onFinish can skip processing.
+    // When stop() is called, AI SDK's onFinish fires. Without this guard, onFinish would
+    // eventually trigger completeStreaming() which clears waitingToStartStreaming,
+    // preventing the moderator from being triggered.
+    if (streamResumptionPrefilled) {
+      rlog.resume('sdk-resume', `STOPPING stale AI SDK stream - server prefilled correct state`);
+      stoppedStaleStreamRef.current = true; // Signal onFinish to skip processing
+      stopAiSdk(); // Stop the stale auto-resumed stream
+      return 'blocked'; // Let custom resumption handle triggering the correct participant
+    }
+
     // Detected resumed stream - set streaming flag FIRST
     // This ensures store.isStreaming reflects the actual state for message sync
-    // Must happen BEFORE the streamResumptionPrefilled check so message sync works
     isStreamingRef.current = true;
     // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- called from useEffectEvent in response to AI SDK status
     setIsExplicitlyStreaming(true);
-
-    // ✅ CRITICAL FIX: When server has prefilled resumption state, DON'T trigger custom resumption
-    // The server knows which participant needs to be triggered, but AI SDK is already handling
-    // the stream. We've already set isExplicitlyStreaming=true above so message sync works.
-    // Return 'blocked' to prevent incomplete-round-resumption from triggering a duplicate.
-    if (streamResumptionPrefilled) {
-      return 'blocked'; // Stream is being handled by AI SDK, don't trigger custom resumption
-    }
 
     // Also populate roundParticipantsRef if needed for proper orchestration
     // Store guarantees participants are sorted by priority
@@ -2935,6 +2981,8 @@ export function useMultiParticipantChat(
       retry,
       setMessages,
       isReady,
+      // ✅ NAVIGATION CLEANUP: Expose stop function for route change cleanup
+      stop: stopAiSdk,
     }),
     [
       messages,
@@ -2949,6 +2997,7 @@ export function useMultiParticipantChat(
       retry,
       setMessages,
       isReady,
+      stopAiSdk,
     ],
   );
 }

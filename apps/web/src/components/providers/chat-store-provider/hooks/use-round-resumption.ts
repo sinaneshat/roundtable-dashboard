@@ -313,11 +313,15 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
           rlog.resume('round-resum', `initial: AI SDK not ready (msgs=${chat.messages?.length ?? 0}) - calling cfp to hydrate`);
           const enabledForHydration = getEnabledParticipants(latestParticipants);
           const nextIdx = typeof latestNextParticipant === 'number' ? latestNextParticipant : latestNextParticipant.index;
-          chat.continueFromParticipant(
-            { index: nextIdx, participantId: enabledForHydration[nextIdx]?.id ?? '' },
-            enabledForHydration,
-            latestMessages,
-          );
+          // ✅ FIX: Use queueMicrotask to avoid flushSync during render phase
+          // continueFromParticipant uses flushSync internally, which can't be called during React render
+          queueMicrotask(() => {
+            chat.continueFromParticipant(
+              { index: nextIdx, participantId: enabledForHydration[nextIdx]?.id ?? '' },
+              enabledForHydration,
+              latestMessages,
+            );
+          });
 
           // Still not ready - schedule recursive retry with direct execution
           // ✅ FIX: Don't rely on toggle pattern (fails with React 18 batching)
@@ -413,7 +417,10 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
             // Without this, continueFromParticipant uses stale AI SDK messages instead of
             // the freshly-persisted messages from PATCH, causing "User message not found" errors
             // ✅ FIX: Pass pollEnabledParticipants (not full array)
-            chat.continueFromParticipant(pollCorrectedParticipant, pollEnabledParticipants, pollMessages);
+            // ✅ FIX: Use queueMicrotask to avoid flushSync during render phase
+            queueMicrotask(() => {
+              chat.continueFromParticipant(pollCorrectedParticipant, pollEnabledParticipants, pollMessages);
+            });
           };
 
           retryTimeoutRef.current = setTimeout(pollUntilReady, 100);
@@ -459,7 +466,10 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         // ✅ TYPE-SAFE: Pass full object with participantId for validation against config changes
         // ✅ CRITICAL FIX: Pass latestMessages to ensure correct userMessageId for backend lookup
         // ✅ FIX: Pass latestEnabledParticipants (not full array)
-        chat.continueFromParticipant(correctedParticipant, latestEnabledParticipants, latestMessages);
+        // ✅ FIX: Use queueMicrotask to avoid flushSync during render phase
+        queueMicrotask(() => {
+          chat.continueFromParticipant(correctedParticipant, latestEnabledParticipants, latestMessages);
+        });
       }, 100); // Small delay for AI SDK hydration to complete
       return;
     }
@@ -516,7 +526,10 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     // Without this, continueFromParticipant uses stale AI SDK messages instead of
     // the freshly-persisted messages from PATCH, causing "User message not found" errors
     // ✅ FIX: Pass enabledParticipants (not full array) to match the index calculations
-    chat.continueFromParticipant(correctedParticipant, enabledParticipants, freshMessages);
+    // ✅ FIX: Use queueMicrotask to avoid flushSync during render phase
+    queueMicrotask(() => {
+      chat.continueFromParticipant(correctedParticipant, enabledParticipants, freshMessages);
+    });
 
     // Cleanup
     return () => {

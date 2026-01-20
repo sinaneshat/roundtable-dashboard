@@ -306,6 +306,8 @@ export const ThreadStateSchema = z.object({
   sendMessage: z.custom<((content: string) => Promise<void>) | undefined>().optional(),
   startRound: z.custom<(() => Promise<void>) | undefined>().optional(),
   chatSetMessages: ChatSetMessagesFnSchema.optional(),
+  // ✅ NAVIGATION CLEANUP: Stop function to abort in-flight streaming on route change
+  chatStop: z.custom<(() => void) | undefined>().optional(),
 });
 
 export const ThreadActionsSchema = z.object({
@@ -318,6 +320,8 @@ export const ThreadActionsSchema = z.object({
   setSendMessage: z.custom<SetSendMessage>(),
   setStartRound: z.custom<SetStartRound>(),
   setChatSetMessages: z.custom<SetChatSetMessages>(),
+  // ✅ NAVIGATION CLEANUP: Action to set the AI SDK stop function
+  setChatStop: z.custom<(fn?: () => void) => void>(),
   checkStuckStreams: z.custom<CheckStuckStreams>(),
   // Streaming message actions (direct store updates for AI SDK callbacks)
   upsertStreamingMessage: z.custom<UpsertStreamingMessage>(),

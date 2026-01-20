@@ -332,6 +332,16 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   const startRoundRef = useRef(chat.startRound);
   const setMessagesRef = useRef(chat.setMessages);
 
+  // ✅ NAVIGATION CLEANUP: Wire up AI SDK's stop function to the store
+  // This allows reset functions to stop streaming before clearing state
+  useLayoutEffect(() => {
+    store.getState().setChatStop(chat.stop);
+    return () => {
+      // Clear on unmount to prevent stale references
+      store.getState().setChatStop(undefined);
+    };
+  }, [store, chat.stop]);
+
   useStateSync({
     store,
     chat,

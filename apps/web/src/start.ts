@@ -48,6 +48,10 @@ export const cookieMiddleware = createMiddleware({ type: 'function' }).server(
  * TanStack Start instance with global middleware.
  * - requestMiddleware: runs for ALL requests
  * - functionMiddleware: runs for ALL server functions
+ *
+ * Note: SSR is ENABLED (default) for fast first paint. Session fetching
+ * is skipped on server in beforeLoad to avoid blocking TTFB.
+ * Auth is handled client-side after hydration.
  */
 export const startInstance = createStart(() => ({
   requestMiddleware: [requestMiddleware],

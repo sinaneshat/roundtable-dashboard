@@ -20,9 +20,14 @@ export const Route = createFileRoute('/_protected')({
 
   // ✅ AUTH CHECK: Uses session from root context (already cached)
   // No duplicate getSession() call - root beforeLoad handles session fetching
-  // Redirects to sign-in if not authenticated (server-side redirect)
+  // Redirects to sign-in if not authenticated (client-side redirect)
   beforeLoad: async ({ location, context }) => {
-    // Session already fetched and cached by root beforeLoad
+    // Server-side: skip auth check, let client handle it after hydration
+    if (typeof window === 'undefined') {
+      return { session: null };
+    }
+
+    // Client-side: session from root beforeLoad
     const { session } = context;
 
     if (!session) {
@@ -36,6 +41,11 @@ export const Route = createFileRoute('/_protected')({
     return { session };
   },
   loader: async ({ context }) => {
+    // Server-side: skip data fetching, let client handle after hydration
+    if (typeof window === 'undefined') {
+      return {};
+    }
+
     const { queryClient } = context;
 
     // ensureQueryData ensures data is available before rendering
@@ -65,7 +75,7 @@ export const Route = createFileRoute('/_protected')({
 /**
  * Protected Layout - Session verified in beforeLoad
  *
- * Auth is now checked server-side in beforeLoad using the getSession server function.
+ * Auth is now checked client-side in beforeLoad after hydration.
  * If no session, user is redirected to sign-in before this component renders.
  * useSession is still used for accessing session data reactively in child components.
  */

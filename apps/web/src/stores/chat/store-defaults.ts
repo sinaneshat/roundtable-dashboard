@@ -149,6 +149,8 @@ export const THREAD_DEFAULTS = {
   sendMessage: undefined,
   startRound: undefined,
   chatSetMessages: undefined,
+  // ✅ NAVIGATION CLEANUP: Stop function to abort in-flight streaming
+  chatStop: undefined,
 } satisfies ThreadState;
 
 // ============================================================================
@@ -384,6 +386,7 @@ export const COMPLETE_RESET_STATE = {
   sendMessage: THREAD_DEFAULTS.sendMessage,
   startRound: THREAD_DEFAULTS.startRound,
   chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
+  chatStop: THREAD_DEFAULTS.chatStop,
   // Flags state
   hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
   isRegenerating: FLAGS_DEFAULTS.isRegenerating,
@@ -477,6 +480,7 @@ export const THREAD_RESET_STATE = {
   sendMessage: THREAD_DEFAULTS.sendMessage,
   startRound: THREAD_DEFAULTS.startRound,
   chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
+  chatStop: THREAD_DEFAULTS.chatStop,
   // Callbacks (included in thread reset)
   onComplete: CALLBACKS_DEFAULTS.onComplete,
   // Stream resumption state

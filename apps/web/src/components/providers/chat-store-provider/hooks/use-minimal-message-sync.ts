@@ -23,8 +23,38 @@ import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 
-import { getUserMetadata, isModeratorMessage } from '@/lib/utils';
+import { getParticipantIndex, getRoundNumber, getUserMetadata, isModeratorMessage } from '@/lib/utils';
 import type { ChatStoreApi } from '@/stores/chat';
+
+/**
+ * ✅ ID/METADATA MISMATCH FIX: Check if message ID matches its metadata
+ * AI SDK can have stale/wrong message IDs from auto-resume to wrong round
+ * Returns false if ID says r1p1 but metadata says r0p0 (mismatch)
+ */
+function isMessageIdMetadataConsistent(msg: UIMessage): boolean {
+  // Only check assistant messages (user messages don't follow the pattern)
+  if (msg.role !== MessageRoles.ASSISTANT)
+    return true;
+
+  // Parse round/participant from ID pattern: {threadId}_r{round}_p{participant}
+  const idMatch = msg.id?.match(/_r(\d+)_p(\d+)$/);
+  if (!idMatch || !idMatch[1] || !idMatch[2])
+    return true; // Can't parse ID, assume OK
+
+  const roundFromId = Number.parseInt(idMatch[1], 10);
+  const participantFromId = Number.parseInt(idMatch[2], 10);
+
+  // Get round/participant from metadata
+  const roundFromMeta = getRoundNumber(msg.metadata);
+  const participantFromMeta = getParticipantIndex(msg.metadata);
+
+  // If metadata is missing, assume OK (will be filled later)
+  if (roundFromMeta === null || participantFromMeta === null)
+    return true;
+
+  // Check for mismatch
+  return roundFromId === roundFromMeta && participantFromId === participantFromMeta;
+}
 
 type UseMinimalMessageSyncParams = {
   store: ChatStoreApi;
@@ -94,15 +124,42 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
     }
     lastSyncedThreadIdRef.current = currentThreadId ?? null;
 
+    // ✅ ID/METADATA MISMATCH FIX: Filter out AI SDK messages with inconsistent ID/metadata
+    // This can happen when AI SDK auto-resumes to wrong round (e.g., ID says _r1_p1 but metadata says r0p0)
+    // Such messages would overwrite correct store messages with the same ID
     const filteredChatMessages = chatMessages.filter((m) => {
-      if (m.role !== MessageRoles.USER)
-        return true;
-      const userMeta = getUserMetadata(m.metadata);
-      return !userMeta?.isParticipantTrigger;
+      // Filter out trigger messages
+      if (m.role === MessageRoles.USER) {
+        const userMeta = getUserMetadata(m.metadata);
+        if (userMeta?.isParticipantTrigger)
+          return false;
+      }
+      // ✅ FIX: Filter out messages with mismatched ID/metadata
+      // These are corrupt messages from AI SDK auto-resume to wrong round
+      if (!isMessageIdMetadataConsistent(m)) {
+        return false;
+      }
+      return true;
     });
 
+    // ✅ FIX: Also track which AI SDK messages have consistent IDs
+    // Only use consistent chat message IDs for deduplication
     const chatMessageIds = new Set(filteredChatMessages.map(m => m.id));
+
+    // ✅ FIX: Track IDs of inconsistent AI SDK messages
+    // Store messages with these IDs should NOT be excluded (prefer store version)
+    const inconsistentChatMessageIds = new Set(
+      chatMessages
+        .filter(m => !isMessageIdMetadataConsistent(m))
+        .map(m => m.id),
+    );
+
     const storeOnlyMessages = currentStoreMessages.filter((m) => {
+      // ✅ FIX: Include store message if AI SDK's version was inconsistent
+      // (even though IDs match, prefer store's correct metadata)
+      if (inconsistentChatMessageIds.has(m.id)) {
+        return true;
+      }
       if (chatMessageIds.has(m.id))
         return false;
       if (isModeratorMessage(m))
@@ -249,15 +306,34 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
         // Sync the fresh messages
         const currentStoreMessages = store.getState().messages;
 
+        // ✅ ID/METADATA MISMATCH FIX: Filter out AI SDK messages with inconsistent ID/metadata
         const filteredChatMessages = currentMessages.filter((m) => {
-          if (m.role !== MessageRoles.USER)
-            return true;
-          const userMeta = getUserMetadata(m.metadata);
-          return !userMeta?.isParticipantTrigger;
+          if (m.role === MessageRoles.USER) {
+            const userMeta = getUserMetadata(m.metadata);
+            if (userMeta?.isParticipantTrigger)
+              return false;
+          }
+          // ✅ FIX: Filter out messages with mismatched ID/metadata
+          if (!isMessageIdMetadataConsistent(m)) {
+            return false;
+          }
+          return true;
         });
 
         const chatMessageIds = new Set(filteredChatMessages.map(m => m.id));
+
+        // ✅ FIX: Track IDs of inconsistent AI SDK messages
+        const inconsistentChatMessageIds = new Set(
+          currentMessages
+            .filter(m => !isMessageIdMetadataConsistent(m))
+            .map(m => m.id),
+        );
+
         const storeOnlyMessages = currentStoreMessages.filter((m) => {
+          // ✅ FIX: Include store message if AI SDK's version was inconsistent
+          if (inconsistentChatMessageIds.has(m.id)) {
+            return true;
+          }
           if (chatMessageIds.has(m.id))
             return false;
           if (isModeratorMessage(m))

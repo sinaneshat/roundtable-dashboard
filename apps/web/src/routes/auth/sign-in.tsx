@@ -5,7 +5,6 @@ import { AuthForm } from '@/components/auth/auth-form';
 import { AuthShowcaseLayout } from '@/components/auth/auth-showcase-layout';
 import { AuthLoadingSkeleton } from '@/components/loading';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
-import { getSession } from '@/server/auth';
 
 const pageTitle = 'Sign In - Roundtable';
 const pageDescription = 'Sign in to Roundtable - the collaborative AI brainstorming platform where multiple AI models work together to solve problems and generate ideas.';
@@ -24,9 +23,9 @@ const signInSearchSchema = z.object({
 });
 
 export const Route = createFileRoute('/auth/sign-in')({
-  // Server-side auth check - redirect if already authenticated
-  beforeLoad: async () => {
-    const session = await getSession();
+  // Use session from root context - NO duplicate API call
+  beforeLoad: async ({ context }) => {
+    const { session } = context;
 
     if (session) {
       // Already authenticated, redirect to chat

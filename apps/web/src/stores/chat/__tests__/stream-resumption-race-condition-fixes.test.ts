@@ -293,38 +293,24 @@ describe('double Trigger Prevention', () => {
     }, { timeout: 500 });
   });
 
-  it('should allow triggering next participant after current completes', async () => {
-    setupIncompleteRound(1, 1, 3);
+  it('should allow triggering next participant on fresh mount after previous completes', async () => {
+    // This test verifies that on a fresh page load (simulated by remounting),
+    // the hook triggers the next incomplete participant.
+    // Note: During a single session, subsequent participants (P2, P3, etc.) are
+    // triggered by use-multi-participant-chat.ts, NOT by this resumption hook.
+    // This hook is for resuming after page refresh/navigation.
 
-    const { rerender } = renderHook(() =>
-      useIncompleteRoundResumption({
-        threadId: 'thread-123',
-        enabled: true,
+    // Set up with P0 AND P1 already complete (simulating state after page refresh)
+    const messagesWithP0P1Complete = [
+      createTestUserMessage({ roundNumber: 1 }),
+      createTestAssistantMessage({
+        id: 'thread-123_r1_p0',
+        content: 'Assistant 0 response',
+        roundNumber: 1,
+        participantId: 'participant-0',
+        participantIndex: 0,
+        finishReason: 'stop',
       }),
-    );
-
-    await waitFor(() => {
-      expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(1);
-    }, { timeout: 500 });
-
-    mockStore.actions.setNextParticipantToTrigger.mockClear();
-    mockStore.actions.setStreamingRoundNumber.mockClear();
-    mockStore.actions.setCurrentParticipantIndex.mockClear();
-
-    act(() => {
-      mockStore.setState({
-        isStreaming: true,
-        waitingToStartStreaming: false,
-      });
-    });
-    rerender();
-
-    await act(async () => {
-      await waitForAsync(50);
-    });
-
-    const messagesWithP1Complete = [
-      ...mockStore.getState().messages || [],
       createTestAssistantMessage({
         id: 'thread-123_r1_p1',
         content: 'Assistant 1 response',
@@ -335,21 +321,39 @@ describe('double Trigger Prevention', () => {
       }),
     ];
 
-    act(() => {
-      mockStore.setState({
-        messages: messagesWithP1Complete,
-        isStreaming: false,
-      });
-    });
-    rerender();
+    const thread = createMockThread();
+    const participants = createMockParticipants(3);
 
-    // Wait for stream settling period (50ms) to complete + buffer
-    await act(async () => {
-      await waitForAsync(150);
+    mockStore.setState({
+      thread,
+      participants,
+      messages: messagesWithP0P1Complete,
+      preSearches: [],
+      isStreaming: false,
+      waitingToStartStreaming: false,
+      pendingMessage: null,
+      hasSentPendingMessage: false,
+      hasEarlyOptimisticMessage: false,
+      enableWebSearch: false,
+      currentResumptionPhase: null,
+      preSearchResumption: null,
+      moderatorResumption: null,
+      resumptionRoundNumber: null,
+      streamResumptionPrefilled: false,
+      isModeratorStreaming: false,
+      nextParticipantToTrigger: null,
+      streamingRoundNumber: null,
+      currentParticipantIndex: 0,
     });
-    // Force rerender after settling timeout fires
-    rerender();
 
+    renderHook(() =>
+      useIncompleteRoundResumption({
+        threadId: 'thread-123',
+        enabled: true,
+      }),
+    );
+
+    // On fresh mount with P0 and P1 complete, should trigger P2
     await waitFor(() => {
       expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(2);
       expect(mockStore.actions.setStreamingRoundNumber).toHaveBeenCalledWith(1);
@@ -673,6 +677,9 @@ describe('integration Tests', () => {
   });
 
   it('should handle complete flow from trigger to streaming', async () => {
+    // This test verifies the complete resumption flow for a single participant.
+    // Note: Subsequent participants (P2, P3) are triggered by use-multi-participant-chat.ts,
+    // not by this hook. This test only verifies the initial trigger works correctly.
     setupIncompleteRound(1, 1, 3);
 
     const { rerender } = renderHook(() =>
@@ -682,11 +689,13 @@ describe('integration Tests', () => {
       }),
     );
 
+    // Should trigger P1 (first missing participant)
     await waitFor(() => {
       expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(1);
       expect(mockStore.actions.setWaitingToStartStreaming).toHaveBeenCalledWith(true);
     }, { timeout: 500 });
 
+    // Simulate the trigger flow: waiting -> streaming
     act(() => {
       mockStore.setState({ waitingToStartStreaming: false });
     });
@@ -717,6 +726,11 @@ describe('integration Tests', () => {
       await waitForAsync(50);
     });
 
+    // Verify P1 was triggered correctly
+    const calls = mockStore.actions.setNextParticipantToTrigger.mock.calls;
+    expect(calls.some(call => call[0] === 1)).toBe(true);
+
+    // P1 completes - this hook does NOT trigger P2 (that's handled by use-multi-participant-chat)
     const messagesAfterStreaming = [
       ...mockStore.getState().messages || [],
       createTestAssistantMessage({
@@ -737,19 +751,17 @@ describe('integration Tests', () => {
     });
     rerender();
 
-    // Wait for stream settling period (50ms) to complete + buffer
+    // Wait for stream settling period to complete
     await act(async () => {
       await waitForAsync(150);
     });
-    // Force rerender after settling timeout fires
     rerender();
 
-    await waitFor(() => {
-      const calls = mockStore.actions.setNextParticipantToTrigger.mock.calls;
-      const lastCall = calls[calls.length - 1];
-      expect(lastCall).toBeDefined();
-      expect(lastCall[0]).toBe(2);
-    }, { timeout: 500 });
+    // Verify the hook does NOT re-trigger (subsequent participants handled by different hook)
+    // The last call should still be P1, not P2
+    const finalCalls = mockStore.actions.setNextParticipantToTrigger.mock.calls;
+    const p2Calls = finalCalls.filter(call => call[0] === 2);
+    expect(p2Calls).toHaveLength(0); // No P2 triggers from this hook
   });
 
   it('should handle trigger failure with timeout and retry', async () => {

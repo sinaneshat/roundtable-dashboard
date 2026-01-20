@@ -36,6 +36,7 @@ export function getRouter() {
     defaultPreload: 'intent',
     defaultPreloadStaleTime: 0,
     defaultNotFoundComponent: NotFoundScreen,
+    // Note: defaultSsr: false is configured in start.ts via createStart()
   });
 
   setupRouterSsrQueryIntegration({
