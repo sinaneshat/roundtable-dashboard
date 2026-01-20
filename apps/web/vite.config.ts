@@ -54,9 +54,33 @@ export default defineConfig({
   },
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
+    // Polyfill __name helper that esbuild injects with keepNames - prevents ReferenceError in Workers
+    __name: '((fn, name) => fn)',
   },
   build: {
     sourcemap: true,
+  },
+  // SSR environment configuration for Cloudflare Workers
+  environments: {
+    ssr: {
+      build: {
+        // Disable esbuild keepNames in SSR build to prevent __name helper injection
+        rollupOptions: {
+          output: {
+            // Ensure function names are not preserved in output
+            generatedCode: {
+              constBindings: true,
+            },
+          },
+        },
+      },
+      // Apply keepNames: false to SSR environment esbuild
+      optimizeDeps: {
+        esbuildOptions: {
+          keepNames: false,
+        },
+      },
+    },
   },
   // Disable esbuild keepNames to prevent __name helper injection
   optimizeDeps: {
