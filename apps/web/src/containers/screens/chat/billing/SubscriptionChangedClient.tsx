@@ -14,6 +14,7 @@ import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId } from '@/lib/utils/product-logic';
+import { validateUsageStatsCache } from '@/stores/chat/actions/types';
 import type { Subscription } from '@/types/billing';
 
 // Glass button styles for billing pages (consistent with chat toolbar)
@@ -89,12 +90,9 @@ function SubscriptionChangedContent() {
 
   // Must be called before early return to satisfy React hooks rules
   const creditsAvailable = useMemo(() => {
-    if (!usageStats?.data || typeof usageStats.data !== 'object' || !('credits' in usageStats.data)) {
-      return 0;
-    }
-    const credits = usageStats.data.credits as { available: number } | undefined;
-    return credits?.available || 0;
-  }, [usageStats?.data]);
+    const validated = validateUsageStatsCache(usageStats);
+    return validated?.credits.available ?? 0;
+  }, [usageStats]);
 
   if (!isLoadingData && !displaySubscription) {
     return (

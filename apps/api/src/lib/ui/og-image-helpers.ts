@@ -13,9 +13,6 @@
 
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
-// Re-export colors and utilities from og-colors.ts (no asset import)
-export { createGradient, getModeColor, OG_COLORS, truncateText } from './og-colors';
-
 // Lazy load asset functions to avoid 449KB module at startup
 type OGAssetsModule = typeof import('./og-assets.generated');
 let ogAssetsModule: OGAssetsModule | null = null;

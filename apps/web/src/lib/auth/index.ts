@@ -10,6 +10,9 @@
 // Client exports
 export { authClient } from './client';
 
+// Session cache exports
+export { clearCachedSession } from './session-cache';
+
 // Centralized types - single source of truth
 export type {
   Session,

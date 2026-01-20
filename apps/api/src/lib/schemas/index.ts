@@ -4,10 +4,6 @@
  * Centralized exports for all Zod schemas and type utilities.
  */
 
-// Data part schema (custom AI message parts)
-export type { DataPart } from './data-part-schema';
-export { DataPartSchema, isDataPart } from './data-part-schema';
-
 // Error schemas
 export type { ErrorMetadata } from './error-schemas';
 export {
@@ -20,38 +16,6 @@ export {
   isErrorCategory,
   isUIMessageErrorType,
 } from './error-schemas';
-
-// Form option schemas
-export type { FormOption, FormOptions, NavItem } from './form-option-schemas';
-export {
-  FormOptionSchema,
-  FormOptionsSchema,
-  isFormOption,
-  isFormOptions,
-  NavItemBaseSchema,
-} from './form-option-schemas';
-
-// Message metadata schemas
-export type {
-  PartialAssistantMetadata,
-  PartialMessageMetadata,
-  PartialUserMetadata,
-  PreSearchQueryMetadata,
-  PreSearchQueryState,
-  PreSearchResult,
-  PreSearchResultItem,
-} from './message-metadata';
-export {
-  messageHasError,
-  PartialAssistantMetadataSchema,
-  PartialMessageMetadataSchema,
-  PartialUserMetadataSchema,
-  PreSearchQueryMetadataSchema,
-  PreSearchQueryStateSchema,
-  PreSearchResultItemSchema,
-  PreSearchResultItemSchemaEnhanced,
-  PreSearchResultSchema,
-} from './message-metadata';
 
 // Message schemas
 export type {
@@ -107,14 +71,6 @@ export {
   StreamingToolCallSchema,
   StreamingUsageSchema,
 } from './message-schemas';
-
-// Model schemas
-export type { OrderedModel } from './model-schemas';
-export {
-  isOrderedModel,
-  isOrderedModelArray,
-  OrderedModelSchema,
-} from './model-schemas';
 
 // Participant schemas
 export type {

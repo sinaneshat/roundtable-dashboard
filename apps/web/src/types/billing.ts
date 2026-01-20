@@ -1,51 +1,9 @@
 /**
- * Billing types - Manually defined from API schema
+ * Billing types - Re-exported from API services
  *
- * These types match the API response schemas exactly.
- * Used when Hono type inference doesn't work properly.
+ * All types are derived from backend Hono routes via type inference.
+ * No manual type definitions - single source of truth from API.
  */
 
-import type { StripeSubscriptionStatus } from '@roundtable/shared';
-
-/**
- * Subscription type matching API response
- */
-export type Subscription = {
-  id: string;
-  status: StripeSubscriptionStatus;
-  priceId: string;
-  cancelAtPeriodEnd: boolean;
-  currentPeriodStart: string;
-  currentPeriodEnd: string;
-  canceledAt: string | null;
-  trialStart: string | null;
-  trialEnd: string | null;
-  price: {
-    productId: string;
-  };
-};
-
-/**
- * Price type from product prices array
- */
-export type Price = {
-  id: string;
-  productId: string;
-  currency: string;
-  unitAmount: number | null;
-  interval: string;
-  intervalCount: number;
-  trialPeriodDays: number | null;
-};
-
-/**
- * Product type from products list
- */
-export type Product = {
-  id: string;
-  name: string;
-  description: string | null;
-  active: boolean;
-  features: string[];
-  prices?: Price[];
-};
+export type { Price, Product } from '@/services/api/billing/products';
+export type { Subscription } from '@/services/api/billing/subscriptions';

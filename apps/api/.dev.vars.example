@@ -35,6 +35,12 @@ TURNSTILE_SECRET_KEY=your-turnstile-secret-key
 AWS_SES_ACCESS_KEY_ID=your-aws-access-key-id
 AWS_SES_SECRET_ACCESS_KEY=your-aws-secret-access-key
 
+# SES Region and Email Configuration
+# These can also be set in wrangler.jsonc vars, but adding here for local dev fallback
+AWS_SES_REGION=eu-north-1
+FROM_EMAIL=noreply@roundtable.now
+SES_REPLY_TO_EMAIL=support@roundtable.now
+
 # ============================================================================
 # STRIPE PAYMENT PROCESSING
 # ============================================================================

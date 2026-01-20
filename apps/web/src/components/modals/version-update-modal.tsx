@@ -1,7 +1,7 @@
 import { useState } from 'react';
 
 import { Icons } from '@/components/icons';
-import { useServiceWorker } from '@/components/providers/service-worker-provider';
+import { useServiceWorker } from '@/components/providers';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,

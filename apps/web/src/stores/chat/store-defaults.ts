@@ -25,6 +25,7 @@ import type {
   FormState,
   PreSearchState,
   ScreenState,
+  SidebarAnimationState,
   StreamResumptionSliceState,
   ThreadState,
   TrackingState,
@@ -258,6 +259,18 @@ export const ATTACHMENTS_DEFAULTS = {
 } satisfies AttachmentsState;
 
 // ============================================================================
+// SIDEBAR ANIMATION SLICE DEFAULTS (AI title typewriter effect)
+// ============================================================================
+
+export const SIDEBAR_ANIMATION_DEFAULTS = {
+  animatingThreadId: null,
+  animationPhase: 'idle' as const,
+  oldTitle: null,
+  newTitle: null,
+  displayedTitle: null,
+} satisfies SidebarAnimationState;
+
+// ============================================================================
 // TYPE-SAFE STATE RESET GROUPS
 // ============================================================================
 // These groups ensure that when resetting related state, ALL fields are included.
@@ -413,6 +426,12 @@ export const COMPLETE_RESET_STATE = {
   animationResolvers: new Map(),
   // Attachments state
   pendingAttachments: ATTACHMENTS_DEFAULTS.pendingAttachments,
+  // Sidebar animation state
+  animatingThreadId: SIDEBAR_ANIMATION_DEFAULTS.animatingThreadId,
+  animationPhase: SIDEBAR_ANIMATION_DEFAULTS.animationPhase,
+  oldTitle: SIDEBAR_ANIMATION_DEFAULTS.oldTitle,
+  newTitle: SIDEBAR_ANIMATION_DEFAULTS.newTitle,
+  displayedTitle: SIDEBAR_ANIMATION_DEFAULTS.displayedTitle,
 };
 
 /**

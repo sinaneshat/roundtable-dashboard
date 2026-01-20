@@ -51,6 +51,7 @@ import type {
   CompleteModeratorStream,
   CompleteRegeneration,
   CompleteStreaming,
+  CompleteTitleAnimation,
   DeduplicateMessages,
   FinalizeMessageId,
   GetAttachments,
@@ -86,6 +87,7 @@ import type {
   ResetToNewChat,
   ResetToOverview,
   ResetUI,
+  SetAnimationPhase,
   SetAutoMode,
   SetChatSetMessages,
   SetConfigChangeRoundNumber,
@@ -128,10 +130,12 @@ import type {
   SetThread,
   SetWaitingToStartStreaming,
   StartRegeneration,
+  StartTitleAnimation,
   TryMarkModeratorCreated,
   TryMarkPreSearchTriggered,
   UpdateAttachmentPreview,
   UpdateAttachmentUpload,
+  UpdateDisplayedTitle,
   UpdatePartialPreSearchData,
   UpdateParticipant,
   UpdateParticipants,
@@ -594,6 +598,30 @@ export const AttachmentsActionsSchema = z.object({
 export const AttachmentsSliceSchema = z.intersection(AttachmentsStateSchema, AttachmentsActionsSchema);
 
 // ============================================================================
+// SIDEBAR ANIMATION SLICE SCHEMAS (AI title typewriter effect)
+// ============================================================================
+
+export const TitleAnimationPhaseSchema = z.enum(['idle', 'deleting', 'typing', 'complete']);
+export type TitleAnimationPhase = z.infer<typeof TitleAnimationPhaseSchema>;
+
+export const SidebarAnimationStateSchema = z.object({
+  animatingThreadId: z.string().nullable(),
+  animationPhase: TitleAnimationPhaseSchema,
+  oldTitle: z.string().nullable(),
+  newTitle: z.string().nullable(),
+  displayedTitle: z.string().nullable(),
+});
+
+export const SidebarAnimationActionsSchema = z.object({
+  startTitleAnimation: z.custom<StartTitleAnimation>(),
+  updateDisplayedTitle: z.custom<UpdateDisplayedTitle>(),
+  setAnimationPhase: z.custom<SetAnimationPhase>(),
+  completeTitleAnimation: z.custom<CompleteTitleAnimation>(),
+});
+
+export const SidebarAnimationSliceSchema = z.intersection(SidebarAnimationStateSchema, SidebarAnimationActionsSchema);
+
+// ============================================================================
 // OPERATIONS SLICE SCHEMAS
 // ============================================================================
 
@@ -627,30 +655,33 @@ export const ChatStoreSchema = z.intersection(
                     z.intersection(
                       z.intersection(
                         z.intersection(
-                          FormSliceSchema,
-                          FeedbackSliceSchema,
+                          z.intersection(
+                            FormSliceSchema,
+                            FeedbackSliceSchema,
+                          ),
+                          UISliceSchema,
                         ),
-                        UISliceSchema,
+                        PreSearchSliceSchema,
                       ),
-                      PreSearchSliceSchema,
+                      ThreadSliceSchema,
                     ),
-                    ThreadSliceSchema,
+                    FlagsSliceSchema,
                   ),
-                  FlagsSliceSchema,
+                  DataSliceSchema,
                 ),
-                DataSliceSchema,
+                TrackingSliceSchema,
               ),
-              TrackingSliceSchema,
+              CallbacksSliceSchema,
             ),
-            CallbacksSliceSchema,
+            ScreenSliceSchema,
           ),
-          ScreenSliceSchema,
+          StreamResumptionSliceSchema,
         ),
-        StreamResumptionSliceSchema,
+        AnimationSliceSchema,
       ),
-      AnimationSliceSchema,
+      AttachmentsSliceSchema,
     ),
-    AttachmentsSliceSchema,
+    SidebarAnimationSliceSchema,
   ),
   OperationsActionsSchema,
 );
@@ -715,3 +746,7 @@ export type AnimationSlice = z.infer<typeof AnimationSliceSchema>;
 export type AttachmentsState = z.infer<typeof AttachmentsStateSchema>;
 export type AttachmentsActions = z.infer<typeof AttachmentsActionsSchema>;
 export type AttachmentsSlice = z.infer<typeof AttachmentsSliceSchema>;
+
+export type SidebarAnimationState = z.infer<typeof SidebarAnimationStateSchema>;
+export type SidebarAnimationActions = z.infer<typeof SidebarAnimationActionsSchema>;
+export type SidebarAnimationSlice = z.infer<typeof SidebarAnimationSliceSchema>;

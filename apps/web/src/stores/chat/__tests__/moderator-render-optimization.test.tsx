@@ -16,12 +16,20 @@
 import { MessagePartTypes, MessageStatuses } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import type { ReactNode } from 'react';
-import { memo, useEffect, useRef } from 'react';
-import { describe, expect, it, vi } from 'vitest';
+import React, { memo, useEffect, useRef } from 'react';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { useChatStore } from '@/components/providers';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
-import { createTestAssistantMessage, createTestModeratorMessage, createTestUserMessage, render as rtlRender, screen } from '@/lib/testing';
+import {
+  createStoreWrapper,
+  createTestAssistantMessage,
+  createTestChatStore,
+  createTestModeratorMessage,
+  createTestUserMessage,
+  render,
+  screen,
+} from '@/lib/testing';
 
 // Test messages from helpers.ts
 const _messages = {
@@ -118,9 +126,9 @@ type MessageListWithTrackingProps = {
   onRender: (id: string) => void;
 };
 
-function MessageListWithTracking({ messages, onRender }: MessageListWithTrackingProps) {
-  const isStreaming = useChatStore(s => s.isStreaming);
-  const isModeratorStreaming = useChatStore(s => s.isModeratorStreaming);
+function MessageListWithTracking({ messages, onRender, store }: MessageListWithTrackingProps & { store: ReturnType<typeof createTestChatStore> }) {
+  const isStreaming = store.getState().isStreaming;
+  const isModeratorStreaming = store.getState().isModeratorStreaming;
 
   return (
     <div data-testid="message-list">
@@ -146,25 +154,23 @@ function MessageListWithTracking({ messages, onRender }: MessageListWithTracking
   );
 }
 
-// TestWrapper removed - using TestProviders from @/lib/testing render which includes:
-// - RouterProvider (required by ChatStoreProvider)
-// - QueryClientProvider
-// - I18nProvider
-// - ChatStoreProvider
-// - ThreadHeaderProvider
-// - TooltipProvider
-
-// TODO: Refactor to properly test render optimization with router context
-describe.todo('moderator Render Optimization', () => {
+describe('moderator Render Optimization', () => {
   let renderTracker: Map<string, number>;
   let onRender: (id: string) => void;
+  let store: ReturnType<typeof createTestChatStore>;
 
   beforeEach(() => {
     renderTracker = new Map();
     onRender = vi.fn((id: string) => {
       renderTracker.set(id, (renderTracker.get(id) || 0) + 1);
     });
+    store = createTestChatStore();
   });
+
+  function rtlRender(ui: React.ReactElement) {
+    const StoreWrapper = createStoreWrapper(store);
+    return render(ui, { wrapper: StoreWrapper });
+  }
 
   describe('participant Messages During Moderator Streaming', () => {
     it('should not re-render completed participant messages when moderator streams', () => {
@@ -196,6 +202,7 @@ describe.todo('moderator Render Optimization', () => {
         <MessageListWithTracking
           messages={[userMessage, participant1, participant2]}
           onRender={onRender}
+          store={store}
         />,
       );
 
@@ -214,10 +221,10 @@ describe.todo('moderator Render Optimization', () => {
       });
 
       rerender(
-
         <MessageListWithTracking
           messages={[userMessage, participant1, participant2, moderatorMessage]}
           onRender={onRender}
+          store={store}
         />,
       );
 
@@ -253,10 +260,10 @@ describe.todo('moderator Render Optimization', () => {
       });
 
       const { rerender } = rtlRender(
-
         <MessageListWithTracking
           messages={[userMessage, participant1, moderatorMessage1]}
           onRender={onRender}
+          store={store}
         />,
       );
 
@@ -271,10 +278,10 @@ describe.todo('moderator Render Optimization', () => {
       });
 
       rerender(
-
         <MessageListWithTracking
           messages={[userMessage, participant1, moderatorMessage2]}
           onRender={onRender}
+          store={store}
         />,
       );
 
@@ -293,8 +300,7 @@ describe.todo('moderator Render Optimization', () => {
       });
 
       const { rerender } = rtlRender(
-
-        <MessageListWithTracking messages={[moderatorMessage]} onRender={onRender} />,
+        <MessageListWithTracking messages={[moderatorMessage]} onRender={onRender} store={store} />,
       );
 
       const initialRenderCount = renderTracker.get('thread_r0_moderator');
@@ -305,8 +311,7 @@ describe.todo('moderator Render Optimization', () => {
 
       // Re-render with same content
       rerender(
-
-        <MessageListWithTracking messages={[moderatorMessage]} onRender={onRender} />,
+        <MessageListWithTracking messages={[moderatorMessage]} onRender={onRender} store={store} />,
       );
 
       // Moderator should NOT re-render (memo should prevent it)
@@ -330,8 +335,7 @@ describe.todo('moderator Render Optimization', () => {
       });
 
       const { rerender } = rtlRender(
-
-        <MessageListWithTracking messages={[userMessage, moderatorChunk1]} onRender={onRender} />,
+        <MessageListWithTracking messages={[userMessage, moderatorChunk1]} onRender={onRender} store={store} />,
       );
 
       expect(screen.getByTestId('message-thread_r0_moderator')).toBeInTheDocument();
@@ -348,8 +352,7 @@ describe.todo('moderator Render Optimization', () => {
       });
 
       rerender(
-
-        <MessageListWithTracking messages={[userMessage, moderatorChunk2]} onRender={onRender} />,
+        <MessageListWithTracking messages={[userMessage, moderatorChunk2]} onRender={onRender} store={store} />,
       );
 
       expect(renderTracker.get('thread_r0_moderator')).toBe(1);
@@ -363,8 +366,7 @@ describe.todo('moderator Render Optimization', () => {
       });
 
       rerender(
-
-        <MessageListWithTracking messages={[userMessage, moderatorChunk3]} onRender={onRender} />,
+        <MessageListWithTracking messages={[userMessage, moderatorChunk3]} onRender={onRender} store={store} />,
       );
 
       expect(renderTracker.get('thread_r0_moderator')).toBe(1);
@@ -387,10 +389,10 @@ describe.todo('moderator Render Optimization', () => {
       ];
 
       const { rerender } = rtlRender(
-
         <MessageListWithTracking
           messages={[userMessage]}
           onRender={onRender}
+          store={store}
         />,
       );
 
@@ -405,10 +407,10 @@ describe.todo('moderator Render Optimization', () => {
         });
 
         rerender(
-
           <MessageListWithTracking
             messages={[userMessage, moderatorMessage]}
             onRender={onRender}
+            store={store}
           />,
         );
       });
@@ -430,8 +432,7 @@ describe.todo('moderator Render Optimization', () => {
       });
 
       const { rerender } = rtlRender(
-
-        <MessageListWithTracking messages={[message1]} onRender={onRender} />,
+        <MessageListWithTracking messages={[message1]} onRender={onRender} store={store} />,
       );
 
       expect(renderTracker.get('thread_r0_moderator')).toBe(1);
@@ -445,8 +446,7 @@ describe.todo('moderator Render Optimization', () => {
       });
 
       rerender(
-
-        <MessageListWithTracking messages={[message2]} onRender={onRender} />,
+        <MessageListWithTracking messages={[message2]} onRender={onRender} store={store} />,
       );
 
       // Should NOT re-render (memo comparison detects same content)
@@ -465,8 +465,7 @@ describe.todo('moderator Render Optimization', () => {
       });
 
       const { rerender } = rtlRender(
-
-        <MessageListWithTracking messages={[moderatorMessage]} onRender={onRender} />,
+        <MessageListWithTracking messages={[moderatorMessage]} onRender={onRender} store={store} />,
       );
 
       expect(renderTracker.get('thread_r0_moderator')).toBe(1);
@@ -475,8 +474,7 @@ describe.todo('moderator Render Optimization', () => {
 
       // Re-render with same message
       rerender(
-
-        <MessageListWithTracking messages={[moderatorMessage]} onRender={onRender} />,
+        <MessageListWithTracking messages={[moderatorMessage]} onRender={onRender} store={store} />,
       );
 
       // Memo should prevent re-render when content and status are same
@@ -522,8 +520,7 @@ describe.todo('moderator Render Optimization', () => {
       );
 
       const { rerender } = rtlRender(
-
-        <MessageListWithTracking messages={messages} onRender={onRender} />,
+        <MessageListWithTracking messages={messages} onRender={onRender} store={store} />,
       );
 
       // All messages render initially
@@ -542,8 +539,7 @@ describe.todo('moderator Render Optimization', () => {
       );
 
       rerender(
-
-        <MessageListWithTracking messages={updatedMessages} onRender={onRender} />,
+        <MessageListWithTracking messages={updatedMessages} onRender={onRender} store={store} />,
       );
 
       // Only moderator should re-render
@@ -633,10 +629,10 @@ describe.todo('moderator Render Optimization', () => {
       ];
 
       const { rerender } = rtlRender(
-
         <MessageListWithTracking
           messages={[...round0Messages, ...round1Messages]}
           onRender={onRender}
+          store={store}
         />,
       );
 
@@ -650,10 +646,10 @@ describe.todo('moderator Render Optimization', () => {
       });
 
       rerender(
-
         <MessageListWithTracking
           messages={[...round0Messages, ...round1Messages, round1Moderator]}
           onRender={onRender}
+          store={store}
         />,
       );
 
@@ -694,8 +690,7 @@ describe.todo('moderator Render Optimization', () => {
       ];
 
       const { rerender } = rtlRender(
-
-        <MessageListWithTracking messages={messages} onRender={onRender} />,
+        <MessageListWithTracking messages={messages} onRender={onRender} store={store} />,
       );
 
       const phase1Renders = new Map(renderTracker);
@@ -711,8 +706,7 @@ describe.todo('moderator Render Optimization', () => {
       );
 
       rerender(
-
-        <MessageListWithTracking messages={messages} onRender={onRender} />,
+        <MessageListWithTracking messages={messages} onRender={onRender} store={store} />,
       );
 
       const phase2Renders = new Map(renderTracker);
@@ -726,8 +720,7 @@ describe.todo('moderator Render Optimization', () => {
       });
 
       rerender(
-
-        <MessageListWithTracking messages={[...messages]} onRender={onRender} />,
+        <MessageListWithTracking messages={[...messages]} onRender={onRender} store={store} />,
       );
 
       const phase3Renders = new Map(renderTracker);
@@ -741,8 +734,7 @@ describe.todo('moderator Render Optimization', () => {
       });
 
       rerender(
-
-        <MessageListWithTracking messages={[...messages]} onRender={onRender} />,
+        <MessageListWithTracking messages={[...messages]} onRender={onRender} store={store} />,
       );
 
       const phase4Renders = new Map(renderTracker);

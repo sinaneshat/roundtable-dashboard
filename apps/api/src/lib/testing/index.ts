@@ -43,6 +43,7 @@ export type MockStripeInvoice = {
   subscription?: string;
   amount_due: number;
   amount_paid: number;
+  paid: boolean;
 };
 
 export type MockDrizzleDb = {
@@ -103,23 +104,45 @@ export function createMockStripeSubscription(
 export function createMockStripeInvoice(
   overrides: Partial<MockStripeInvoice> = {},
 ): MockStripeInvoice {
+  const status = overrides.status || 'paid';
+  const isPaid = status === 'paid';
+
   return {
     id: `in_${Math.random().toString(36).substring(7)}`,
     customer: `cus_${Math.random().toString(36).substring(7)}`,
-    status: 'paid',
+    status,
     amount_due: 2000,
-    amount_paid: 2000,
+    amount_paid: isPaid ? 2000 : 0,
+    paid: isPaid,
     ...overrides,
   };
 }
 
 export function createMockDrizzleDb(): MockDrizzleDb {
+  const queryCache = new Map<string | symbol, {
+    findFirst: ReturnType<typeof vi.fn>;
+    findMany: ReturnType<typeof vi.fn>;
+  }>();
+
   return {
     select: vi.fn().mockReturnThis(),
     insert: vi.fn().mockReturnThis(),
     update: vi.fn().mockReturnThis(),
     delete: vi.fn().mockReturnThis(),
-    query: {},
+    query: new Proxy({}, {
+      get: (_target, prop) => {
+        if (!queryCache.has(prop)) {
+          queryCache.set(prop, {
+            findFirst: vi.fn().mockResolvedValue(null),
+            findMany: vi.fn().mockResolvedValue([]),
+          });
+        }
+        return queryCache.get(prop);
+      },
+    }) as Record<string, {
+      findFirst: ReturnType<typeof vi.fn>;
+      findMany: ReturnType<typeof vi.fn>;
+    }>,
     transaction: vi.fn(cb => cb(createMockDrizzleDb())),
     batch: vi.fn().mockResolvedValue([]),
   };
@@ -144,7 +167,7 @@ export function createMockLogger(): TypedLogger {
   };
 }
 
-export function createMockApiEnv(): Partial<CloudflareEnv> {
+export function createMockApiEnv(overrides?: Partial<CloudflareEnv>): Partial<CloudflareEnv> {
   return {
     DB: null as unknown as D1Database,
     KV: createMockKV(),
@@ -153,5 +176,6 @@ export function createMockApiEnv(): Partial<CloudflareEnv> {
     BETTER_AUTH_URL: 'http://localhost:8787',
     STRIPE_SECRET_KEY: 'sk_test_mock',
     STRIPE_WEBHOOK_SECRET: 'whsec_test_mock',
+    ...overrides,
   };
 }

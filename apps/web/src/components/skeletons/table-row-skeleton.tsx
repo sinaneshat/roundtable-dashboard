@@ -16,8 +16,8 @@ type TableRowSkeletonProps = {
 export function TableRowSkeleton({ columns = 4, className, ...props }: TableRowSkeletonProps) {
   return (
     <div className={cn('flex items-center space-x-4 p-4 border-b', className)} {...props}>
-      {Array.from({ length: columns }).map((_, i) => (
-        <Skeleton key={i} className={cn('h-4', i === 0 ? 'w-48' : 'w-24')} />
+      {Array.from({ length: columns }, (_, i) => (
+        <Skeleton key={`skeleton-col-${i}`} className={cn('h-4', i === 0 ? 'w-48' : 'w-24')} />
       ))}
     </div>
   );

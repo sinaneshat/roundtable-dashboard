@@ -5,7 +5,8 @@ import type { ListSidebarThreadsResponse } from '@/services/api';
 import { listSidebarThreadsService } from '@/services/api';
 import { cookieMiddleware } from '@/start';
 
-type ServerFnErrorResponse = { success: false; data: null };
+import type { ServerFnErrorResponse } from './schemas';
+
 type GetSidebarThreadsResult = ListSidebarThreadsResponse | ServerFnErrorResponse;
 
 export const getSidebarThreads = createServerFn({ method: 'GET' })

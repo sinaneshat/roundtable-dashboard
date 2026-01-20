@@ -21,13 +21,13 @@ import {
   useSubscriptionsQuery,
 } from '@/hooks';
 import { useBoolean } from '@/hooks/utils';
+import { clearCachedSession } from '@/lib/auth';
 import { deleteUser, signOut, useSession } from '@/lib/auth/client';
 import type { Session, User } from '@/lib/auth/types';
 import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
 import { showApiErrorToast } from '@/lib/toast';
 import dynamic from '@/lib/utils/dynamic';
-import { clearCachedSession } from '@/routes/__root';
 import type { Subscription } from '@/types/billing';
 
 const CancelSubscriptionDialog = dynamic<CancelSubscriptionDialogProps>(

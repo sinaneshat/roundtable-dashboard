@@ -225,11 +225,6 @@ export const MIME_TYPE_CATEGORIES = {
   code: CODE_MIME_TYPES,
 } as const;
 
-export const IMAGE_MIMES: readonly string[] = IMAGE_MIME_TYPES;
-export const DOCUMENT_MIMES: readonly string[] = DOCUMENT_MIME_TYPES;
-export const TEXT_MIMES: readonly string[] = TEXT_MIME_TYPES;
-export const CODE_MIMES: readonly string[] = CODE_MIME_TYPES;
-
 // ============================================================================
 // TEXT EXTRACTABLE MIME TYPES (RAG Content Extraction)
 // ============================================================================
@@ -598,13 +593,13 @@ export const FILE_TYPE_TO_ICON: Record<FilePreviewType, FileIconName> = {
  * Use this for file validation classification
  */
 export function getFileCategoryFromMime(mimeType: string): FileCategory {
-  if (IMAGE_MIMES.includes(mimeType))
+  if ((IMAGE_MIME_TYPES as readonly string[]).includes(mimeType))
     return FileCategories.IMAGE;
-  if (DOCUMENT_MIMES.includes(mimeType))
+  if ((DOCUMENT_MIME_TYPES as readonly string[]).includes(mimeType))
     return FileCategories.DOCUMENT;
-  if (TEXT_MIMES.includes(mimeType))
+  if ((TEXT_MIME_TYPES as readonly string[]).includes(mimeType))
     return FileCategories.TEXT;
-  if (CODE_MIMES.includes(mimeType))
+  if ((CODE_MIME_TYPES as readonly string[]).includes(mimeType))
     return FileCategories.CODE;
   return FileCategories.OTHER;
 }
@@ -614,15 +609,15 @@ export function getFileCategoryFromMime(mimeType: string): FileCategory {
  * Use this for UI preview rendering
  */
 export function getPreviewTypeFromMime(mimeType: string): FilePreviewType {
-  if (IMAGE_MIMES.includes(mimeType))
+  if ((IMAGE_MIME_TYPES as readonly string[]).includes(mimeType))
     return FilePreviewTypes.IMAGE;
   if (mimeType === 'application/pdf')
     return FilePreviewTypes.PDF;
-  if (DOCUMENT_MIMES.includes(mimeType))
+  if ((DOCUMENT_MIME_TYPES as readonly string[]).includes(mimeType))
     return FilePreviewTypes.DOCUMENT;
-  if (TEXT_MIMES.includes(mimeType))
+  if ((TEXT_MIME_TYPES as readonly string[]).includes(mimeType))
     return FilePreviewTypes.TEXT;
-  if (CODE_MIMES.includes(mimeType))
+  if ((CODE_MIME_TYPES as readonly string[]).includes(mimeType))
     return FilePreviewTypes.CODE;
   return FilePreviewTypes.UNKNOWN;
 }
@@ -677,7 +672,7 @@ export const FILE_TYPE_COLOR_CLASSES: Record<FileTypeColor, string> = {
 export function getFileTypeColor(mimeType: string): FileTypeColor {
   if (mimeType === DocumentMimeTypes.PDF)
     return FileTypeColors.RED;
-  if (IMAGE_MIMES.includes(mimeType))
+  if ((IMAGE_MIME_TYPES as readonly string[]).includes(mimeType))
     return FileTypeColors.PURPLE;
   if (mimeType.startsWith('text/javascript') || mimeType.startsWith('application/javascript'))
     return FileTypeColors.YELLOW;

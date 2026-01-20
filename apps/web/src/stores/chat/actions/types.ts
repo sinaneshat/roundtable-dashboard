@@ -25,6 +25,7 @@ const UsagePlanSchema = z.object({
   name: z.string(),
   monthlyCredits: z.number(),
   hasActiveSubscription: z.boolean().optional(),
+  freeRoundUsed: z.boolean().optional(),
   nextRefillAt: z.string().datetime().nullable(),
   pendingChange: z.object({
     pendingTier: z.string(),

@@ -55,11 +55,12 @@ export type {
   StoredModeratorData,
   StoredModeratorSummary,
 } from './store-schemas';
-export type { ParticipantCompletionStatus, ParticipantDebugInfo } from './utils/participant-completion-gate';
+export type { ParticipantCompletionStatus, ParticipantDebugInfo, RoundActualCompletionStatus } from './utils/participant-completion-gate';
 export {
   areAllParticipantsCompleteForRound,
   getModeratorMessageForRound,
   getParticipantCompletionStatus,
+  getRoundActualCompletionStatus,
   isMessageComplete,
   isRoundComplete,
   ParticipantCompletionStatusSchema,

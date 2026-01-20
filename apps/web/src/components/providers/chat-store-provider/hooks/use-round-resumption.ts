@@ -19,6 +19,7 @@ import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
 import { getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex as getParticipantIndexFromMetadata, getRoundNumber, isModeratorMessage } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatParticipant } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { shouldWaitForPreSearch } from '@/stores/chat';
@@ -144,8 +145,13 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
   const resumptionTriggeredRef = useRef<string | null>(null);
 
   // Clean up dangling nextParticipantToTrigger state
+  // ✅ STALE SELECTOR FIX: Read fresh state instead of using potentially stale selectors
+  // React batching can cause selectors to have outdated values when effects run.
   useEffect(() => {
-    if (nextParticipantToTrigger === null || waitingToStart || chatIsStreaming) {
+    const freshState = store.getState();
+    if (freshState.nextParticipantToTrigger === null
+      || freshState.waitingToStartStreaming
+      || freshState.isStreaming) {
       return;
     }
 
@@ -155,6 +161,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         && !latestState.waitingToStartStreaming
         && !latestState.isStreaming
       ) {
+        rlog.resume('round-resum', 'cleanup: clearing dangling nextParticipantToTrigger');
         latestState.setNextParticipantToTrigger(null);
       }
     }, 500);
@@ -184,25 +191,54 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
       retryTimeoutRef.current = null;
     }
 
-    if (nextParticipantToTrigger === null || !waitingToStart) {
+    // ✅ STALE SELECTOR FIX: Read fresh state from store instead of relying on selectors
+    // React selectors can have stale values due to batching. The retry mechanism reads
+    // fresh state, but a React re-render can cause the effect to run again with stale
+    // selector values, causing early exit even when store has correct values.
+    // Solution: Read fresh state at effect start and use those values.
+    const freshState = store.getState();
+    const freshWaitingToStart = freshState.waitingToStartStreaming;
+    const freshNextParticipantToTrigger = freshState.nextParticipantToTrigger;
+    const freshIsStreaming = freshState.isStreaming;
+    const freshParticipants = freshState.participants;
+    const freshMessages = freshState.messages;
+    const freshPreSearches = freshState.preSearches;
+    const freshThread = freshState.thread;
+    const freshScreenMode = freshState.screenMode;
+    const freshConfigChangeRoundNumber = freshState.configChangeRoundNumber;
+    const freshIsWaitingForChangelog = freshState.isWaitingForChangelog;
+    const freshIsPatchInProgress = freshState.isPatchInProgress;
+    const freshEnableWebSearch = freshState.enableWebSearch;
+
+    // ✅ DEBUG: Log effect entry for resumption debugging (using fresh state)
+    const nextIdx = freshNextParticipantToTrigger !== null ? getParticipantIndex(freshNextParticipantToTrigger) : -1;
+    rlog.resume('round-resum', `effect wait=${freshWaitingToStart ? 1 : 0} nextP=${nextIdx} ready=${chatIsReady ? 1 : 0} streaming=${freshIsStreaming ? 1 : 0} parts=${freshParticipants.length} msgs=${freshMessages.length}`);
+
+    if (freshNextParticipantToTrigger === null || !freshWaitingToStart) {
+      rlog.resume('round-resum', 'EXIT: nextP=null or not waiting');
       resumptionTriggeredRef.current = null; // Reset tracking when conditions not met
       return;
     }
 
-    // Skip conditions (minimal logging)
-    if (chatIsStreaming) {
+    // Skip conditions (minimal logging) - use fresh state values
+    if (freshIsStreaming) {
+      rlog.resume('round-resum', 'EXIT: already streaming - clearing wait flags');
       store.getState().setWaitingToStartStreaming(false);
       store.getState().setNextParticipantToTrigger(null);
       resumptionTriggeredRef.current = null;
       return;
     }
-    if (storeParticipants.length === 0 || storeMessages.length === 0)
+    if (freshParticipants.length === 0 || freshMessages.length === 0) {
+      rlog.resume('round-resum', `EXIT: no data parts=${freshParticipants.length} msgs=${freshMessages.length}`);
       return;
+    }
 
     // useStreamingTrigger handles OVERVIEW screen via startRound()
     // This hook is for THREAD screen resumption via continueFromParticipant()
-    if (storeScreenMode === ScreenModes.OVERVIEW)
+    if (freshScreenMode === ScreenModes.OVERVIEW) {
+      rlog.resume('round-resum', 'EXIT: OVERVIEW screen - handled by streaming-trigger');
       return;
+    }
 
     // ✅ CHANGELOG: Wait for changelog to be fetched before streaming when config changed
     // This allows the changelog accordion to show config changes before participants speak
@@ -210,26 +246,31 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     // isWaitingForChangelog is set AFTER PATCH (triggers changelog fetch)
     // Both must be null/false for streaming to proceed
     // ✅ PATCH BLOCKING: Also wait for PATCH to complete to ensure participants have real ULIDs
-    if (configChangeRoundNumber !== null || isWaitingForChangelog || isPatchInProgress)
+    if (freshConfigChangeRoundNumber !== null || freshIsWaitingForChangelog || freshIsPatchInProgress) {
+      rlog.resume('round-resum', `EXIT: config/changelog configR=${freshConfigChangeRoundNumber} changelog=${freshIsWaitingForChangelog ? 1 : 0} patch=${freshIsPatchInProgress ? 1 : 0}`);
       return;
+    }
 
     // Generate unique key for this resumption attempt
-    const threadId = storeThread?.id || 'unknown';
-    const resumptionKey = `${threadId}-r${getCurrentRoundNumber(storeMessages)}-p${getParticipantIndex(nextParticipantToTrigger)}`;
+    const threadId = freshThread?.id || 'unknown';
+    const resumptionKey = `${threadId}-r${getCurrentRoundNumber(freshMessages)}-p${getParticipantIndex(freshNextParticipantToTrigger)}`;
 
     // Prevent duplicate triggers for the same resumption
     if (resumptionTriggeredRef.current === resumptionKey) {
+      rlog.resume('round-resum', `EXIT: already triggered key=${resumptionKey.slice(-20)}`);
       return;
     }
 
     // Wait for AI SDK to be ready
     if (!chatIsReady) {
+      rlog.resume('round-resum', `AI SDK not ready - scheduling retry (wait=${freshWaitingToStart ? 1 : 0} nextP=${nextIdx})`);
       // ✅ RACE CONDITION FIX: Schedule retry with direct execution
       // AI SDK hydration is async - isReady will become true after setMessages completes
       // Schedule a retry that directly checks and executes continuation
       // NOTE: Setting same value in Zustand doesn't notify subscribers, so we can't
       // rely on re-triggering the effect - we must execute directly in the retry
       retryTimeoutRef.current = setTimeout(() => {
+        rlog.resume('round-resum', 'retry timeout fired - checking conditions');
         const latestState = store.getState();
         const latestParticipants = latestState.participants;
         const latestMessages = latestState.messages;
@@ -238,6 +279,8 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         const latestNextParticipant = latestState.nextParticipantToTrigger;
 
         // Verify conditions still hold
+        const nextP = latestNextParticipant !== null ? (typeof latestNextParticipant === 'number' ? latestNextParticipant : latestNextParticipant.index) : -1;
+        rlog.resume('round-resum', `retry conditions: wait=${latestState.waitingToStartStreaming ? 1 : 0} nextP=${nextP} streaming=${latestState.isStreaming ? 1 : 0} screen=${latestState.screenMode} modStream=${latestState.isModeratorStreaming ? 1 : 0}`);
         if (!latestState.waitingToStartStreaming
           || latestNextParticipant === null
           || latestState.isStreaming
@@ -248,11 +291,25 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
           || latestState.isWaitingForChangelog // ✅ CHANGELOG: Wait for changelog before streaming
           || latestState.isPatchInProgress // ✅ PATCH BLOCKING: Wait for PATCH to ensure real ULIDs
         ) {
+          rlog.resume('round-resum', 'retry conditions FAILED - aborting');
           return;
         }
 
         // Check if AI SDK is now ready
         if (!chat.isReady) {
+          // ✅ HYDRATION FIX: Call continueFromParticipant to trigger hydration FIRST
+          // The AI SDK has 0 messages but latestMessages has messages from the store.
+          // continueFromParticipant will hydrate the AI SDK, then return early.
+          // We then poll until hydration completes and isReady becomes true.
+          rlog.resume('round-resum', `initial: AI SDK not ready (msgs=${chat.messages?.length ?? 0}) - calling cfp to hydrate`);
+          const enabledForHydration = getEnabledParticipants(latestParticipants);
+          const nextIdx = typeof latestNextParticipant === 'number' ? latestNextParticipant : latestNextParticipant.index;
+          chat.continueFromParticipant(
+            { index: nextIdx, participantId: enabledForHydration[nextIdx]?.id ?? '' },
+            enabledForHydration,
+            latestMessages,
+          );
+
           // Still not ready - schedule recursive retry with direct execution
           // ✅ FIX: Don't rely on toggle pattern (fails with React 18 batching)
           // Instead, recursively poll until ready and execute directly
@@ -287,8 +344,23 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
               return; // Conditions no longer valid, stop polling
             }
 
-            // Check if AI SDK is now ready
+            // ✅ HYDRATION FIX: If AI SDK not ready, call continueFromParticipant anyway
+            // The hydration logic inside continueFromParticipant will:
+            // 1. See AI SDK has 0 messages but pollMessages has messages
+            // 2. Hydrate the AI SDK with setMessages(pollMessages)
+            // 3. Return early (isTriggeringRef.current = false)
+            // 4. On next poll, isReady will be true and streaming can start
             if (!chat.isReady) {
+              rlog.resume('round-resum', `poll: AI SDK not ready (msgs=${chat.messages?.length ?? 0}) - calling cfp to hydrate`);
+              // Call continueFromParticipant to trigger hydration
+              const pollEnabledForHydration = getEnabledParticipants(pollParticipants);
+              const pollNextIdx = typeof pollNextParticipant === 'number' ? pollNextParticipant : pollNextParticipant.index;
+              chat.continueFromParticipant(
+                { index: pollNextIdx, participantId: pollEnabledForHydration[pollNextIdx]?.id ?? '' },
+                pollEnabledForHydration,
+                pollMessages,
+              );
+              // Schedule next poll to check if hydration completed
               retryTimeoutRef.current = setTimeout(pollUntilReady, 100);
               return;
             }
@@ -384,29 +456,30 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     }
 
     // Wait for pre-search to complete
-    // ✅ BUG FIX: Use form state (storeEnableWebSearch) NOT thread.enableWebSearch
+    // ✅ BUG FIX: Use form state (freshEnableWebSearch) NOT thread.enableWebSearch
     // When user enables web search mid-conversation, form state is true but thread is false
-    const currentRound = getCurrentRoundNumber(storeMessages);
-    const webSearchEnabled = storeEnableWebSearch;
-    const preSearchForRound = storePreSearches.find(ps => ps.roundNumber === currentRound);
+    const currentRound = getCurrentRoundNumber(freshMessages);
+    const webSearchEnabled = freshEnableWebSearch;
+    const preSearchForRound = freshPreSearches.find(ps => ps.roundNumber === currentRound);
     if (shouldWaitForPreSearch(webSearchEnabled, preSearchForRound)) {
+      rlog.resume('round-resum', `EXIT: waiting pre-search r${currentRound}`);
       return;
     }
 
     // ✅ PARTICIPANT MISMATCH FIX: Filter to enabled participants BEFORE index calculations
     // validateAndCorrectNextParticipant and continueFromParticipant both expect indices
     // into the ENABLED participants array, not the full participants array.
-    // Previously we passed storeParticipants (full array) which caused index mismatches
+    // Previously we passed freshParticipants (full array) which caused index mismatches
     // when some participants were disabled (e.g., index 2 in full array != index 2 in enabled array)
-    const enabledParticipants = getEnabledParticipants(storeParticipants);
+    const enabledParticipants = getEnabledParticipants(freshParticipants);
 
     // ✅ CACHE MISMATCH FIX: Validate server's nextParticipantToTrigger against actual messages
     // Server prefill uses live DB, but SSR messages may be cached. If mismatch detected,
     // correct the next participant to ensure proper streaming order (p0 → p1 → p2).
-    const serverNextIndex = getParticipantIndex(nextParticipantToTrigger);
+    const serverNextIndex = getParticipantIndex(freshNextParticipantToTrigger);
     const correctedNextIndex = validateAndCorrectNextParticipant(
       serverNextIndex,
-      storeMessages,
+      freshMessages,
       enabledParticipants,
       currentRound,
     );
@@ -414,24 +487,27 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     // Build corrected participant trigger value
     // ✅ FIX: Use enabledParticipants to get the correct participant ID at the corrected index
     const correctedParticipant = correctedNextIndex === serverNextIndex
-      ? nextParticipantToTrigger
-      : typeof nextParticipantToTrigger === 'number'
+      ? freshNextParticipantToTrigger
+      : typeof freshNextParticipantToTrigger === 'number'
         ? correctedNextIndex
         : { index: correctedNextIndex, participantId: enabledParticipants[correctedNextIndex]?.id ?? '' };
 
     // Update resumption key to reflect corrected participant
-    const correctedResumptionKey = `${storeThread?.id || 'unknown'}-r${currentRound}-p${correctedNextIndex}`;
+    const correctedResumptionKey = `${freshThread?.id || 'unknown'}-r${currentRound}-p${correctedNextIndex}`;
 
     // ✅ Mark as triggered before calling to prevent race condition double-triggers
     resumptionTriggeredRef.current = correctedResumptionKey;
 
+    // ✅ DEBUG: Log continuation trigger
+    rlog.resume('round-resum', `CONTINUE r${currentRound} p${correctedNextIndex} serverP=${serverNextIndex} parts=${enabledParticipants.length} msgs=${freshMessages.length}`);
+
     // Resume from specific participant
     // ✅ TYPE-SAFE: Pass full object with participantId for validation against config changes
-    // ✅ CRITICAL FIX: Pass storeMessages to ensure correct userMessageId for backend lookup
+    // ✅ CRITICAL FIX: Pass freshMessages to ensure correct userMessageId for backend lookup
     // Without this, continueFromParticipant uses stale AI SDK messages instead of
     // the freshly-persisted messages from PATCH, causing "User message not found" errors
     // ✅ FIX: Pass enabledParticipants (not full array) to match the index calculations
-    chat.continueFromParticipant(correctedParticipant, enabledParticipants, storeMessages);
+    chat.continueFromParticipant(correctedParticipant, enabledParticipants, freshMessages);
 
     // Cleanup
     return () => {
@@ -443,9 +519,15 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
   }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, configChangeRoundNumber, isWaitingForChangelog, isPatchInProgress, storeEnableWebSearch, chat, store]);
 
   // Safety timeout for thread screen resumption
+  // ✅ STALE SELECTOR FIX: Read fresh state instead of using potentially stale selectors
   useEffect(() => {
-    const currentScreenMode = store.getState().screenMode;
-    if (currentScreenMode !== 'thread' || !waitingToStart || nextParticipantToTrigger === null) {
+    const freshState = store.getState();
+    const currentScreenMode = freshState.screenMode;
+    const freshWaiting = freshState.waitingToStartStreaming;
+    const freshNextP = freshState.nextParticipantToTrigger;
+    const freshStreaming = freshState.isStreaming;
+
+    if (currentScreenMode !== 'thread' || !freshWaiting || freshNextP === null) {
       if (resumptionTimeoutRef.current) {
         clearTimeout(resumptionTimeoutRef.current);
         resumptionTimeoutRef.current = null;
@@ -453,7 +535,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
       return;
     }
 
-    if (chatIsStreaming) {
+    if (freshStreaming) {
       if (resumptionTimeoutRef.current) {
         clearTimeout(resumptionTimeoutRef.current);
         resumptionTimeoutRef.current = null;
@@ -465,6 +547,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     resumptionTimeoutRef.current = setTimeout(() => {
       const latestState = store.getState();
       if (latestState.waitingToStartStreaming && !latestState.isStreaming) {
+        rlog.resume('round-resum', 'safety timeout: clearing stuck resumption state');
         latestState.setWaitingToStartStreaming(false);
         latestState.setNextParticipantToTrigger(null);
       }

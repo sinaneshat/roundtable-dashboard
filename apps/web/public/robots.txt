@@ -1,7 +1,11 @@
-# Roundtable - Preview Environment
-# https://web-preview.roundtable.now
+# Roundtable - robots.txt
+# https://roundtable.now
 
 User-agent: *
-Disallow: /
+Allow: /
+Disallow: /api/
+Disallow: /auth/callback
+Disallow: /chat/billing/
 
-# Preview/Development environment - no indexing
+# Sitemap
+Sitemap: https://roundtable.now/sitemap.xml

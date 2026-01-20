@@ -4,7 +4,8 @@ import type { GetUsageStatsResponse } from '@/services/api';
 import { getUserUsageStatsService } from '@/services/api';
 import { cookieMiddleware } from '@/start';
 
-type ServerFnErrorResponse = { success: false; data: null };
+import type { ServerFnErrorResponse } from './schemas';
+
 type GetUsageStatsResult = GetUsageStatsResponse | ServerFnErrorResponse;
 
 export const getUsageStats = createServerFn({ method: 'GET' })

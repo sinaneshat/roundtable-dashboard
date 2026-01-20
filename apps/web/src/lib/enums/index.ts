@@ -7,8 +7,6 @@
  * @example
  * ```ts
  * import {
- *   ChatAlertVariants,
- *   type ChatAlertVariant,
  *   StorageTypes,
  *   type StorageType,
  * } from '@/lib/enums';
@@ -25,17 +23,6 @@ export {
   DEFAULT_CREDIT_ESTIMATION_STATUS,
   isCreditEstimationStatus,
 } from './billing-ui';
-
-// Chat UI enums
-export {
-  CHAT_ALERT_VARIANT_LABELS,
-  CHAT_ALERT_VARIANTS,
-  type ChatAlertVariant,
-  ChatAlertVariants,
-  ChatAlertVariantSchema,
-  DEFAULT_CHAT_ALERT_VARIANT,
-  isChatAlertVariant,
-} from './chat-ui';
 
 // Storage enums
 export {

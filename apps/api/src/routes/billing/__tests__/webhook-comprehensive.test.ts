@@ -52,12 +52,19 @@ function createMockSubscription(
   priceId: string = 'price_pro_monthly',
   overrides: Partial<MockStripeSubscription> = {},
 ): MockStripeSubscription {
-  return createMockStripeSubscription({
+  const base = createMockStripeSubscription({
     customer: customerId,
     status,
-    priceId,
     ...overrides,
   });
+
+  // Override the price ID in the nested structure
+  const firstItem = base.items.data[0];
+  if (firstItem) {
+    firstItem.price.id = priceId;
+  }
+
+  return base;
 }
 
 // Mock invoice data factory (uses lib/testing mock)
@@ -289,7 +296,7 @@ describe('stripe Webhook Event Processing', () => {
     });
 
     it('syncs subscription data to database', () => {
-      const subscription = createMockSubscription('cus_test_sync', StripeSubscriptionStatuses.ACTIVE);
+      const subscription = createMockSubscription('cus_test_sync', StripeSubscriptionStatuses.ACTIVE, 'price_pro_monthly');
 
       const dbRecord = {
         id: subscription.id,

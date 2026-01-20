@@ -65,13 +65,13 @@ export function PublicPricingScreen() {
       return prices !== undefined
         && prices !== null
         && prices.some(
-          price => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
+          (price: Price) => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
         );
     })
     .map(product => ({
       ...product,
       prices: product.prices.filter(
-        price => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
+        (price: Price) => price.interval === UIBillingIntervals.MONTH && price.unitAmount != null,
       ),
     }))
     .sort((a, b) => (a.prices?.[0]?.unitAmount ?? 0) - (b.prices?.[0]?.unitAmount ?? 0));

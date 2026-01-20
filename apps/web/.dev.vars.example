@@ -27,3 +27,8 @@ AUTH_GOOGLE_SECRET=your-google-oauth-client-secret
 # Create dedicated IAM user with only SES:SendEmail permission
 AWS_SES_ACCESS_KEY_ID=your-aws-access-key-id
 AWS_SES_SECRET_ACCESS_KEY=your-aws-secret-access-key
+
+# SES Region and Email Configuration
+AWS_SES_REGION=eu-north-1
+FROM_EMAIL=noreply@roundtable.now
+SES_REPLY_TO_EMAIL=support@roundtable.now

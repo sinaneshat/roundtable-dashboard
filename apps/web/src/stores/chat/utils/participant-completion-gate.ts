@@ -280,6 +280,121 @@ export function areAllParticipantsCompleteForRound(
   return status.allComplete;
 }
 
+/**
+ * Completion status for a round based on ACTUAL messages (not current config)
+ *
+ * Used when participant configuration may have changed since the round started.
+ * Determines expected participants from the messages themselves rather than
+ * the current participant configuration.
+ */
+export type RoundActualCompletionStatus = {
+  /** Whether all participants in the round have completed */
+  allComplete: boolean;
+  /** Expected participant count (derived from max participantIndex + 1) */
+  expectedCount: number;
+  /** Number of complete participant messages */
+  completedCount: number;
+  /** Participant indices that have complete messages */
+  completedIndices: number[];
+  /** Participant indices that are missing or incomplete */
+  incompleteIndices: number[];
+};
+
+/**
+ * Get completion status based on ACTUAL round messages
+ *
+ * This function determines completion by examining the messages that exist
+ * in the round, NOT by checking the current participant configuration.
+ * This is critical for handling cases where participant config changed
+ * after/during a round.
+ *
+ * Expected participant count is determined by: max(participantIndex) + 1
+ * from all participant messages in the round.
+ *
+ * A round is participant-complete when all indices from 0 to max have
+ * complete messages (finishReason or text content).
+ *
+ * @param messages - Array of UI messages
+ * @param roundNumber - Round number to check
+ * @returns Completion status based on actual round content
+ */
+export function getRoundActualCompletionStatus(
+  messages: UIMessage[],
+  roundNumber: number,
+): RoundActualCompletionStatus {
+  // Get participant messages for this round (exclude moderator)
+  const roundParticipantMessages = messages.filter((m) => {
+    if (m.role !== MessageRoles.ASSISTANT)
+      return false;
+    if (getRoundNumber(m.metadata) !== roundNumber)
+      return false;
+    // Exclude moderator messages
+    const modMeta = getModeratorMetadata(m.metadata);
+    if (modMeta)
+      return false;
+    return true;
+  });
+
+  if (roundParticipantMessages.length === 0) {
+    return {
+      allComplete: false,
+      expectedCount: 0,
+      completedCount: 0,
+      completedIndices: [],
+      incompleteIndices: [],
+    };
+  }
+
+  // Determine expected count from max participantIndex
+  let maxIndex = -1;
+  const messagesByIndex = new Map<number, UIMessage>();
+
+  for (const msg of roundParticipantMessages) {
+    const metadata = getAssistantMetadata(msg.metadata);
+    const pIndex = metadata?.participantIndex;
+    if (typeof pIndex === 'number' && pIndex >= 0) {
+      maxIndex = Math.max(maxIndex, pIndex);
+      // Keep only the first message per index (in case of duplicates)
+      if (!messagesByIndex.has(pIndex)) {
+        messagesByIndex.set(pIndex, msg);
+      }
+    }
+  }
+
+  // No valid participant indices found
+  if (maxIndex < 0) {
+    return {
+      allComplete: false,
+      expectedCount: 0,
+      completedCount: 0,
+      completedIndices: [],
+      incompleteIndices: [],
+    };
+  }
+
+  const expectedCount = maxIndex + 1;
+  const completedIndices: number[] = [];
+  const incompleteIndices: number[] = [];
+
+  // Check each expected index
+  for (let i = 0; i < expectedCount; i++) {
+    const msg = messagesByIndex.get(i);
+    if (msg && isMessageComplete(msg)) {
+      completedIndices.push(i);
+    } else {
+      incompleteIndices.push(i);
+    }
+  }
+
+  return {
+    allComplete: incompleteIndices.length === 0 && completedIndices.length === expectedCount,
+    expectedCount,
+    completedCount: completedIndices.length,
+    completedIndices,
+    incompleteIndices,
+  };
+}
+
 // ============================================================================
 // Moderator Message Utilities
 // ============================================================================

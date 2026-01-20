@@ -494,6 +494,34 @@ export type GetAttachments = () => PendingAttachment[];
 export type HasAttachments = () => boolean;
 
 // ============================================================================
+// SIDEBAR ANIMATION ACTIONS (AI title typewriter effect)
+// ============================================================================
+
+/**
+ * Start the title animation for a thread
+ * Called when AI-generated title is ready - triggers delete→type animation
+ */
+export type StartTitleAnimation = (threadId: string, oldTitle: string, newTitle: string) => void;
+
+/**
+ * Update the currently displayed title during animation
+ * Called by animation controller during delete/type phases
+ */
+export type UpdateDisplayedTitle = (title: string) => void;
+
+/**
+ * Set the current animation phase
+ * State machine: idle → deleting → typing → complete
+ */
+export type SetAnimationPhase = (phase: 'idle' | 'deleting' | 'typing' | 'complete') => void;
+
+/**
+ * Complete the title animation
+ * Resets all animation state to idle
+ */
+export type CompleteTitleAnimation = () => void;
+
+// ============================================================================
 // OPERATIONS ACTIONS (Composite multi-slice operations)
 // ============================================================================
 

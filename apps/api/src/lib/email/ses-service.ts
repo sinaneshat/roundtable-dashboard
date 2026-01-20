@@ -1,8 +1,8 @@
-// IMPORTANT: Import render directly from @react-email/render, NOT from @react-email/components
-// The barrel export pulls in shiki (9.8MB) and prettier (256KB) which bloats the bundle
-import { render } from '@react-email/render';
+// Use renderToString from react-dom/server for Cloudflare Workers compatibility
+// @react-email/render uses renderToReadableStream which isn't available in Workers runtime
 import { AwsClient } from 'aws4fetch';
 import { env as workersEnv } from 'cloudflare:workers';
+import { renderToString } from 'react-dom/server';
 
 import { BRAND } from '@/constants';
 import { MagicLink } from '@/emails/templates';
@@ -152,13 +152,14 @@ class EmailService {
   }
 
   async sendMagicLink(to: string, magicLink: string, expirationMinutes = 15) {
-    // Render React Email template to HTML
-    // Note: Using @react-email/render directly (not barrel export from @react-email/components)
-    // to avoid importing shiki (9.8MB) and prettier (256KB) - see import comment at top
-    const html = await render(MagicLink({
+    // Render React Email template to HTML using renderToString (sync)
+    // Cloudflare Workers doesn't support renderToReadableStream used by @react-email/render
+    const markup = renderToString(MagicLink({
       loginUrl: magicLink,
       expirationTime: `${expirationMinutes} minutes`,
     }));
+    // Add DOCTYPE for proper email rendering
+    const html = `<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">${markup}`;
 
     const text = `Sign in to ${BRAND.displayName} using this link: ${magicLink}. This link expires in ${expirationMinutes} minutes.`;
 

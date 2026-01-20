@@ -10,6 +10,7 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { extractFileContextForSearch, getCurrentRoundNumber, getRoundNumber, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import { executePreSearchStreamService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { AnimationIndices, getEffectiveWebSearchEnabled, readPreSearchStreamData } from '@/stores/chat';
@@ -31,65 +32,85 @@ export function useStreamingTrigger({
 }: UseStreamingTriggerParams) {
   const navigate = useNavigate();
 
+  // ✅ STALE SELECTOR FIX: These selectors are kept for effect dependency tracking,
+  // but the effect reads fresh state from store.getState() to avoid stale values.
   const {
     waitingToStart,
-    storeParticipants,
-    storeMessages,
-    storePreSearches,
-    storeThread,
-    storeScreenMode,
-    storePendingAnimations,
     chatIsStreaming,
-    formEnableWebSearch,
-    isWaitingForChangelog,
-    configChangeRoundNumber,
-    isPatchInProgress,
   } = useStore(store, useShallow(s => ({
     waitingToStart: s.waitingToStartStreaming,
-    storeParticipants: s.participants,
-    storeMessages: s.messages,
-    storePreSearches: s.preSearches,
-    storeThread: s.thread,
-    storeScreenMode: s.screenMode,
-    storePendingAnimations: s.pendingAnimations,
     chatIsStreaming: s.isStreaming,
-    formEnableWebSearch: s.enableWebSearch,
-    isWaitingForChangelog: s.isWaitingForChangelog,
-    configChangeRoundNumber: s.configChangeRoundNumber,
-    isPatchInProgress: s.isPatchInProgress,
   })));
 
   const startRoundCalledForRoundRef = useRef<number | null>(null);
   const waitingStartTimeRef = useRef<number | null>(null);
 
   useEffect(() => {
-    if (!waitingToStart) {
+    // ✅ STALE SELECTOR FIX: Read fresh state from store instead of relying on selectors
+    // React selectors can have stale values due to batching. Reading fresh state ensures
+    // we always work with the latest values, preventing "EXIT: not waiting" when store
+    // actually has waitingToStartStreaming=true.
+    const freshState = store.getState();
+    const freshWaitingToStart = freshState.waitingToStartStreaming;
+    const freshScreenMode = freshState.screenMode;
+    const freshCreatedThreadId = freshState.createdThreadId;
+    const freshParticipants = freshState.participants;
+    const freshMessages = freshState.messages;
+    const freshThread = freshState.thread;
+    const freshPreSearches = freshState.preSearches;
+    const freshConfigChangeRoundNumber = freshState.configChangeRoundNumber;
+    const freshIsWaitingForChangelog = freshState.isWaitingForChangelog;
+    const freshIsPatchInProgress = freshState.isPatchInProgress;
+    const freshEnableWebSearch = freshState.enableWebSearch;
+
+    rlog.trigger('streaming-trigger', `effect-run wait=${freshWaitingToStart ? 1 : 0} screen=${freshScreenMode} created=${freshCreatedThreadId?.slice(-8) ?? '-'} parts=${freshParticipants.length} msgs=${freshMessages.length}`);
+
+    if (!freshWaitingToStart) {
       startRoundCalledForRoundRef.current = null;
+      rlog.trigger('streaming-trigger', 'EXIT: not waiting');
       return;
     }
 
-    const currentScreenMode = storeScreenMode;
+    const currentScreenMode = freshScreenMode;
 
-    if (currentScreenMode !== ScreenModes.OVERVIEW) {
+    // ✅ FIX: Allow streaming in THREAD mode for:
+    // 1. Newly created threads (createdThreadId is set during handleCreateThread)
+    // 2. Existing threads with ongoing rounds (freshThread exists)
+    // The guard only blocks when:
+    // - Not in OVERVIEW mode (initial message submission)
+    // - AND not a newly created thread
+    // - AND no active thread (shouldn't trigger on random navigation)
+    const isNewlyCreatedThread = Boolean(freshCreatedThreadId) && freshWaitingToStart;
+    const hasActiveThread = Boolean(freshThread?.id);
+    const canStreamInThreadMode = isNewlyCreatedThread || hasActiveThread;
+    rlog.trigger('streaming-trigger', `isNewlyCreatedThread=${isNewlyCreatedThread ? 1 : 0} hasThread=${hasActiveThread ? 1 : 0} mode=${currentScreenMode}`);
+    if (currentScreenMode !== ScreenModes.OVERVIEW && !canStreamInThreadMode) {
+      rlog.trigger('streaming-trigger', 'EXIT: wrong screen mode and no active thread');
       return;
     }
 
-    if (!chat.startRound || storeParticipants.length === 0 || storeMessages.length === 0) {
+    if (!chat.startRound || freshParticipants.length === 0 || freshMessages.length === 0) {
+      rlog.trigger('streaming-trigger', `EXIT: missing data startRound=${!!chat.startRound} parts=${freshParticipants.length} msgs=${freshMessages.length}`);
       return;
     }
 
-    const currentRound = getCurrentRoundNumber(storeMessages);
-    const isInitialThreadCreation = currentRound === 0 && currentScreenMode === ScreenModes.OVERVIEW && waitingToStart && configChangeRoundNumber === null;
-    if ((configChangeRoundNumber !== null || isWaitingForChangelog || isPatchInProgress) && !isInitialThreadCreation) {
+    const currentRound = getCurrentRoundNumber(freshMessages);
+    // ✅ FIX: Include newly created threads navigating to thread page
+    const isInitialThreadCreation = currentRound === 0 && (currentScreenMode === ScreenModes.OVERVIEW || isNewlyCreatedThread) && freshWaitingToStart && freshConfigChangeRoundNumber === null;
+    rlog.trigger('streaming-trigger', `r${currentRound} isInitial=${isInitialThreadCreation ? 1 : 0} changelog=${freshIsWaitingForChangelog ? 1 : 0} patch=${freshIsPatchInProgress ? 1 : 0} configChange=${freshConfigChangeRoundNumber}`);
+    if ((freshConfigChangeRoundNumber !== null || freshIsWaitingForChangelog || freshIsPatchInProgress) && !isInitialThreadCreation) {
+      rlog.trigger('streaming-trigger', 'EXIT: config changes in progress');
       return;
     }
 
-    const webSearchEnabled = formEnableWebSearch;
+    const webSearchEnabled = freshEnableWebSearch;
+    rlog.trigger('streaming-trigger', `webSearch=${webSearchEnabled ? 1 : 0} preSearches=${freshPreSearches.length}`);
 
     if (webSearchEnabled) {
-      const currentRoundPreSearch = storePreSearches.find(ps => ps.roundNumber === currentRound);
+      const currentRoundPreSearch = freshPreSearches.find(ps => ps.roundNumber === currentRound);
 
       if (!currentRoundPreSearch) {
+        rlog.trigger('streaming-trigger', `EXIT: webSearch enabled but no preSearch for r${currentRound}`);
         return;
       }
 
@@ -102,7 +123,7 @@ export function useStreamingTrigger({
         }
 
         const pendingMsg = currentState.pendingMessage;
-        const userMessageForRound = storeMessages.find((msg) => {
+        const userMessageForRound = freshMessages.find((msg) => {
           if (msg.role !== MessageRoles.USER)
             return false;
           const msgRound = getRoundNumber(msg.metadata);
@@ -114,7 +135,7 @@ export function useStreamingTrigger({
           return;
         }
 
-        const threadIdForSearch = storeThread?.id || effectiveThreadId;
+        const threadIdForSearch = freshThread?.id || effectiveThreadId;
 
         queueMicrotask(() => {
           const resumeSearch = async () => {
@@ -175,7 +196,7 @@ export function useStreamingTrigger({
         }
 
         const pendingMsg = currentState.pendingMessage;
-        const userMessageForRound = storeMessages.find((msg) => {
+        const userMessageForRound = freshMessages.find((msg) => {
           if (msg.role !== MessageRoles.USER)
             return false;
           const msgRound = getRoundNumber(msg.metadata);
@@ -187,7 +208,7 @@ export function useStreamingTrigger({
           return;
         }
 
-        const threadIdForSearch = storeThread?.id || effectiveThreadId;
+        const threadIdForSearch = freshThread?.id || effectiveThreadId;
 
         queueMicrotask(() => {
           const executeSearch = async () => {
@@ -237,35 +258,51 @@ export function useStreamingTrigger({
         return;
       }
 
-      const isPreSearchAnimating = storePendingAnimations.has(AnimationIndices.PRE_SEARCH);
+      const freshPendingAnimations = freshState.pendingAnimations;
+      const isPreSearchAnimating = freshPendingAnimations.has(AnimationIndices.PRE_SEARCH);
       if (isPreSearchAnimating) {
         return;
       }
     }
 
+    rlog.trigger('streaming-trigger', `pre-startRound checks: calledFor=${startRoundCalledForRoundRef.current} triggering=${chat.isTriggeringRef.current ? 1 : 0} streaming=${chat.isStreamingRef.current ? 1 : 0} isReady=${chat.isReady ? 1 : 0}`);
+
     if (startRoundCalledForRoundRef.current === currentRound) {
+      rlog.trigger('streaming-trigger', `EXIT: already called for r${currentRound}`);
       return;
     }
 
     if (chat.isTriggeringRef.current || chat.isStreamingRef.current) {
+      rlog.trigger('streaming-trigger', 'EXIT: already triggering or streaming');
       return;
     }
 
-    if (!chat.isReady) {
+    // ✅ FIX: For newly created threads, bypass isReady check
+    // When thread is created, the provider's initialMessages is empty (captured at mount).
+    // The AI SDK hasn't been hydrated, so isReady is false (msgs=0).
+    // But we have store messages to pass to startRound, which will hydrate the AI SDK.
+    // So we skip the isReady check when: (1) isReady is false, (2) we have store messages, (3) this is a new thread
+    const canBypassReadyCheck = !chat.isReady && freshMessages.length > 0 && isNewlyCreatedThread;
+    if (!chat.isReady && !canBypassReadyCheck) {
+      rlog.trigger('streaming-trigger', `EXIT: chat not ready - msgs.length=${chat.messages?.length ?? 0}`);
       return;
     }
     startRoundCalledForRoundRef.current = currentRound;
 
+    rlog.trigger('streaming-trigger', `CALLING startRound r${currentRound} parts=${freshParticipants.length} msgs=${freshMessages.length} bypassReady=${canBypassReadyCheck ? 1 : 0}`);
     queueMicrotask(() => {
-      chat.startRound(storeParticipants, storeMessages);
+      chat.startRound(freshParticipants, freshMessages);
     });
-  // eslint-disable-next-line react-hooks/exhaustive-deps -- individual chat properties listed, not whole object
-  }, [waitingToStart, chat.startRound, chat.isReady, chat.isTriggeringRef, chat.isStreamingRef, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, storePendingAnimations, store, effectiveThreadId, formEnableWebSearch, configChangeRoundNumber, isWaitingForChangelog, isPatchInProgress, queryClientRef]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps -- uses fresh state from store.getState(), selectors just for triggering
+  }, [waitingToStart, chat.startRound, chat.isReady, chat.isTriggeringRef, chat.isStreamingRef, store, effectiveThreadId, queryClientRef]);
 
+  // ✅ STALE SELECTOR FIX: Read fresh state to avoid clearing based on stale selectors
   useEffect(() => {
-    if (waitingToStart && chatIsStreaming) {
-      store.getState().setWaitingToStartStreaming(false);
-      store.getState().setHasSentPendingMessage(true);
+    const freshState = store.getState();
+    if (freshState.waitingToStartStreaming && freshState.isStreaming) {
+      rlog.trigger('streaming-trigger', 'clearing wait - streaming started');
+      freshState.setWaitingToStartStreaming(false);
+      freshState.setHasSentPendingMessage(true);
     }
   }, [waitingToStart, chatIsStreaming, store]);
 

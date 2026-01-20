@@ -234,7 +234,7 @@ describe('completeStreaming Deduplication', () => {
       });
 
       // Count subscription notifications
-      const notifications: unknown[] = [];
+      const notifications: ReturnType<typeof store.getState>[] = [];
       const unsubscribe = store.subscribe((state) => {
         notifications.push(state);
       });

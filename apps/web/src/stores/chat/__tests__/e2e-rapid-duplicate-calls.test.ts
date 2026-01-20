@@ -29,13 +29,13 @@ type CallRecord = {
   type: TestCallType;
   timestamp: number;
   tick: number;
-  args?: unknown;
+  args?: Record<string, string | number | boolean>;
 };
 
 type CallTracker = {
   calls: CallRecord[];
   currentTick: number;
-  recordCall: (type: TestCallType, args?: unknown) => void;
+  recordCall: (type: TestCallType, args?: Record<string, string | number | boolean>) => void;
   advanceTick: () => void;
   getCallsInTick: (tick: number) => CallRecord[];
   getDuplicatesInTick: (tick: number) => Map<TestCallType, CallRecord[]>;
@@ -53,7 +53,7 @@ function createCallTracker(): CallTracker {
   return {
     calls,
     currentTick,
-    recordCall: (type: TestCallType, args?: unknown) => {
+    recordCall: (type: TestCallType, args?: Record<string, string | number | boolean>) => {
       calls.push({
         type,
         timestamp: Date.now(),

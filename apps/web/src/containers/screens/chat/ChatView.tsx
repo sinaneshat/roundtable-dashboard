@@ -517,21 +517,24 @@ export function ChatView({
 
   // ✅ SCROLL FIX: Auto-scroll to absolute bottom on initial thread load
   // Uses useLayoutEffect to scroll BEFORE browser paint - no flicker
+  // Skip scroll for newly created threads (createdThreadId set) - user is already at top
   const hasScrolledToBottomRef = useRef(false);
   useLayoutEffect(() => {
     // Only scroll on thread mode with ready data, and only once
+    // Skip when createdThreadId is set - means thread was just created from overview
     if (
       mode === ScreenModes.THREAD
       && isStoreReady
       && effectiveMessages.length > 0
       && !hasScrolledToBottomRef.current
+      && !createdThreadId
     ) {
       hasScrolledToBottomRef.current = true;
       // useLayoutEffect runs synchronously after DOM mutations but before paint
       // This ensures scroll happens before user sees the page
       scrollToBottom('instant');
     }
-  }, [mode, isStoreReady, effectiveMessages.length, scrollToBottom]);
+  }, [mode, isStoreReady, effectiveMessages.length, scrollToBottom, createdThreadId]);
 
   const isResumptionActive = preSearchResumption?.status === MessageStatuses.STREAMING
     || preSearchResumption?.status === MessageStatuses.PENDING

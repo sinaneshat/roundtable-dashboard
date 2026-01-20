@@ -163,7 +163,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
           queryKey: queryKeys.threads.all,
           predicate: isListOrSidebarQuery,
         },
-        (old: unknown) => {
+        (old) => {
           const parsedQuery = validateInfiniteQueryCache(old);
           if (!parsedQuery)
             return old;

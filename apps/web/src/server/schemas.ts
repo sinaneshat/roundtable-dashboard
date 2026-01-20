@@ -21,3 +21,14 @@ export const threadIdSchema = z.string().uuid();
  * Validates non-empty string with reasonable max length.
  */
 export const idSchema = z.string().min(1).max(255);
+
+/**
+ * Schema for server function error response.
+ * Used when service calls fail.
+ */
+export const serverFnErrorResponseSchema = z.object({
+  success: z.literal(false),
+  data: z.null(),
+});
+
+export type ServerFnErrorResponse = z.infer<typeof serverFnErrorResponseSchema>;

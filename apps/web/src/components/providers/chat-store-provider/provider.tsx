@@ -26,6 +26,8 @@ import {
   useStreamActivityTracker,
   useStreamingTrigger,
   useStuckStreamDetection,
+  useTitleAnimationController,
+  useTitlePolling,
 } from './hooks';
 import type { ChatStoreProviderProps } from './types';
 
@@ -391,6 +393,10 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     effectiveThreadId,
     queryClientRef,
   });
+
+  // ✅ TITLE ANIMATION: Poll for AI-generated title and animate typewriter effect
+  useTitlePolling({ store, queryClientRef });
+  useTitleAnimationController({ store });
 
   const { triggerModerator } = useModeratorTrigger({ store });
 

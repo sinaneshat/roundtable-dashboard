@@ -48,6 +48,7 @@ import {
   PRESEARCH_DEFAULTS,
   REGENERATION_STATE_RESET,
   SCREEN_DEFAULTS,
+  SIDEBAR_ANIMATION_DEFAULTS,
   STREAM_RESUMPTION_DEFAULTS,
   STREAM_RESUMPTION_STATE_RESET,
   STREAMING_STATE_RESET,
@@ -69,9 +70,11 @@ import type {
   OperationsActions,
   PreSearchSlice,
   ScreenSlice,
+  SidebarAnimationSlice,
   StreamResumptionPrefillUpdate,
   StreamResumptionSlice,
   ThreadSlice,
+  TitleAnimationPhase,
   TrackingSlice,
   UISlice,
 } from './store-schemas';
@@ -820,7 +823,10 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     }, false, 'streamResumption/setCurrentResumptionPhase'),
 
   prefillStreamResumptionState: (threadId, serverState) => {
+    // ✅ DEBUG: Log current store state BEFORE prefill
+    const prePrefillState = get();
     rlog.phase('prefill', `t=${threadId.slice(-8)} phase=${serverState.currentPhase} r${serverState.roundNumber} done=${serverState.roundComplete ? 1 : 0} nextP=${serverState.participants?.nextParticipantToTrigger ?? '-'}`);
+    rlog.phase('prefill-pre', `modStream=${prePrefillState.isModeratorStreaming ? 1 : 0} wait=${prePrefillState.waitingToStartStreaming ? 1 : 0} nextP=${prePrefillState.nextParticipantToTrigger !== null ? 1 : 0}`);
 
     // ✅ FIX: For complete/idle phases, still set prefilled state to block incomplete-round-resumption
     // Previously we skipped entirely, leaving streamResumptionPrefilled=false and currentResumptionPhase=null.
@@ -828,12 +834,16 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     // allowing incomplete-round-resumption to run and re-trigger participants for completed rounds.
     // Now we set the phase to COMPLETE/IDLE so the guard works: `if (phase === COMPLETE) return`.
     if (serverState.roundComplete || serverState.currentPhase === RoundPhases.COMPLETE || serverState.currentPhase === RoundPhases.IDLE) {
-      rlog.phase('prefill-block', 'round complete/idle - blocking resumption');
+      rlog.phase('prefill-block', 'round complete/idle - blocking resumption, modStream=0');
       set({
         streamResumptionPrefilled: true,
         prefilledForThreadId: threadId,
         currentResumptionPhase: serverState.currentPhase === RoundPhases.IDLE ? RoundPhases.IDLE : RoundPhases.COMPLETE,
         resumptionRoundNumber: serverState.roundNumber,
+        // ✅ FIX: Explicitly clear streaming flags for complete/idle phases
+        // Zustand persist may restore stale flags from previous session
+        isModeratorStreaming: false,
+        waitingToStartStreaming: false,
       }, false, 'streamResumption/prefillStreamResumptionState_complete');
       return;
     }
@@ -858,6 +868,10 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
           };
         }
         stateUpdate.waitingToStartStreaming = true;
+        // ✅ FIX: Explicitly clear moderator flag for non-moderator phases
+        // Zustand persist may restore stale isModeratorStreaming=true from previous session
+        stateUpdate.isModeratorStreaming = false;
+        rlog.phase('prefill-case', `PRE_SEARCH: wait=1 modStream=0`);
         break;
 
       case RoundPhases.PARTICIPANTS: {
@@ -882,6 +896,10 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
         // Set waitingToStartStreaming regardless of whether nextParticipantToTrigger is set
         // (prefill happens before initializeThread, so participants array may be empty)
         stateUpdate.waitingToStartStreaming = true;
+        // ✅ FIX: Explicitly clear moderator flag for non-moderator phases
+        // Zustand persist may restore stale isModeratorStreaming=true from previous session
+        stateUpdate.isModeratorStreaming = false;
+        rlog.phase('prefill-case', `PARTICIPANTS: wait=1 modStream=0 nextP=${serverNextIndex ?? '-'}`);
         break;
       }
 
@@ -895,10 +913,14 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
         }
         stateUpdate.waitingToStartStreaming = true;
         stateUpdate.isModeratorStreaming = true;
+        rlog.phase('prefill-case', `MODERATOR: wait=1 modStream=1`);
         break;
     }
 
     set(stateUpdate, false, 'streamResumption/prefillStreamResumptionState');
+    // ✅ DEBUG: Log final state after prefill
+    const postPrefillState = get();
+    rlog.phase('prefill-post', `modStream=${postPrefillState.isModeratorStreaming ? 1 : 0} wait=${postPrefillState.waitingToStartStreaming ? 1 : 0} nextP=${postPrefillState.nextParticipantToTrigger !== null ? (typeof postPrefillState.nextParticipantToTrigger === 'number' ? postPrefillState.nextParticipantToTrigger : postPrefillState.nextParticipantToTrigger.index) : '-'}`);
   },
 });
 
@@ -1021,6 +1043,30 @@ const createAttachmentsSlice: SliceCreator<AttachmentsSlice> = (set, get) => ({
   hasAttachments: () => get().pendingAttachments.length > 0,
 });
 
+const createSidebarAnimationSlice: SliceCreator<SidebarAnimationSlice> = set => ({
+  ...SIDEBAR_ANIMATION_DEFAULTS,
+
+  startTitleAnimation: (threadId: string, oldTitle: string, newTitle: string) =>
+    set({
+      animatingThreadId: threadId,
+      animationPhase: 'deleting',
+      oldTitle,
+      newTitle,
+      displayedTitle: oldTitle,
+    }, false, 'sidebarAnimation/startTitleAnimation'),
+
+  updateDisplayedTitle: (title: string) =>
+    set({ displayedTitle: title }, false, 'sidebarAnimation/updateDisplayedTitle'),
+
+  setAnimationPhase: (phase: TitleAnimationPhase) =>
+    set({ animationPhase: phase }, false, 'sidebarAnimation/setAnimationPhase'),
+
+  completeTitleAnimation: () =>
+    set({
+      ...SIDEBAR_ANIMATION_DEFAULTS,
+    }, false, 'sidebarAnimation/completeTitleAnimation'),
+});
+
 const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
   resetThreadState: () =>
     set(THREAD_RESET_STATE, false, 'operations/resetThreadState'),
@@ -1069,7 +1115,11 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     const isResumingStream = currentState.streamResumptionPrefilled;
     const resumptionRound = currentState.resumptionRoundNumber;
 
+    const resumptionPhaseForLog = currentState.currentResumptionPhase;
+    const waitingForLog = currentState.waitingToStartStreaming;
+    const nextPForLog = currentState.nextParticipantToTrigger;
     rlog.init('thread', `resum=${isResumingStream ? 1 : 0} same=${isSameThread ? 1 : 0} store=${storeMessages.length} db=${newMessages.length} resumR=${resumptionRound ?? '-'}`);
+    rlog.init('thread-state', `wait=${waitingForLog ? 1 : 0} phase=${resumptionPhaseForLog ?? '-'} nextP=${nextPForLog !== null ? (typeof nextPForLog === 'number' ? nextPForLog : nextPForLog.index) : '-'}`);
 
     let messagesToSet: UIMessage[];
 
@@ -1275,6 +1325,10 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       showInitialUI: false,
       hasInitiallyLoaded: true,
     }, false, 'operations/initializeThread');
+
+    // ✅ DEBUG: Log final state after initialization
+    const finalState = get();
+    rlog.init('thread-final', `wait=${finalState.waitingToStartStreaming ? 1 : 0} prefilled=${finalState.streamResumptionPrefilled ? 1 : 0} phase=${finalState.currentResumptionPhase ?? '-'} nextP=${finalState.nextParticipantToTrigger !== null ? (typeof finalState.nextParticipantToTrigger === 'number' ? finalState.nextParticipantToTrigger : finalState.nextParticipantToTrigger.index) : '-'}`);
   },
 
   updateParticipants: (participants: ChatParticipant[]) => {
@@ -1475,6 +1529,7 @@ export function createChatStore() {
           ...createStreamResumptionSlice(...args),
           ...createAnimationSlice(...args),
           ...createAttachmentsSlice(...args),
+          ...createSidebarAnimationSlice(...args),
           ...createOperationsSlice(...args),
         }),
       ),

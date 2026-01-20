@@ -1,42 +1,57 @@
 /**
- * Auth Types - Single Source of Truth
+ * Auth Types - Zod-first pattern
  *
- * Following Better Auth official documentation patterns.
- * All authentication-related types are defined here to avoid duplication
- * across the codebase.
+ * Following type-inference-patterns.md:
+ * - All types inferred from Zod schemas (single source of truth)
+ * - No manual type definitions
+ * - Better Auth response validation at runtime
  *
- * Note: These types mirror the API's Better Auth types. Since auth is
- * handled by the API server, we define the types manually here to avoid
- * cross-package dependencies.
+ * Note: These schemas mirror Better Auth's response types for validation
+ * and type inference. They match the API's auth schema structure.
  */
 
-// Core Better Auth types - matches API's auth schema
-export type User = {
-  id: string;
-  email?: string;
-  name: string;
-  emailVerified: boolean;
-  image?: string | null;
-  createdAt: Date;
-  updatedAt: Date;
-};
-
-export type Session = {
-  id: string;
-  userId: string;
-  token: string;
-  expiresAt: Date;
-  createdAt: Date;
-  updatedAt: Date;
-  ipAddress?: string | null;
-  userAgent?: string | null;
-};
+import { z } from 'zod';
 
 /**
- * Full session data returned by Better Auth's getSession()
+ * User schema - matches Better Auth user response
+ * Validates user data from authentication endpoints
+ */
+export const userSchema = z.object({
+  id: z.string().min(1),
+  email: z.string().email().optional(),
+  name: z.string().min(1),
+  emailVerified: z.boolean(),
+  image: z.string().nullable().optional(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+});
+
+export type User = z.infer<typeof userSchema>;
+
+/**
+ * Session schema - matches Better Auth session response
+ * Validates session metadata from authentication endpoints
+ */
+export const sessionSchema = z.object({
+  id: z.string().min(1),
+  userId: z.string().min(1),
+  token: z.string().min(1),
+  expiresAt: z.coerce.date(),
+  createdAt: z.coerce.date(),
+  updatedAt: z.coerce.date(),
+  ipAddress: z.string().nullable().optional(),
+  userAgent: z.string().nullable().optional(),
+});
+
+export type Session = z.infer<typeof sessionSchema>;
+
+/**
+ * Full session data schema - matches Better Auth's getSession() response
  * Contains both session metadata and user information
  */
-export type SessionData = {
-  session: Session;
-  user: User;
-};
+export const sessionDataSchema = z.object({
+  session: sessionSchema,
+  user: userSchema,
+});
+
+export type SessionData = z.infer<typeof sessionDataSchema>;

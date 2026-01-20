@@ -597,5 +597,3 @@ export {
   AppError,
   ExternalServiceError,
 };
-
-export default createError;

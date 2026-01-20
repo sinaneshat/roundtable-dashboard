@@ -4,10 +4,8 @@
  * English-only application. Translation keys maintained for consistency.
  */
 
-export type { AbstractIntlMessages, Formats } from './provider';
-export {
-  getRequestConfig,
-  getTranslations,
-  I18nProvider,
-  useTranslations,
-} from './provider';
+export { getTranslations } from './get-translations';
+export { I18nProvider } from './provider';
+export type { AbstractIntlMessages, Formats } from './types';
+export { getRequestConfig } from './types';
+export { useTranslations } from './use-translations';

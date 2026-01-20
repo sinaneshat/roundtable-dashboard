@@ -17,6 +17,46 @@ import type { ChatParticipant, DbUserMessageMetadata } from '@/services/api';
 import { useSyncedRefs } from './use-synced-refs';
 
 /**
+ * ✅ FIX: Sanitize messages for AI SDK hydration
+ * Handles malformed messages that have streaming text parts after page refresh.
+ * These cause "Cannot read properties of undefined (reading 'text')" errors
+ * during AI SDK's resumeStream operation.
+ *
+ * The fix: Mark all streaming text parts as 'done' to prevent AI SDK from
+ * attempting to resume them (which fails with malformed message structures).
+ */
+function sanitizeMessagesForAiSdk(messages: UIMessage[]): UIMessage[] {
+  return messages.map((msg) => {
+    // Only process assistant messages (user messages don't have streaming state)
+    if (msg.role !== MessageRoles.ASSISTANT || !msg.parts || msg.parts.length === 0) {
+      return msg;
+    }
+
+    // Check if any text part has streaming state
+    const hasStreamingPart = msg.parts.some((p) => {
+      return p && typeof p === 'object' && 'state' in p && p.state === TextPartStates.STREAMING;
+    });
+
+    if (!hasStreamingPart) {
+      return msg;
+    }
+
+    // Mark all streaming parts as done to prevent resume errors
+    // Using structuredClone to safely create a mutable copy
+    const clonedMsg = structuredClone(msg);
+    if (clonedMsg.parts) {
+      for (const part of clonedMsg.parts) {
+        if (part && typeof part === 'object' && 'state' in part && part.state === TextPartStates.STREAMING) {
+          (part as { state: string }).state = 'done';
+        }
+      }
+    }
+
+    return clonedMsg;
+  });
+}
+
+/**
  * Zod schema for UseMultiParticipantChatOptions validation
  * Validates hook options at entry point to ensure type safety
  * Note: Callbacks are not validated to preserve their type signatures
@@ -1562,7 +1602,10 @@ export function useMultiParticipantChat(
       // Store messages come from Zustand+Immer which freezes all arrays (Object.freeze)
       // AI SDK needs mutable arrays to push streaming parts during response generation
       // Without this, streaming fails with "Cannot add property 0, object is not extensible"
-      const mutableMessages = structuredClone(initialMessages);
+      //
+      // ✅ FIX: Sanitize messages to handle malformed parts from interrupted streams
+      // Messages with multiple text parts (streaming + done) cause AI SDK resumeStream errors
+      const mutableMessages = structuredClone(sanitizeMessagesForAiSdk(initialMessages));
       setMessages(mutableMessages);
       hasHydratedRef.current = true;
     }
@@ -1663,6 +1706,21 @@ export function useMultiParticipantChat(
     // causing the backend to create duplicate participants (race condition)
     if (participantsOverride) {
       participantsRef.current = participantsOverride;
+    }
+
+    // ✅ FIX: Hydrate AI SDK from messagesOverride for newly created threads
+    // When ChatStoreProvider mounts before thread creation, initialMessages is empty.
+    // The hydration effect never runs because initialMessages.length === 0.
+    // When startRound is called with messagesOverride (the store's current messages),
+    // we need to hydrate the AI SDK immediately before proceeding.
+    // ✅ FIX: Sanitize messages to handle malformed parts from interrupted streams
+    if (messages.length === 0 && messagesOverride && messagesOverride.length > 0 && !hasHydratedRef.current) {
+      const mutableMessages = structuredClone(sanitizeMessagesForAiSdk(messagesOverride));
+      setMessages(mutableMessages);
+      hasHydratedRef.current = true;
+      // Reset triggering flag - we'll be called again after hydration takes effect
+      isTriggeringRef.current = false;
+      return;
     }
 
     // ✅ Guards: Wait for dependencies to be ready (effect will retry)
@@ -1851,9 +1909,13 @@ export function useMultiParticipantChat(
     // When passed from trigger, these messages are guaranteed to be persisted (from PATCH response)
     const freshMessages = messagesOverride || initialMessages;
 
+    // ✅ DEBUG: Log entry with all guard states
+    rlog.resume('cfp-entry', `P${fromIndex} status=${status} msgs=${messages.length} triggering=${isTriggeringRef.current ? 1 : 0} hydrated=${hasHydratedRef.current ? 1 : 0} streaming=${isExplicitlyStreaming ? 1 : 0}`);
+
     // ✅ CRITICAL FIX: ATOMIC check-and-set to prevent race conditions
     // Same pattern as startRound - must happen FIRST before any other logic
     if (isTriggeringRef.current) {
+      rlog.resume('cfp-guard', 'EXIT: already triggering');
       return;
     }
     isTriggeringRef.current = true;
@@ -1877,9 +1939,26 @@ export function useMultiParticipantChat(
       isStreamingRef.current = false;
     }
 
+    // ✅ HYDRATION FIX: When AI SDK has no messages but messagesOverride is provided,
+    // hydrate the AI SDK first. This handles resumption after page refresh where:
+    // - Store has messages (from SSR prefill)
+    // - AI SDK has 0 messages (initialMessages was empty at mount time)
+    // - Resumption needs messages to be in AI SDK before streaming can start
+    // Same pattern as startRound hydration (line ~1717)
+    if (messages.length === 0 && messagesOverride && messagesOverride.length > 0 && !hasHydratedRef.current) {
+      rlog.resume('cfp-hydrate', `hydrating AI SDK: override=${messagesOverride.length} msgs`);
+      const mutableMessages = structuredClone(sanitizeMessagesForAiSdk(messagesOverride));
+      setMessages(mutableMessages);
+      hasHydratedRef.current = true;
+      // Reset triggering flag - we'll be called again after hydration takes effect
+      isTriggeringRef.current = false;
+      return;
+    }
+
     // ✅ Guards: Wait for dependencies to be ready
     // ✅ FIX: Require AI SDK to be fully ready before sending
     if (messages.length === 0 || status !== AiSdkStatuses.READY) {
+      rlog.resume('cfp-guard', `EXIT: not ready msgs=${messages.length} status=${status}`);
       isTriggeringRef.current = false;
       return;
     }
@@ -1887,12 +1966,14 @@ export function useMultiParticipantChat(
     // ✅ FIX: Ensure threadId is valid before proceeding
     const effectiveThreadId = callbackRefs.threadId.current;
     if (!effectiveThreadId || effectiveThreadId.trim() === '') {
+      rlog.resume('cfp-guard', 'EXIT: no threadId');
       isTriggeringRef.current = false;
       return;
     }
 
     // ✅ FIX: Ensure AI SDK has been hydrated with initial messages
     if (!hasHydratedRef.current) {
+      rlog.resume('cfp-guard', 'EXIT: not hydrated');
       isTriggeringRef.current = false;
       return;
     }
@@ -1901,12 +1982,14 @@ export function useMultiParticipantChat(
     const enabled = getEnabledParticipants(uniqueParticipants);
 
     if (enabled.length === 0) {
+      rlog.resume('cfp-guard', 'EXIT: no participants');
       isTriggeringRef.current = false;
       return;
     }
 
     // Validate fromIndex is within bounds
     if (fromIndex < 0 || fromIndex >= enabled.length) {
+      rlog.resume('cfp-guard', `EXIT: index out of bounds idx=${fromIndex} len=${enabled.length}`);
       isTriggeringRef.current = false;
       return;
     }
@@ -1917,6 +2000,7 @@ export function useMultiParticipantChat(
     if (expectedParticipantId) {
       const actualParticipant = enabled[fromIndex];
       if (actualParticipant && actualParticipant.id !== expectedParticipantId) {
+        rlog.resume('cfp-guard', `EXIT: participant mismatch expected=${expectedParticipantId.slice(-8)} actual=${actualParticipant.id.slice(-8)}`);
         console.error(
           `[continueFromParticipant] Participant mismatch at index ${fromIndex}: `
           + `expected ${expectedParticipantId}, got ${actualParticipant.id}. `
@@ -1934,6 +2018,7 @@ export function useMultiParticipantChat(
     const lastUserMessage = [...messagesToSearch].reverse().find(m => m.role === MessageRoles.USER);
 
     if (!lastUserMessage) {
+      rlog.resume('cfp-guard', 'EXIT: no user message');
       isTriggeringRef.current = false;
       return;
     }
@@ -1942,6 +2027,7 @@ export function useMultiParticipantChat(
     const userText = textPart && 'text' in textPart ? textPart.text : '';
 
     if (!userText.trim()) {
+      rlog.resume('cfp-guard', 'EXIT: empty user text');
       isTriggeringRef.current = false;
       return;
     }

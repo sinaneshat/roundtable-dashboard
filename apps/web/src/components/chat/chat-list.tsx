@@ -5,6 +5,7 @@ import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useSt
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatRenameForm } from '@/components/chat/chat-rename-form';
 import { ChatThreadMenuItems } from '@/components/chat/chat-thread-menu-items';
+import { TypewriterTitle } from '@/components/chat/typewriter-title';
 import { Icons } from '@/components/icons';
 import {
   DropdownMenu,
@@ -95,7 +96,7 @@ function ChatItem({
                   className="truncate overflow-hidden text-ellipsis whitespace-nowrap"
                   style={{ maxWidth: '13rem' }}
                 >
-                  {chat.title}
+                  <TypewriterTitle threadId={chat.id} currentTitle={chat.title ?? ''} />
                 </div>
               </Link>
             </SidebarMenuButton>

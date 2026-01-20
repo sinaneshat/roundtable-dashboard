@@ -15,26 +15,10 @@ import { Icons } from '@/components/icons';
 import { StructuredData } from '@/components/seo';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import type { SessionData } from '@/lib/auth';
+import { getCachedSession, setCachedSession } from '@/lib/auth/session-cache';
 import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 import type { RouterContext } from '@/router';
 import { getSession } from '@/server/auth';
-
-// ============================================================================
-// SESSION CACHING - Single source of truth for auth state
-// ============================================================================
-
-/**
- * Cached session on client to avoid server roundtrips during navigation.
- * Session is validated once on initial page load; subsequent navigations reuse cache.
- * Cookie validity is still enforced by the browser/Better Auth.
- */
-let cachedClientSession: SessionData | null = null;
-
-/** Clear the cached session (call on sign out) */
-export function clearCachedSession() {
-  cachedClientSession = null;
-}
 
 /**
  * Root route with QueryClient context
@@ -50,8 +34,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
   // All child routes access session via context - no repeated getSession() calls
   beforeLoad: async () => {
     // Client-side: reuse cached session to avoid server function call
-    if (typeof window !== 'undefined' && cachedClientSession !== null) {
-      return { session: cachedClientSession };
+    if (typeof window !== 'undefined' && getCachedSession() !== null) {
+      return { session: getCachedSession() };
     }
 
     // Server-side or first client load: fetch session
@@ -59,7 +43,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 
     // Cache on client for subsequent navigations
     if (typeof window !== 'undefined') {
-      cachedClientSession = session;
+      setCachedSession(session);
     }
 
     return { session };

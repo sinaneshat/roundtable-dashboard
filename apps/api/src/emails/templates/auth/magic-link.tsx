@@ -170,5 +170,3 @@ MagicLink.PreviewProps = {
   loginUrl: 'https://example.com/magic-link?token=magic123',
   expirationTime: '15 minutes',
 } as MagicLinkProps;
-
-export default MagicLink;

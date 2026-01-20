@@ -10,3 +10,5 @@ export { useStateSync } from './use-state-sync';
 export { useStreamActivityTracker } from './use-stream-activity-tracker';
 export { useStreamingTrigger } from './use-streaming-trigger';
 export { useStuckStreamDetection } from './use-stuck-stream-detection';
+export { useTitleAnimationController } from './use-title-animation-controller';
+export { useTitlePolling } from './use-title-polling';

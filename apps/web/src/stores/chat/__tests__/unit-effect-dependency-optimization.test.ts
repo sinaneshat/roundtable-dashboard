@@ -61,6 +61,13 @@ vi.mock('@/lib/auth/client', () => ({
   useSession: () => ({ data: { user: { name: 'Test User', image: null } } }),
 }));
 
+// Mock TanStack Router
+vi.mock('@tanstack/react-router', () => ({
+  useRouter: () => ({
+    navigate: vi.fn(),
+  }),
+}));
+
 // Mock query hooks
 vi.mock('@/hooks/queries', () => ({
   useThreadSlugStatusQuery: vi.fn((_threadId: string | null, _enabled: boolean) => ({

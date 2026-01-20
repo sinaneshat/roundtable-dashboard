@@ -4,7 +4,8 @@ import { getSubscriptionsService } from '@/services/api';
 import type { ListSubscriptionsResponse } from '@/services/api/billing/subscriptions';
 import { cookieMiddleware } from '@/start';
 
-type ServerFnErrorResponse = { success: false; data: null };
+import type { ServerFnErrorResponse } from './schemas';
+
 type GetSubscriptionsResult = ListSubscriptionsResponse | ServerFnErrorResponse;
 
 export const getSubscriptions = createServerFn({ method: 'GET' })

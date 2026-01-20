@@ -15,7 +15,7 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
   const t = useTranslations();
 
   return (
-    <div className="relative grid h-svh lg:grid-cols-2 overflow-hidden">
+    <main className="relative grid h-svh lg:grid-cols-2 overflow-hidden">
       <div className="absolute inset-0 -z-10 pointer-events-none flex items-center justify-center overflow-hidden">
         <div className="block sm:hidden">
           <RadialGlow size={1200} offsetY={0} duration={18} animate />
@@ -56,6 +56,6 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
           <LiveChatDemoLazy />
         </Card>
       </div>
-    </div>
+    </main>
   );
 }

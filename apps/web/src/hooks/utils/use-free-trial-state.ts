@@ -4,6 +4,7 @@ import { useMemo } from 'react';
 
 import { useChatStore } from '@/components/providers/chat-store-provider/context';
 import { useSidebarThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
+import { validateUsageStatsCache } from '@/stores/chat/actions/types';
 
 export type FreeTrialStateReturn = {
   isFreeUser: boolean;
@@ -34,10 +35,8 @@ export function useFreeTrialState(): FreeTrialStateReturn {
   const messages = useChatStore(state => state.messages);
 
   const freeRoundUsedFromApi = useMemo(() => {
-    if (!statsData?.success || !statsData.data)
-      return false;
-    const data = statsData.data as { plan?: { freeRoundUsed?: boolean } };
-    return data.plan?.freeRoundUsed ?? false;
+    const validated = validateUsageStatsCache(statsData);
+    return validated?.plan.freeRoundUsed ?? false;
   }, [statsData]);
 
   const hasExistingThread = useMemo(() => {
@@ -51,10 +50,10 @@ export function useFreeTrialState(): FreeTrialStateReturn {
   const hasUsedTrial = freeRoundUsedFromApi || hasExistingThread || hasLocalMessages;
 
   const isFreeUser = useMemo(() => {
-    if (!statsData?.success || !statsData.data)
+    const validated = validateUsageStatsCache(statsData);
+    if (!validated)
       return false;
-    const data = statsData.data as { plan?: { type?: string } };
-    return data.plan?.type !== PlanTypes.PAID;
+    return validated.plan.type !== PlanTypes.PAID;
   }, [statsData]);
 
   const isWarningState = hasUsedTrial;

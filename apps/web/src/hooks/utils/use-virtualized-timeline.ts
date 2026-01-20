@@ -114,8 +114,17 @@ export function useVirtualizedTimeline({
     return () => resizeObserver.disconnect();
   }, [shouldEnable, listRef]);
 
+  // ✅ FIX: Custom onChange to avoid flushSync warning during render
+  // Default TanStack Virtual onChange uses flushSync which warns when called during render
+  // Using queueMicrotask defers the update and prevents the warning
+  const onChange = useCallback(() => {
+    queueMicrotask(() => {
+      forceUpdate(c => c + 1);
+    });
+  }, []);
+
   // Initialize window virtualizer - OFFICIAL PATTERN
-  // No onChange callback, no state caching - methods called directly in render
+  // Custom onChange avoids flushSync warning during render phase
   // scrollMarginRef.current is read directly; forceUpdate triggers re-render when it changes
   const virtualizer = useWindowVirtualizer({
     count: timelineItems.length,
@@ -125,6 +134,7 @@ export function useVirtualizedTimeline({
     paddingStart,
     paddingEnd,
     enabled: shouldEnable,
+    onChange,
   });
 
   // Scroll position adjustment during streaming

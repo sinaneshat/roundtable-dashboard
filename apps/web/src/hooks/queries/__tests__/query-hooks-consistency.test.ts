@@ -123,30 +123,27 @@ describe('useProductsQuery - uses shared queryOptions', () => {
 });
 
 describe('pricing.tsx route - uses shared queryOptions', () => {
-  it('should import productsQueryOptions and subscriptionsQueryOptions', () => {
-    const fileContent = readHookFile('routes/_protected/chat/pricing.tsx');
+  it('should import productsQueryOptions', () => {
+    const fileContent = readHookFile('routes/chat.pricing.tsx');
     expect(fileContent).toMatch(/import\s*\{[^}]*productsQueryOptions[^}]*\}\s*from\s*['"]@\/lib\/data\/query-options['"]/);
-    expect(fileContent).toMatch(/subscriptionsQueryOptions/);
   });
 
-  it('should NOT import getProducts or getSubscriptions directly', () => {
-    const fileContent = readHookFile('routes/_protected/chat/pricing.tsx');
+  it('should NOT import getProducts directly', () => {
+    const fileContent = readHookFile('routes/chat.pricing.tsx');
     // Should NOT have direct server function imports (now using queryOptions)
     expect(fileContent).not.toMatch(/import\s*\{[^}]*getProducts[^}]*\}\s*from\s*['"]@\/server\/products['"]/);
-    expect(fileContent).not.toMatch(/import\s*\{[^}]*getSubscriptions[^}]*\}\s*from\s*['"]@\/server\/subscriptions['"]/);
   });
 
   it('should NOT use inline staleTime in ensureQueryData (uses queryOptions instead)', () => {
-    const fileContent = readHookFile('routes/_protected/chat/pricing.tsx');
+    const fileContent = readHookFile('routes/chat.pricing.tsx');
     // The loader should use ensureQueryData(productsQueryOptions) not ensureQueryData({ staleTime: ... })
     // Check that staleTime is NOT specified inline in the loader
     expect(fileContent).not.toMatch(/ensureQueryData\(\s*\{[\s\S]*staleTime:/);
   });
 
   it('should use ensureQueryData with shared queryOptions', () => {
-    const fileContent = readHookFile('routes/_protected/chat/pricing.tsx');
+    const fileContent = readHookFile('routes/chat.pricing.tsx');
     expect(fileContent).toMatch(/ensureQueryData\(productsQueryOptions\)/);
-    expect(fileContent).toMatch(/ensureQueryData\(subscriptionsQueryOptions\)/);
   });
 });
 

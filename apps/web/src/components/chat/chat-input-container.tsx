@@ -13,6 +13,7 @@ import { MAX_PARTICIPANTS_LIMIT, MIN_PARTICIPANTS_REQUIRED } from '@/lib/config'
 import { useTranslations } from '@/lib/i18n';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
+import { validateUsageStatsCache } from '@/stores/chat/actions/types';
 
 type AlertConfig = {
   message: string;
@@ -87,16 +88,15 @@ export const ChatInputContainer = memo(({
 
   // Credit estimation for paid users
   const creditStatus = useMemo(() => {
-    if (!statsData?.success || !statsData.data || typeof statsData.data !== 'object') {
+    const validated = validateUsageStatsCache(statsData);
+    if (!validated) {
       return { status: 'ok' as const, estimated: 0, available: 0, remaining: 0 };
     }
 
-    const data = statsData.data as { credits?: { available: number }; plan?: { type: string } };
-    const credits = data.credits;
-    const plan = data.plan;
+    const { credits, plan } = validated;
 
-    if (!credits || plan?.type !== PlanTypes.PAID) {
-      return { status: 'ok' as const, estimated: 0, available: credits?.available ?? 0, remaining: 0 };
+    if (plan.type !== PlanTypes.PAID) {
+      return { status: 'ok' as const, estimated: 0, available: credits.available, remaining: 0 };
     }
 
     const count = participantCount || 1;
@@ -113,14 +113,10 @@ export const ChatInputContainer = memo(({
   }, [statsData, participantCount]);
 
   const isQuotaExceeded = useMemo(() => {
-    if (!statsData?.success || !statsData.data || typeof statsData.data !== 'object')
+    const validated = validateUsageStatsCache(statsData);
+    if (!validated || validated.plan.type !== PlanTypes.PAID)
       return false;
-    const data = statsData.data as { credits?: { available: number }; plan?: { type: string } };
-    const credits = data.credits;
-    const plan = data.plan;
-    if (!credits || plan?.type !== PlanTypes.PAID)
-      return false;
-    return credits.available < creditStatus.estimated || credits.available <= 0;
+    return validated.credits.available < creditStatus.estimated || validated.credits.available <= 0;
   }, [statsData, creditStatus.estimated]);
 
   // Determine which alert to show (priority order)

@@ -26,7 +26,7 @@ export default function TermsScreen() {
   const t = useTranslations();
 
   return (
-    <div className="container mx-auto px-4 py-8 max-w-4xl">
+    <main className="container mx-auto px-4 py-8 max-w-4xl">
       <div className="mb-8">
         <Button asChild variant="ghost" size="sm" startIcon={<Icons.arrowLeft />}>
           <Link to="/auth/sign-in">
@@ -57,6 +57,6 @@ export default function TermsScreen() {
           </section>
         </CardContent>
       </Card>
-    </div>
+    </main>
   );
 }

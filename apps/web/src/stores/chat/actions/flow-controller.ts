@@ -12,13 +12,11 @@ import { startTransition, useCallback, useEffect, useMemo, useRef, useState } fr
 import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider/context';
-import { useThreadSlugStatusQuery } from '@/hooks/queries';
 import { useSession } from '@/lib/auth/client';
-import { isListOrSidebarQuery, queryKeys } from '@/lib/data/query-keys';
+import { queryKeys } from '@/lib/data/query-keys';
 import { createEmptyListCache, createPrefetchMeta, getCreatedAt, toISOString, toISOStringOrNull } from '@/lib/utils';
 
 import { getModeratorMessageForRound } from '../utils/participant-completion-gate';
-import { validateInfiniteQueryCache, validateSlugStatusResponse } from './types';
 
 export type UseFlowControllerOptions = {
   enabled?: boolean;
@@ -145,15 +143,9 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   // ✅ FIX: Use refs to track immediately, preventing re-entry during startTransition
   // Refs update synchronously; state via startTransition is deferred → effects see stale state
   const [hasNavigated, setHasNavigated] = useState(false);
-  const [hasUpdatedThread, setHasUpdatedThread] = useState(false);
-  const [aiGeneratedSlug, setAiGeneratedSlug] = useState<string | null>(null);
-  const hasUpdatedThreadRef = useRef(false);
+  const [hasUpdatedUrl, setHasUpdatedUrl] = useState(false);
+  const hasUpdatedUrlRef = useRef(false);
   const hasNavigatedRef = useRef(false);
-
-  // ✅ POLLING FIX: Track which threadId we're actively polling for
-  // This ref ensures polling continues even if screenMode or other reactive state changes
-  // Without this, state changes could disable the query between fetch intervals, stopping polling
-  const activePollingThreadIdRef = useRef<string | null>(null);
 
   // Disable controller if screen mode changed (navigated away)
   const isActive = enabled && streamingState.screenMode === ScreenModes.OVERVIEW;
@@ -162,13 +154,11 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   useEffect(() => {
     if (streamingState.showInitialUI) {
       // ✅ FIX: Reset refs immediately (synchronous) before deferred state update
-      hasUpdatedThreadRef.current = false;
+      hasUpdatedUrlRef.current = false;
       hasNavigatedRef.current = false;
-      activePollingThreadIdRef.current = null;
       startTransition(() => {
         setHasNavigated(false);
-        setHasUpdatedThread(false);
-        setAiGeneratedSlug(null);
+        setHasUpdatedUrl(false);
       });
     }
   }, [streamingState.showInitialUI]);
@@ -194,158 +184,43 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
   }, [messages]);
 
   // ============================================================================
-  // SLUG POLLING & URL UPDATES
+  // URL UPDATE ON AI TITLE READY
   // ============================================================================
 
-  // ✅ POLLING FIX: Use ref-based tracking for continuous polling
-  // Problem: Reactive state changes (screenMode, etc.) could disable the query between fetches
-  // Solution: Once we START polling, continue until AI title is ready (tracked by ref)
-  //
-  // Activation: When all conditions are met, set the ref to start polling
-  // Continuation: Ref keeps query enabled even if reactive conditions change
-  // Termination: Ref is cleared when AI title is ready (hasUpdatedThread)
-
-  // Check initial conditions for starting polling
-  const shouldStartPolling = isActive
-    && !streamingState.showInitialUI
-    && !!threadState.createdThreadId
-    && !hasUpdatedThread;
-
-  // ✅ POLLING FIX: Track active polling via ref
-  // Once polling starts, don't let reactive state changes stop it
-  useEffect(() => {
-    // Start polling when conditions are met
-    if (shouldStartPolling && activePollingThreadIdRef.current !== threadState.createdThreadId) {
-      activePollingThreadIdRef.current = threadState.createdThreadId;
-    }
-    // Stop polling when AI title is ready
-    if (hasUpdatedThread) {
-      activePollingThreadIdRef.current = null;
-    }
-  }, [shouldStartPolling, threadState.createdThreadId, hasUpdatedThread]);
-
-  // ✅ POLLING FIX: Use ref for query enabled state
-  // This ensures the query stays enabled between fetches even if reactive state changes
-  // The actual threadId for the query comes from createdThreadId (which is stable)
-  const shouldPoll = !!activePollingThreadIdRef.current || shouldStartPolling;
-
-  const slugStatusQuery = useThreadSlugStatusQuery(
-    threadState.createdThreadId,
-    shouldPoll,
-  );
-
   /**
-   * STEP 1: URL replacement when AI slug ready
-   * Polls immediately after thread creation, replaces URL in background
+   * URL replacement when AI title is ready
+   * Triggered by thread.isAiGeneratedTitle change (set by use-title-polling hook)
+   * Only handles URL navigation - polling and cache updates handled by useTitlePolling
    */
   useEffect(() => {
     if (!isActive)
       return;
+    if (!threadState.currentThread?.isAiGeneratedTitle)
+      return;
+    if (!threadState.currentThread?.slug)
+      return;
+    if (hasUpdatedUrlRef.current)
+      return;
 
-    // Use Zod validation for type-safe data extraction
-    const slugData = validateSlugStatusResponse(slugStatusQuery.data);
+    // Set ref IMMEDIATELY to prevent re-entry
+    hasUpdatedUrlRef.current = true;
+    startTransition(() => {
+      setHasUpdatedUrl(true);
+    });
 
-    // Track timeout for cleanup
-    let invalidationTimeoutId: ReturnType<typeof setTimeout> | undefined;
-
-    // Process when AI title is ready and we haven't already handled it
-    if (slugData?.isAiGeneratedTitle && !hasUpdatedThreadRef.current) {
-      // Set ref IMMEDIATELY to prevent re-entry before startTransition propagates
-      hasUpdatedThreadRef.current = true;
-
-      startTransition(() => {
-        setAiGeneratedSlug(slugData.slug);
-        setHasUpdatedThread(true);
+    // ✅ TanStack Router: Navigate to update URL with AI-generated slug
+    const slug = threadState.currentThread.slug;
+    queueMicrotask(() => {
+      router.navigate({
+        to: '/chat/$slug',
+        params: { slug },
+        replace: true,
       });
-
-      // Update thread in store
-      const currentThread = threadState.currentThread;
-      if (currentThread) {
-        const updatedThread = {
-          ...currentThread,
-          isAiGeneratedTitle: true,
-          title: slugData.title,
-          slug: slugData.slug,
-        };
-        threadState.setThread(updatedThread);
-
-        // Optimistically update sidebar with AI-generated title
-        queryClient.setQueriesData(
-          {
-            queryKey: queryKeys.threads.all,
-            predicate: isListOrSidebarQuery,
-          },
-          (old: unknown) => {
-            const parsedQuery = validateInfiniteQueryCache(old);
-            if (!parsedQuery) {
-              return old;
-            }
-
-            return {
-              ...parsedQuery,
-              pages: parsedQuery.pages.map((page) => {
-                if (!page.success || !page.data?.items) {
-                  return page;
-                }
-
-                const updatedItems = page.data.items.map((thread) => {
-                  if (thread.id !== currentThread.id)
-                    return thread;
-
-                  return {
-                    ...thread,
-                    title: slugData.title,
-                    slug: slugData.slug,
-                    isAiGeneratedTitle: true,
-                  };
-                });
-
-                return {
-                  ...page,
-                  data: {
-                    ...page.data,
-                    items: updatedItems,
-                  },
-                };
-              }),
-            };
-          },
-        );
-      }
-
-      // Delayed invalidation to avoid race condition (server may not have updated title yet)
-      invalidationTimeoutId = setTimeout(() => {
-        queryClient.invalidateQueries({
-          queryKey: queryKeys.threads.all,
-        });
-      }, 3000);
-
-      // ✅ TanStack Router: Navigate properly to update URL
-      // Cache is populated, so route loader will find fresh data and skip fetch
-      queueMicrotask(() => {
-        router.navigate({
-          to: '/chat/$slug',
-          params: { slug: slugData.slug },
-          replace: true,
-        });
-      });
-    }
-
-    // Cleanup timeout on unmount or dependency change
-    return () => {
-      if (invalidationTimeoutId) {
-        clearTimeout(invalidationTimeoutId);
-      }
-    };
-    // Deps intentionally exclude threadState.currentThread to read current value at effect time
-    // without re-running when thread updates. This is the "read without subscribing" pattern.
-    // Re-running on every thread update would cause unnecessary URL replacements.
+    });
   }, [
     isActive,
-    slugStatusQuery.data,
-    threadState,
-    queryClient,
-    hasUpdatedThread,
+    threadState.currentThread?.isAiGeneratedTitle,
+    threadState.currentThread?.slug,
     router,
   ]);
 
@@ -357,7 +232,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
    * STEP 2: Navigate to thread detail page when first moderator completes
    * After URL replaced, do full navigation to ChatThreadScreen
    */
-  const hasAiSlug = Boolean(aiGeneratedSlug || (threadState.currentThread?.isAiGeneratedTitle && threadState.currentThread?.slug));
+  const hasAiSlug = Boolean(threadState.currentThread?.isAiGeneratedTitle && threadState.currentThread?.slug);
 
   useEffect(() => {
     if (!isActive)
@@ -370,9 +245,9 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
 
     // ✅ FIX: Only navigate if we're in an ACTIVE chat creation flow
     // Don't navigate if user intentionally returned to /chat (e.g., clicked logo/new chat)
-    // Check that we have a URL update pending (hasUpdatedThread) which indicates
+    // Check that we have a URL update completed (hasUpdatedUrl) which indicates
     // we're in the middle of creating a new thread, not just viewing overview
-    if (!hasUpdatedThread) {
+    if (!hasUpdatedUrl) {
       return;
     }
 
@@ -408,7 +283,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     streamingState.showInitialUI,
     hasNavigated,
     hasAiSlug,
-    hasUpdatedThread,
+    hasUpdatedUrl,
     threadState.createdThreadId,
     threadState.currentThread?.slug,
     prepopulateQueryCache,

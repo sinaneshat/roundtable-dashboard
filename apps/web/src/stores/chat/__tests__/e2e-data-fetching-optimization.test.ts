@@ -27,8 +27,10 @@ import { createChatStore } from '../store';
 // Mock Utilities - Track Query Behavior
 // ============================================================================
 
+type QueryKey = ReadonlyArray<string | number | Record<string, unknown>>;
+
 type QueryFetchRecord = {
-  queryKey: unknown[];
+  queryKey: QueryKey;
   timestamp: number;
   cacheHit: boolean;
   staleTime?: number;
@@ -38,7 +40,7 @@ type QueryBehaviorTracker = {
   fetches: QueryFetchRecord[];
   cacheHits: QueryFetchRecord[];
   cacheMisses: QueryFetchRecord[];
-  recordFetch: (queryKey: unknown[], cacheHit: boolean, staleTime?: number) => void;
+  recordFetch: (queryKey: QueryKey, cacheHit: boolean, staleTime?: number) => void;
   getFetchCount: (keyMatcher: string) => number;
   getCacheHitCount: (keyMatcher: string) => number;
   getCacheMissCount: (keyMatcher: string) => number;
@@ -54,7 +56,7 @@ function createQueryBehaviorTracker(): QueryBehaviorTracker {
     cacheHits: fetches.filter(f => f.cacheHit),
     cacheMisses: fetches.filter(f => !f.cacheHit),
 
-    recordFetch(queryKey: unknown[], cacheHit: boolean, staleTime?: number) {
+    recordFetch(queryKey: QueryKey, cacheHit: boolean, staleTime?: number) {
       fetches.push({ queryKey, timestamp: Date.now(), cacheHit, staleTime });
     },
 

@@ -157,19 +157,18 @@ describe('threadSlugStatusQuery polling configuration', () => {
 
 describe('flowController title polling integration', () => {
   describe('trigger conditions', () => {
-    it('should only poll on OVERVIEW screen mode', async () => {
+    it('should only be active on OVERVIEW screen mode', async () => {
       const { readFileSync } = await import('node:fs');
       const { resolve } = await import('node:path');
 
       const controllerPath = resolve(__dirname, '../../../stores/chat/actions/flow-controller.ts');
       const sourceCode = readFileSync(controllerPath, 'utf-8');
 
-      // Verify shouldPoll condition requires OVERVIEW screen mode
+      // Verify isActive condition requires OVERVIEW screen mode
       expect(sourceCode).toContain('ScreenModes.OVERVIEW');
 
-      // Verify polling is controlled for first round (round 0)
-      // The controller uses shouldPoll boolean which is set based on screen mode and round
-      expect(sourceCode).toContain('shouldPoll');
+      // Verify controller is controlled based on screen mode
+      expect(sourceCode).toContain('isActive');
     });
 
     it('should stop polling when AI title is received', async () => {
@@ -183,26 +182,26 @@ describe('flowController title polling integration', () => {
       expect(sourceCode).toContain('isAiGeneratedTitle');
 
       // Verify it updates cache when title is ready
-      expect(sourceCode).toContain('setQueriesData');
+      expect(sourceCode).toContain('setQueryData');
     });
   });
 
   describe('continuous polling fix', () => {
-    it('should use ref-based tracking to prevent polling interruption', async () => {
+    it('should use ref-based tracking to prevent re-entry', async () => {
       const { readFileSync } = await import('node:fs');
       const { resolve } = await import('node:path');
 
       const controllerPath = resolve(__dirname, '../../../stores/chat/actions/flow-controller.ts');
       const sourceCode = readFileSync(controllerPath, 'utf-8');
 
-      // Verify activePollingThreadIdRef exists for tracking active polling
-      expect(sourceCode).toContain('activePollingThreadIdRef');
+      // Verify ref-based tracking exists for preventing re-entry
+      expect(sourceCode).toContain('hasUpdatedUrlRef');
 
-      // Verify ref is used to control polling continuation
-      expect(sourceCode).toMatch(/activePollingThreadIdRef\.current/);
+      // Verify ref is used to control URL update
+      expect(sourceCode).toMatch(/hasUpdatedUrlRef\.current/);
     });
 
-    it('should reset polling ref when showInitialUI is true', async () => {
+    it('should reset refs when showInitialUI is true', async () => {
       const { readFileSync } = await import('node:fs');
       const { resolve } = await import('node:path');
 
@@ -210,7 +209,7 @@ describe('flowController title polling integration', () => {
       const sourceCode = readFileSync(controllerPath, 'utf-8');
 
       // Find the effect that resets refs when showInitialUI is true
-      const resetMatch = sourceCode.match(/if\s*\(streamingState\.showInitialUI\)\s*\{[\s\S]*?activePollingThreadIdRef\.current\s*=\s*null/);
+      const resetMatch = sourceCode.match(/if\s*\(streamingState\.showInitialUI\)\s*\{[\s\S]*?hasUpdatedUrlRef\.current\s*=\s*false/);
       expect(resetMatch).not.toBeNull();
     });
 

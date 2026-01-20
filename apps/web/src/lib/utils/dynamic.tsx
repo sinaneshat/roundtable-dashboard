@@ -8,7 +8,7 @@
 'use client';
 
 import type { ComponentType, ReactNode } from 'react';
-import { lazy, Suspense, useEffect, useState } from 'react';
+import { lazy, Suspense, useSyncExternalStore } from 'react';
 
 type DynamicOptions = {
   loading?: () => ReactNode;
@@ -44,13 +44,18 @@ export default function dynamic<P extends object>(
   // Use type assertion in lazy() to handle union types from .then() transformations
   const LazyComponent = lazy(() => importFn() as Promise<DefaultExportModule<P>>);
 
+  // Client-side state subscription for useSyncExternalStore
+  const subscribe = () => {
+    // No-op: we only need to track mount state, not listen for changes
+    return () => {};
+  };
+
+  const getClientSnapshot = () => true;
+  const getServerSnapshot = () => false;
+
   const DynamicComponent = (props: P) => {
     const fallback = options.loading?.() ?? null;
-    const [isClient, setIsClient] = useState(false);
-
-    useEffect(() => {
-      setIsClient(true);
-    }, []);
+    const isClient = useSyncExternalStore(subscribe, getClientSnapshot, getServerSnapshot);
 
     // When ssr: false, show fallback during SSR and until client hydrates
     if (options.ssr === false && !isClient) {

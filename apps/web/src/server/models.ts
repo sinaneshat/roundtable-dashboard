@@ -4,7 +4,8 @@ import type { ListModelsResponse } from '@/services/api';
 import { listModelsService } from '@/services/api';
 import { cookieMiddleware } from '@/start';
 
-type ServerFnErrorResponse = { success: false; data: null };
+import type { ServerFnErrorResponse } from './schemas';
+
 type GetModelsResult = ListModelsResponse | ServerFnErrorResponse;
 
 export const getModels = createServerFn({ method: 'GET' })

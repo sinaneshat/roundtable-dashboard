@@ -509,5 +509,3 @@ export {
   mapStatusCode,
   STOKER_TO_HONO_STATUS_MAP,
 };
-
-export default HTTPExceptionFactory;

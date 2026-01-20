@@ -294,12 +294,18 @@ describe('participant Completion Gate - Map Optimization', () => {
 // ============================================================================
 
 describe('flow State Machine - Single Pass Optimization', () => {
+  type MessageMetadata = {
+    roundNumber?: number;
+    isModerator?: boolean;
+    finishReason?: FinishReason;
+  };
+
   /**
    * Helper to safely get round number from metadata
    */
-  function getMetadataRoundNumber(metadata: unknown): number | undefined {
+  function getMetadataRoundNumber(metadata: MessageMetadata | undefined | null): number | undefined {
     if (metadata && typeof metadata === 'object' && 'roundNumber' in metadata) {
-      return (metadata as { roundNumber?: number }).roundNumber;
+      return metadata.roundNumber;
     }
     return undefined;
   }
@@ -307,9 +313,9 @@ describe('flow State Machine - Single Pass Optimization', () => {
   /**
    * Helper to check if metadata indicates moderator
    */
-  function isMetadataModerator(metadata: unknown): boolean {
+  function isMetadataModerator(metadata: MessageMetadata | undefined | null): boolean {
     if (metadata && typeof metadata === 'object' && 'isModerator' in metadata) {
-      return (metadata as { isModerator?: boolean }).isModerator === true;
+      return metadata.isModerator === true;
     }
     return false;
   }
@@ -317,9 +323,9 @@ describe('flow State Machine - Single Pass Optimization', () => {
   /**
    * Helper to get finish reason from metadata
    */
-  function getMetadataFinishReason(metadata: unknown): FinishReason | undefined {
+  function getMetadataFinishReason(metadata: MessageMetadata | undefined | null): FinishReason | undefined {
     if (metadata && typeof metadata === 'object' && 'finishReason' in metadata) {
-      return (metadata as { finishReason?: FinishReason }).finishReason;
+      return metadata.finishReason;
     }
     return undefined;
   }
@@ -441,12 +447,16 @@ describe('flow State Machine - Single Pass Optimization', () => {
 // ============================================================================
 
 describe('round Utils - Single Pass Grouping', () => {
+  type RoundMetadata = {
+    roundNumber?: number;
+  };
+
   /**
    * Helper to safely get round number from metadata
    */
-  function getMetadataRoundNumber(metadata: unknown): number | undefined {
+  function getMetadataRoundNumber(metadata: RoundMetadata | undefined | null): number | undefined {
     if (metadata && typeof metadata === 'object' && 'roundNumber' in metadata) {
-      return (metadata as { roundNumber?: number }).roundNumber;
+      return metadata.roundNumber;
     }
     return undefined;
   }

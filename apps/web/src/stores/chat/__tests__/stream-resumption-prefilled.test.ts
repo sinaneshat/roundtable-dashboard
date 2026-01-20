@@ -41,17 +41,45 @@ type UIMessage = {
   metadata?: DbMessageMetadata;
 };
 
+type PreSearchData = {
+  queries: Array<{
+    query: string;
+    rationale: string;
+    searchDepth: string;
+    index: number;
+    total: number;
+  }>;
+  results: Array<{
+    query: string;
+    answer: string | null;
+    results: Array<Record<string, unknown>>;
+    responseTime: number;
+    index: number;
+  }>;
+  summary: string;
+  successCount: number;
+  failureCount: number;
+  totalResults: number;
+  totalTime: number;
+};
+
 type PreSearch = {
   id: string;
   threadId: string;
   roundNumber: number;
   status: string;
   userQuery: string;
-  searchData: unknown;
+  searchData: PreSearchData | null;
   errorMessage: string | null;
   createdAt: Date;
   completedAt: Date | null;
 };
+
+type ParticipantSettings = {
+  temperature?: number;
+  maxTokens?: number;
+  topP?: number;
+} | null;
 
 type ChatParticipant = {
   id: string;
@@ -61,7 +89,7 @@ type ChatParticipant = {
   customRoleId: string | null;
   isEnabled: boolean;
   priority: number;
-  settings: unknown;
+  settings: ParticipantSettings;
   createdAt: Date;
   updatedAt: Date;
 };
@@ -137,7 +165,7 @@ function createMockPreSearch(
       failureCount: 0,
       totalResults: 9,
       totalTime: 17000,
-    },
+    } satisfies PreSearchData,
     errorMessage: null,
     createdAt: new Date(),
     completedAt: new Date(),

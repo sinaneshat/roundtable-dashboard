@@ -17,7 +17,5 @@ export {
   useModelPreferencesHydrated,
   useModelPreferencesStore,
 } from './preferences-store-provider';
-export {
-  ServiceWorkerProvider,
-  useServiceWorker,
-} from './service-worker-provider';
+export { ServiceWorkerProvider } from './service-worker-provider';
+export { useServiceWorker } from './use-service-worker';

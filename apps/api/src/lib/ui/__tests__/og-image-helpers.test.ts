@@ -16,7 +16,7 @@ import {
   getModeColor,
   OG_COLORS,
   truncateText,
-} from '../og-image-helpers';
+} from '../og-colors';
 
 describe('oG_COLORS', () => {
   it('should have all required color properties', () => {
