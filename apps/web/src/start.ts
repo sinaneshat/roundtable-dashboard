@@ -20,13 +20,14 @@ const requestMiddleware = createMiddleware().server(async ({ next }) => {
  * Extracts cookie header once and provides via context.
  * Eliminates repetitive getRequest() calls in every server function.
  *
+ * Registered as global functionMiddleware below, so runs automatically for ALL server functions.
+ * No need to add .middleware([cookieMiddleware]) to individual server functions.
+ *
  * Usage in server functions:
  * ```ts
- * import { cookieMiddleware } from '@/start';
- *
  * export const myFn = createServerFn({ method: 'GET' })
- *   .middleware([cookieMiddleware])
  *   .handler(async ({ context }) => {
+ *     // cookieHeader is automatically available via global middleware
  *     const { cookieHeader } = context;
  *     return await apiCall({ cookieHeader });
  *   });

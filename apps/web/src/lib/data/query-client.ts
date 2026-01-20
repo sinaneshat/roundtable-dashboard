@@ -27,7 +27,7 @@ import { GC_TIMES } from './stale-times';
  *
  * Individual queries can override these defaults as needed
  */
-function makeQueryClient() {
+export function makeQueryClient() {
   return new QueryClient({
     defaultOptions: {
       queries: {

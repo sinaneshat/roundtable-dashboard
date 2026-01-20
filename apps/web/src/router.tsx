@@ -4,7 +4,7 @@ import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query
 
 import NotFoundScreen from '@/containers/screens/general/NotFoundScreen';
 import type { SessionData } from '@/lib/auth';
-import { getQueryClient } from '@/lib/data/query-client';
+import { makeQueryClient } from '@/lib/data/query-client';
 
 import { routeTree } from './routeTree.gen';
 
@@ -14,12 +14,23 @@ export type RouterContext = {
   session: SessionData | null;
 };
 
+/**
+ * Router factory following official TanStack Start + React Query SSR pattern
+ * @see https://tanstack.com/router/latest/docs/integrations/query
+ * @see https://tanstack.com/start/latest/docs/framework/react/examples/start-basic-react-query
+ *
+ * Creates fresh QueryClient per router instance (SSR-safe)
+ * setupRouterSsrQueryIntegration automatically:
+ * - Wraps router with QueryClientProvider
+ * - Handles SSR dehydration/hydration
+ * - Streams queries that resolve during server render
+ * - Handles redirect() from queries/mutations
+ */
 export function getRouter() {
-  const queryClient = getQueryClient();
+  const queryClient = makeQueryClient();
 
   const router = createTanStackRouter({
     routeTree,
-    // Initial context - session populated by root beforeLoad
     context: { queryClient, session: null },
     scrollRestoration: true,
     defaultPreload: 'intent',
@@ -30,7 +41,6 @@ export function getRouter() {
   setupRouterSsrQueryIntegration({
     router,
     queryClient,
-    wrapQueryClient: true,
   });
 
   return router;

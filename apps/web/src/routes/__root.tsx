@@ -22,7 +22,8 @@ import { getSession } from '@/server/auth';
 
 /**
  * Root route with QueryClient context
- * TanStack Start pattern: context flows from router to all routes
+ * QueryClientProvider is automatically wrapped by setupRouterSsrQueryIntegration in router.tsx
+ * No need for manual provider - the integration handles SSR dehydration/hydration automatically
  */
 const siteName = BRAND.name;
 const siteDescription = BRAND.description;
@@ -132,8 +133,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
-  // ✅ SSR: QueryClientProvider is now at router level via Wrap option
-  // This ensures proper dehydration/hydration of React Query state
   return (
     <RootDocument>
       <Outlet />

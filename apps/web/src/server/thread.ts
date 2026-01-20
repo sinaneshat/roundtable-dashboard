@@ -1,4 +1,5 @@
 import { createServerFn } from '@tanstack/react-start';
+import { zodValidator } from '@tanstack/zod-adapter';
 
 import type {
   GetThreadBySlugResponse,
@@ -14,9 +15,9 @@ import {
   getThreadPreSearchesService,
   getThreadStreamResumptionStateService,
 } from '@/services/api';
-import { cookieMiddleware } from '@/start';
 
 import type { ServerFnErrorResponse } from './schemas';
+import { idSchema, slugSchema } from './schemas';
 
 type GetThreadBySlugResult = GetThreadBySlugResponse | ServerFnErrorResponse;
 type GetStreamResumptionStateResult = GetThreadStreamResumptionStateResponse | ServerFnErrorResponse;
@@ -25,8 +26,7 @@ type GetThreadFeedbackResult = GetThreadFeedbackResponse | ServerFnErrorResponse
 type GetThreadPreSearchesResult = GetThreadPreSearchesResponse | ServerFnErrorResponse;
 
 export const getThreadBySlug = createServerFn({ method: 'GET' })
-  .middleware([cookieMiddleware])
-  .inputValidator((data: string) => data)
+  .inputValidator(zodValidator(slugSchema))
   .handler(async ({ data, context }): Promise<GetThreadBySlugResult> => {
     return await getThreadBySlugService(
       { param: { slug: data } },
@@ -35,8 +35,7 @@ export const getThreadBySlug = createServerFn({ method: 'GET' })
   });
 
 export const getStreamResumptionState = createServerFn({ method: 'GET' })
-  .middleware([cookieMiddleware])
-  .inputValidator((data: string) => data)
+  .inputValidator(zodValidator(idSchema))
   .handler(async ({ data, context }): Promise<GetStreamResumptionStateResult> => {
     return await getThreadStreamResumptionStateService(
       { param: { threadId: data } },
@@ -45,8 +44,7 @@ export const getStreamResumptionState = createServerFn({ method: 'GET' })
   });
 
 export const getThreadChangelog = createServerFn({ method: 'GET' })
-  .middleware([cookieMiddleware])
-  .inputValidator((data: string) => data)
+  .inputValidator(zodValidator(idSchema))
   .handler(async ({ data, context }): Promise<GetThreadChangelogResult> => {
     return await getThreadChangelogService(
       { param: { id: data } },
@@ -55,8 +53,7 @@ export const getThreadChangelog = createServerFn({ method: 'GET' })
   });
 
 export const getThreadFeedback = createServerFn({ method: 'GET' })
-  .middleware([cookieMiddleware])
-  .inputValidator((data: string) => data)
+  .inputValidator(zodValidator(idSchema))
   .handler(async ({ data, context }): Promise<GetThreadFeedbackResult> => {
     return await getThreadFeedbackService(
       { param: { id: data } },
@@ -65,8 +62,7 @@ export const getThreadFeedback = createServerFn({ method: 'GET' })
   });
 
 export const getThreadPreSearches = createServerFn({ method: 'GET' })
-  .middleware([cookieMiddleware])
-  .inputValidator((data: string) => data)
+  .inputValidator(zodValidator(idSchema))
   .handler(async ({ data, context }): Promise<GetThreadPreSearchesResult> => {
     return await getThreadPreSearchesService(
       { param: { id: data } },
