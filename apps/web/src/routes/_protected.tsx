@@ -88,9 +88,23 @@ function ProtectedLayout() {
   const routeContext = Route.useRouteContext();
   const activeSession = session ?? routeContext.session;
 
+  // SSR: Server renders with session: null for fast TTFB
+  // Client: beforeLoad handles redirect to /auth/sign-in if no session
+  // This brief null state during hydration shows the child route's content
+  // (skeleton or actual content) while client-side auth resolves
   if (!activeSession) {
-    // This shouldn't happen with beforeLoad guard, but handle gracefully
-    return null;
+    // Render Outlet anyway - child routes have their own pendingComponent/skeleton
+    // The client-side beforeLoad will redirect to login if truly unauthenticated
+    // This prevents black screen while maintaining SSR content visibility
+    return (
+      <PreferencesStoreProvider>
+        <ChatLayoutProviders>
+          <ChatLayoutShell session={null}>
+            <Outlet />
+          </ChatLayoutShell>
+        </ChatLayoutProviders>
+      </PreferencesStoreProvider>
+    );
   }
 
   // Wrap with providers so sidebar has access to stores

@@ -178,6 +178,8 @@ import {
 // Models routes (dynamic OpenRouter models)
 import { listModelsHandler } from './routes/models/handler';
 import { listModelsRoute } from './routes/models/route';
+// OG image routes
+import { ogChatHandler, ogChatRoute } from './routes/og';
 // Project routes
 import {
   addAttachmentToProjectHandler,
@@ -427,7 +429,7 @@ app.use('*', async (c, next) => {
 });
 
 // Session attachment - optimized with prefix-based routing
-const publicPrefixes = ['/chat/public/', '/system/', '/webhooks/', '/_next/', '/static/'];
+const publicPrefixes = ['/chat/public/', '/system/', '/webhooks/', '/_next/', '/static/', '/og/'];
 const staticExtensions = ['.ico', '.png', '.jpg', '.svg'];
 const docPaths = ['/health', '/api/v1/health', '/doc', '/openapi.json', '/scalar', '/llms.txt'];
 
@@ -555,7 +557,8 @@ app.use('/uploads/multipart/:id/complete', RateLimiterFactory.create('upload'), 
 
 let routeChain = app
   .openapi(healthRoute, healthHandler)
-  .openapi(detailedHealthRoute, detailedHealthHandler);
+  .openapi(detailedHealthRoute, detailedHealthHandler)
+  .openapi(ogChatRoute, ogChatHandler);
 
 if (IS_DEV_ENVIRONMENT) {
   routeChain = routeChain

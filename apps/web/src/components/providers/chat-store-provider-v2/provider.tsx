@@ -15,11 +15,14 @@
  * - useRoundPolling handles incomplete round detection
  */
 
+import { useQueryClient } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
-import { useCallback, useState, useSyncExternalStore } from 'react';
+import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
 
+import { invalidationPatterns } from '@/lib/data/query-keys';
 import { showApiErrorToast } from '@/lib/toast';
 import { createChatStore } from '@/stores/chat-v2';
+import { reset } from '@/stores/chat-v2/reset';
 
 import { ChatStoreContext } from './context';
 import {
@@ -45,6 +48,34 @@ export type ChatStoreProviderProps = {
 export function ChatStoreProvider({ children, slug }: ChatStoreProviderProps) {
   // Create store via useState lazy initializer for SSR isolation
   const [store] = useState(() => createChatStore());
+  const queryClient = useQueryClient();
+  const previousSlugRef = useRef<string | undefined>(slug);
+
+  // Reset store when slug changes (thread-to-thread navigation)
+  // ✅ FIX: useLayoutEffect runs BEFORE child useLayoutEffects (like useSyncHydrateStore)
+  // This ensures reset happens BEFORE hydration, not after (which would clear hydrated data)
+  // Execution order: parent useLayoutEffect → child useLayoutEffect → useEffect
+  useLayoutEffect(() => {
+    const prevSlug = previousSlugRef.current;
+
+    // Trigger on actual slug changes (not initial mount or undefined→defined)
+    if (prevSlug !== undefined && slug !== undefined && prevSlug !== slug) {
+      // Get previous thread ID before reset
+      const prevThreadId = store.getState().thread?.id;
+
+      // Reset store state for navigation
+      reset(store, 'navigation');
+
+      // Invalidate previous thread's TanStack Query caches
+      if (prevThreadId) {
+        invalidationPatterns.leaveThread(prevThreadId).forEach((key) => {
+          queryClient.invalidateQueries({ queryKey: key });
+        });
+      }
+    }
+
+    previousSlugRef.current = slug;
+  }, [slug, store, queryClient]);
 
   // Subscribe to thread ID changes reactively
   const effectiveThreadId = useSyncExternalStore(

@@ -101,6 +101,8 @@ export function reset(store: ChatStoreApi, scope: ResetScope): void {
         thread: null,
         participants: [],
         messages: [],
+        changelog: [],
+        threadUser: null,
         error: null,
         // Round
         flow: INITIAL_FLOW_STATE,

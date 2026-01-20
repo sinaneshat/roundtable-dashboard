@@ -254,18 +254,20 @@ export function ChatView({
   // Changelog/feedback data only exists AFTER a round completes, so skip when:
   // 1. Initial creation flow (just created from overview, streaming round 0)
   // 2. First round is currently streaming
-  // 3. No completed rounds yet (navigating to existing thread mid-first-round)
+  // 3. No completed rounds yet AND not returning to existing thread with data
   const isInitialCreationFlow = Boolean(createdThreadId) && streamingRoundNumber === 0;
   const isFirstRoundStreaming = streamingRoundNumber === 0 && (isStreaming || isModeratorStreaming || waitingToStartStreaming);
-  // ✅ FIX: Also skip if thread has no completed rounds - no data exists yet to fetch
-  // This handles navigation to existing thread where first round is in progress
   const hasNoCompletedRounds = completedRoundNumbers.size === 0;
-  const shouldSkipAuxiliaryQueries = isInitialCreationFlow || isFirstRoundStreaming || hasNoCompletedRounds;
+  // ✅ FIX: Don't skip when returning to existing thread with initial messages
+  // Race condition: effectiveMessages may be empty during first render before hydration
+  // If initialMessages exist from loader, we're returning to an existing thread that has data
+  const isReturningToExistingThread = mode === ScreenModes.THREAD && effectiveThreadId && initialMessages && initialMessages.length > 0;
+  const shouldSkipAuxiliaryQueries = isInitialCreationFlow || isFirstRoundStreaming || (hasNoCompletedRounds && !isReturningToExistingThread);
 
   // ✅ RESUMPTION DEBUG: Track changelog query enabled state
   useEffect(() => {
     if (mode === ScreenModes.THREAD && effectiveThreadId) {
-      rlog.resume('changelog-query', `t=${effectiveThreadId.slice(-8)} skip=${shouldSkipAuxiliaryQueries ? 1 : 0} (create=${isInitialCreationFlow ? 1 : 0} firstStream=${isFirstRoundStreaming ? 1 : 0} noRounds=${hasNoCompletedRounds ? 1 : 0}) completed=[${[...completedRoundNumbers]}] msgs=${effectiveMessages.length}`);
+      rlog.resume('changelog-query', `t=${effectiveThreadId.slice(-8)} skip=${shouldSkipAuxiliaryQueries ? 1 : 0} (create=${isInitialCreationFlow ? 1 : 0} firstStream=${isFirstRoundStreaming ? 1 : 0} noRounds=${hasNoCompletedRounds ? 1 : 0} returning=${isReturningToExistingThread ? 1 : 0}) completed=[${[...completedRoundNumbers]}] msgs=${effectiveMessages.length}`);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [mode, effectiveThreadId, shouldSkipAuxiliaryQueries, completedRoundNumbers.size, effectiveMessages.length]);

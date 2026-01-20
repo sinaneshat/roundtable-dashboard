@@ -15,9 +15,7 @@ import {
 } from '@/lib/data/query-options';
 import type {
   GetThreadBySlugResponse,
-  GetThreadChangelogResponse,
   GetThreadFeedbackResponse,
-  GetThreadPreSearchesResponse,
   GetThreadStreamResumptionStateResponse,
 } from '@/services/api';
 
@@ -44,7 +42,15 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
 
     // ensureQueryData internally checks staleTime and only fetches if data is stale/missing
     // @see https://tanstack.com/router/latest/docs/framework/react/guide/external-data-loading
-    await queryClient.ensureQueryData(options);
+    // ✅ FIX: Wrap in try-catch to handle SSR errors gracefully (e.g., 401 unauthorized)
+    // On error, return empty data and let component handle via useQuery
+    try {
+      await queryClient.ensureQueryData(options);
+    } catch (error) {
+      console.error('[ChatThread] Loader error:', error);
+      // Return empty loader data - component will re-fetch via useQuery
+      return { threadTitle: null, threadId: null, preSearches: undefined, changelog: undefined, feedback: undefined, streamResumption: undefined };
+    }
 
     // Get thread ID from cached data for auxiliary fetches
     const cachedData = queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey);
@@ -78,38 +84,28 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
         feedback = feedbackResult?.success ? feedbackResult.data?.feedback : undefined;
         preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
       } else {
-        // ✅ SPA NAVIGATION: Use cached data immediately, prefetch missing in background
-        // This makes thread creation navigation instant - no blocking on auxiliary data
-        // Component handles missing data gracefully with ?? operators
+        // ✅ SPA NAVIGATION: Use ensureQueryData to respect cache
+        // - New thread: flow-controller pre-populates cache → returns immediately (no network)
+        // - Existing thread: fetches if cache empty/invalidated, uses cache if valid
+        // - Thread→Thread: Previous thread cache invalidated by leaveThread pattern
+        const [changelogResult, preSearchesResult] = await Promise.all([
+          queryClient.ensureQueryData(changelogOptions).catch(() => null),
+          queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
+        ]);
+        changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
+        preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
+
+        // Other auxiliary data - use cache + prefetch pattern (non-blocking)
         const cachedStream = queryClient.getQueryData<GetThreadStreamResumptionStateResponse>(streamOptions.queryKey);
-        const cachedChangelog = queryClient.getQueryData<GetThreadChangelogResponse>(changelogOptions.queryKey);
         const cachedFeedback = queryClient.getQueryData<GetThreadFeedbackResponse>(feedbackOptions.queryKey);
-        const cachedPreSearches = queryClient.getQueryData<GetThreadPreSearchesResponse>(preSearchesOptions.queryKey);
 
-        // Use cached data if available
         streamResumption = cachedStream?.success ? cachedStream.data : undefined;
-        changelog = cachedChangelog?.success ? cachedChangelog.data?.items : undefined;
         feedback = cachedFeedback?.success ? cachedFeedback.data?.feedback : undefined;
-        preSearches = cachedPreSearches?.success ? cachedPreSearches.data?.items : undefined;
 
-        // Prefetch missing data in background (non-blocking)
         if (!cachedStream)
           queryClient.prefetchQuery(streamOptions);
-        if (!cachedChangelog)
-          queryClient.prefetchQuery(changelogOptions);
         if (!cachedFeedback)
           queryClient.prefetchQuery(feedbackOptions);
-        if (!cachedPreSearches)
-          queryClient.prefetchQuery(preSearchesOptions);
-
-        // ✅ STALE INFINITY FIX: Invalidate staleTime:Infinity queries on SPA navigation
-        // Problem: staleTime: Infinity means TanStack Query never auto-refetches
-        // Data changes happen BETWEEN visits (user navigates away during streaming)
-        // Server invalidates KV cache but client TanStack Query cache stays stale
-        // Solution: Invalidate queries to force fresh fetch on each visit
-        // This ensures changelog accordion and pre-search results show correctly
-        queryClient.invalidateQueries({ queryKey: changelogOptions.queryKey });
-        queryClient.invalidateQueries({ queryKey: preSearchesOptions.queryKey });
       }
     }
 
