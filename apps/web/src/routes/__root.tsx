@@ -61,14 +61,20 @@ export const Route = createRootRouteWithContext<RouterContext>()({
     }
 
     // Server-side or first client load: fetch session
-    const session = await getSession();
+    try {
+      const session = await getSession();
 
-    // Cache on client for subsequent navigations
-    if (typeof window !== 'undefined') {
-      setCachedSession(session);
+      // Cache on client for subsequent navigations
+      if (typeof window !== 'undefined') {
+        setCachedSession(session);
+      }
+
+      return { session };
+    } catch (error) {
+      console.error('[ROOT] Session fetch error:', error);
+      // Return null session on error to allow page to render
+      return { session: null };
     }
-
-    return { session };
   },
   head: () => {
     const siteUrl = getAppBaseUrl();

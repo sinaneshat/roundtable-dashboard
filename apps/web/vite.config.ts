@@ -4,6 +4,7 @@ import path from 'node:path';
 import { cloudflare } from '@cloudflare/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
+import viteReact from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
@@ -28,6 +29,8 @@ export default defineConfig({
         { path: '/legal/privacy', prerender: { enabled: true } },
       ],
     }),
+    // React support
+    viteReact(),
     // Tailwind CSS v4
     tailwindcss(),
     // TypeScript path aliases
