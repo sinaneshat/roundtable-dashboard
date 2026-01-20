@@ -4,7 +4,6 @@ import path from 'node:path';
 import { cloudflare } from '@cloudflare/vite-plugin';
 import tailwindcss from '@tailwindcss/vite';
 import { tanstackStart } from '@tanstack/react-start/plugin/vite';
-import viteReact from '@vitejs/plugin-react';
 import { visualizer } from 'rollup-plugin-visualizer';
 import { defineConfig } from 'vite';
 import tsconfigPaths from 'vite-tsconfig-paths';
@@ -15,13 +14,9 @@ const APP_VERSION = rootPkg.version;
 
 export default defineConfig({
   plugins: [
-    // Tailwind CSS v4
-    tailwindcss(),
-    // TypeScript path aliases
-    tsconfigPaths(),
-    // Cloudflare Workers integration
+    // Per official Cloudflare docs: cloudflare plugin first
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
-    // TanStack Start framework
+    // TanStack Start framework with prerendering
     tanstackStart({
       prerender: {
         enabled: true,
@@ -33,8 +28,10 @@ export default defineConfig({
         { path: '/legal/privacy', prerender: { enabled: true } },
       ],
     }),
-    // React support
-    viteReact(),
+    // Tailwind CSS v4
+    tailwindcss(),
+    // TypeScript path aliases
+    tsconfigPaths(),
     // Bundle analyzer (only with ANALYZE=true)
     process.env.ANALYZE === 'true' && visualizer({
       filename: 'stats.html',
@@ -43,7 +40,6 @@ export default defineConfig({
       brotliSize: true,
     }),
   ].filter(Boolean),
-  // Local dev server proxy to API
   server: {
     proxy: {
       '/api': {
@@ -53,7 +49,6 @@ export default defineConfig({
       },
     },
   },
-  // Define globals
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
