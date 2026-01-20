@@ -184,9 +184,11 @@ export function useVirtualizedTimeline({
   );
 
   // Reset scrollMargin when items become empty
+  // Using ref + forceUpdate pattern for perf - only re-render when margin actually changes
   useLayoutEffect(() => {
     if (timelineItems.length === 0 && scrollMarginRef.current !== 0) {
       scrollMarginRef.current = 0;
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional force re-render
       forceUpdate(c => c + 1);
     }
   }, [timelineItems.length]);
