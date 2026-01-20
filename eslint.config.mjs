@@ -22,6 +22,7 @@ export default antfu(
       '**/scripts/**/*',
       '**/routeTree.gen.ts',
       '**/dist/**/*',
+      '**/dist-test/**/*',
       '**/.output/**/*',
       '**/public/*.js',
     ],
