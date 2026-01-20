@@ -35,26 +35,35 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
     const threadId = cachedData?.success && cachedData.data?.thread?.id;
     const threadTitle = cachedData?.success && cachedData.data?.thread?.title ? cachedData.data.thread.title : null;
 
-    // Prefetch auxiliary data in parallel - ensureQueryData handles freshness checks
-    // All queries use shared queryOptions for proper SSR dehydration/hydration
-    // ✅ SSR HYDRATION: All data fetched on server, no client-side fetches needed
+    // ✅ SSR HYDRATION: Fetch auxiliary data and return directly for immediate SSR access
+    // useQuery doesn't return cached data on first SSR render, so pass via loaderData
+    let preSearches;
+    let changelog;
+    let feedback;
+    let streamResumption;
+
     if (threadId) {
       const streamOptions = streamResumptionQueryOptions(threadId);
       const changelogOptions = threadChangelogQueryOptions(threadId);
       const feedbackOptions = threadFeedbackQueryOptions(threadId);
       const preSearchesOptions = threadPreSearchesQueryOptions(threadId);
 
-      // Parallel prefetch - all queries run concurrently
-      // Each uses ensureQueryData for proper cache integration and SSR hydration
-      await Promise.all([
-        queryClient.ensureQueryData(streamOptions).catch(() => { /* Stream status is optional */ }),
-        queryClient.ensureQueryData(changelogOptions).catch(() => { /* Changelog is optional */ }),
-        queryClient.ensureQueryData(feedbackOptions).catch(() => { /* Feedback is optional */ }),
-        queryClient.ensureQueryData(preSearchesOptions).catch(() => { /* Pre-searches are optional */ }),
+      // Parallel fetch - all queries run concurrently
+      const [streamResult, changelogResult, feedbackResult, preSearchesResult] = await Promise.all([
+        queryClient.ensureQueryData(streamOptions).catch(() => null),
+        queryClient.ensureQueryData(changelogOptions).catch(() => null),
+        queryClient.ensureQueryData(feedbackOptions).catch(() => null),
+        queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
       ]);
+
+      // Extract data from results
+      streamResumption = streamResult?.success ? streamResult.data : undefined;
+      changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
+      feedback = feedbackResult?.success ? feedbackResult.data?.feedback : undefined;
+      preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
     }
 
-    return { threadTitle, threadId };
+    return { threadTitle, threadId, preSearches, changelog, feedback, streamResumption };
   },
   // Dynamic title from loader data
   head: ({ loaderData }) => {
@@ -111,10 +120,13 @@ function ChatThreadRoute() {
   });
 
   const threadData = queryData?.success ? queryData.data : null;
-  const streamResumptionState = streamData?.success ? streamData.data : null;
-  const changelog = changelogData?.success ? changelogData.data?.items : undefined;
-  const feedback = feedbackData?.success ? feedbackData.data?.feedback : undefined;
-  const preSearches = preSearchesData?.success ? preSearchesData.data?.items : undefined;
+
+  // ✅ SSR HYDRATION: Use loaderData for SSR (useQuery returns undefined on first SSR render)
+  // useQuery takes over on client for reactivity/updates after mutations
+  const streamResumptionState = streamData?.success ? streamData.data : (loaderData.streamResumption ?? null);
+  const changelog = changelogData?.success ? changelogData.data?.items : loaderData.changelog;
+  const feedback = feedbackData?.success ? feedbackData.data?.feedback : loaderData.feedback;
+  const preSearches = preSearchesData?.success ? preSearchesData.data?.items : loaderData.preSearches;
 
   const user = useMemo(() => ({
     id: session?.user?.id ?? '',
