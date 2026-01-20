@@ -58,4 +58,13 @@ export default defineConfig({
   build: {
     sourcemap: true,
   },
+  // Disable esbuild keepNames to prevent __name helper injection
+  optimizeDeps: {
+    esbuildOptions: {
+      keepNames: false,
+    },
+  },
+  esbuild: {
+    keepNames: false,
+  },
 });
