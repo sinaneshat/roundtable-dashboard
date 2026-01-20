@@ -29,6 +29,7 @@ type ChatInputContainerProps = {
   isModelsLoading?: boolean;
   children: ReactNode;
   className?: string;
+  autoMode?: boolean;
 };
 
 const variantStyles: Record<BorderVariant, {
@@ -76,6 +77,7 @@ export const ChatInputContainer = memo(({
   isModelsLoading = false,
   children,
   className,
+  autoMode = false,
 }: ChatInputContainerProps) => {
   const t = useTranslations();
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
@@ -83,7 +85,8 @@ export const ChatInputContainer = memo(({
 
   const isOverLimit = inputValue.length > STRING_LIMITS.MESSAGE_MAX;
   const participantCount = participants.length;
-  const showMinModelsError = participantCount < MIN_PARTICIPANTS_REQUIRED && !isHydrating && !isModelsLoading;
+  // In auto mode, don't show min models error - AI will select models based on prompt
+  const showMinModelsError = !autoMode && participantCount < MIN_PARTICIPANTS_REQUIRED && !isHydrating && !isModelsLoading;
   const showMaxModelsError = participantCount > MAX_PARTICIPANTS_LIMIT && !isHydrating && !isModelsLoading;
 
   // Credit estimation for paid users

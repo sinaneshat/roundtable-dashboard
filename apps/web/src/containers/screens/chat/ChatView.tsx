@@ -778,6 +778,7 @@ export function ChatView({
                 inputValue={inputValue}
                 isHydrating={mode === ScreenModes.THREAD && !hasInitiallyLoaded}
                 isModelsLoading={isModelsLoading}
+                autoMode={autoMode}
               >
                 <ChatInputHeader
                   autoMode={autoMode}
@@ -806,6 +807,7 @@ export function ChatView({
                   isHydrating={mode === ScreenModes.THREAD && !hasInitiallyLoaded}
                   isSubmitting={showSubmitSpinner}
                   isModelsLoading={isModelsLoading}
+                  autoMode={autoMode}
                   toolbar={(
                     <ChatInputToolbarMenu
                       selectedParticipants={selectedParticipants}

@@ -68,6 +68,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     selectedMode: s.selectedMode,
     selectedParticipants: s.selectedParticipants,
     enableWebSearch: s.enableWebSearch,
+    autoMode: s.autoMode,
   })));
 
   const actions = useChatStore(useShallow(s => ({
@@ -100,9 +101,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
   const createThreadMutation = useCreateThreadMutation();
   const updateThreadMutation = useUpdateThreadMutation();
 
+  // In auto mode, skip participant validation - AI will select models based on prompt
   const isFormValid = Boolean(
     formState.inputValue.trim()
-    && formState.selectedParticipants.length >= MIN_PARTICIPANTS_REQUIRED
+    && (formState.autoMode || formState.selectedParticipants.length >= MIN_PARTICIPANTS_REQUIRED)
     && formState.selectedMode,
   );
 
@@ -116,7 +118,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     const freshSelectedParticipants = freshState.selectedParticipants;
     const freshEnableWebSearch = freshState.enableWebSearch;
 
-    if (!prompt || freshSelectedParticipants.length < MIN_PARTICIPANTS_REQUIRED || !freshSelectedMode) {
+    // In auto mode, skip participant validation - AI selects models after analysis
+    const hasRequiredParticipants = freshState.autoMode || freshSelectedParticipants.length >= MIN_PARTICIPANTS_REQUIRED;
+    if (!prompt || !hasRequiredParticipants || !freshSelectedMode) {
       return;
     }
 

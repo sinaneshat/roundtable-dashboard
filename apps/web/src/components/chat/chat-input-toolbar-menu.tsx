@@ -82,7 +82,8 @@ export const ChatInputToolbarMenu = memo(({
 
   const currentMode = getChatModeById(selectedMode);
   const ModeIcon = currentMode?.icon;
-  const hasNoModelsSelected = selectedParticipants.length < MIN_PARTICIPANTS_REQUIRED;
+  // In auto mode, don't show error - AI will select models based on prompt
+  const hasNoModelsSelected = !autoMode && selectedParticipants.length < MIN_PARTICIPANTS_REQUIRED;
 
   const handleAttachClick = useCallback(() => {
     onAttachmentClick?.();

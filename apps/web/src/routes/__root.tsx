@@ -28,11 +28,33 @@ const siteName = BRAND.name;
 const siteDescription = BRAND.description;
 const twitterHandle = BRAND.social.twitterHandle;
 
+/**
+ * Routes that don't require session check (static/public pages)
+ * These are prerendered at build time and shouldn't call the API
+ */
+const STATIC_ROUTES = [
+  '/legal/terms',
+  '/legal/privacy',
+] as const;
+
+/**
+ * Check if a route is static and doesn't need session
+ */
+function isStaticRoute(pathname: string): boolean {
+  return STATIC_ROUTES.some(route => pathname === route || pathname === `${route}/`);
+}
+
 export const Route = createRootRouteWithContext<RouterContext>()({
   // ✅ ROOT SESSION CHECK: Single source of truth for auth state
   // Runs on every navigation, uses cache on client to avoid server calls
   // All child routes access session via context - no repeated getSession() calls
-  beforeLoad: async () => {
+  beforeLoad: async ({ location }) => {
+    // Skip session check for static routes (prerendered at build time)
+    // These pages don't need auth and shouldn't call the API during SSG
+    if (isStaticRoute(location.pathname)) {
+      return { session: null };
+    }
+
     // Client-side: reuse cached session to avoid server function call
     if (typeof window !== 'undefined' && getCachedSession() !== null) {
       return { session: getCachedSession() };

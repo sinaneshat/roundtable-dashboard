@@ -51,6 +51,7 @@ type ChatInputProps = {
   isModelsLoading?: boolean;
   hideInternalAlerts?: boolean;
   borderVariant?: BorderVariant;
+  autoMode?: boolean;
 };
 
 const EMPTY_PARTICIPANTS: ParticipantConfig[] = [];
@@ -83,6 +84,7 @@ export const ChatInput = memo(({
   isModelsLoading = false,
   hideInternalAlerts: _hideInternalAlerts = false,
   borderVariant = BorderVariants.DEFAULT,
+  autoMode = false,
 }: ChatInputProps) => {
   const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -116,7 +118,8 @@ export const ChatInput = memo(({
   const isMicDisabled = disabled || isQuotaExceeded || isFreeUserBlocked;
   const isOverLimit = value.length > STRING_LIMITS.MESSAGE_MAX;
   const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting || isLoadingStats || creditEstimate.isLoading || isFreeUserBlocked;
-  const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && participants.length > 0 && !isOverLimit;
+  // In auto mode, skip participant validation - AI will select models based on prompt
+  const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && (autoMode || participants.length > 0) && !isOverLimit;
 
   const handleFilesSelected = useCallback((files: File[]) => {
     if (onAddAttachments && files.length > 0) {
@@ -224,7 +227,8 @@ export const ChatInput = memo(({
     }
   };
 
-  const showNoModelsError = participants.length === 0 && !isQuotaExceeded && !isHydrating && !isModelsLoading;
+  // Don't show "no models" error in auto mode - AI will select models based on prompt
+  const showNoModelsError = !autoMode && participants.length === 0 && !isQuotaExceeded && !isHydrating && !isModelsLoading;
 
   return (
     <div className="w-full">

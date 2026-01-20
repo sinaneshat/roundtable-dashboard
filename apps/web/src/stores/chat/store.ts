@@ -1326,6 +1326,50 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       hasInitiallyLoaded: true,
     }, false, 'operations/initializeThread');
 
+    // ✅ PRE-SEARCH RESUMPTION FIX: Create preSearch entry from resumption data
+    // When phase is PRE_SEARCH and preSearchResumption exists but preSearches is empty,
+    // we need to create a placeholder entry so PreSearchStream component can render and resume.
+    // This happens because prefillStreamResumptionState only sets preSearchResumption but
+    // doesn't have access to userQuery (which requires messages from initializeThread).
+    const stateAfterInit = get();
+    if (
+      stateAfterInit.currentResumptionPhase === RoundPhases.PRE_SEARCH
+      && stateAfterInit.preSearchResumption?.preSearchId
+      && stateAfterInit.preSearches.length === 0
+      && stateAfterInit.resumptionRoundNumber !== null
+    ) {
+      // Find the user query from the messages for this round
+      const userMessageForRound = messagesToSet.find((msg) => {
+        if (msg.role !== MessageRoles.USER) {
+          return false;
+        }
+        const msgRound = getRoundNumber(msg.metadata);
+        return msgRound === stateAfterInit.resumptionRoundNumber;
+      });
+
+      // Extract user query from the message
+      const userQuery = userMessageForRound
+        ? extractTextFromMessage(userMessageForRound)
+        : '';
+
+      rlog.init('presearch-resume', `creating preSearch entry from resumption: id=${stateAfterInit.preSearchResumption.preSearchId.slice(-8)} r=${stateAfterInit.resumptionRoundNumber} query=${userQuery.slice(0, 30)}...`);
+
+      // Create the preSearch entry for resumption
+      const resumptionPreSearch: StoredPreSearch = {
+        id: stateAfterInit.preSearchResumption.preSearchId,
+        threadId: thread.id,
+        roundNumber: stateAfterInit.resumptionRoundNumber,
+        userQuery,
+        status: stateAfterInit.preSearchResumption.status as StoredPreSearch['status'],
+        searchData: null,
+        createdAt: new Date().toISOString(),
+        completedAt: null,
+        errorMessage: null,
+      };
+
+      set({ preSearches: [resumptionPreSearch] }, false, 'operations/initializeThread_preSearchResumption');
+    }
+
     // ✅ DEBUG: Log final state after initialization
     const finalState = get();
     rlog.init('thread-final', `wait=${finalState.waitingToStartStreaming ? 1 : 0} prefilled=${finalState.streamResumptionPrefilled ? 1 : 0} phase=${finalState.currentResumptionPhase ?? '-'} nextP=${finalState.nextParticipantToTrigger !== null ? (typeof finalState.nextParticipantToTrigger === 'number' ? finalState.nextParticipantToTrigger : finalState.nextParticipantToTrigger.index) : '-'}`);
