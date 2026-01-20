@@ -806,6 +806,7 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
           headers: {
             'Content-Type': 'image/svg+xml',
             'Cache-Control': 'no-cache',
+            'Access-Control-Allow-Origin': '*',
             'X-OG-Generated': 'true',
             'X-OG-Format': 'svg-local-dev',
           },
@@ -830,6 +831,7 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
           headers: {
             'Content-Type': 'image/svg+xml',
             'Cache-Control': 'no-cache',
+            'Access-Control-Allow-Origin': '*',
             'X-OG-Generated': 'true',
             'X-OG-Format': 'svg-fallback',
           },
@@ -841,6 +843,7 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
         headers: {
           'Content-Type': 'image/png',
           'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
+          'Access-Control-Allow-Origin': '*',
           'X-OG-Generated': 'true',
         },
       });
@@ -857,6 +860,7 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
         headers: {
           'Content-Type': 'image/png',
           'Cache-Control': 'no-cache',
+          'Access-Control-Allow-Origin': '*',
           'X-OG-Error': 'true',
           'X-OG-Error-Message': encodeURIComponent(errorMessage.slice(0, 100)),
         },
