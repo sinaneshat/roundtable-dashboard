@@ -283,6 +283,15 @@ export function usePendingMessage({
   }, [effectiveThreadId]);
 
   useEffect(() => {
+    // ✅ DEBUG: Track pre-search trigger conditions for round 1+ (pendingMessage is null)
+    const webSearchEnabled = getEffectiveWebSearchEnabled(thread, formEnableWebSearch);
+    const currentRound = messages.length > 0 ? getCurrentRoundNumber(messages) : 0;
+    const preSearchForRound = Array.isArray(preSearches)
+      ? preSearches.find(ps => ps.roundNumber === currentRound)
+      : undefined;
+
+    rlog.msg('presearch-trigger', `r${currentRound} screen=${screenMode} wait=${waitingToStart ? 1 : 0} pending=${pendingMessage ? 1 : 0} changelog=${isWaitingForChangelog ? 1 : 0} configR=${configChangeRoundNumber ?? '-'} web=${webSearchEnabled ? 1 : 0} preSearch=${preSearchForRound?.status ?? 'none'}`);
+
     if (screenMode !== ScreenModes.THREAD) {
       return;
     }
@@ -296,18 +305,13 @@ export function usePendingMessage({
     }
 
     if (isWaitingForChangelog || configChangeRoundNumber !== null) {
+      rlog.msg('presearch-trigger', `r${currentRound} EXIT: changelog blocking`);
       return;
     }
 
-    const webSearchEnabled = getEffectiveWebSearchEnabled(thread, formEnableWebSearch);
     if (!webSearchEnabled) {
       return;
     }
-
-    const currentRound = messages.length > 0 ? getCurrentRoundNumber(messages) : 0;
-    const preSearchForRound = Array.isArray(preSearches)
-      ? preSearches.find(ps => ps.roundNumber === currentRound)
-      : undefined;
 
     if (!preSearchForRound || preSearchForRound.status !== MessageStatuses.PENDING) {
       return;

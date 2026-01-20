@@ -128,6 +128,10 @@ export function useChangelogSync({
     rlog.changelog('merge-complete', `r${configChangeRoundNumber} clearing flags`);
     state.setIsWaitingForChangelog(false);
     state.setConfigChangeRoundNumber(null);
+    // ✅ FIX: Also clear isPatchInProgress to unblock streaming-trigger
+    // Form-actions sets isPatchInProgress=false after PATCH, but due to React batching
+    // the streaming-trigger might not see the update before changelog merge completes
+    state.setIsPatchInProgress(false);
     lastMergedRoundRef.current = configChangeRoundNumber;
   }, [
     roundChangelogFetching,
