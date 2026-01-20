@@ -1,7 +1,0 @@
-# Roundtable - Preview Environment
-# https://web-preview.roundtable.now
-
-User-agent: *
-Disallow: /
-
-# Preview/Development environment - no indexing
