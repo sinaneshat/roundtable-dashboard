@@ -275,8 +275,6 @@ function RootDocument({ children }: { children: ReactNode }) {
   return (
     <html lang="en" className="dark">
       <head>
-        {/* Polyfill __name helper before any scripts - esbuild keepNames workaround */}
-        <script dangerouslySetInnerHTML={{ __html: 'window.__name=function(t){return t}' }} />
         <HeadContent />
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
