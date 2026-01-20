@@ -42,12 +42,17 @@ const OG_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;
  * Convert SVG to PNG using @cf-wasm/resvg
  */
 async function svgToPng(svg: string): Promise<Uint8Array> {
-  const { Resvg } = await import('@cf-wasm/resvg');
-  const resvg = new Resvg(svg, {
-    fitTo: { mode: 'width', value: OG_WIDTH },
-  });
-  const pngData = resvg.render();
-  return pngData.asPng();
+  try {
+    const { Resvg } = await import('@cf-wasm/resvg');
+    const resvg = new Resvg(svg, {
+      fitTo: { mode: 'width', value: OG_WIDTH },
+    });
+    const pngData = resvg.render();
+    return pngData.asPng();
+  } catch (error) {
+    console.error('[OG] svgToPng error:', error);
+    throw error;
+  }
 }
 
 /**
@@ -331,6 +336,90 @@ async function generateFallbackOgImage(): Promise<Uint8Array> {
 }
 
 /**
+ * Create error fallback response (simple placeholder)
+ */
+function createErrorFallbackResponse(): Response {
+  // Return 1x1 transparent PNG as absolute fallback
+  const transparentPng = new Uint8Array([
+    0x89,
+    0x50,
+    0x4E,
+    0x47,
+    0x0D,
+    0x0A,
+    0x1A,
+    0x0A,
+    0x00,
+    0x00,
+    0x00,
+    0x0D,
+    0x49,
+    0x48,
+    0x44,
+    0x52,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x08,
+    0x06,
+    0x00,
+    0x00,
+    0x00,
+    0x1F,
+    0x15,
+    0xC4,
+    0x89,
+    0x00,
+    0x00,
+    0x00,
+    0x0A,
+    0x49,
+    0x44,
+    0x41,
+    0x54,
+    0x78,
+    0x9C,
+    0x63,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x05,
+    0x00,
+    0x01,
+    0x0D,
+    0x0A,
+    0x2D,
+    0xB4,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x49,
+    0x45,
+    0x4E,
+    0x44,
+    0xAE,
+    0x42,
+    0x60,
+    0x82,
+  ]);
+  return new Response(transparentPng.buffer as ArrayBuffer, {
+    status: 200,
+    headers: {
+      'Content-Type': 'image/png',
+      'Cache-Control': 'no-cache',
+      'X-OG-Cache': 'ERROR',
+    },
+  });
+}
+
+/**
  * GET /og/chat - Generate OG image for public thread
  */
 export const ogChatHandler: RouteHandler<typeof ogChatRoute, ApiEnv> = createHandler(
@@ -340,98 +429,122 @@ export const ogChatHandler: RouteHandler<typeof ogChatRoute, ApiEnv> = createHan
     operationName: 'ogChat',
   },
   async (c) => {
-    const { slug, v: versionParam } = c.validated.query;
-    const db = await getDbAsync();
-    const r2Bucket = c.env.UPLOADS_R2_BUCKET;
+    try {
+      const { slug, v: versionParam } = c.validated.query;
+      const db = await getDbAsync();
+      const r2Bucket = c.env.UPLOADS_R2_BUCKET;
 
-    // Fetch thread by slug (same pattern as getPublicThreadHandler)
-    const threads = await db
-      .select()
-      .from(tables.chatThread)
-      .where(or(
-        eq(tables.chatThread.slug, slug),
-        eq(tables.chatThread.previousSlug, slug),
-      ))
-      .limit(1)
-      .$withCache({
-        config: { ex: 3600 },
-        tag: PublicThreadCacheTags.single(slug),
+      // Fetch thread by slug (same pattern as getPublicThreadHandler)
+      const threads = await db
+        .select()
+        .from(tables.chatThread)
+        .where(or(
+          eq(tables.chatThread.slug, slug),
+          eq(tables.chatThread.previousSlug, slug),
+        ))
+        .limit(1)
+        .$withCache({
+          config: { ex: 3600 },
+          tag: PublicThreadCacheTags.single(slug),
+        });
+
+      const thread = threads[0];
+
+      // Return fallback if thread not found or not public
+      if (!thread || !thread.isPublic
+        || thread.status === ThreadStatusSchema.enum.deleted
+        || thread.status === ThreadStatusSchema.enum.archived) {
+        try {
+          const fallbackPng = await generateFallbackOgImage();
+          return new Response(fallbackPng.buffer as ArrayBuffer, {
+            status: 200,
+            headers: {
+              'Content-Type': 'image/png',
+              'Cache-Control': `public, max-age=${OG_CACHE_TTL_SECONDS}, immutable`,
+              'X-OG-Cache': 'MISS',
+              'X-OG-Fallback': 'true',
+            },
+          });
+        } catch (fallbackError) {
+          console.error('[OG] Fallback generation error:', fallbackError);
+          return createErrorFallbackResponse();
+        }
+      }
+
+      // Get participant count and message count (no query cache - R2 caches the final image)
+      const [participants, messages] = await Promise.all([
+        db.select()
+          .from(tables.chatParticipant)
+          .where(eq(tables.chatParticipant.threadId, thread.id)),
+        db.select()
+          .from(tables.chatMessage)
+          .where(eq(tables.chatMessage.threadId, thread.id)),
+      ]);
+
+      const participantCount = participants.length;
+      const messageCount = messages.length;
+
+      // Generate version hash for cache key
+      const versionHash = versionParam ?? generateOgVersionHash({
+        title: thread.title ?? undefined,
+        mode: thread.mode,
+        participantCount,
+        messageCount,
+        updatedAt: thread.updatedAt,
       });
 
-    const thread = threads[0];
+      const cacheKey = generateOgCacheKey(
+        OgImageTypes.PUBLIC_THREAD,
+        slug,
+        versionHash,
+      );
 
-    // Return fallback if thread not found or not public
-    if (!thread || !thread.isPublic
-      || thread.status === ThreadStatusSchema.enum.deleted
-      || thread.status === ThreadStatusSchema.enum.archived) {
-      const fallbackPng = await generateFallbackOgImage();
-      return new Response(fallbackPng.buffer as ArrayBuffer, {
+      // Check R2 cache
+      const cached = await getOgImageFromCache(r2Bucket, cacheKey);
+      if (cached.found && cached.data) {
+        return createCachedImageResponse(cached.data);
+      }
+
+      // Generate OG image
+      const svg = await generateOgImageSvg({
+        title: thread.title ?? 'AI Conversation',
+        mode: thread.mode as ChatMode | undefined,
+        participantCount,
+        messageCount,
+      });
+
+      const pngData = await svgToPng(svg);
+
+      // Store in R2 cache (fire and forget)
+      storeOgImageInCache(r2Bucket, cacheKey, pngData.buffer as ArrayBuffer).catch(() => {
+        // Ignore cache store errors
+      });
+
+      return new Response(pngData.buffer as ArrayBuffer, {
         status: 200,
         headers: {
           'Content-Type': 'image/png',
           'Cache-Control': `public, max-age=${OG_CACHE_TTL_SECONDS}, immutable`,
           'X-OG-Cache': 'MISS',
-          'X-OG-Fallback': 'true',
         },
       });
+    } catch (error) {
+      console.error('[OG] Handler error:', error);
+      // Try to return fallback OG image on any error
+      try {
+        const fallbackPng = await generateFallbackOgImage();
+        return new Response(fallbackPng.buffer as ArrayBuffer, {
+          status: 200,
+          headers: {
+            'Content-Type': 'image/png',
+            'Cache-Control': 'no-cache',
+            'X-OG-Cache': 'ERROR',
+            'X-OG-Fallback': 'true',
+          },
+        });
+      } catch {
+        return createErrorFallbackResponse();
+      }
     }
-
-    // Get participant count and message count (no query cache - R2 caches the final image)
-    const [participants, messages] = await Promise.all([
-      db.select()
-        .from(tables.chatParticipant)
-        .where(eq(tables.chatParticipant.threadId, thread.id)),
-      db.select()
-        .from(tables.chatMessage)
-        .where(eq(tables.chatMessage.threadId, thread.id)),
-    ]);
-
-    const participantCount = participants.length;
-    const messageCount = messages.length;
-
-    // Generate version hash for cache key
-    const versionHash = versionParam ?? generateOgVersionHash({
-      title: thread.title ?? undefined,
-      mode: thread.mode,
-      participantCount,
-      messageCount,
-      updatedAt: thread.updatedAt,
-    });
-
-    const cacheKey = generateOgCacheKey(
-      OgImageTypes.PUBLIC_THREAD,
-      slug,
-      versionHash,
-    );
-
-    // Check R2 cache
-    const cached = await getOgImageFromCache(r2Bucket, cacheKey);
-    if (cached.found && cached.data) {
-      return createCachedImageResponse(cached.data);
-    }
-
-    // Generate OG image
-    const svg = await generateOgImageSvg({
-      title: thread.title ?? 'AI Conversation',
-      mode: thread.mode as ChatMode | undefined,
-      participantCount,
-      messageCount,
-    });
-
-    const pngData = await svgToPng(svg);
-
-    // Store in R2 cache (fire and forget)
-    storeOgImageInCache(r2Bucket, cacheKey, pngData.buffer as ArrayBuffer).catch(() => {
-      // Ignore cache store errors
-    });
-
-    return new Response(pngData.buffer as ArrayBuffer, {
-      status: 200,
-      headers: {
-        'Content-Type': 'image/png',
-        'Cache-Control': `public, max-age=${OG_CACHE_TTL_SECONDS}, immutable`,
-        'X-OG-Cache': 'MISS',
-      },
-    });
   },
 );

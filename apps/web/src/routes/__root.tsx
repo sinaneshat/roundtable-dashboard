@@ -31,14 +31,19 @@ const siteDescription = BRAND.description;
 const twitterHandle = BRAND.social.twitterHandle;
 
 export const Route = createRootRouteWithContext<RouterContext>()({
-  // ✅ SSR SESSION STRATEGY: Skip session fetch on server to avoid blocking TTFB
-  // Server renders with session: null, client fetches session after hydration
-  // This gives fast first paint while auth is handled client-side
+  // ✅ SSR SESSION STRATEGY: Fetch session on both server and client
+  // Server uses cookies via cookieMiddleware, client uses cached session
+  // This enables true SSR with user data rendered on first paint
   beforeLoad: async () => {
-    // Server-side: ALWAYS return null session (skip blocking API call)
-    // This allows SSR to complete immediately
+    // Server-side: fetch session using cookies (SSR-safe)
     if (typeof window === 'undefined') {
-      return { session: null };
+      try {
+        const session = await getSession();
+        return { session };
+      } catch (error) {
+        console.error('[ROOT] SSR session error:', error);
+        return { session: null };
+      }
     }
 
     // Client-side: reuse cached session to avoid unnecessary API call
@@ -53,7 +58,7 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       setCachedSession(session);
       return { session };
     } catch (error) {
-      console.error('[ROOT] Session fetch error:', error);
+      console.error('[ROOT] Client session error:', error);
       return { session: null };
     }
   },

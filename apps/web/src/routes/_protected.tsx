@@ -18,51 +18,48 @@ export const Route = createFileRoute('/_protected')({
   // This stops the pendingComponent from flashing on every /chat/* navigation
   staleTime: 5 * 60 * 1000, // 5 minutes - layout data rarely needs refresh
 
-  // ✅ AUTH CHECK: Uses session from root context (already cached)
-  // No duplicate getSession() call - root beforeLoad handles session fetching
-  // Redirects to sign-in if not authenticated (client-side redirect)
+  // ✅ AUTH CHECK: Uses session from root context (SSR or client)
+  // Root beforeLoad now fetches session on server too via cookies
+  // Redirects to sign-in if not authenticated (client-side only)
   beforeLoad: async ({ location, context }) => {
-    // Server-side: skip auth check, let client handle it after hydration
-    if (typeof window === 'undefined') {
-      return { session: null };
-    }
-
-    // Client-side: session from root beforeLoad
     const { session } = context;
 
+    // No session - handle based on environment
     if (!session) {
+      // Server: can't throw redirect, return null (component renders minimal shell)
+      if (typeof window === 'undefined') {
+        return { session: null };
+      }
+      // Client: redirect to sign-in
       throw redirect({
         to: '/auth/sign-in',
         search: { redirect: location.href },
       });
     }
 
-    // Pass session through for child routes
     return { session };
   },
   loader: async ({ context }) => {
-    // Server-side: skip data fetching, let client handle after hydration
-    if (typeof window === 'undefined') {
+    const { queryClient, session } = context;
+
+    // Skip data fetch if no session (unauthenticated)
+    if (!session) {
       return {};
     }
 
-    const { queryClient } = context;
-
-    // ensureQueryData ensures data is available before rendering
-    // It internally checks staleTime and only fetches if data is stale/missing
-    // Using shared queryOptions guarantees same config in loader and hooks
-    // This prevents "content flash" where SSR content disappears into loading state
-    //
-    // Pattern from TanStack docs:
-    // - ensureQueryData returns cached data if fresh, otherwise fetches
-    // - Same queryOptions in hooks means useQuery uses cached data immediately
-    // @see https://tanstack.com/router/latest/docs/framework/react/guide/external-data-loading
-    await Promise.all([
-      queryClient.ensureQueryData(modelsQueryOptions),
-      queryClient.ensureQueryData(subscriptionsQueryOptions),
-      queryClient.ensureQueryData(usageQueryOptions),
-      queryClient.ensureInfiniteQueryData(sidebarThreadsQueryOptions),
-    ]);
+    // Prefetch layout data - works on both server and client
+    // Server functions automatically forward cookies via cookieMiddleware
+    try {
+      await Promise.all([
+        queryClient.ensureQueryData(modelsQueryOptions),
+        queryClient.ensureQueryData(subscriptionsQueryOptions),
+        queryClient.ensureQueryData(usageQueryOptions),
+        queryClient.ensureInfiniteQueryData(sidebarThreadsQueryOptions),
+      ]);
+    } catch (error) {
+      console.error('[PROTECTED] Loader prefetch error:', error);
+      // Continue with empty data - components will handle loading states
+    }
 
     return {};
   },
@@ -73,41 +70,24 @@ export const Route = createFileRoute('/_protected')({
 });
 
 /**
- * Protected Layout - Session verified in beforeLoad
+ * Protected Layout - Session from SSR or client
  *
- * Auth is now checked client-side in beforeLoad after hydration.
- * If no session, user is redirected to sign-in before this component renders.
- * useSession is still used for accessing session data reactively in child components.
+ * SSR: Session fetched on server via cookies, layout renders with real data
+ * Client: useSession hook provides reactive updates (sign-out, etc.)
+ * Single render path eliminates hydration mismatches
  */
 function ProtectedLayout() {
-  // Session is guaranteed by beforeLoad, use client hook for reactive access
-  const { data: session } = useSession();
-
-  // beforeLoad guarantees we have a session, but on client navigation
-  // the hook may briefly return null while syncing. Use route context as fallback.
+  // Route context has session from beforeLoad (server or client)
   const routeContext = Route.useRouteContext();
-  const activeSession = session ?? routeContext.session;
 
-  // SSR: Server renders with session: null for fast TTFB
-  // Client: beforeLoad handles redirect to /auth/sign-in if no session
-  // This brief null state during hydration shows the child route's content
-  // (skeleton or actual content) while client-side auth resolves
-  if (!activeSession) {
-    // Render Outlet anyway - child routes have their own pendingComponent/skeleton
-    // The client-side beforeLoad will redirect to login if truly unauthenticated
-    // This prevents black screen while maintaining SSR content visibility
-    return (
-      <PreferencesStoreProvider>
-        <ChatLayoutProviders>
-          <ChatLayoutShell session={null}>
-            <Outlet />
-          </ChatLayoutShell>
-        </ChatLayoutProviders>
-      </PreferencesStoreProvider>
-    );
-  }
+  // Client session hook for reactive updates (sign-out, etc.)
+  // Falls back to route context for SSR hydration
+  const { data: clientSession } = useSession();
+  const activeSession = clientSession ?? routeContext.session;
 
-  // Wrap with providers so sidebar has access to stores
+  // Single render path - always render layout shell
+  // If no session on server, shell renders with null (minimal UI)
+  // Client will redirect to login if truly unauthenticated
   return (
     <PreferencesStoreProvider>
       <ChatLayoutProviders>
