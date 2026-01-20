@@ -404,7 +404,8 @@ export const listSubscriptionsHandler: RouteHandler<typeof listSubscriptionsRout
       c.header('Cache-Control', 'no-store, no-cache, must-revalidate');
 
       return Responses.collection(c, serializedSubscriptions);
-    } catch {
+    } catch (error) {
+      console.error('[Billing] listSubscriptions error:', error);
       throw createError.internal('Failed to retrieve subscriptions', ErrorContextBuilders.database('select', 'stripeSubscription'));
     }
   },
