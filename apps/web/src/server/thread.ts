@@ -4,12 +4,14 @@ import type {
   GetThreadBySlugResponse,
   GetThreadChangelogResponse,
   GetThreadFeedbackResponse,
+  GetThreadPreSearchesResponse,
   GetThreadStreamResumptionStateResponse,
 } from '@/services/api';
 import {
   getThreadBySlugService,
   getThreadChangelogService,
   getThreadFeedbackService,
+  getThreadPreSearchesService,
   getThreadStreamResumptionStateService,
 } from '@/services/api';
 import { cookieMiddleware } from '@/start';
@@ -20,6 +22,7 @@ type GetThreadBySlugResult = GetThreadBySlugResponse | ServerFnErrorResponse;
 type GetStreamResumptionStateResult = GetThreadStreamResumptionStateResponse | ServerFnErrorResponse;
 type GetThreadChangelogResult = GetThreadChangelogResponse | ServerFnErrorResponse;
 type GetThreadFeedbackResult = GetThreadFeedbackResponse | ServerFnErrorResponse;
+type GetThreadPreSearchesResult = GetThreadPreSearchesResponse | ServerFnErrorResponse;
 
 export const getThreadBySlug = createServerFn({ method: 'GET' })
   .middleware([cookieMiddleware])
@@ -56,6 +59,16 @@ export const getThreadFeedback = createServerFn({ method: 'GET' })
   .inputValidator((data: string) => data)
   .handler(async ({ data, context }): Promise<GetThreadFeedbackResult> => {
     return await getThreadFeedbackService(
+      { param: { id: data } },
+      { cookieHeader: context.cookieHeader },
+    );
+  });
+
+export const getThreadPreSearches = createServerFn({ method: 'GET' })
+  .middleware([cookieMiddleware])
+  .inputValidator((data: string) => data)
+  .handler(async ({ data, context }): Promise<GetThreadPreSearchesResult> => {
+    return await getThreadPreSearchesService(
       { param: { id: data } },
       { cookieHeader: context.cookieHeader },
     );

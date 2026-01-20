@@ -13,7 +13,7 @@ import {
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { SmartImage } from '@/components/ui/smart-image';
-import { getAppBaseUrl } from '@/lib/config/base-urls';
+import { getApiOriginUrl, getAppBaseUrl } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
@@ -74,12 +74,14 @@ export function ShareDialog({
 
   const baseUrl = getAppBaseUrl();
   const shareUrl = `${baseUrl}/public/chat/${slug}`;
-  // OG image from API endpoint - always include cache busting to ensure fresh data
+  // OG image from API endpoint directly (bypass proxy for reliable image loading)
+  // Uses the API origin URL to avoid proxy issues with binary image responses
   const ogImageUrl = useMemo(() => {
-    const basePath = `${baseUrl}/api/v1/og/chat?slug=${slug}`;
+    const apiOrigin = getApiOriginUrl();
+    const basePath = `${apiOrigin}/api/v1/og/chat?slug=${slug}`;
     // Always add cache busting param to ensure fresh OG image after making thread public
     return `${basePath}&v=${ogRevision}-${Date.now()}`;
-  }, [baseUrl, slug, ogRevision]);
+  }, [slug, ogRevision]);
 
   useEffect(() => {
     return () => {

@@ -208,6 +208,16 @@ export function getAppBaseUrl(): string {
 }
 
 /**
+ * Get full API origin URL (without /api/v1 path)
+ * Used for direct API access like OG images that bypass the proxy
+ */
+export function getApiOriginUrl(): string {
+  const apiUrl = getBaseUrls().api;
+  // Remove /api/v1 suffix to get just the origin
+  return apiUrl.replace('/api/v1', '');
+}
+
+/**
  * For SSG builds: Get the production API URL
  * Used when building static pages that need to fetch from a live API
  */

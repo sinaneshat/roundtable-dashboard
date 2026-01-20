@@ -94,6 +94,8 @@ export function useIncompleteRoundResumption(
     // ✅ CHANGELOG BLOCKING FIX: Add changelog flags for blocking during config changes
     isWaitingForChangelog,
     configChangeRoundNumber,
+    // ✅ PARTICIPANTS PHASE FIX: Track if provider still has pending trigger
+    nextParticipantToTrigger,
   } = useChatStore(useShallow(s => ({
     messages: s.messages,
     participants: s.participants,
@@ -115,6 +117,8 @@ export function useIncompleteRoundResumption(
     // ✅ CHANGELOG BLOCKING FIX: Add changelog flags for blocking during config changes
     isWaitingForChangelog: s.isWaitingForChangelog,
     configChangeRoundNumber: s.configChangeRoundNumber,
+    // ✅ PARTICIPANTS PHASE FIX: Track if provider still has pending trigger
+    nextParticipantToTrigger: s.nextParticipantToTrigger,
   })));
 
   // Actions - batched with useShallow for stable reference
@@ -802,13 +806,16 @@ export function useIncompleteRoundResumption(
     // ✅ UNIFIED PHASES: Skip if server prefilled a different phase
     // When prefilled, phase-specific effects handle resumption
     if (streamResumptionPrefilled && currentResumptionPhase) {
-      // ✅ FIX: Only skip PARTICIPANTS phase here - provider handles via prefilled nextParticipantToTrigger
-      // Previously we let 'participants' phase continue here, but that caused duplicate triggers:
-      // - Server says P0 done (nextP=1), but DB race means store has no P0 message
-      // - This effect calculates responded=[] and triggers P0 again
-      // - Provider's trigger effect also triggers based on prefilled nextP=1
-      // - Result: P0 triggered twice, messages duplicated
-      if (currentResumptionPhase === RoundPhases.PARTICIPANTS) {
+      // ✅ FIX: Only skip PARTICIPANTS phase if provider still has pending trigger
+      // Previously we returned early unconditionally, but this caused issues:
+      // - Server says P0 done (nextP=1), provider triggers P1
+      // - AI SDK resume completes P0's cached stream, clears nextParticipantToTrigger
+      // - But P1 was never actually triggered, and this effect can't run to trigger it
+      //
+      // Now: Only skip if nextParticipantToTrigger is still set (provider will handle).
+      // Once provider triggers and clears nextParticipantToTrigger, allow this effect
+      // to run its normal incomplete round detection to trigger remaining participants.
+      if (currentResumptionPhase === RoundPhases.PARTICIPANTS && nextParticipantToTrigger !== null) {
         return;
       }
       // Pre-search and moderator have their own effects below - let them handle
@@ -1006,6 +1013,8 @@ export function useIncompleteRoundResumption(
     // ✅ UNIFIED PHASES: Include phase state for proper phase-based resumption
     currentResumptionPhase,
     streamResumptionPrefilled,
+    // ✅ PARTICIPANTS PHASE FIX: Re-run when provider clears nextParticipantToTrigger
+    nextParticipantToTrigger,
     // ✅ FIX: Now using state instead of ref, so it's in deps and triggers re-runs
     activeStreamCheckComplete,
     // ✅ CHANGELOG BLOCKING FIX: Include changelog flags so effect re-runs when cleared

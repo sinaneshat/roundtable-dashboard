@@ -41,7 +41,7 @@ import {
   isVisionRequiredMimeType,
 } from '@/lib/utils';
 import dynamic from '@/lib/utils/dynamic';
-import type { ApiChangelog, ApiParticipant, Model, RoundFeedbackData } from '@/services/api';
+import type { ApiChangelog, ApiParticipant, Model, RoundFeedbackData, StoredPreSearch } from '@/services/api';
 import {
   useAutoModeAnalysis,
   useChatFormActions,
@@ -82,6 +82,11 @@ export type ChatViewProps = {
    * SSR: Initial participants from route loader for first paint
    */
   initialParticipants?: ApiParticipant[];
+  /**
+   * SSR: Initial pre-searches from route loader for first paint
+   * Store may be empty during SSR - use these for immediate content render
+   */
+  initialPreSearches?: StoredPreSearch[];
 };
 
 export function ChatView({
@@ -93,6 +98,7 @@ export function ChatView({
   threadId: serverThreadId,
   initialMessages,
   initialParticipants,
+  initialPreSearches,
 }: ChatViewProps) {
   const t = useTranslations();
 
@@ -177,6 +183,13 @@ export function ChatView({
   const effectiveThreadId = serverThreadId || thread?.id || createdThreadId || '';
   const currentStreamingParticipant = contextParticipants[currentParticipantIndex] || null;
 
+  // ✅ SSR FIX: Compute effective data EARLY for use in completedRoundNumbers
+  // Store hydration happens in useLayoutEffect (client-only), so server renders with empty store
+  // Fall back to initialMessages/initialParticipants/initialPreSearches for SSR content paint
+  const effectiveMessages = messages.length > 0 ? messages : (initialMessages ?? []);
+  const effectiveParticipants = contextParticipants.length > 0 ? contextParticipants : (initialParticipants ?? []);
+  const effectivePreSearches = preSearches.length > 0 ? preSearches : (initialPreSearches ?? []);
+
   // ✅ MOVED UP: Need completedRoundNumbers early for shouldSkipAuxiliaryQueries
   // ✅ PERF FIX: Use ref to stabilize Set reference - only create new Set when contents change
   // Previously, useMemo created a new Set on every messages change, causing ChatMessageList
@@ -185,7 +198,7 @@ export function ChatView({
   const completedRoundNumbersRef = useRef<Set<number>>(new Set());
   const completedRoundNumbers = useMemo(() => {
     const completed = new Set<number>();
-    messages.forEach((msg) => {
+    effectiveMessages.forEach((msg) => {
       if (isModeratorMessage(msg)) {
         const moderatorMeta = getModeratorMetadata(msg.metadata);
         if (moderatorMeta?.finishReason) {
@@ -210,7 +223,7 @@ export function ChatView({
     }
     completedRoundNumbersRef.current = completed;
     return completed;
-  }, [messages, currentResumptionPhase, resumptionRoundNumber]);
+  }, [effectiveMessages, currentResumptionPhase, resumptionRoundNumber]);
 
   // ✅ PERF: Detect when auxiliary queries should be skipped
   // Changelog/feedback data only exists AFTER a round completes, so skip when:
@@ -371,16 +384,12 @@ export function ChatView({
     incompatibleModelIdsRef.current = incompatibleModelIds;
   }, [incompatibleModelIds]);
 
-  // ✅ SSR FIX: Use initial data from props for first paint when store is empty
-  // Store hydration happens in useLayoutEffect (client-only), so server renders with empty store
-  // Fall back to initialMessages/initialParticipants for SSR content paint
-  const effectiveMessages = messages.length > 0 ? messages : (initialMessages ?? []);
-  const effectiveParticipants = contextParticipants.length > 0 ? contextParticipants : (initialParticipants ?? []);
-
+  // ✅ SSR FIX: effectiveMessages/effectiveParticipants/effectivePreSearches computed earlier
+  // for use in completedRoundNumbers. Use effectivePreSearches for timeline.
   const timelineItems: TimelineItem[] = useThreadTimeline({
     messages: effectiveMessages,
     changelog,
-    preSearches,
+    preSearches: effectivePreSearches,
   });
 
   const feedbackActions = useFeedbackActions({ threadId: effectiveThreadId });

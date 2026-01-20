@@ -3,7 +3,7 @@
  */
 
 import type { ChatMode, ScreenMode } from '@roundtable/shared';
-import { ScreenModes } from '@roundtable/shared';
+import { RoundPhases, ScreenModes } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -117,10 +117,19 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // No client-side fetch-fresh needed - proper SSR paint guaranteed
 
   // ✅ PERF: Get streaming state to skip pre-search orchestrator during initial creation
-  const { streamingRoundNumber, createdThreadId, messages: storeMessages } = useChatStore(useShallow(s => ({
+  const {
+    streamingRoundNumber,
+    createdThreadId,
+    messages: storeMessages,
+    // ✅ FIX: Get resumption state to enable pre-search fetch during mid-round resumption
+    streamResumptionPrefilled,
+    currentResumptionPhase,
+  } = useChatStore(useShallow(s => ({
     streamingRoundNumber: s.streamingRoundNumber,
     createdThreadId: s.createdThreadId,
     messages: s.messages,
+    streamResumptionPrefilled: s.streamResumptionPrefilled,
+    currentResumptionPhase: s.currentResumptionPhase,
   })));
 
   // ✅ PERF: Skip pre-search query during initial creation flow or when no completed rounds
@@ -135,11 +144,21 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     return metadata && metadata.finishReason;
   });
 
+  // ✅ FIX: Also enable pre-search fetch during mid-round resumption
+  // When resuming from participants/moderator phase with web search enabled,
+  // pre-search data exists even though the round hasn't completed yet.
+  // Pre-search happens BEFORE participants, so if we're in participants/moderator phase,
+  // the pre-search for that round has already completed.
+  const hasPreSearchResumptionData = thread?.enableWebSearch
+    && streamResumptionPrefilled
+    && (currentResumptionPhase === RoundPhases.PARTICIPANTS
+      || currentResumptionPhase === RoundPhases.MODERATOR);
+
   const preSearchOrchestratorEnabled = mode === ScreenModes.THREAD
     && Boolean(thread?.id)
     && enableOrchestrator
     && !isInitialCreationFlow
-    && hasCompletedRounds;
+    && (hasCompletedRounds || hasPreSearchResumptionData);
 
   getPreSearchOrchestrator({
     threadId: thread?.id || '',

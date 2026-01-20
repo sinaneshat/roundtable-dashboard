@@ -10,6 +10,7 @@ import {
   threadBySlugQueryOptions,
   threadChangelogQueryOptions,
   threadFeedbackQueryOptions,
+  threadPreSearchesQueryOptions,
 } from '@/lib/data/query-options';
 import type { GetThreadBySlugResponse } from '@/services/api';
 
@@ -36,10 +37,12 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
 
     // Prefetch auxiliary data in parallel - ensureQueryData handles freshness checks
     // All queries use shared queryOptions for proper SSR dehydration/hydration
+    // ✅ SSR HYDRATION: All data fetched on server, no client-side fetches needed
     if (threadId) {
       const streamOptions = streamResumptionQueryOptions(threadId);
       const changelogOptions = threadChangelogQueryOptions(threadId);
       const feedbackOptions = threadFeedbackQueryOptions(threadId);
+      const preSearchesOptions = threadPreSearchesQueryOptions(threadId);
 
       // Parallel prefetch - all queries run concurrently
       // Each uses ensureQueryData for proper cache integration and SSR hydration
@@ -47,6 +50,7 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
         queryClient.ensureQueryData(streamOptions).catch(() => { /* Stream status is optional */ }),
         queryClient.ensureQueryData(changelogOptions).catch(() => { /* Changelog is optional */ }),
         queryClient.ensureQueryData(feedbackOptions).catch(() => { /* Feedback is optional */ }),
+        queryClient.ensureQueryData(preSearchesOptions).catch(() => { /* Pre-searches are optional */ }),
       ]);
     }
 
@@ -89,8 +93,28 @@ function ChatThreadRoute() {
     enabled: !!loaderData.threadId,
   });
 
+  // ✅ SSR HYDRATION: Auxiliary data prefetched in loader, hydrated via query cache
+  // Uses useQuery (not suspense) since these are optional
+  const { data: changelogData } = useQuery({
+    ...threadChangelogQueryOptions(loaderData.threadId ?? ''),
+    enabled: !!loaderData.threadId,
+  });
+
+  const { data: feedbackData } = useQuery({
+    ...threadFeedbackQueryOptions(loaderData.threadId ?? ''),
+    enabled: !!loaderData.threadId,
+  });
+
+  const { data: preSearchesData } = useQuery({
+    ...threadPreSearchesQueryOptions(loaderData.threadId ?? ''),
+    enabled: !!loaderData.threadId,
+  });
+
   const threadData = queryData?.success ? queryData.data : null;
   const streamResumptionState = streamData?.success ? streamData.data : null;
+  const changelog = changelogData?.success ? changelogData.data?.items : undefined;
+  const feedback = feedbackData?.success ? feedbackData.data?.feedback : undefined;
+  const preSearches = preSearchesData?.success ? preSearchesData.data?.items : undefined;
 
   const user = useMemo(() => ({
     id: session?.user?.id ?? '',
@@ -122,6 +146,9 @@ function ChatThreadRoute() {
       slug={slug}
       user={user}
       streamResumptionState={streamResumptionState}
+      initialChangelog={changelog}
+      initialFeedback={feedback}
+      initialPreSearches={preSearches}
     />
   );
 }

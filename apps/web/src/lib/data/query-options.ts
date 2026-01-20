@@ -19,7 +19,7 @@ import { getModels } from '@/server/models';
 import { getProducts } from '@/server/products';
 import { getSidebarThreads } from '@/server/sidebar-threads';
 import { getSubscriptions } from '@/server/subscriptions';
-import { getStreamResumptionState, getThreadBySlug, getThreadChangelog, getThreadFeedback } from '@/server/thread';
+import { getStreamResumptionState, getThreadBySlug, getThreadChangelog, getThreadFeedback, getThreadPreSearches } from '@/server/thread';
 import { getUsageStats } from '@/server/usage-stats';
 
 import { queryKeys } from './query-keys';
@@ -226,6 +226,31 @@ export function streamResumptionQueryOptions(threadId: string) {
     queryFn: () => getStreamResumptionState({ data: threadId }),
     staleTime: 0, // Always fetch fresh - stream state changes
     gcTime: GC_TIMES.SHORT, // 1 min - ephemeral data
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: false,
+  });
+}
+
+/**
+ * Thread pre-searches query options factory
+ *
+ * Used by:
+ * - _protected/chat/$slug.tsx loader (ensureQueryData)
+ * - useThreadPreSearchesQuery hook (useQuery)
+ *
+ * Server function getThreadPreSearches() works both server-side and client-side:
+ * - Server: Runs directly, forwards cookies
+ * - Client: Makes RPC call to server function
+ *
+ * IMPORTANT: staleTime is Infinity - pre-searches use ONE-WAY DATA FLOW pattern.
+ * Updates come from streaming, not polling/refetching.
+ */
+export function threadPreSearchesQueryOptions(threadId: string) {
+  return queryOptions({
+    queryKey: queryKeys.threads.preSearches(threadId),
+    queryFn: () => getThreadPreSearches({ data: threadId }),
+    staleTime: STALE_TIMES.preSearch, // Infinity
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     retry: false,

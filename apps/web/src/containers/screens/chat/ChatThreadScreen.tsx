@@ -20,7 +20,7 @@ import {
   threadHasImageFiles,
 } from '@/lib/utils';
 import dynamic from '@/lib/utils/dynamic';
-import type { ApiMessage, ApiParticipant, ChatThread, Model, ThreadDetailData, ThreadStreamResumptionState } from '@/services/api';
+import type { ApiMessage, ApiParticipant, ChangelogItem, ChatThread, Model, RoundFeedbackData, StoredPreSearch, ThreadDetailData, ThreadStreamResumptionState } from '@/services/api';
 import {
   areAllParticipantsCompleteForRound,
   getModeratorMessageForRound,
@@ -43,6 +43,12 @@ type ChatThreadScreenProps = {
   slug: string;
   user: ThreadDetailData['user'];
   streamResumptionState?: ThreadStreamResumptionState | null;
+  /** Pre-searched data prefetched on server for SSR hydration */
+  initialPreSearches?: StoredPreSearch[];
+  /** Changelog items prefetched on server for SSR hydration */
+  initialChangelog?: ChangelogItem[];
+  /** Feedback data prefetched on server for SSR hydration */
+  initialFeedback?: RoundFeedbackData[];
 };
 
 function useThreadHeaderUpdater({
@@ -80,6 +86,9 @@ export default function ChatThreadScreen({
   slug,
   user,
   streamResumptionState,
+  initialPreSearches,
+  initialChangelog: _initialChangelog,
+  initialFeedback,
 }: ChatThreadScreenProps) {
   const t = useTranslations();
   const isDeleteDialogOpen = useBoolean(false);
@@ -101,6 +110,8 @@ export default function ChatThreadScreen({
     participants,
     initialMessages: uiMessages,
     streamResumptionState,
+    initialPreSearches,
+    initialFeedback,
   });
 
   useThreadHeaderUpdater({ thread, slug, onDeleteClick: isDeleteDialogOpen.onTrue });
@@ -361,6 +372,7 @@ export default function ChatThreadScreen({
         threadId={thread.id}
         initialMessages={uiMessages}
         initialParticipants={participants}
+        initialPreSearches={initialPreSearches}
       />
 
       <ChatDeleteDialog

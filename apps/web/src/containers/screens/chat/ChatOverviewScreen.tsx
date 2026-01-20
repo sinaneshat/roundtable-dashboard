@@ -922,6 +922,7 @@ export default function ChatOverviewScreen() {
       isSubmitting: formActions.isSubmitting,
       isUploading: chatAttachments.isUploading,
       isModelsLoading, // Pass loading state for internal UI updates
+      autoMode, // Skip visual validation in auto mode
     };
   }, [
     inputValue,
@@ -939,6 +940,7 @@ export default function ChatOverviewScreen() {
     chatInputToolbar,
     formActions.isSubmitting,
     chatAttachments.isUploading,
+    autoMode,
   ]);
 
   const showChatView = !showInitialUI && (currentThread || createdThreadId);
@@ -1043,6 +1045,7 @@ export default function ChatOverviewScreen() {
                             participants={selectedParticipants}
                             inputValue={inputValue}
                             isModelsLoading={isModelsLoading}
+                            autoMode={autoMode}
                           >
                             <ChatInputHeader
                               autoMode={autoMode}
@@ -1073,6 +1076,7 @@ export default function ChatOverviewScreen() {
                         participants={selectedParticipants}
                         inputValue={inputValue}
                         isModelsLoading={isModelsLoading}
+                        autoMode={autoMode}
                       >
                         <ChatInputHeader
                           autoMode={autoMode}
