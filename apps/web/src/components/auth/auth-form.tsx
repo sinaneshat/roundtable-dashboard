@@ -13,7 +13,7 @@ import { RHFTextField } from '@/components/forms/rhf-text-field';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Form } from '@/components/ui/form';
-import { useBoolean } from '@/hooks/utils';
+import { useBoolean, useIsMounted } from '@/hooks/utils';
 import { authClient } from '@/lib/auth/client';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
@@ -35,8 +35,12 @@ function AuthFormContent() {
   const router = useRouter();
   const search = routeApi.useSearch();
   const isLoading = useBoolean(false);
+  const isMounted = useIsMounted();
   const [step, setStep] = useState<AuthStep>(DEFAULT_AUTH_STEP);
   const [sentEmail, setSentEmail] = useState('');
+
+  // SSR-safe: disable animations on server to prevent invisible content
+  const isServer = !isMounted;
 
   // Handle toast messages from URL params
   useEffect(() => {
@@ -105,7 +109,7 @@ function AuthFormContent() {
         {step === AuthSteps.METHOD && (
           <motion.div
             key="method"
-            initial={{ opacity: 0 }}
+            initial={isServer ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
@@ -127,7 +131,7 @@ function AuthFormContent() {
         {step === AuthSteps.EMAIL && (
           <motion.div
             key="email"
-            initial={{ opacity: 0 }}
+            initial={isServer ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
@@ -177,7 +181,7 @@ function AuthFormContent() {
         {step === AuthSteps.SENT && (
           <motion.div
             key="sent"
-            initial={{ opacity: 0 }}
+            initial={isServer ? false : { opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 0.15 }}
@@ -185,7 +189,7 @@ function AuthFormContent() {
           >
             <div className="flex items-center gap-3">
               <motion.div
-                initial={{ scale: 0.8, opacity: 0 }}
+                initial={isServer ? false : { scale: 0.8, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
                 transition={{ type: 'spring', stiffness: 300, damping: 25, delay: 0.05 }}
                 className="flex size-10 items-center justify-center rounded-full bg-chart-3/20"

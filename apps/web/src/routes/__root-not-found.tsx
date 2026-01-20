@@ -1,3 +1,5 @@
+import { Link } from '@tanstack/react-router';
+
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 
@@ -14,12 +16,13 @@ export function NotFoundComponent() {
             <p className="text-muted-foreground text-base sm:text-lg mb-8 max-w-md">
               The page you're looking for doesn't exist or has been moved.
             </p>
+            {/* ✅ Use TanStack Router Link for type-safe navigation */}
             <Button
               size="lg"
-              onClick={() => (window.location.href = '/')}
+              asChild
               startIcon={<Icons.home className="size-4" />}
             >
-              Go Home
+              <Link to="/">Go Home</Link>
             </Button>
           </div>
         </div>

@@ -74,13 +74,16 @@ export default function PricingScreen() {
                 ? SubscriptionChangeTypes.DOWNGRADE
                 : SubscriptionChangeTypes.CHANGE;
 
-            const params = new URLSearchParams({
-              changeType,
-              oldProductId: changeDetails.oldPrice.productId,
-              newProductId: changeDetails.newPrice.productId,
+            // ✅ Use TanStack Router search option for type-safe query params
+            navigate({
+              to: '/chat/billing/subscription-changed',
+              search: {
+                changeType,
+                oldProductId: changeDetails.oldPrice.productId,
+                newProductId: changeDetails.newPrice.productId,
+              },
+              replace: true,
             });
-
-            navigate({ to: `/chat/billing/subscription-changed?${params.toString()}`, replace: true });
           } else {
             navigate({ to: '/chat/billing/subscription-changed', replace: true });
           }

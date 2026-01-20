@@ -1,29 +1,35 @@
 import type { BorderGradientDirection } from '@roundtable/shared';
 import { BORDER_GRADIENT_DIRECTIONS, BorderGradientDirections } from '@roundtable/shared';
 import { motion } from 'motion/react';
-import type { ComponentProps, ElementType, ReactNode } from 'react';
-import { useEffect, useState } from 'react';
+import type { ComponentPropsWithoutRef, ReactNode } from 'react';
+import { createElement, useEffect, useState } from 'react';
 
 import { cn } from '@/lib/ui/cn';
 
-export type HoverBorderGradientProps = {
+type PolymorphicElementType = 'button' | 'div' | 'a' | 'span';
+
+type HoverBorderGradientBaseProps<T extends PolymorphicElementType> = {
   children: ReactNode;
   containerClassName?: string;
   className?: string;
-  as?: ElementType;
+  as?: T;
   duration?: number;
   clockwise?: boolean;
-} & ComponentProps<'button'>;
+};
 
-export function HoverBorderGradient({
+export type HoverBorderGradientProps<T extends PolymorphicElementType = 'button'> =
+  HoverBorderGradientBaseProps<T> & Omit<ComponentPropsWithoutRef<T>, keyof HoverBorderGradientBaseProps<T>>;
+
+export function HoverBorderGradient<T extends PolymorphicElementType = 'button'>({
   children,
   containerClassName,
   className,
-  as: Tag = 'button',
+  as,
   duration = 1,
   clockwise = true,
   ...props
-}: HoverBorderGradientProps) {
+}: HoverBorderGradientProps<T>) {
+  const elementType = as ?? 'button';
   const [hovered, setHovered] = useState<boolean>(false);
   const [direction, setDirection] = useState<BorderGradientDirection>(BorderGradientDirections.TOP);
 
@@ -58,18 +64,18 @@ export function HoverBorderGradient({
     return undefined;
   }, [hovered, duration]);
 
-  return (
-    <Tag
-      onMouseEnter={() => {
-        setHovered(true);
-      }}
-      onMouseLeave={() => setHovered(false)}
-      className={cn(
-        'relative flex h-min w-fit flex-col flex-nowrap content-center items-center justify-center gap-10 overflow-visible rounded-4xl border border-input bg-background/50 p-px decoration-clone transition duration-500 hover:border-primary/50',
-        containerClassName,
-      )}
-      {...props}
-    >
+  const containerProps = {
+    onMouseEnter: () => setHovered(true),
+    onMouseLeave: () => setHovered(false),
+    className: cn(
+      'relative flex h-min w-fit flex-col flex-nowrap content-center items-center justify-center gap-10 overflow-visible rounded-4xl border border-input bg-background/50 p-px decoration-clone transition duration-500 hover:border-primary/50',
+      containerClassName,
+    ),
+    ...props,
+  };
+
+  const innerContent = (
+    <>
       <div
         className={cn(
           'z-10 w-auto rounded-[inherit] bg-background px-6 py-2 text-foreground',
@@ -97,6 +103,8 @@ export function HoverBorderGradient({
         transition={{ ease: 'linear', duration: duration ?? 1 }}
       />
       <div className="absolute inset-[2px] z-1 flex-none rounded-[inherit] bg-background" />
-    </Tag>
+    </>
   );
+
+  return createElement(elementType, containerProps, innerContent);
 }

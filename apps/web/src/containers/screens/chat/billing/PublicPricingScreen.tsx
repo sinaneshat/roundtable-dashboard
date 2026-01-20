@@ -96,8 +96,9 @@ export function PublicPricingScreen() {
         setProcessingPriceId(null);
       }
     } else {
+      // ✅ Use TanStack Router search option for type-safe query params
       const returnUrl = `/chat/pricing?priceId=${priceId}`;
-      navigate({ to: `/auth/sign-up?redirect=${encodeURIComponent(returnUrl)}` });
+      navigate({ to: '/auth/sign-up', search: { redirect: returnUrl } });
     }
   };
 

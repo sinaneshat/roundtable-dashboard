@@ -22,26 +22,20 @@ import type {
 } from '@/services/api';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
-  // ✅ ROUTE-LEVEL CACHING: Match TanStack Query staleTime for efficient navigation
-  // Prevents loader from re-running when revisiting same thread within 2 minutes
-  // TanStack Query still manages actual data freshness; this prevents duplicate loader calls
-  staleTime: 2 * 60 * 1000, // 2 minutes - matches STALE_TIMES.threadDetail
+  // ✅ DISABLE route-level caching to fix preloading race condition
+  // React Query handles caching at the query level instead
+  staleTime: 0,
 
   // ✅ SKELETON FLASH FIX: Only show pending component after 300ms
-  // During thread creation, cache is pre-populated so navigation is instant
-  // This prevents unnecessary skeleton flash for quick SPA navigations
   pendingMs: 300,
 
-  // Prefetch thread data and stream resumption state for SSR hydration
-  // Uses shared queryOptions to ensure consistent caching between server and client
   loader: async ({ params, context }) => {
     const { queryClient } = context;
 
-    // ✅ GUARD: Handle undefined slug gracefully during route preloading
-    // TanStack Router may call loader during preload before params are fully resolved
-    // Return empty data instead of throwing - component will handle missing data
+    // ✅ GUARD: Skip loading when slug is undefined (safety check)
+    // This shouldn't happen when Link uses proper params syntax
     if (!params.slug) {
-      console.warn('[ChatThread] Loader called without slug - likely preloading race condition');
+      console.error('[ChatThread] Loader skipped - slug undefined');
       return { threadTitle: null, threadId: null, preSearches: undefined, changelog: undefined, feedback: undefined, streamResumption: undefined };
     }
 
@@ -154,9 +148,12 @@ function ChatThreadRoute() {
 
   // ✅ HOOKS FIX: Call all hooks unconditionally to comply with Rules of Hooks
   // useQuery with enabled:false won't fetch but satisfies hook ordering requirements
-  const { data: queryData, isLoading } = useQuery({
+  // Use isPending instead of isLoading for React Query v5:
+  // - isPending: no cached data yet (true even when enabled=false with no cache)
+  // - isLoading: isPending AND isFetching (only true during active fetch)
+  const { data: queryData, isPending, isError, error } = useQuery({
     ...threadBySlugQueryOptions(slug ?? ''),
-    enabled: !!slug, // Only fetch when slug is defined
+    enabled: Boolean(slug), // Only fetch when slug is defined
   });
 
   // ✅ loaderData for auxiliary data (already prefetched in loader)
@@ -172,9 +169,23 @@ function ChatThreadRoute() {
   }), [session?.user?.id, session?.user?.name, session?.user?.image]);
 
   // ✅ Conditional rendering AFTER all hooks are called
-  // Show skeleton while slug is undefined or data is loading
-  if (!slug || isLoading) {
+  // Show skeleton while slug is undefined or query is pending (no data yet)
+  if (!slug || isPending) {
     return <ThreadContentSkeleton />;
+  }
+
+  // ✅ Handle query errors (e.g., network failure, server error)
+  if (isError) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <div className="text-center">
+          <h1 className="text-2xl font-bold text-destructive">Error loading thread</h1>
+          <p className="text-muted-foreground mt-2">
+            {error?.message || 'An error occurred while loading the thread.'}
+          </p>
+        </div>
+      </div>
+    );
   }
 
   const threadData = queryData?.success ? queryData.data : null;

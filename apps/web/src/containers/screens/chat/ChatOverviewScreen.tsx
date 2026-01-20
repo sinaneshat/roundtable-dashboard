@@ -26,7 +26,8 @@ import {
   useChatStoreApi,
   useModelPreferencesStore,
 } from '@/components/providers';
-import { LogoHolosphere } from '@/components/ui/logo-holosphere';
+import Image from '@/components/ui/image';
+import { LogoGlow } from '@/components/ui/logo-glow';
 import { BRAND } from '@/constants';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
 import {
@@ -965,14 +966,42 @@ export default function ChatOverviewScreen() {
                   >
                     <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
                       <motion.div
-                        className="relative flex items-center justify-center overflow-visible"
-                        style={{ width: 210, height: 210, marginBottom: -35 }}
-                        initial={isServer ? false : { opacity: 0, scale: 0.8 }}
-                        animate={{ opacity: 1, scale: 1 }}
+                        className="relative h-20 w-20 sm:h-24 sm:w-24"
+                        initial={isServer ? false : { opacity: 0 }}
+                        animate={{ opacity: 1 }}
                         exit={{ scale: 0.5, opacity: 0, y: -50 }}
-                        transition={{ delay: 0.1, duration: 0.6, ease: 'easeOut' }}
+                        transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
                       >
-                        <LogoHolosphere width={140} height={140} />
+                        <LogoGlow />
+                        <motion.div
+                          className="relative w-full h-full"
+                          animate={{
+                            rotate: 360,
+                            scale: [1, 1.03, 1],
+                          }}
+                          transition={{
+                            rotate: {
+                              duration: 60,
+                              repeat: Infinity,
+                              ease: 'linear',
+                            },
+                            scale: {
+                              duration: 4,
+                              repeat: Infinity,
+                              ease: 'easeInOut',
+                            },
+                          }}
+                          style={{ willChange: 'transform' }}
+                        >
+                          <Image
+                            src={BRAND.logos.main}
+                            alt={BRAND.name}
+                            className="w-full h-full object-contain"
+                            width={96}
+                            height={96}
+                            priority
+                          />
+                        </motion.div>
                       </motion.div>
 
                       <div className="flex flex-col items-center gap-1.5">

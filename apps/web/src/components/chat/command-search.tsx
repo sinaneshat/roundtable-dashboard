@@ -42,10 +42,10 @@ function SearchResultItem({
   onClose,
   onSelect,
 }: SearchResultItemProps) {
-  const href = `/chat/${thread.slug}`;
   return (
     <Link
-      to={href}
+      to="/chat/$slug"
+      params={{ slug: thread.slug }}
       preload={false}
       onClick={onClose}
       className={cn(
@@ -137,7 +137,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
       case KeyboardKeys.ENTER:
         e.preventDefault();
         if (threads[selectedIndex]) {
-          navigate({ to: `/chat/${threads[selectedIndex].slug}` });
+          navigate({ to: '/chat/$slug', params: { slug: threads[selectedIndex].slug } });
           handleClose();
         }
         break;

@@ -31,7 +31,6 @@ import { useTranslations } from '@/lib/i18n';
 import { isFilePart } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { toastManager } from '@/lib/toast';
-import { rlog } from '@/lib/utils/dev-logger';
 import {
   getDetailedIncompatibleModelIds,
   getModeratorMetadata,
@@ -41,6 +40,7 @@ import {
   isModeratorMessage,
   isVisionRequiredMimeType,
 } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import dynamic from '@/lib/utils/dynamic';
 import type { ApiChangelog, ApiParticipant, Model, RoundFeedbackData, StoredPreSearch } from '@/services/api';
 import {

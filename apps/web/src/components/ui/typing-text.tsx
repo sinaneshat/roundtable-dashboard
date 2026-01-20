@@ -1,6 +1,8 @@
 import { motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 
+import { useIsMounted } from '@/hooks/utils';
+
 type TypingTextProps = {
   text: string;
   speed?: number;
@@ -32,11 +34,14 @@ export function TypingText({
   enabled = true,
   showStreamingCursor = false,
 }: TypingTextProps) {
-  const [currentIndex, setCurrentIndex] = useState(enabled ? 0 : text.length);
+  const isMounted = useIsMounted();
+  // SSR-safe: show full text on server, start from 0 on client
+  const [currentIndex, setCurrentIndex] = useState(enabled && isMounted ? 0 : text.length);
 
   // ✅ FIX: Derive displayedText from currentIndex (no separate state)
   // Prevents nested setState calls that cause "Maximum update depth" errors
-  const displayedText = text.slice(0, currentIndex);
+  // SSR: show full text immediately
+  const displayedText = isMounted ? text.slice(0, currentIndex) : text;
 
   useEffect(() => {
     // If not enabled or speed is 0, display instantly
@@ -94,6 +99,7 @@ export function TypingText({
 
 /**
  * Simpler version for instant reveal with fade-in animation
+ * SSR-safe: renders visible content on server, animates on client
  */
 export function FadeInText({
   children,
@@ -104,10 +110,13 @@ export function FadeInText({
   delay?: number;
   className?: string;
 }) {
+  const isMounted = useIsMounted();
+  const isServer = !isMounted;
+
   return (
     <motion.span
       className={className}
-      initial={{ opacity: 0 }}
+      initial={isServer ? false : { opacity: 0 }}
       animate={{ opacity: 1 }}
       transition={{ duration: 0.3, delay }}
     >

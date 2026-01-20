@@ -1585,7 +1585,7 @@ export function useMultiParticipantChat(
       setMessages(mutableMessages);
       hasHydratedRef.current = true;
     }
-  }, [messages.length, initialMessages, setMessages]);
+  }, [messages.length, initialMessages, setMessages, threadId]);
 
   // ✅ NAVIGATION FIX: Reset all refs when threadId changes (to empty OR different thread)
   // This handles:
@@ -2149,7 +2149,7 @@ export function useMultiParticipantChat(
         // ✅ CRITICAL: Use flushSync to ensure AI SDK sees merged state BEFORE streaming
         // eslint-disable-next-line react-dom/no-flush-sync -- Required: orchestrator must see earlier participants as complete
         flushSync(() => {
-          setMessages(currentMessages => {
+          setMessages((currentMessages) => {
             // Clone to break Immer freeze
             const merged = structuredClone([...currentMessages]);
             for (const msg of messagesToMerge) {
@@ -2161,11 +2161,14 @@ export function useMultiParticipantChat(
             // Sort by role (user first), then round, then participant index
             merged.sort((a, b) => {
               // User messages come first
-              if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER) return -1;
-              if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER) return 1;
+              if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER)
+                return -1;
+              if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER)
+                return 1;
               const aRound = getRoundNumber(a.metadata) ?? 0;
               const bRound = getRoundNumber(b.metadata) ?? 0;
-              if (aRound !== bRound) return aRound - bRound;
+              if (aRound !== bRound)
+                return aRound - bRound;
               const aIdx = getParticipantIndex(a.metadata) ?? 999;
               const bIdx = getParticipantIndex(b.metadata) ?? 999;
               return aIdx - bIdx;

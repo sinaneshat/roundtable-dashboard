@@ -66,7 +66,6 @@ function ChatItem({
   disableAnimation,
 }: ChatItemProps) {
   const t = useTranslations();
-  const chatUrl = `/chat/${chat.slug}`;
 
   const handleRenameFormSubmit = useCallback((title: string) => {
     onRenameSubmit(chat, title);
@@ -88,8 +87,12 @@ function ChatItem({
               asChild
               isActive={isActive}
             >
+              {/* ✅ FIX: Use params prop instead of string interpolation
+                  This ensures TanStack Router properly extracts the slug param
+                  and passes it to the route loader */}
               <Link
-                to={chatUrl}
+                to="/chat/$slug"
+                params={{ slug: chat.slug }}
                 preload="intent"
               >
                 <div
