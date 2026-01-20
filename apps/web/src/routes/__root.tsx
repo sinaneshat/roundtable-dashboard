@@ -5,6 +5,7 @@ import type { ErrorComponentProps } from '@tanstack/react-router';
 import {
   createRootRouteWithContext,
   HeadContent,
+  Link,
   Outlet,
   Scripts,
 } from '@tanstack/react-router';
@@ -252,14 +253,15 @@ function RootErrorComponent({ error, reset }: ErrorComponentProps) {
               >
                 Try Again
               </Button>
+              {/* ✅ Use TanStack Router Link for type-safe navigation */}
               <Button
                 variant="outline"
                 size="lg"
-                onClick={() => (window.location.href = '/')}
+                asChild
                 startIcon={<Icons.home className="size-4" />}
                 className="min-w-[140px]"
               >
-                Go Home
+                <Link to="/">Go Home</Link>
               </Button>
             </div>
           </div>

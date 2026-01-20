@@ -62,12 +62,16 @@ async function queueRoundCompletionCheck(
  * ✅ FIX: Validate KV participant status against actual DB messages
  * KV can have stale data (e.g., participant marked FAILED but message was never saved)
  * This function cross-validates to find the REAL next participant
+ *
+ * @param currentStreamingIndex - The participant index currently streaming (if known).
+ *   Used to avoid returning a participant index BEFORE the current one (DB race condition).
  */
 async function getDbValidatedNextParticipant(
   threadId: string,
   roundNumber: number,
   totalParticipants: number,
   _kvNextParticipant: { roundNumber: number; participantIndex: number; totalParticipants: number } | null,
+  currentStreamingIndex?: number,
 ): Promise<{ participantIndex: number } | null> {
   const db = await getDbAsync();
 
@@ -96,8 +100,14 @@ async function getDbValidatedNextParticipant(
   }
 
   // Find first participant without a DB message
+  // ✅ FIX: But never go backwards from current streaming index
   for (let i = 0; i < totalParticipants; i++) {
     if (!participantIndicesWithMessages.has(i)) {
+      // ✅ CRITICAL FIX: If we're past this participant (streaming a later one),
+      // skip - their message will appear in DB soon (race condition)
+      if (currentStreamingIndex !== undefined && i < currentStreamingIndex) {
+        continue;
+      }
       return { participantIndex: i };
     }
   }
@@ -186,11 +196,13 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
 
       if (!metadata) {
         // ✅ FIX: Validate KV result against actual DB messages
+        // Pass currentStreamingIndex to avoid going backwards due to DB race conditions
         const dbValidatedNext = await getDbValidatedNextParticipant(
           threadId,
           activeStream.roundNumber,
           activeStream.totalParticipants,
           nextParticipant,
+          activeStream.participantIndex,
         );
         const validatedRoundComplete = !dbValidatedNext;
 
@@ -247,11 +259,13 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
 
         // ✅ FIX: Validate KV result against actual DB messages
         // KV might have marked participant as FAILED but message was never saved
+        // Pass currentStreamingIndex to avoid going backwards due to DB race conditions
         const dbValidatedNextParticipant = await getDbValidatedNextParticipant(
           threadId,
           activeStream.roundNumber,
           activeStream.totalParticipants,
           kvUpdatedNextParticipant,
+          activeStream.participantIndex,
         );
         const updatedRoundComplete = !dbValidatedNextParticipant;
 
@@ -579,10 +593,21 @@ export const getThreadStreamResumptionStateHandler: RouteHandler<typeof getThrea
 
         // Find the REAL next participant: first one without a DB message
         // This overrides KV if KV has stale/incorrect status
+        // ✅ FIX: But NEVER go backwards - if P1 is streaming, P0 must be complete
+        // even if P0's message hasn't been persisted to DB yet (race condition)
         let nextParticipant = kvNextParticipant;
         for (let i = 0; i < activeStream.totalParticipants; i++) {
           if (!participantIndicesWithMessages.has(i)) {
-            // This participant has no DB message - they need to respond
+            // This participant has no DB message - they MIGHT need to respond
+            // ✅ CRITICAL FIX: But if we're PAST this participant (streaming a later one),
+            // don't go backwards. The earlier participant is complete but DB hasn't synced yet.
+            // Example: P0 complete, P1 streaming, DB doesn't have P0's message yet.
+            // Without this check, we'd return nextP=0 causing P0 to show "Thinking..."
+            if (i < activeStream.participantIndex) {
+              // Skip - this participant is before the currently streaming one
+              // Their message will appear in DB soon (race condition)
+              continue;
+            }
             // Override KV result if different
             if (!kvNextParticipant || kvNextParticipant.participantIndex !== i) {
               nextParticipant = {

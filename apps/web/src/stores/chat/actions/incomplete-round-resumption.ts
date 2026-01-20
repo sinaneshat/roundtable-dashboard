@@ -289,6 +289,9 @@ export function useIncompleteRoundResumption(
   // of 50ms before allowing resumption triggers. This gives onFinish time to run.
   const wasStreamingRef = useRef(false);
 
+  // Track settling state via ref to avoid dependencies that trigger re-renders
+  const isStreamSettlingRef = useRef(false);
+
   useEffect(() => {
     // Clear any pending timeout when effect re-runs
     if (streamSettlingTimeoutRef.current) {
@@ -299,7 +302,8 @@ export function useIncompleteRoundResumption(
     if (isStreaming) {
       // Streaming is active - track it and ensure not in settling state
       wasStreamingRef.current = true;
-      if (isStreamSettling) {
+      if (isStreamSettlingRef.current) {
+        isStreamSettlingRef.current = false;
         setIsStreamSettling(false);
       }
     } else if (wasStreamingRef.current) {
@@ -307,11 +311,13 @@ export function useIncompleteRoundResumption(
       wasStreamingRef.current = false;
 
       // Enter settling period
+      isStreamSettlingRef.current = true;
       setIsStreamSettling(true);
       rlog.resume('settle-start', `streaming ended, waiting 50ms for onFinish`);
 
       // Clear settling after delay
       streamSettlingTimeoutRef.current = setTimeout(() => {
+        isStreamSettlingRef.current = false;
         setIsStreamSettling(false);
         rlog.resume('settle-end', `settling complete, resumption allowed`);
       }, 50);
@@ -323,7 +329,7 @@ export function useIncompleteRoundResumption(
         streamSettlingTimeoutRef.current = null;
       }
     };
-  }, [isStreaming, isStreamSettling]);
+  }, [isStreaming]);
 
   const currentRoundNumber = messages.length > 0 ? getCurrentRoundNumber(messages) : null;
 

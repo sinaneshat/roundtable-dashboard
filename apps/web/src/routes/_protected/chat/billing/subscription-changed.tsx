@@ -11,6 +11,7 @@ const pageDescription = 'Your subscription has been updated successfully.';
 const subscriptionChangedSearchSchema = z.object({
   changeType: z.string().optional(),
   oldProductId: z.string().optional(),
+  newProductId: z.string().optional(),
 });
 
 export const Route = createFileRoute('/_protected/chat/billing/subscription-changed')({
