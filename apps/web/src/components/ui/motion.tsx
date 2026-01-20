@@ -263,7 +263,7 @@ export function StreamingMessageContent({
   className,
 }: StreamingMessageContentProps) {
   return (
-    <div className={cn(className)}>
+    <div className={cn('min-w-0', className)}>
       {children}
     </div>
   );

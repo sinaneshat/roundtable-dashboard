@@ -245,6 +245,7 @@ export const ModelMessageCard = memo(({
               <div
                 style={{ gridArea: '1/1' }}
                 className={cn(
+                  'min-w-0',
                   !skipTransitions && 'transition-opacity duration-200 ease-out',
                   renderableParts.length > 0 ? 'opacity-100' : 'opacity-0 pointer-events-none',
                 )}

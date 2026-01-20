@@ -59,12 +59,15 @@ async function queueRoundCompletionCheck(
 }
 
 /**
- * ✅ FIX: Validate KV participant status against actual DB messages
- * KV can have stale data (e.g., participant marked FAILED but message was never saved)
- * This function cross-validates to find the REAL next participant
+ * Validate KV participant status against actual DB messages.
+ * KV can have stale data (e.g., participant marked FAILED but message was never saved).
+ * Cross-validates to find the REAL next participant.
  *
- * @param currentStreamingIndex - The participant index currently streaming (if known).
- *   Used to avoid returning a participant index BEFORE the current one (DB race condition).
+ * @param threadId - Thread to check
+ * @param roundNumber - Current round number
+ * @param totalParticipants - Total participant count in round
+ * @param _kvNextParticipant - KV-stored next participant (may be stale)
+ * @param currentStreamingIndex - Index currently streaming (avoids returning earlier index due to DB race)
  */
 async function getDbValidatedNextParticipant(
   threadId: string,

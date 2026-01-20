@@ -61,7 +61,7 @@ function CodeBlockComponent({
     <CodeBlockContext value={contextValue}>
       <div
         className={cn(
-          'group relative min-w-0 w-full rounded-2xl border bg-background text-foreground',
+          'group relative min-w-0 w-full my-4 first:mt-0 last:mb-0 rounded-xl border border-border/50 bg-muted/30 text-foreground overflow-hidden',
           className,
         )}
         {...props}
@@ -69,19 +69,19 @@ function CodeBlockComponent({
         <div className="relative">
           {isHighlighting && !html
             ? (
-                <pre className="m-0 bg-background p-4 text-foreground text-sm overflow-x-auto">
+                <pre className="m-0 bg-transparent p-4 text-foreground text-sm overflow-x-auto rounded-xl">
                   <code className="font-mono text-sm">{code}</code>
                 </pre>
               )
             : (
                 <>
                   <div
-                    className="dark:hidden [&>pre]:m-0 [&>pre]:overflow-x-auto [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
+                    className="dark:hidden [&>pre]:m-0 [&>pre]:overflow-x-auto [&>pre]:p-4 [&>pre]:text-sm [&>pre]:rounded-xl [&_code]:font-mono [&_code]:text-sm [&>pre]:![background:transparent]"
                     // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for Shiki syntax highlighting output
                     dangerouslySetInnerHTML={{ __html: html }}
                   />
                   <div
-                    className="hidden dark:block [&>pre]:m-0 [&>pre]:overflow-x-auto [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
+                    className="hidden dark:block [&>pre]:m-0 [&>pre]:overflow-x-auto [&>pre]:p-4 [&>pre]:text-sm [&>pre]:rounded-xl [&_code]:font-mono [&_code]:text-sm [&>pre]:![background:transparent]"
                     // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for Shiki syntax highlighting output
                     dangerouslySetInnerHTML={{ __html: darkHtml }}
                   />

@@ -75,7 +75,7 @@ function MermaidAwarePre(props: ComponentPropsWithoutRef<'pre'>) {
   const mermaidChart = extractMermaidChart(children);
   if (mermaidChart) {
     return (
-      <Suspense fallback={<div className="animate-pulse bg-muted rounded-lg h-32" />}>
+      <Suspense fallback={<div className="animate-pulse bg-muted/30 border border-border/50 rounded-xl h-32 my-4" />}>
         <LazyMermaid chart={mermaidChart} />
       </Suspense>
     );

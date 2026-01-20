@@ -506,8 +506,47 @@ export function useMultiParticipantChat(
 
     // Find first participant without a COMPLETE message (0 to totalParticipants-1)
     // ✅ FIX: Default to totalParticipants (round complete) - only set lower if incomplete found
+    //
+    // ✅ SEQUENTIAL ORDER FIX: Participants respond in sequential order (P0 → P1 → P2 → ...)
+    // If ANY higher-indexed participant has a complete message, ALL lower-indexed participants
+    // MUST be complete (even if their messages haven't been detected yet due to race conditions).
+    // This prevents triggering P0 after P1 finishes when P0's message wasn't detected.
+    //
+    // ✅ RESUMPTION FIX: Only apply sequential order if ALL earlier messages EXIST.
+    // During page refresh, P0 might have never been created (user refreshed before P0 streamed).
+    // In this case, P1 completing doesn't mean P0 is complete - P0 never existed.
+    // We detect this by checking if messages exist for indices 0 to highestCompleteIndex.
     let nextIndex = totalParticipants;
-    for (let i = 0; i < totalParticipants; i++) {
+
+    // Find the highest index that has a complete message
+    // All participants before this index are implicitly complete due to sequential order
+    let highestCompleteIndex = -1;
+    for (const idx of participantIndicesWithCompleteMessages) {
+      if (idx > highestCompleteIndex)
+        highestCompleteIndex = idx;
+    }
+
+    // ✅ RESUMPTION FIX: Check if ALL messages 0 to highestCompleteIndex exist
+    // If any message is missing, sequential order assumption doesn't apply
+    let allEarlierMessagesExist = true;
+    if (highestCompleteIndex > 0) {
+      for (let i = 0; i < highestCompleteIndex; i++) {
+        // Check if message EXISTS (regardless of complete status)
+        const expectedMsgId = `${callbackRefs.threadId.current}_r${currentRound}_p${i}`;
+        const msgExists = messagesRef.current.some(m => m.id === expectedMsgId);
+        if (!msgExists) {
+          allEarlierMessagesExist = false;
+          rlog.trigger('gap-detect', `P${i} message missing - cannot assume sequential order`);
+          break;
+        }
+      }
+    }
+
+    // Start searching from after the highest complete index (if sequential order applies)
+    // OR from 0 if sequential order doesn't apply (messages missing)
+    const startIndex = (highestCompleteIndex >= 0 && allEarlierMessagesExist) ? highestCompleteIndex + 1 : 0;
+
+    for (let i = startIndex; i < totalParticipants; i++) {
       if (!participantIndicesWithCompleteMessages.has(i)) {
         // Found a participant without a complete message - trigger them
         // Clear from queue if they were previously queued but message is missing
@@ -1762,6 +1801,37 @@ export function useMultiParticipantChat(
     // freshMessages contains guaranteed-persisted messages, avoiding stale closure issues
     const roundNumber = getCurrentRoundNumber(messagesToSearch);
 
+    // ✅ ROUND DECREMENT GUARD: Prevent corruption from stale messages
+    // After a round completes, currentRoundRef is incremented. If startRound is called
+    // with stale messages (missing the just-completed round), getCurrentRoundNumber
+    // returns the OLD round number. Setting currentRoundRef to a lower value corrupts
+    // state and causes re-triggering of already-completed rounds.
+    //
+    // EXCEPTION: Allow going back to an INCOMPLETE round (missing participants).
+    // During page refresh, currentRoundRef might have been prematurely incremented
+    // when P1 finished but P0's message doesn't exist. This is legitimate resumption.
+    if (roundNumber < currentRoundRef.current) {
+      // Check if roundNumber's round actually completed (has all participants)
+      const effectiveThreadId = callbackRefs.threadId.current;
+      let roundIsComplete = true;
+      for (let i = 0; i < enabled.length; i++) {
+        const expectedMsgId = `${effectiveThreadId}_r${roundNumber}_p${i}`;
+        const msgExists = messagesRef.current.some(m => m.id === expectedMsgId);
+        if (!msgExists) {
+          roundIsComplete = false;
+          break;
+        }
+      }
+      if (roundIsComplete) {
+        // Round actually completed - this is a stale trigger, block it
+        rlog.stream('start', `BLOCKED: stale round r${roundNumber} < current r${currentRoundRef.current} (round complete)`);
+        isTriggeringRef.current = false;
+        return;
+      }
+      // Round is incomplete (missing participants) - allow resumption
+      rlog.stream('start', `ALLOW: incomplete round r${roundNumber} (currentRef=${currentRoundRef.current})`);
+    }
+
     // CRITICAL: Update refs FIRST to avoid race conditions
     currentIndexRef.current = DEFAULT_PARTICIPANT_INDEX;
     roundParticipantsRef.current = enabled;
@@ -1993,6 +2063,34 @@ export function useMultiParticipantChat(
     // ✅ STALE CLOSURE FIX: Use freshMessages (persisted messages) for round number calculation
     // Messages are now persisted via PATCH before streaming starts (round 1+)
     const roundNumber = getCurrentRoundNumber(messagesToSearch);
+
+    // ✅ ROUND DECREMENT GUARD: Prevent corruption from stale messages
+    // Same guard as startRound - if calculated round is less than current, messages are stale.
+    // This can happen when continueFromParticipant is called from an effect with outdated deps.
+    //
+    // EXCEPTION: Allow going back to an INCOMPLETE round (missing participants).
+    // During page refresh, currentRoundRef might have been prematurely incremented
+    // when P1 finished but P0's message doesn't exist. This is legitimate resumption.
+    if (roundNumber < currentRoundRef.current) {
+      // Check if roundNumber's round actually completed (has all participants' messages)
+      let roundIsComplete = true;
+      for (let i = 0; i < enabled.length; i++) {
+        const expectedMsgId = `${effectiveThreadId}_r${roundNumber}_p${i}`;
+        const msgExists = messagesRef.current.some(m => m.id === expectedMsgId);
+        if (!msgExists) {
+          roundIsComplete = false;
+          break;
+        }
+      }
+      if (roundIsComplete) {
+        // Round actually completed - this is a stale trigger, block it
+        rlog.resume('cfp-exit', `P${fromIndex} BLOCKED: stale round r${roundNumber} < current r${currentRoundRef.current} (round complete)`);
+        isTriggeringRef.current = false;
+        return;
+      }
+      // Round is incomplete (missing participants) - allow resumption
+      rlog.resume('cfp-allow', `P${fromIndex} ALLOW: incomplete round r${roundNumber} (currentRef=${currentRoundRef.current})`);
+    }
 
     rlog.resume('continue', `P${fromIndex} r${roundNumber} msgs=${messages.length} search=${messagesToSearch.length} enabled=${enabled.length}`);
 

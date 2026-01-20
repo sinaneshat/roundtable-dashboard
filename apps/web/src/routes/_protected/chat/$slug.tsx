@@ -95,12 +95,19 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
         // Prefetch missing data in background (non-blocking)
         if (!cachedStream)
           queryClient.prefetchQuery(streamOptions);
-        if (!cachedChangelog)
-          queryClient.prefetchQuery(changelogOptions);
         if (!cachedFeedback)
           queryClient.prefetchQuery(feedbackOptions);
         if (!cachedPreSearches)
           queryClient.prefetchQuery(preSearchesOptions);
+
+        // ✅ STALE INFINITY FIX: Invalidate staleTime:Infinity queries on SPA navigation
+        // Problem: staleTime: Infinity means TanStack Query never auto-refetches
+        // Data changes happen BETWEEN visits (user navigates away during streaming)
+        // Server invalidates KV cache but client TanStack Query cache stays stale
+        // Solution: Invalidate queries to force fresh fetch on each visit
+        // This ensures changelog accordion and pre-search results show correctly
+        queryClient.invalidateQueries({ queryKey: changelogOptions.queryKey });
+        queryClient.invalidateQueries({ queryKey: preSearchesOptions.queryKey });
       }
     }
 

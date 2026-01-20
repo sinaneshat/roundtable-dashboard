@@ -12,7 +12,7 @@ const CodeBlock = dynamic(
   () => import('@/components/ai-elements/code-block').then(mod => ({ default: mod.CodeBlock })),
   {
     ssr: false,
-    loading: () => <Skeleton className="h-32 w-full rounded-2xl" />,
+    loading: () => <Skeleton className="h-32 w-full rounded-xl" />,
   },
 );
 
@@ -53,17 +53,14 @@ type MarkdownCodeProps = {
 };
 
 export function MarkdownCode({ inline, className, children }: MarkdownCodeProps) {
-  if (inline)
+  // Only handle inline code - block code is handled by MarkdownPre
+  // This prevents double-wrapping when ReactMarkdown processes <pre><code>...</code></pre>
+  if (inline) {
     return <InlineCode className={className}>{children}</InlineCode>;
+  }
 
-  const language = extractLanguage(className);
-  const code = extractTextContent(children).trim();
-
-  return (
-    <CodeBlock code={code} language={language} showLineNumbers={code.split('\n').length > 3}>
-      <CodeBlockCopyButton />
-    </CodeBlock>
-  );
+  // For block code, return a native code element - MarkdownPre will wrap it in CodeBlock
+  return <code className={className}>{children}</code>;
 }
 
 type MarkdownPreProps = {
@@ -94,7 +91,7 @@ export function MarkdownPre({ children, className }: MarkdownPreProps) {
   }
 
   return (
-    <pre className={cn('bg-muted min-w-0 rounded-2xl overflow-x-auto my-4 p-4 text-sm font-mono', className)}>
+    <pre className={cn('bg-muted/30 border border-border/50 min-w-0 rounded-xl overflow-hidden overflow-x-auto my-4 first:mt-0 last:mb-0 p-4 text-sm font-mono', className)}>
       {children}
     </pre>
   );

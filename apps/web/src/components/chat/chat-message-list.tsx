@@ -121,8 +121,8 @@ const ParticipantMessageWrapper = memo(({
   const hasError = status === MessageStatuses.FAILED || assistantMetadata?.hasError;
 
   return (
-    <div className="flex justify-start">
-      <div className="w-full">
+    <div className="flex justify-start min-w-0">
+      <div className="w-full min-w-0">
         <ParticipantHeader
           avatarSrc={avatarSrc}
           avatarName={avatarName}
@@ -207,9 +207,9 @@ function AssistantGroupCard({
   return (
     <div
       key={`assistant-group-${group.participantKey}-${group.messages[0]?.index}`}
-      className="flex justify-start"
+      className="flex justify-start min-w-0"
     >
-      <div className="w-full">
+      <div className="w-full min-w-0">
         <ParticipantHeader
           avatarSrc={group.headerInfo.avatarSrc}
           avatarName={group.headerInfo.avatarName}

@@ -6,7 +6,7 @@
 
 import type { RoundPhase } from '@roundtable/shared';
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, TextPartStates } from '@roundtable/shared';
-import { use, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { use, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
@@ -153,8 +153,16 @@ export function useIncompleteRoundResumption(
   // ✅ STREAM SETTLING FIX: Track when streaming just ended
   // When isStreaming goes false, AI SDK's onFinish hasn't run yet (message parts still have state='streaming').
   // Wait 50ms before allowing resumption triggers to let onFinish update message state.
-  const [isStreamSettling, setIsStreamSettling] = useState(false);
+  // Using useReducer instead of useState to satisfy react-hooks-extra/no-direct-set-state-in-use-effect
+  const [isStreamSettling, dispatchSettling] = useReducer((_: boolean, action: boolean) => action, false);
   const streamSettlingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  // Track settling state via ref to avoid dependencies that trigger re-renders
+  const isStreamSettlingRef = useRef(false);
+  // Callback to update settling state
+  const updateSettlingState = useCallback((settling: boolean) => {
+    isStreamSettlingRef.current = settling;
+    dispatchSettling(settling);
+  }, []);
   // ✅ UNIFIED PHASES: Phase-based resumption tracking
   const preSearchPhaseResumptionAttemptedRef = useRef<string | null>(null);
   const moderatorPhaseResumptionAttemptedRef = useRef<string | null>(null);
@@ -289,9 +297,6 @@ export function useIncompleteRoundResumption(
   // of 50ms before allowing resumption triggers. This gives onFinish time to run.
   const wasStreamingRef = useRef(false);
 
-  // Track settling state via ref to avoid dependencies that trigger re-renders
-  const isStreamSettlingRef = useRef(false);
-
   useEffect(() => {
     // Clear any pending timeout when effect re-runs
     if (streamSettlingTimeoutRef.current) {
@@ -303,22 +308,19 @@ export function useIncompleteRoundResumption(
       // Streaming is active - track it and ensure not in settling state
       wasStreamingRef.current = true;
       if (isStreamSettlingRef.current) {
-        isStreamSettlingRef.current = false;
-        setIsStreamSettling(false);
+        updateSettlingState(false);
       }
     } else if (wasStreamingRef.current) {
       // Just transitioned from streaming to not streaming
       wasStreamingRef.current = false;
 
       // Enter settling period
-      isStreamSettlingRef.current = true;
-      setIsStreamSettling(true);
+      updateSettlingState(true);
       rlog.resume('settle-start', `streaming ended, waiting 50ms for onFinish`);
 
       // Clear settling after delay
       streamSettlingTimeoutRef.current = setTimeout(() => {
-        isStreamSettlingRef.current = false;
-        setIsStreamSettling(false);
+        updateSettlingState(false);
         rlog.resume('settle-end', `settling complete, resumption allowed`);
       }, 50);
     }
@@ -329,7 +331,7 @@ export function useIncompleteRoundResumption(
         streamSettlingTimeoutRef.current = null;
       }
     };
-  }, [isStreaming]);
+  }, [isStreaming, updateSettlingState]);
 
   const currentRoundNumber = messages.length > 0 ? getCurrentRoundNumber(messages) : null;
 
@@ -573,10 +575,31 @@ export function useIncompleteRoundResumption(
   // Find the first missing participant index
   // ✅ AI SDK RESUME FIX: Skip BOTH responded AND in-progress participants
   // In-progress participants have partial content from AI SDK resume - accept as-is
+  //
+  // ✅ SEQUENTIAL ORDER FIX: Participants respond in sequential order (P0 → P1 → P2 → ...)
+  // If ANY higher-indexed participant is in-progress or responded, ALL lower-indexed
+  // participants MUST be complete (even if their messages haven't been detected yet).
+  // This prevents triggering P0 when P1 is already streaming.
   let nextParticipantIndex: number | null = null;
 
   if (isIncomplete) {
-    for (let i = 0; i < enabledParticipants.length; i++) {
+    // Find the highest index that is known to be active (in-progress or responded)
+    // All participants before this index are implicitly complete due to sequential order
+    let highestKnownIndex = -1;
+    for (const idx of respondedParticipantIndices) {
+      if (idx > highestKnownIndex)
+        highestKnownIndex = idx;
+    }
+    for (const idx of inProgressParticipantIndices) {
+      if (idx > highestKnownIndex)
+        highestKnownIndex = idx;
+    }
+
+    // Start searching from after the highest known index
+    // (or from 0 if no participants have responded/in-progress yet)
+    const startIndex = highestKnownIndex >= 0 ? highestKnownIndex + 1 : 0;
+
+    for (let i = startIndex; i < enabledParticipants.length; i++) {
       // Skip responded (complete) participants
       if (respondedParticipantIndices.has(i)) {
         continue;
@@ -618,13 +641,12 @@ export function useIncompleteRoundResumption(
     // ✅ DOUBLE-TRIGGER FIX: Reset round-level guard
     roundTriggerInProgressRef.current = null;
     // ✅ STREAM SETTLING FIX: Reset settling state on navigation
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
-    setIsStreamSettling(false);
+    updateSettlingState(false);
     if (streamSettlingTimeoutRef.current) {
       clearTimeout(streamSettlingTimeoutRef.current);
       streamSettlingTimeoutRef.current = null;
     }
-  }, [threadId]);
+  }, [threadId, updateSettlingState]);
 
   // ============================================================================
   // ✅ EFFECT ORDERING FIX: Signature reset MUST run BEFORE immediate placeholder

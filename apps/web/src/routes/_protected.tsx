@@ -1,7 +1,8 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
-import { ChatLayoutProviders, PreferencesStoreProvider } from '@/components/providers';
+import { ChatLayoutProviders } from '@/components/providers/chat-layout-providers';
+import { PreferencesStoreProvider } from '@/components/providers/preferences-store-provider';
 import { useSession } from '@/lib/auth/client';
 import {
   modelsQueryOptions,

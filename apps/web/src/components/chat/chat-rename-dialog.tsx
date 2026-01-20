@@ -13,7 +13,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Label } from '@/components/ui/label';
-import { useUpdateThreadMutation } from '@/hooks/mutations';
+import { useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
