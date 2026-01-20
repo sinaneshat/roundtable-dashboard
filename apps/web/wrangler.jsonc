@@ -1,8 +1,8 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "roundtable-web",
   "account_id": "499b6c3c38f75f7f7dc7d3127954b921",
-  "compatibility_date": "2025-01-15",
+  "compatibility_date": "2026-01-20",
   "compatibility_flags": ["nodejs_compat"],
   "upload_source_maps": true,
   "main": "@tanstack/react-start/server-entry",

@@ -1,9 +1,9 @@
 {
-  "$schema": "node_modules/wrangler/config-schema.json",
+  "$schema": "./node_modules/wrangler/config-schema.json",
   "main": "worker.ts",
   "name": "roundtable-api",
   "account_id": "499b6c3c38f75f7f7dc7d3127954b921",
-  "compatibility_date": "2025-01-15",
+  "compatibility_date": "2026-01-20",
   "compatibility_flags": ["nodejs_compat"],
   "minify": true,
   "upload_source_maps": false, // source maps add 40MB+ to upload, disabled

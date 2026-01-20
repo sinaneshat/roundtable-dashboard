@@ -85,7 +85,7 @@
     "zustand": "^5.0.9"
   },
   "devDependencies": {
-    "@cloudflare/vite-plugin": "^1.0.0",
+    "@cloudflare/vite-plugin": "^1.21.1",
     "@roundtable/api": "workspace:*",
     "@roundtable/typescript-config": "workspace:*",
     "@roundtable/vitest-config": "workspace:*",
@@ -108,6 +108,6 @@
     "vite": "^7.0.0",
     "vite-tsconfig-paths": "^6.0.3",
     "vitest": "^4.0.16",
-    "wrangler": "^4.59.2"
+    "wrangler": "^4.59.3"
   }
 }
