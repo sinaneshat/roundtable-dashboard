@@ -42,5 +42,7 @@ export default defineConfig({
   },
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
+    // Polyfill __name helper injected by esbuild keepNames in dependencies
+    __name: '((target, value) => target)',
   },
 });
