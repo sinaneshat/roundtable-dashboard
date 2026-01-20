@@ -2047,7 +2047,11 @@ export function useMultiParticipantChat(
     const participant = enabled[fromIndexToUse];
     if (participant && threadId) {
       const expectedMessageId = `${threadId}_r${roundNumber}_p${fromIndexToUse}`;
-      const existingMessage = messages.find(m => m.id === expectedMessageId);
+      // ✅ FIX: Check BOTH AI SDK messages AND store messages for existing complete message
+      // Race condition: AI SDK (messages) might be empty, but store (messagesToSearch) has the message
+      // Without checking both, we'd re-stream and create a duplicate
+      const existingMessage = messages.find(m => m.id === expectedMessageId)
+        || messagesToSearch.find(m => m.id === expectedMessageId);
 
       if (existingMessage) {
         // Check if the existing message is TRULY complete (has finishReason AND content)
@@ -2062,6 +2066,7 @@ export function useMultiParticipantChat(
         // A message is truly complete if it has BOTH valid finishReason AND content.
         // If it only has partial content (no finishReason), we need to re-stream.
         if (hasFinishReason && hasContent) {
+          rlog.resume('skip-complete', `P${fromIndexToUse} already complete, notifying store`);
           // ✅ RACE CONDITION FIX: Notify store when skipping a completed participant
           // Previously, this would return early without notifying anyone, leaving
           // the system stuck with nextParticipantToTrigger set but no streaming starting.

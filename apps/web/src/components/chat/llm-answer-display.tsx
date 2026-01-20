@@ -30,12 +30,12 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
         </div>
       </FadeInText>
 
-      <div dir="auto">
+      <div dir="auto" className="min-w-0">
         {isStreaming
           ? (
-              <div>
+              <div className="min-w-0">
                 <LazyStreamdown
-                  className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+                  className="min-w-0 text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                   components={streamdownComponents}
                 >
                   {answer}
@@ -44,7 +44,7 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
               </div>
             )
           : (
-              <div className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
+              <div className="min-w-0 text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
                 <ReactMarkdown components={streamdownComponents}>
                   {answer}
                 </ReactMarkdown>

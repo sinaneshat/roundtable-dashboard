@@ -76,12 +76,12 @@ function CodeBlockComponent({
             : (
                 <>
                   <div
-                    className="dark:hidden overflow-hidden [&>pre]:m-0 [&>pre]:overflow-x-auto [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
+                    className="dark:hidden [&>pre]:m-0 [&>pre]:overflow-x-auto [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
                     // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for Shiki syntax highlighting output
                     dangerouslySetInnerHTML={{ __html: html }}
                   />
                   <div
-                    className="hidden dark:block overflow-hidden [&>pre]:m-0 [&>pre]:overflow-x-auto [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
+                    className="hidden dark:block [&>pre]:m-0 [&>pre]:overflow-x-auto [&>pre]:bg-background! [&>pre]:p-4 [&>pre]:text-foreground! [&>pre]:text-sm [&_code]:font-mono [&_code]:text-sm"
                     // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for Shiki syntax highlighting output
                     dangerouslySetInnerHTML={{ __html: darkHtml }}
                   />

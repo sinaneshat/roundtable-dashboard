@@ -79,9 +79,11 @@ describe('sidebar Infinite Render Prevention - Source Code Verification', () => 
       const chatListPath = resolve(__dirname, '../chat-list.tsx');
       const content = readFileSync(chatListPath, 'utf-8');
 
-      // TanStack Router uses 'to' instead of 'href'
+      // TanStack Router uses 'to' with params prop for type-safe routing
       expect(content).toMatch(/Link\s+to=/);
-      expect(content).toMatch(/to=\{chatUrl\}/);
+      // Uses typed params pattern: to="/chat/$slug" params={{ slug: chat.slug }}
+      expect(content).toMatch(/to="\/chat\/\$slug"/);
+      expect(content).toMatch(/params=\{\s*\{\s*slug:/);
     });
 
     it('should enable intent-based preload for fast navigation', () => {

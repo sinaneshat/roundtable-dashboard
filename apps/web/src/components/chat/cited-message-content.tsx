@@ -159,7 +159,7 @@ export function CitedMessageContent({
   // No citations and no available sources - render plain markdown
   if (finalSources.length === 0) {
     return (
-      <div dir="auto" className={cn('prose prose-sm dark:prose-invert max-w-none', className)}>
+      <div dir="auto" className={cn('prose prose-sm dark:prose-invert max-w-none min-w-0', className)}>
         {renderMarkdown(text)}
       </div>
     );
@@ -169,7 +169,7 @@ export function CitedMessageContent({
   // Use plainText (with citations stripped) if inline citations were found, otherwise original text
   const displayText = sourceData.length > 0 ? plainText : text;
   return (
-    <div dir="auto" className={cn('prose prose-sm dark:prose-invert max-w-none', className)}>
+    <div dir="auto" className={cn('prose prose-sm dark:prose-invert max-w-none min-w-0', className)}>
       {renderMarkdown(displayText)}
       <SourcesFooter sources={finalSources} />
     </div>

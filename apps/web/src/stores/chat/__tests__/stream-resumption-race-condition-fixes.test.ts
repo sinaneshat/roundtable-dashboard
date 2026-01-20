@@ -343,11 +343,18 @@ describe('double Trigger Prevention', () => {
     });
     rerender();
 
+    // Wait for stream settling period (50ms) to complete + buffer
+    await act(async () => {
+      await waitForAsync(150);
+    });
+    // Force rerender after settling timeout fires
+    rerender();
+
     await waitFor(() => {
       expect(mockStore.actions.setNextParticipantToTrigger).toHaveBeenCalledWith(2);
       expect(mockStore.actions.setStreamingRoundNumber).toHaveBeenCalledWith(1);
       expect(mockStore.actions.setCurrentParticipantIndex).toHaveBeenCalledWith(2);
-    }, { timeout: 300 });
+    }, { timeout: 500 });
   });
 });
 
@@ -730,12 +737,19 @@ describe('integration Tests', () => {
     });
     rerender();
 
+    // Wait for stream settling period (50ms) to complete + buffer
+    await act(async () => {
+      await waitForAsync(150);
+    });
+    // Force rerender after settling timeout fires
+    rerender();
+
     await waitFor(() => {
       const calls = mockStore.actions.setNextParticipantToTrigger.mock.calls;
       const lastCall = calls[calls.length - 1];
       expect(lastCall).toBeDefined();
       expect(lastCall[0]).toBe(2);
-    }, { timeout: 300 });
+    }, { timeout: 500 });
   });
 
   it('should handle trigger failure with timeout and retry', async () => {

@@ -18,6 +18,8 @@ import type { Components } from 'react-markdown';
 import ReactMarkdown from 'react-markdown';
 import { z } from 'zod';
 
+import { cn } from '@/lib/ui/cn';
+
 // Lazy-load mermaid renderer only when mermaid blocks are detected
 const LazyMermaid = lazy(() => import('./lazy-mermaid'));
 
@@ -95,7 +97,7 @@ function LazyStreamdownComponent({ children, className, components }: LazyStream
   }, [children, components]);
 
   return (
-    <div className={className}>
+    <div className={cn('min-w-0', className)}>
       <ReactMarkdown components={enhancedComponents}>
         {children}
       </ReactMarkdown>

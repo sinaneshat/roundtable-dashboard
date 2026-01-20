@@ -324,7 +324,7 @@ export const ModelMessageCard = memo(({
             : groupAvailableSources;
 
           return (
-            <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`} dir="auto" className="min-w-0 overflow-hidden">
+            <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`} dir="auto" className="min-w-0">
               <CitedMessageContent
                 text={part.text}
                 citations={resolvedCitations}
@@ -342,7 +342,7 @@ export const ModelMessageCard = memo(({
           <div
             key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}
             dir="auto"
-            className="min-w-0 overflow-hidden text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+            className="min-w-0 text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
           >
             {skipTransitions
               ? (

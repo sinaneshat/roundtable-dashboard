@@ -27,7 +27,7 @@ export function Message({ className, from, ...props }: MessageProps) {
 }
 
 const messageContentVariants = cva(
-  'is-user:dark w-full flex flex-col gap-2 overflow-hidden text-sm',
+  'is-user:dark w-full flex flex-col gap-2 text-sm',
   {
     variants: {
       variant: {
