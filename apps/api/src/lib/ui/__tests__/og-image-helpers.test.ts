@@ -8,13 +8,17 @@
  * - Base64 image loading functions
  */
 
-import type { ChatMode } from '@roundtable/shared/enums';
+import { CHAT_MODES } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
 
 import {
   createGradient,
   getModeColor,
+  MODE_COLORS,
   OG_COLORS,
+  OG_DEFAULTS,
+  OG_HEIGHT,
+  OG_WIDTH,
   truncateText,
 } from '../og-colors';
 
@@ -57,28 +61,20 @@ describe('oG_COLORS', () => {
 });
 
 describe('getModeColor', () => {
-  it('should return correct color for analyzing mode', () => {
-    const color = getModeColor('analyzing' as ChatMode);
-    expect(color).toBe(OG_COLORS.analyzing);
+  it('should return correct color for all modes using CHAT_MODES array', () => {
+    // Using CHAT_MODES as single source of truth - no unsafe typecasts
+    CHAT_MODES.forEach((mode) => {
+      const color = getModeColor(mode);
+      expect(color).toBe(OG_COLORS[mode]);
+      expect(color).toBe(MODE_COLORS[mode]);
+    });
   });
 
-  it('should return correct color for brainstorming mode', () => {
-    const color = getModeColor('brainstorming' as ChatMode);
-    expect(color).toBe(OG_COLORS.brainstorming);
-  });
-
-  it('should return correct color for debating mode', () => {
-    const color = getModeColor('debating' as ChatMode);
-    expect(color).toBe(OG_COLORS.debating);
-  });
-
-  it('should return correct color for solving mode', () => {
-    const color = getModeColor('solving' as ChatMode);
-    expect(color).toBe(OG_COLORS.solving);
-  });
-
-  it('should return primary color for unknown mode', () => {
-    const color = getModeColor('unknown-mode' as ChatMode);
+  it('should return primary color for invalid mode via Zod validation', () => {
+    // getModeColor uses Zod safeParse internally, invalid modes return primary
+    // Test with runtime-invalid value using type assertion for test purposes
+    const invalidMode = 'unknown-mode' as Parameters<typeof getModeColor>[0];
+    const color = getModeColor(invalidMode);
     expect(color).toBe(OG_COLORS.primary);
   });
 });
@@ -158,19 +154,20 @@ describe('truncateText', () => {
   });
 });
 
-describe('oG Image Dimension Constants', () => {
-  // Standard OG image dimensions
-  const STANDARD_OG_WIDTH = 1200;
-  const STANDARD_OG_HEIGHT = 630;
-
-  it('should use standard OG image dimensions', () => {
-    // These are the recommended dimensions for OG images
-    // Verify that our implementation uses these standards
-    expect(STANDARD_OG_WIDTH).toBe(1200);
-    expect(STANDARD_OG_HEIGHT).toBe(630);
+describe('oG Image Dimension Constants (centralized)', () => {
+  it('should use standard OG image dimensions from og-colors.ts', () => {
+    // Using centralized constants - single source of truth
+    expect(OG_WIDTH).toBe(1200);
+    expect(OG_HEIGHT).toBe(630);
 
     // Aspect ratio should be approximately 1.9:1
-    const aspectRatio = STANDARD_OG_WIDTH / STANDARD_OG_HEIGHT;
+    const aspectRatio = OG_WIDTH / OG_HEIGHT;
     expect(aspectRatio).toBeCloseTo(1.9, 1);
+  });
+
+  it('should have sensible defaults from OG_DEFAULTS', () => {
+    expect(OG_DEFAULTS.title).toBeTruthy();
+    expect(OG_DEFAULTS.participantCount).toBeGreaterThan(0);
+    expect(OG_DEFAULTS.messageCount).toBeGreaterThan(0);
   });
 });

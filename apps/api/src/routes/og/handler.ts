@@ -10,13 +10,22 @@
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
-import type { ChatMode } from '@roundtable/shared';
+import type { ChatMode } from '@roundtable/shared/enums';
+import { ChatModeSchema } from '@roundtable/shared/enums';
 import { eq, or } from 'drizzle-orm';
 
 import { createHandler } from '@/core';
 import { chatMessage, chatParticipant, chatThread, getDbAsync } from '@/db';
 import { getWebappEnvFromContext, WEBAPP_ENVS } from '@/lib/config/base-urls';
-import { OG_COLORS as SHARED_OG_COLORS } from '@/lib/ui/og-colors';
+import type { OgImageParams } from '@/lib/ui/og-colors';
+import {
+  getModeColor,
+  MAX_MODEL_ICONS,
+  OG_COLORS,
+  OG_DEFAULTS,
+  OG_HEIGHT,
+  OG_WIDTH,
+} from '@/lib/ui/og-colors';
 import type { ApiEnv } from '@/types';
 
 import type { ogImageRoute } from './route';
@@ -35,33 +44,11 @@ async function getOGAssets(): Promise<OGAssetsModule> {
   return ogAssetsModule;
 }
 
-// OG image dimensions (standard)
-const OG_WIDTH = 1200;
-const OG_HEIGHT = 630;
-
 // Brand constants (subset needed for OG images)
 const BRAND = {
   name: 'Roundtable.now',
   tagline: 'Multiple AI Models, One Conversation',
 } as const;
-
-// Use centralized OG colors from og-image-helpers
-const OG_COLORS = SHARED_OG_COLORS;
-
-// Mode colors
-const MODE_COLORS = {
-  analyzing: OG_COLORS.analyzing,
-  brainstorming: OG_COLORS.brainstorming,
-  debating: OG_COLORS.debating,
-  solving: OG_COLORS.solving,
-} as const satisfies Record<ChatMode, string>;
-
-function getModeColor(mode: ChatMode): string {
-  return MODE_COLORS[mode] ?? OG_COLORS.primary;
-}
-
-// Maximum number of model icons to display
-const MAX_MODEL_ICONS = 5;
 
 /**
  * Get embedded fonts for satori (no network fetch required)
@@ -73,15 +60,10 @@ async function getEmbeddedFonts() {
 
 /**
  * Generate OG image SVG using satori with embedded assets
+ * Uses OgImageParams schema for type-safe parameter validation
  */
-async function generateOgImage(params: {
-  title: string;
-  mode?: ChatMode;
-  participantCount: number;
-  messageCount: number;
-  participantModelIds?: string[];
-}) {
-  const { title, mode, participantCount, messageCount, participantModelIds = [] } = params;
+async function generateOgImage(params: OgImageParams) {
+  const { title, mode, participantCount, messageCount, participantModelIds } = params;
   const modeColor = mode ? getModeColor(mode) : OG_COLORS.primary;
 
   // Lazy load og-assets (460KB+ base64)
@@ -102,8 +84,11 @@ async function generateOgImage(params: {
   const modeIconBase64 = mode ? assets.getModeIconBase64Sync(mode) : null;
 
   // Generate SVG using satori
+  // NOTE: satori types expect ReactElement but accept plain objects at runtime
+  // This is the recommended approach for non-React environments (Cloudflare Workers)
+  // See: https://github.com/vercel/satori#virtual-dom-elements
   const svg = await satori(
-    // @ts-expect-error - satori accepts plain objects as virtual DOM
+    // @ts-expect-error satori runtime accepts plain objects, types expect ReactElement
     {
       type: 'div',
       props: {
@@ -755,10 +740,11 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
       const query = c.req.query();
       const slug = query.slug;
 
-      let title = 'AI Conversation';
+      // Initialize with defaults from centralized schema
+      let title = OG_DEFAULTS.title;
       let mode: ChatMode | undefined;
-      let participantCount = 3;
-      let messageCount = 10;
+      let participantCount = OG_DEFAULTS.participantCount;
+      let messageCount = OG_DEFAULTS.messageCount;
       let participantModelIds: string[] = [];
       let debugInfo = '';
 
@@ -775,7 +761,9 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
 
         if (threadData.thread) {
           title = threadData.thread.title || title;
-          mode = threadData.thread.mode as ChatMode;
+          // Use Zod validation for type-safe mode parsing (no unsafe typecast)
+          const modeResult = ChatModeSchema.safeParse(threadData.thread.mode);
+          mode = modeResult.success ? modeResult.data : undefined;
           participantCount = threadData.participantCount || participantCount;
           messageCount = threadData.messageCount || messageCount;
           participantModelIds = threadData.participantModelIds || [];
@@ -792,7 +780,7 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
       // Local dev: Generate simple SVG without satori (WASM not available)
       if (isLocalDev) {
         const assets = await getOGAssets();
-        const modeColor = mode ? MODE_COLORS[mode] : OG_COLORS.primary;
+        const modeColor = mode ? getModeColor(mode) : OG_COLORS.primary;
         const simpleSvg = generateSimpleOgSvg({
           title,
           mode,
@@ -807,6 +795,7 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
             'Content-Type': 'image/svg+xml',
             'Cache-Control': 'no-cache',
             'Access-Control-Allow-Origin': '*',
+            'Cross-Origin-Resource-Policy': 'cross-origin',
             'X-OG-Generated': 'true',
             'X-OG-Format': 'svg-local-dev',
           },
@@ -832,6 +821,7 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
             'Content-Type': 'image/svg+xml',
             'Cache-Control': 'no-cache',
             'Access-Control-Allow-Origin': '*',
+            'Cross-Origin-Resource-Policy': 'cross-origin',
             'X-OG-Generated': 'true',
             'X-OG-Format': 'svg-fallback',
           },
@@ -844,6 +834,7 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
           'Content-Type': 'image/png',
           'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=86400',
           'Access-Control-Allow-Origin': '*',
+          'Cross-Origin-Resource-Policy': 'cross-origin',
           'X-OG-Generated': 'true',
         },
       });
@@ -861,6 +852,7 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
           'Content-Type': 'image/png',
           'Cache-Control': 'no-cache',
           'Access-Control-Allow-Origin': '*',
+          'Cross-Origin-Resource-Policy': 'cross-origin',
           'X-OG-Error': 'true',
           'X-OG-Error-Message': encodeURIComponent(errorMessage.slice(0, 100)),
         },

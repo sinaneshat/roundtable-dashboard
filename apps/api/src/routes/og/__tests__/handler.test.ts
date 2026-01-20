@@ -5,7 +5,17 @@
  * Tests cover SVG generation, PNG conversion, and error handling.
  */
 
+import { CHAT_MODES } from '@roundtable/shared/enums';
 import { describe, expect, it, vi } from 'vitest';
+
+import {
+  getModeColor,
+  MODE_COLORS,
+  OG_COLORS,
+  OG_DEFAULTS,
+  OG_HEIGHT,
+  OG_WIDTH,
+} from '@/lib/ui/og-colors';
 
 // Mock database
 vi.mock('@/db', () => ({
@@ -20,35 +30,19 @@ vi.mock('@/db', () => ({
   chatMessage: { threadId: 'threadId' },
 }));
 
-// Standard OG dimensions
-const OG_WIDTH = 1200;
-const OG_HEIGHT = 630;
-
 // PNG magic bytes
 const PNG_MAGIC = [0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A];
 
 describe('oG Image Handler', () => {
   describe('oG Image Dimensions', () => {
     it('should use standard OG image dimensions (1200x630)', () => {
+      // Using centralized constants from og-colors.ts
       expect(OG_WIDTH).toBe(1200);
       expect(OG_HEIGHT).toBe(630);
     });
   });
 
-  describe('oG Colors', () => {
-    const OG_COLORS = {
-      background: '#000000',
-      backgroundGradientStart: '#0a0a0a',
-      backgroundGradientEnd: '#1a1a1a',
-      primary: '#2563eb',
-      textPrimary: '#ffffff',
-      textSecondary: '#a1a1aa',
-      analyzing: '#8b5cf6',
-      brainstorming: '#f59e0b',
-      debating: '#ef4444',
-      solving: '#10b981',
-    };
-
+  describe('oG Colors (centralized)', () => {
     it('should have valid hex color codes', () => {
       const hexColorRegex = /^#[0-9a-f]{6}$/i;
 
@@ -61,16 +55,11 @@ describe('oG Image Handler', () => {
       }
     });
 
-    it('should have distinct mode colors', () => {
-      const modeColors = [
-        OG_COLORS.analyzing,
-        OG_COLORS.brainstorming,
-        OG_COLORS.debating,
-        OG_COLORS.solving,
-      ];
-
+    it('should have distinct mode colors using CHAT_MODES array', () => {
+      // Verify MODE_COLORS is derived from CHAT_MODES (single source of truth)
+      const modeColors = CHAT_MODES.map(mode => MODE_COLORS[mode]);
       const uniqueColors = new Set(modeColors);
-      expect(uniqueColors.size).toBe(4);
+      expect(uniqueColors.size).toBe(CHAT_MODES.length);
     });
   });
 
@@ -103,25 +92,20 @@ describe('oG Image Handler', () => {
     });
   });
 
-  describe('mode Color Mapping', () => {
-    const MODE_COLORS: Record<string, string> = {
-      analyzing: '#8b5cf6',
-      brainstorming: '#f59e0b',
-      debating: '#ef4444',
-      solving: '#10b981',
-    };
-
-    it('should return correct color for each mode', () => {
-      expect(MODE_COLORS.analyzing).toBe('#8b5cf6'); // Purple
-      expect(MODE_COLORS.brainstorming).toBe('#f59e0b'); // Orange
-      expect(MODE_COLORS.debating).toBe('#ef4444'); // Red
-      expect(MODE_COLORS.solving).toBe('#10b981'); // Green
+  describe('mode Color Mapping (centralized)', () => {
+    it('should return correct color for each mode via getModeColor', () => {
+      // Using centralized getModeColor from og-colors.ts
+      expect(getModeColor('analyzing')).toBe(OG_COLORS.analyzing);
+      expect(getModeColor('brainstorming')).toBe(OG_COLORS.brainstorming);
+      expect(getModeColor('debating')).toBe(OG_COLORS.debating);
+      expect(getModeColor('solving')).toBe(OG_COLORS.solving);
     });
 
-    it('should have all four chat modes', () => {
-      const modes = ['analyzing', 'brainstorming', 'debating', 'solving'];
-      modes.forEach((mode) => {
+    it('should have all chat modes in MODE_COLORS using CHAT_MODES array', () => {
+      // Using CHAT_MODES as single source of truth
+      CHAT_MODES.forEach((mode) => {
         expect(MODE_COLORS[mode]).toBeDefined();
+        expect(MODE_COLORS[mode]).toBe(OG_COLORS[mode]);
       });
     });
   });
@@ -163,9 +147,9 @@ describe('oG Image Handler', () => {
 describe('oG Image Content', () => {
   describe('title Handling', () => {
     it('should use default title when thread not found', () => {
-      const defaultTitle = 'AI Conversation';
-      expect(defaultTitle).toBeTruthy();
-      expect(defaultTitle.length).toBeGreaterThan(0);
+      // Using centralized OG_DEFAULTS from og-colors.ts
+      expect(OG_DEFAULTS.title).toBeTruthy();
+      expect(OG_DEFAULTS.title.length).toBeGreaterThan(0);
     });
 
     it('should handle long titles gracefully', () => {
@@ -183,8 +167,8 @@ describe('oG Image Content', () => {
     });
 
     it('should use plural form for multiple participants', () => {
-      const participantCount = 3;
-      const label = participantCount === 1 ? 'AI Model' : 'AI Models';
+      // Using default from centralized OG_DEFAULTS
+      const label = OG_DEFAULTS.participantCount === 1 ? 'AI Model' : 'AI Models';
       expect(label).toBe('AI Models');
     });
 
@@ -195,23 +179,24 @@ describe('oG Image Content', () => {
     });
 
     it('should use plural form for multiple messages', () => {
-      const messageCount = 10;
-      const label = messageCount === 1 ? 'Message' : 'Messages';
+      // Using default from centralized OG_DEFAULTS
+      const label = OG_DEFAULTS.messageCount === 1 ? 'Message' : 'Messages';
       expect(label).toBe('Messages');
     });
   });
 
-  describe('default Values', () => {
-    it('should have sensible defaults for missing thread data', () => {
-      const defaults = {
-        title: 'AI Conversation',
-        participantCount: 3,
-        messageCount: 10,
-      };
+  describe('default Values (centralized)', () => {
+    it('should have sensible defaults from OG_DEFAULTS', () => {
+      // Using centralized OG_DEFAULTS from og-colors.ts
+      expect(OG_DEFAULTS.title).toBeTruthy();
+      expect(OG_DEFAULTS.participantCount).toBeGreaterThan(0);
+      expect(OG_DEFAULTS.messageCount).toBeGreaterThan(0);
+    });
 
-      expect(defaults.title).toBeTruthy();
-      expect(defaults.participantCount).toBeGreaterThan(0);
-      expect(defaults.messageCount).toBeGreaterThan(0);
+    it('should have expected default values', () => {
+      expect(OG_DEFAULTS.title).toBe('AI Conversation');
+      expect(OG_DEFAULTS.participantCount).toBe(3);
+      expect(OG_DEFAULTS.messageCount).toBe(10);
     });
   });
 });

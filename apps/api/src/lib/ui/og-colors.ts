@@ -1,13 +1,55 @@
 /**
- * OpenGraph Image Colors
+ * OpenGraph Image Colors & Constants
  *
- * Color constants for OG image generation.
+ * Single source of truth for OG image generation configuration.
  * Extracted to avoid triggering og-assets.generated.ts import at module level.
  */
 
 import type { ChatMode } from '@roundtable/shared/enums';
+import { CHAT_MODES, ChatModeSchema } from '@roundtable/shared/enums';
+import * as z from 'zod';
 
 import { BRAND } from '@/constants';
+
+// ============================================================================
+// OG IMAGE DIMENSIONS (Standard)
+// ============================================================================
+
+export const OG_WIDTH = 1200;
+export const OG_HEIGHT = 630;
+export const MAX_MODEL_ICONS = 5;
+
+// ============================================================================
+// OG IMAGE DEFAULTS SCHEMA (Zod-first pattern)
+// ============================================================================
+
+export const OgDefaultsSchema = z.object({
+  title: z.string(),
+  participantCount: z.number().int().nonnegative(),
+  messageCount: z.number().int().nonnegative(),
+});
+
+export type OgDefaults = z.infer<typeof OgDefaultsSchema>;
+
+export const OG_DEFAULTS: OgDefaults = {
+  title: 'AI Conversation',
+  participantCount: 3,
+  messageCount: 10,
+};
+
+// ============================================================================
+// OG IMAGE PARAMS SCHEMA (Zod-first validation)
+// ============================================================================
+
+export const OgImageParamsSchema = z.object({
+  title: z.string(),
+  mode: ChatModeSchema.optional(),
+  participantCount: z.number().int().nonnegative(),
+  messageCount: z.number().int().nonnegative(),
+  participantModelIds: z.array(z.string()),
+});
+
+export type OgImageParams = z.infer<typeof OgImageParamsSchema>;
 
 // ============================================================================
 // OG IMAGE COLORS
@@ -47,18 +89,30 @@ export const OG_COLORS = {
 } as const;
 
 // ============================================================================
-// MODE COLOR MAPPING
+// MODE COLOR MAPPING (enum-based pattern using CHAT_MODES array)
 // ============================================================================
 
-const MODE_COLORS = {
-  analyzing: OG_COLORS.analyzing,
-  brainstorming: OG_COLORS.brainstorming,
-  debating: OG_COLORS.debating,
-  solving: OG_COLORS.solving,
-} as const satisfies Record<ChatMode, string>;
+/**
+ * Mode colors derived from OG_COLORS using CHAT_MODES array as single source of truth
+ */
+export const MODE_COLORS = CHAT_MODES.reduce(
+  (acc, mode) => {
+    acc[mode] = OG_COLORS[mode];
+    return acc;
+  },
+  {} as Record<ChatMode, string>,
+);
 
+/**
+ * Get color for a chat mode with fallback to primary
+ * Uses Zod validation internally for type safety
+ */
 export function getModeColor(mode: ChatMode): string {
-  return MODE_COLORS[mode] ?? OG_COLORS.primary;
+  const parsed = ChatModeSchema.safeParse(mode);
+  if (parsed.success) {
+    return MODE_COLORS[parsed.data];
+  }
+  return OG_COLORS.primary;
 }
 
 // ============================================================================
