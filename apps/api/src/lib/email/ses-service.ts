@@ -57,6 +57,12 @@ class EmailService {
     const { accessKeyId, secretAccessKey } = await getSesCredentials();
 
     if (!accessKeyId || !secretAccessKey) {
+      console.error({
+        log_type: 'ses_credentials_missing',
+        timestamp: new Date().toISOString(),
+        has_access_key: Boolean(accessKeyId),
+        has_secret_key: Boolean(secretAccessKey),
+      });
       throw new Error(
         'Email service not configured. Please provide AWS_SES_ACCESS_KEY_ID and AWS_SES_SECRET_ACCESS_KEY environment variables.',
       );
@@ -133,6 +139,14 @@ class EmailService {
       // Check if the request was successful
       if (!response.ok) {
         const errorBody = await response.text();
+        console.error({
+          log_type: 'ses_api_error',
+          timestamp: new Date().toISOString(),
+          status: response.status,
+          statusText: response.statusText,
+          error_body: errorBody.slice(0, 500),
+          region: config.region,
+        });
         throw new Error(
           `Failed to send email via SES: ${response.status} ${response.statusText}. ${errorBody}`,
         );

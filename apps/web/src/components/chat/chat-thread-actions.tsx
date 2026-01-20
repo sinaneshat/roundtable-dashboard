@@ -49,7 +49,8 @@ type ChatThreadActionsProps = {
 
 export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = false, skipFetch = false }: ChatThreadActionsProps) {
   const t = useTranslations();
-  const isDesktop = useMediaQuery('(min-width: 768px)');
+  // Desktop-first SSR: render full desktop UI on server, hydrate to actual viewport
+  const isDesktop = useMediaQuery('(min-width: 768px)', true);
   const toggleFavoriteMutation = useToggleFavoriteMutation();
   const togglePublicMutation = useTogglePublicMutation();
   const [isMenuOpen, setIsMenuOpen] = useState(false);

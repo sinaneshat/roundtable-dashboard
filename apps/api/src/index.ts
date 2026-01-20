@@ -847,22 +847,62 @@ rootApp.all('/api/auth/*', async (c) => {
     return new Response(null, { status: 204, headers });
   }
 
-  const { auth } = await import('@/lib/auth/server');
-  const response = await auth.handler(c.req.raw);
+  try {
+    const { auth } = await import('@/lib/auth/server');
+    const response = await auth.handler(c.req.raw);
 
-  const newHeaders = new Headers(response.headers);
-  if (origin && allowedOrigins.includes(origin)) {
-    newHeaders.set('Access-Control-Allow-Origin', origin);
-    newHeaders.set('Access-Control-Allow-Credentials', 'true');
-    newHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
-    newHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma');
+    const newHeaders = new Headers(response.headers);
+    if (origin && allowedOrigins.includes(origin)) {
+      newHeaders.set('Access-Control-Allow-Origin', origin);
+      newHeaders.set('Access-Control-Allow-Credentials', 'true');
+      newHeaders.set('Access-Control-Allow-Methods', 'GET, POST, PUT, DELETE, OPTIONS, PATCH');
+      newHeaders.set('Access-Control-Allow-Headers', 'Content-Type, Authorization, X-Requested-With, Accept, Origin, Cache-Control, Pragma');
+    }
+
+    // Log 500 errors from Better Auth for debugging
+    if (response.status >= 500) {
+      const clonedResponse = response.clone();
+      try {
+        const body = await clonedResponse.text();
+        console.error({
+          log_type: 'better_auth_error',
+          timestamp: new Date().toISOString(),
+          path: c.req.path,
+          status: response.status,
+          body: body.slice(0, 1000),
+        });
+      } catch {
+        // Ignore clone errors
+      }
+    }
+
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders,
+    });
+  } catch (error) {
+    console.error({
+      log_type: 'better_auth_exception',
+      timestamp: new Date().toISOString(),
+      path: c.req.path,
+      error_name: error instanceof Error ? error.name : 'Unknown',
+      error_message: error instanceof Error ? error.message : String(error),
+      error_stack: error instanceof Error ? error.stack : undefined,
+    });
+
+    const headers = new Headers();
+    if (origin && allowedOrigins.includes(origin)) {
+      headers.set('Access-Control-Allow-Origin', origin);
+      headers.set('Access-Control-Allow-Credentials', 'true');
+    }
+    headers.set('Content-Type', 'application/json');
+
+    return new Response(
+      JSON.stringify({ error: 'Authentication service error' }),
+      { status: 500, headers },
+    );
   }
-
-  return new Response(response.body, {
-    status: response.status,
-    statusText: response.statusText,
-    headers: newHeaders,
-  });
 });
 
 // Mount API routes

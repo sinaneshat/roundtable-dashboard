@@ -190,9 +190,21 @@ function createAuth() {
     // Following official better-auth pattern: https://better-auth.com/docs/concepts/hooks
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
-        // Validate email domain using reusable utility
-        // Handles: /sign-up/email, /sign-in/email, /sign-in/magic-link
-        validateEmailDomain(ctx);
+        try {
+          // Validate email domain using reusable utility
+          // Handles: /sign-up/email, /sign-in/email, /sign-in/magic-link
+          validateEmailDomain(ctx);
+        } catch (error) {
+          // Log validation errors for debugging
+          console.error({
+            log_type: 'auth_hook_error',
+            timestamp: new Date().toISOString(),
+            path: ctx.path,
+            error_name: error instanceof Error ? error.name : 'Unknown',
+            error_message: error instanceof Error ? error.message : String(error),
+          });
+          throw error; // Re-throw to let Better Auth handle it
+        }
       }),
     },
 
@@ -303,7 +315,15 @@ function createAuth() {
             const { emailService } = await import('@/lib/email/ses-service');
             await emailService.sendMagicLink(email, url);
           } catch (error) {
-            console.error('Failed to send magic link email:', error);
+            // Log detailed error for Cloudflare Workers Logs
+            console.error({
+              log_type: 'magic_link_email_error',
+              timestamp: new Date().toISOString(),
+              email_domain: email.split('@')[1],
+              error_name: error instanceof Error ? error.name : 'Unknown',
+              error_message: error instanceof Error ? error.message : String(error),
+              error_stack: error instanceof Error ? error.stack : undefined,
+            });
             // Better Auth will show this error to the user
             const errorMessage = error instanceof Error ? error.message : 'Failed to send magic link email';
             throw new Error(`Unable to send login email: ${errorMessage}`);

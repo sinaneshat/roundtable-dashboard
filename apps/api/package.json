@@ -48,6 +48,7 @@
     "stoker": "^2.0.1",
     "stripe": "^20.1.0",
     "ulid": "^3.0.2",
+    "workers-og": "^0.0.27",
     "zod": "^4.3.5"
   },
   "devDependencies": {

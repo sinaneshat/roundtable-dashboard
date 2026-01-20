@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
@@ -12,8 +12,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
-import { SmartImage } from '@/components/ui/smart-image';
-import { getApiOriginUrl, getAppBaseUrl } from '@/lib/config/base-urls';
+import { getApiBaseUrl, getAppBaseUrl } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
@@ -74,14 +73,34 @@ export function ShareDialog({
 
   const baseUrl = getAppBaseUrl();
   const shareUrl = `${baseUrl}/public/chat/${slug}`;
-  // OG image from API endpoint directly (bypass proxy for reliable image loading)
-  // Uses the API origin URL to avoid proxy issues with binary image responses
+  // OG image from API endpoint - use proxy route for consistent behavior
   const ogImageUrl = useMemo(() => {
-    const apiOrigin = getApiOriginUrl();
-    const basePath = `${apiOrigin}/api/v1/og/chat?slug=${slug}`;
-    // Always add cache busting param to ensure fresh OG image after making thread public
-    return `${basePath}&v=${ogRevision}-${Date.now()}`;
+    const apiBase = getApiBaseUrl();
+    // Add cache busting param to ensure fresh OG image after making thread public
+    return `${apiBase}/og/chat?slug=${slug}&v=${ogRevision}-${Date.now()}`;
   }, [slug, ogRevision]);
+
+  // Image loading state
+  const [imageLoaded, setImageLoaded] = useState(false);
+  const [imageError, setImageError] = useState(false);
+
+  // Reset image state when URL changes
+  useEffect(() => {
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional reset on URL change for cache busting
+    setImageLoaded(false);
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional reset on URL change for cache busting
+    setImageError(false);
+  }, [ogImageUrl]);
+
+  const handleImageLoad = useCallback(() => {
+    setImageLoaded(true);
+    setImageError(false);
+  }, []);
+
+  const handleImageError = useCallback(() => {
+    setImageError(true);
+    setImageLoaded(false);
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -193,36 +212,47 @@ export function ShareDialog({
               </div>
 
               <div className="overflow-hidden rounded-xl border border-border/50 bg-muted/20">
-                {isLoading
-                  ? (
-                      <div
-                        className="flex items-center justify-center bg-muted/30 animate-pulse"
-                        style={{ aspectRatio: '1200/630' }}
-                      >
-                        <div className="flex flex-col items-center gap-2 text-muted-foreground">
-                          <Icons.loader className="size-6 animate-spin" />
-                          <span className="text-sm">{t('chat.shareDialog.generatingPreview')}</span>
-                        </div>
+                <div
+                  className="relative w-full"
+                  style={{ aspectRatio: '1200/630' }}
+                >
+                  {/* Loading state */}
+                  {(isLoading || (!imageLoaded && !imageError)) && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-muted/30 animate-pulse">
+                      <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                        <Icons.loader className="size-6 animate-spin" />
+                        <span className="text-sm">
+                          {isLoading ? t('chat.shareDialog.generatingPreview') : t('chat.shareDialog.loadingPreview')}
+                        </span>
                       </div>
-                    )
-                  : (
-                      <SmartImage
-                        key={ogImageUrl}
-                        src={ogImageUrl}
-                        alt="Thread preview"
-                        aspectRatio="1200/630"
-                        unoptimized
-                        containerClassName="rounded-xl overflow-hidden"
-                        fallback={(
-                          <div className="absolute inset-0 flex items-center justify-center bg-muted/30 text-muted-foreground">
-                            <div className="flex flex-col items-center gap-2">
-                              <Icons.image className="size-8 opacity-50" />
-                              <span className="text-sm">{t('chat.shareDialog.previewUnavailable')}</span>
-                            </div>
-                          </div>
-                        )}
-                      />
-                    )}
+                    </div>
+                  )}
+
+                  {/* Error state */}
+                  {imageError && !isLoading && (
+                    <div className="absolute inset-0 flex items-center justify-center bg-muted/30 text-muted-foreground">
+                      <div className="flex flex-col items-center gap-2">
+                        <Icons.image className="size-8 opacity-50" />
+                        <span className="text-sm">{t('chat.shareDialog.previewUnavailable')}</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Image - always render but hide when loading/error */}
+                  {!isLoading && (
+                    <img
+                      key={ogImageUrl}
+                      src={ogImageUrl}
+                      alt="Thread preview"
+                      className={cn(
+                        'absolute inset-0 w-full h-full object-cover transition-opacity duration-300',
+                        imageLoaded && !imageError ? 'opacity-100' : 'opacity-0',
+                      )}
+                      onLoad={handleImageLoad}
+                      onError={handleImageError}
+                    />
+                  )}
+                </div>
               </div>
             </div>
 

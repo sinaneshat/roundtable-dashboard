@@ -411,8 +411,11 @@ export function StaggerItem({
     return <div className={cn('w-full', className)}>{children}</div>;
   }
 
+  // initial={false} skips the opacity:0 initial state on hydration
+  // Items stay visible (inherit from SSR), parent controls animation trigger
   return (
     <motion.div
+      initial={false}
       variants={staggerItemVariants}
       className={cn('w-full', className)}
       {...props}

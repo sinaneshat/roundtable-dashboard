@@ -10,7 +10,7 @@
  * - Simple abort controller management
  */
 
-import { MessageStatuses } from '@roundtable/shared';
+import { MessageStatuses, PreSearchSseEvents } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { useCallback, useRef } from 'react';
 
@@ -74,6 +74,8 @@ export function usePreSearchModerator({
 
         const decoder = new TextDecoder();
         let buffer = '';
+        let currentEvent = '';
+        let currentData = '';
 
         while (true) {
           const { done, value } = await reader.read();
@@ -81,22 +83,38 @@ export function usePreSearchModerator({
             break;
 
           buffer += decoder.decode(value, { stream: true });
-
-          // Parse SSE events
           const lines = buffer.split('\n');
           buffer = lines.pop() || '';
 
           for (const line of lines) {
-            if (line.startsWith('data: ')) {
+            if (line.startsWith('event:')) {
+              currentEvent = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              currentData = line.slice(5).trim();
+            } else if (line === '' && currentEvent && currentData) {
+              // Process complete SSE event on empty line
               try {
-                const data = JSON.parse(line.slice(6));
+                const data = JSON.parse(currentData);
 
-                if (data.type === 'result') {
+                if (currentEvent === PreSearchSseEvents.RESULT) {
+                  // Update with intermediate result
+                  store.getState().setPreSearch(round, {
+                    roundNumber: round,
+                    status: MessageStatuses.STREAMING,
+                    query: data.query,
+                    results: data.results,
+                    startedAt: initialResult.startedAt,
+                    completedAt: null,
+                  });
+                }
+
+                if (currentEvent === PreSearchSseEvents.DONE) {
+                  // Final completion
                   store.getState().setPreSearch(round, {
                     roundNumber: round,
                     status: MessageStatuses.COMPLETE,
-                    query: data.query,
-                    results: data.results,
+                    query: data.queries?.[0]?.query || null,
+                    results: data.results || null,
                     startedAt: initialResult.startedAt,
                     completedAt: Date.now(),
                   });
@@ -110,6 +128,9 @@ export function usePreSearchModerator({
               } catch {
                 // Ignore parse errors
               }
+              // Reset for next event
+              currentEvent = '';
+              currentData = '';
             }
           }
         }

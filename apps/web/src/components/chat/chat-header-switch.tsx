@@ -1,12 +1,14 @@
+import { useLocation } from '@tanstack/react-router';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore } from '@/components/providers';
-import { useCurrentPathname } from '@/hooks/utils';
 
 import { MinimalHeader, NavigationHeader } from './chat-header';
 
 export function ChatHeaderSwitch() {
-  const pathname = useCurrentPathname();
+  // useLocation works during SSR (reads from router context)
+  // useCurrentPathname returns '' during SSR which breaks path checks
+  const { pathname } = useLocation();
 
   // Store state to detect active thread even when URL is still /chat
   // ✅ OPTIMIZATION: Batch all selectors with useShallow to prevent multiple re-renders

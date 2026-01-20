@@ -49,7 +49,6 @@ type ChatItemProps = {
   isRenaming: boolean;
   onRenameSubmit: (chat: ChatSidebarItem, newTitle: string) => void;
   onRenameCancel: () => void;
-  disableAnimation?: boolean;
 };
 
 function ChatItem({
@@ -63,7 +62,6 @@ function ChatItem({
   isRenaming,
   onRenameSubmit,
   onRenameCancel,
-  disableAnimation,
 }: ChatItemProps) {
   const t = useTranslations();
 
@@ -126,10 +124,9 @@ function ChatItem({
     </SidebarMenuItem>
   );
 
-  if (disableAnimation) {
-    return content;
-  }
-
+  // Always wrap in StaggerItem for consistent structure between server/client
+  // StaggerItem handles SSR internally (renders plain div on server)
+  // Animation is controlled by parent motion.div variants, not conditional wrapper
   return <StaggerItem>{content}</StaggerItem>;
 }
 
@@ -251,7 +248,6 @@ export function ChatList({
                 isRenaming={isThisChatEditing && updateThreadMutation.isPending}
                 onRenameSubmit={handleRenameSubmit}
                 onRenameCancel={handleRenameCancel}
-                disableAnimation={!shouldAnimate}
               />
             );
           })}

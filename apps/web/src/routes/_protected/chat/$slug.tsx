@@ -109,7 +109,9 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
       }
     }
 
-    return { threadTitle, threadId, preSearches, changelog, feedback, streamResumption };
+    // Return threadData from loader for SSR - useQuery doesn't have access to server-prefetched data on first render
+    const threadData = cachedData?.success ? cachedData.data : null;
+    return { threadTitle, threadId, threadData, preSearches, changelog, feedback, streamResumption };
   },
   // Dynamic title from loader data
   head: ({ loaderData, params }) => {
@@ -151,17 +153,17 @@ function ChatThreadRoute() {
   const { data: session } = useSession();
   const loaderData = Route.useLoaderData();
 
-  // ✅ HOOKS FIX: Call all hooks unconditionally to comply with Rules of Hooks
-  // useQuery with enabled:false won't fetch but satisfies hook ordering requirements
-  // Use isPending instead of isLoading for React Query v5:
-  // - isPending: no cached data yet (true even when enabled=false with no cache)
-  // - isLoading: isPending AND isFetching (only true during active fetch)
-  const { data: queryData, isPending, isError, error } = useQuery({
+  // Use loaderData as primary source (available on SSR)
+  // useQuery provides client-side updates/refetches
+  const { data: queryData, isError, error, isFetching } = useQuery({
     ...threadBySlugQueryOptions(slug ?? ''),
-    enabled: Boolean(slug), // Only fetch when slug is defined
+    enabled: Boolean(slug),
   });
 
-  // ✅ loaderData for auxiliary data (already prefetched in loader)
+  // Prefer loader data (SSR), fall back to query data (client updates)
+  const threadResponse = loaderData?.threadData ?? (queryData?.success ? queryData.data : null);
+
+  // loaderData for auxiliary data (already prefetched in loader)
   const streamResumptionState = loaderData?.streamResumption ?? null;
   const changelog = loaderData?.changelog;
   const feedback = loaderData?.feedback;
@@ -173,13 +175,13 @@ function ChatThreadRoute() {
     image: session?.user?.image || null,
   }), [session?.user?.id, session?.user?.name, session?.user?.image]);
 
-  // ✅ Conditional rendering AFTER all hooks are called
-  // Show skeleton while slug is undefined or query is pending (no data yet)
-  if (!slug || isPending) {
+  // Show skeleton only when:
+  // 1. No slug (invalid route state)
+  // 2. No thread data from loader AND currently fetching (initial client load without SSR)
+  if (!slug || (!threadResponse && isFetching)) {
     return <ThreadContentSkeleton />;
   }
 
-  // ✅ Handle query errors (e.g., network failure, server error)
   if (isError) {
     return (
       <div className="flex h-full items-center justify-center">
@@ -193,10 +195,7 @@ function ChatThreadRoute() {
     );
   }
 
-  const threadData = queryData?.success ? queryData.data : null;
-
-  // Handle case where API returned success: false or unexpected data structure
-  if (!threadData) {
+  if (!threadResponse) {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
@@ -209,7 +208,7 @@ function ChatThreadRoute() {
     );
   }
 
-  const { thread, participants, messages } = threadData;
+  const { thread, participants, messages } = threadResponse;
 
   return (
     <ChatThreadScreen

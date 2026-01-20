@@ -2,7 +2,7 @@
  * OG Image Handler
  *
  * Generates dynamic Open Graph images for public threads.
- * Uses satori for SVG generation and @cf-wasm/resvg for PNG conversion.
+ * Uses workers-og (Cloudflare Workers compatible satori wrapper).
  *
  * @see /docs/backend-patterns.md - Handler conventions
  */
@@ -11,7 +11,7 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import type { ChatMode } from '@roundtable/shared/enums';
 import { OgImageTypes, ThreadStatusSchema } from '@roundtable/shared/enums';
 import { eq, or } from 'drizzle-orm';
-import satori from 'satori';
+import { ImageResponse } from 'workers-og';
 
 import { BRAND } from '@/constants';
 import { createHandler } from '@/core';
@@ -39,300 +39,89 @@ import { OgChatQuerySchema } from './schema';
 const OG_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 /**
- * Convert SVG to PNG using @cf-wasm/resvg
+ * Escape HTML special characters
  */
-async function svgToPng(svg: string): Promise<Uint8Array> {
-  try {
-    const { Resvg } = await import('@cf-wasm/resvg');
-    const resvg = new Resvg(svg, {
-      fitTo: { mode: 'width', value: OG_WIDTH },
-    });
-    const pngData = resvg.render();
-    return pngData.asPng();
-  } catch (error) {
-    console.error('[OG] svgToPng error:', error);
-    throw error;
-  }
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#039;');
 }
 
 /**
- * Generate OG image SVG using satori
+ * Generate OG image HTML for workers-og
  */
-async function generateOgImageSvg(params: {
+function generateOgImageHtml(params: {
   title: string;
   mode?: ChatMode;
   participantCount: number;
   messageCount: number;
-}): Promise<string> {
+}): string {
   const { title, mode, participantCount, messageCount } = params;
   const modeColor = mode ? getModeColor(mode) : OG_COLORS.primary;
-
-  const fonts = getOGFontsSync();
   const logoBase64 = getLogoBase64Sync();
   const modeIconBase64 = mode ? getModeIconBase64Sync(mode) : null;
 
-  const svg = await satori(
-    // @ts-expect-error - satori accepts plain objects as virtual DOM
-    {
-      type: 'div',
-      props: {
-        style: {
-          display: 'flex',
-          flexDirection: 'column',
-          width: '100%',
-          height: '100%',
-          backgroundColor: OG_COLORS.background,
-          backgroundImage: `linear-gradient(135deg, ${OG_COLORS.backgroundGradientStart} 0%, ${OG_COLORS.backgroundGradientEnd} 100%)`,
-          padding: '60px',
-          fontFamily: 'Geist, Inter, sans-serif',
-          position: 'relative',
-        },
-        children: [
-          // Header with logo
-          {
-            type: 'div',
-            props: {
-              style: {
-                display: 'flex',
-                alignItems: 'center',
-                marginBottom: '40px',
-                gap: '16px',
-              },
-              children: [
-                logoBase64 && {
-                  type: 'img',
-                  props: {
-                    src: logoBase64,
-                    width: 56,
-                    height: 56,
-                    style: {
-                      borderRadius: '50%',
-                    },
-                  },
-                },
-                {
-                  type: 'div',
-                  props: {
-                    style: {
-                      fontSize: '28px',
-                      fontWeight: 600,
-                      color: OG_COLORS.textPrimary,
-                      letterSpacing: '-0.01em',
-                    },
-                    children: BRAND.displayName,
-                  },
-                },
-              ].filter(Boolean),
-            },
-          },
+  const escapedTitle = escapeHtml(title);
 
-          // Main content
-          {
-            type: 'div',
-            props: {
-              style: {
-                display: 'flex',
-                flexDirection: 'column',
-                flex: 1,
-                justifyContent: 'center',
-              },
-              children: [
-                // Mode badge with icon
-                mode && {
-                  type: 'div',
-                  props: {
-                    style: {
-                      display: 'flex',
-                      alignItems: 'center',
-                      marginBottom: '24px',
-                      gap: '12px',
-                    },
-                    children: [
-                      modeIconBase64 && {
-                        type: 'img',
-                        props: {
-                          src: modeIconBase64,
-                          width: 28,
-                          height: 28,
-                        },
-                      },
-                      {
-                        type: 'div',
-                        props: {
-                          style: {
-                            fontSize: '20px',
-                            fontWeight: 600,
-                            color: modeColor,
-                            textTransform: 'capitalize',
-                          },
-                          children: mode,
-                        },
-                      },
-                    ].filter(Boolean),
-                  },
-                },
+  // Build mode section HTML if mode is provided (must be on single line to avoid whitespace issues)
+  const modeSectionHtml = mode
+    ? `<div style="display: flex; align-items: center; margin-bottom: 24px; gap: 12px;">${modeIconBase64 ? `<img src="${modeIconBase64}" width="28" height="28" />` : ''}<div style="font-size: 20px; font-weight: 600; color: ${modeColor}; text-transform: capitalize;">${escapeHtml(mode)}</div></div>`
+    : '';
 
-                // Thread title
-                {
-                  type: 'div',
-                  props: {
-                    style: {
-                      fontSize: '56px',
-                      fontWeight: 700,
-                      color: OG_COLORS.textPrimary,
-                      lineHeight: 1.2,
-                      marginBottom: '32px',
-                      letterSpacing: '-0.03em',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                      display: '-webkit-box',
-                      WebkitLineClamp: 3,
-                      WebkitBoxOrient: 'vertical',
-                    },
-                    children: title,
-                  },
-                },
+  return `<div style="display: flex; flex-direction: column; width: 100%; height: 100%; background: linear-gradient(135deg, ${OG_COLORS.backgroundGradientStart} 0%, ${OG_COLORS.backgroundGradientEnd} 100%); padding: 60px; font-family: Geist, Inter, sans-serif;"><div style="display: flex; align-items: center; margin-bottom: 40px; gap: 16px;">${logoBase64 ? `<img src="${logoBase64}" width="56" height="56" style="border-radius: 50%;" />` : ''}<div style="font-size: 28px; font-weight: 600; color: ${OG_COLORS.textPrimary}; letter-spacing: -0.01em;">${escapeHtml(BRAND.displayName)}</div></div><div style="display: flex; flex-direction: column; flex: 1; justify-content: center;">${modeSectionHtml}<div style="font-size: 56px; font-weight: 700; color: ${OG_COLORS.textPrimary}; line-height: 1.2; margin-bottom: 32px; letter-spacing: -0.03em;">${escapedTitle}</div><div style="display: flex; gap: 48px; margin-top: 24px;"><div style="display: flex; flex-direction: column;"><div style="font-size: 48px; font-weight: 700; color: ${modeColor}; line-height: 1;">${participantCount}</div><div style="font-size: 18px; font-weight: 500; color: ${OG_COLORS.textSecondary}; margin-top: 8px;">${participantCount === 1 ? 'AI Model' : 'AI Models'}</div></div><div style="display: flex; flex-direction: column;"><div style="font-size: 48px; font-weight: 700; color: ${OG_COLORS.textPrimary}; line-height: 1;">${messageCount}</div><div style="font-size: 18px; font-weight: 500; color: ${OG_COLORS.textSecondary}; margin-top: 8px;">${messageCount === 1 ? 'Message' : 'Messages'}</div></div></div></div><div style="display: flex; align-items: center; margin-top: 40px; padding-top: 32px; border-top: 2px solid ${OG_COLORS.glassBorder};"><div style="font-size: 20px; font-weight: 500; color: ${OG_COLORS.textSecondary};">${escapeHtml(BRAND.tagline)}</div></div></div>`;
+}
 
-                // Stats row
-                {
-                  type: 'div',
-                  props: {
-                    style: {
-                      display: 'flex',
-                      gap: '48px',
-                      marginTop: '24px',
-                    },
-                    children: [
-                      // Participants
-                      {
-                        type: 'div',
-                        props: {
-                          style: {
-                            display: 'flex',
-                            flexDirection: 'column',
-                          },
-                          children: [
-                            {
-                              type: 'div',
-                              props: {
-                                style: {
-                                  fontSize: '48px',
-                                  fontWeight: 700,
-                                  color: modeColor,
-                                  lineHeight: 1,
-                                },
-                                children: String(participantCount),
-                              },
-                            },
-                            {
-                              type: 'div',
-                              props: {
-                                style: {
-                                  fontSize: '18px',
-                                  fontWeight: 500,
-                                  color: OG_COLORS.textSecondary,
-                                  marginTop: '8px',
-                                },
-                                children: participantCount === 1 ? 'AI Model' : 'AI Models',
-                              },
-                            },
-                          ],
-                        },
-                      },
+/**
+ * Generate OG image using workers-og
+ */
+async function generateOgImage(params: {
+  title: string;
+  mode?: ChatMode;
+  participantCount: number;
+  messageCount: number;
+}): Promise<ArrayBuffer> {
+  console.log('[OG] generateOgImage called with:', JSON.stringify(params));
+  const html = generateOgImageHtml(params);
+  console.log('[OG] Generated HTML length:', html.length);
 
-                      // Messages
-                      {
-                        type: 'div',
-                        props: {
-                          style: {
-                            display: 'flex',
-                            flexDirection: 'column',
-                          },
-                          children: [
-                            {
-                              type: 'div',
-                              props: {
-                                style: {
-                                  fontSize: '48px',
-                                  fontWeight: 700,
-                                  color: OG_COLORS.textPrimary,
-                                  lineHeight: 1,
-                                },
-                                children: String(messageCount),
-                              },
-                            },
-                            {
-                              type: 'div',
-                              props: {
-                                style: {
-                                  fontSize: '18px',
-                                  fontWeight: 500,
-                                  color: OG_COLORS.textSecondary,
-                                  marginTop: '8px',
-                                },
-                                children: messageCount === 1 ? 'Message' : 'Messages',
-                              },
-                            },
-                          ],
-                        },
-                      },
-                    ],
-                  },
-                },
-              ].filter(Boolean),
-            },
-          },
+  const fonts = getOGFontsSync();
+  console.log('[OG] Loaded fonts:', fonts.length);
 
-          // Footer
-          {
-            type: 'div',
-            props: {
-              style: {
-                display: 'flex',
-                alignItems: 'center',
-                marginTop: '40px',
-                paddingTop: '32px',
-                borderTop: `2px solid ${OG_COLORS.glassBorder}`,
-              },
-              children: [
-                {
-                  type: 'div',
-                  props: {
-                    style: {
-                      fontSize: '20px',
-                      fontWeight: 500,
-                      color: OG_COLORS.textSecondary,
-                    },
-                    children: BRAND.tagline,
-                  },
-                },
-              ],
-            },
-          },
-        ],
-      },
-    },
-    {
+  try {
+    const response = new ImageResponse(html, {
       width: OG_WIDTH,
       height: OG_HEIGHT,
-      fonts,
-    },
-  );
+      fonts: fonts.map(font => ({
+        name: font.name,
+        data: font.data,
+        weight: font.weight as 100 | 200 | 300 | 400 | 500 | 600 | 700 | 800 | 900,
+        style: font.style as 'normal' | 'italic',
+      })),
+    });
 
-  return svg;
+    console.log('[OG] ImageResponse created');
+    const buffer = await response.arrayBuffer();
+    console.log('[OG] Image buffer size:', buffer.byteLength);
+    return buffer;
+  } catch (err) {
+    console.error('[OG] ImageResponse error:', err);
+    throw err;
+  }
 }
 
 /**
  * Generate fallback OG image for threads not found or not public
  */
-async function generateFallbackOgImage(): Promise<Uint8Array> {
-  const svg = await generateOgImageSvg({
+async function generateFallbackOgImage(): Promise<ArrayBuffer> {
+  return generateOgImage({
     title: 'AI Conversation',
     mode: undefined,
     participantCount: 3,
     messageCount: 10,
   });
-  return svgToPng(svg);
 }
 
 /**
@@ -456,7 +245,7 @@ export const ogChatHandler: RouteHandler<typeof ogChatRoute, ApiEnv> = createHan
         || thread.status === ThreadStatusSchema.enum.archived) {
         try {
           const fallbackPng = await generateFallbackOgImage();
-          return new Response(fallbackPng.buffer as ArrayBuffer, {
+          return new Response(fallbackPng, {
             status: 200,
             headers: {
               'Content-Type': 'image/png',
@@ -506,21 +295,19 @@ export const ogChatHandler: RouteHandler<typeof ogChatRoute, ApiEnv> = createHan
       }
 
       // Generate OG image
-      const svg = await generateOgImageSvg({
+      const pngData = await generateOgImage({
         title: thread.title ?? 'AI Conversation',
         mode: thread.mode as ChatMode | undefined,
         participantCount,
         messageCount,
       });
 
-      const pngData = await svgToPng(svg);
-
       // Store in R2 cache (fire and forget)
-      storeOgImageInCache(r2Bucket, cacheKey, pngData.buffer as ArrayBuffer).catch(() => {
+      storeOgImageInCache(r2Bucket, cacheKey, pngData).catch(() => {
         // Ignore cache store errors
       });
 
-      return new Response(pngData.buffer as ArrayBuffer, {
+      return new Response(pngData, {
         status: 200,
         headers: {
           'Content-Type': 'image/png',
@@ -533,7 +320,7 @@ export const ogChatHandler: RouteHandler<typeof ogChatRoute, ApiEnv> = createHan
       // Try to return fallback OG image on any error
       try {
         const fallbackPng = await generateFallbackOgImage();
-        return new Response(fallbackPng.buffer as ArrayBuffer, {
+        return new Response(fallbackPng, {
           status: 200,
           headers: {
             'Content-Type': 'image/png',

@@ -1,6 +1,7 @@
-import { Link, useNavigate } from '@tanstack/react-router';
+import { Link, useLocation, useMatches, useNavigate } from '@tanstack/react-router';
 import type { ReactNode } from 'react';
 import { memo, useCallback } from 'react';
+import { z } from 'zod';
 import { useShallow } from 'zustand/react/shallow';
 
 import { Icons } from '@/components/icons';
@@ -20,19 +21,77 @@ import { useSidebarOptional } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants';
 import { useThreadQuery } from '@/hooks/queries';
-import { useCurrentPathname } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { useNavigationReset } from '@/stores/chat';
 
 import { ChatScrollButton } from './chat-scroll-button';
 import { ChatSection } from './chat-states';
+import { ChatThreadActions } from './chat-thread-actions';
 import { useThreadHeaderOptional } from './thread-header-context';
 
-const BREADCRUMB_MAP = {
+// ============================================================================
+// BREADCRUMB CONFIGURATION - Enum-based pattern
+// ============================================================================
+
+const BREADCRUMB_PATHS = ['/chat', '/chat/pricing'] as const;
+type BreadcrumbPath = (typeof BREADCRUMB_PATHS)[number];
+
+const BREADCRUMB_MAP: Record<BreadcrumbPath, { titleKey: string; parent?: string }> = {
   '/chat': { titleKey: 'navigation.chat' },
   '/chat/pricing': { titleKey: 'navigation.pricing', parent: '/chat' },
-} as const;
+};
+
+function isBreadcrumbPath(path: string): path is BreadcrumbPath {
+  return BREADCRUMB_PATHS.includes(path as BreadcrumbPath);
+}
+
+// ============================================================================
+// ROUTE LOADER DATA SCHEMAS - Zod-based validation
+// ============================================================================
+
+/** Minimal thread schema for header actions - only fields needed for ChatThreadActions */
+const RouteThreadSchema = z.object({
+  id: z.string(),
+  title: z.string().nullish(),
+  isPublic: z.boolean().optional(),
+  isFavorite: z.boolean().optional(),
+});
+type RouteThread = z.infer<typeof RouteThreadSchema>;
+
+/** Thread route loader data schema */
+const ThreadLoaderDataSchema = z.object({
+  threadTitle: z.string().nullish(),
+  threadData: z.object({
+    thread: RouteThreadSchema,
+  }).nullish(),
+});
+
+/** Route params schema */
+const RouteParamsSchema = z.object({
+  slug: z.string(),
+});
+
+/** Safely extract thread from loader data using Zod validation */
+function extractThreadFromLoaderData(loaderData: unknown): RouteThread | null {
+  const result = ThreadLoaderDataSchema.safeParse(loaderData);
+  if (!result.success) return null;
+  return result.data.threadData?.thread ?? null;
+}
+
+/** Safely extract thread title from loader data using Zod validation */
+function extractThreadTitle(loaderData: unknown): string | null {
+  const result = ThreadLoaderDataSchema.safeParse(loaderData);
+  if (!result.success) return null;
+  return result.data.threadTitle ?? null;
+}
+
+/** Safely extract slug from route params using Zod validation */
+function extractSlugFromParams(params: unknown): string | null {
+  const result = RouteParamsSchema.safeParse(params);
+  if (!result.success) return null;
+  return result.data.slug;
+}
 
 type NavigationHeaderProps = {
   className?: string;
@@ -52,7 +111,9 @@ function NavigationHeaderComponent({
   maxWidth = false,
   showScrollButton = false,
 }: NavigationHeaderProps = {}) {
-  const pathname = useCurrentPathname();
+  // useLocation works during SSR (reads from router context)
+  // useCurrentPathname returns '' during SSR which breaks path checks
+  const { pathname } = useLocation();
   const t = useTranslations();
   const sidebarContext = useSidebarOptional();
   const hasSidebar = sidebarContext !== null;
@@ -66,6 +127,15 @@ function NavigationHeaderComponent({
       thread: s.thread,
     })),
   );
+
+  // Get thread data from route loader (available on SSR)
+  // useMatches() returns ALL matched routes - works on SSR unlike useMatch with shouldThrow: false
+  const matches = useMatches();
+  const threadMatch = matches.find(m => m.routeId === '/_protected/chat/$slug');
+  const routeThreadTitle = extractThreadTitle(threadMatch?.loaderData);
+  const routeThread = extractThreadFromLoaderData(threadMatch?.loaderData);
+  const routeSlug = extractSlugFromParams(threadMatch?.params);
+
   const context = useThreadHeaderOptional();
   const navigate = useNavigate();
   const handleNavigationReset = useNavigationReset();
@@ -87,13 +157,23 @@ function NavigationHeaderComponent({
   const shouldFetchThread = !!storeThreadId && isOnThreadPage && !hasThreadInStore;
   const { data: cachedThreadData } = useThreadQuery(storeThreadId ?? '', shouldFetchThread);
 
-  const effectiveThreadTitle = cachedThreadData?.success
-    ? cachedThreadData.data?.thread?.title
-    : storeThreadTitle;
+  // Priority: route loader data (SSR) > cached query data > store data
+  const effectiveThreadTitle = routeThreadTitle
+    ?? (cachedThreadData?.success ? cachedThreadData.data?.thread?.title : null)
+    ?? storeThreadTitle;
 
   const shouldUseStoreThreadTitle = hasActiveThread || (!isStaticRoute && pathname?.startsWith('/chat/') && pathname !== '/chat');
   const threadTitle = threadTitleProp ?? (showSidebarTrigger && shouldUseStoreThreadTitle ? effectiveThreadTitle : null);
-  const threadActions = threadActionsProp ?? (showSidebarTrigger && shouldUseStoreThreadTitle ? context.threadActions : null);
+
+  // Thread actions priority: prop > context (set via useEffect after hydration) > SSR fallback from route data
+  // During SSR, context.threadActions is null because useEffect hasn't run yet
+  // Fall back to rendering ChatThreadActions directly when we have route data
+  const contextThreadActions = showSidebarTrigger && shouldUseStoreThreadTitle ? context.threadActions : null;
+  const ssrThreadActions = routeThread && routeSlug && !contextThreadActions
+    ? <ChatThreadActions thread={routeThread} slug={routeSlug} />
+    : null;
+  const threadActions = threadActionsProp ?? contextThreadActions ?? ssrThreadActions;
+
   const isThreadPage = (
     (pathname?.startsWith('/chat/') && pathname !== '/chat' && !isStaticRoute)
     || pathname?.startsWith('/public/chat/')
