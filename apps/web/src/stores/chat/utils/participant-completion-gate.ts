@@ -103,11 +103,18 @@ export function isMessageComplete(message: UIMessage): boolean {
   const metadata = getAssistantMetadata(message.metadata);
   const hasAnyFinishReason = !!metadata?.finishReason;
 
-  // ✅ FALLBACK: Check finishReason directly when Zod validation fails
+  // ✅ FIX: Check for explicit error flag
+  // Error messages (hasError: true) should be considered "complete" for moderator triggering
+  // Even if they don't have text content or valid finishReason, they represent a terminal state
+  const hasErrorFlag = metadata?.hasError === true;
+
+  // ✅ FALLBACK: Check hasError and finishReason directly when Zod validation fails
   let hasFallbackFinishReason = false;
+  let hasFallbackErrorFlag = false;
   if (!metadata && isObject(message.metadata)) {
     const rawFinishReason = message.metadata.finishReason;
     hasFallbackFinishReason = isNonEmptyString(rawFinishReason);
+    hasFallbackErrorFlag = message.metadata.hasError === true;
   }
 
   // Check for text content
@@ -127,8 +134,9 @@ export function isMessageComplete(message: UIMessage): boolean {
 
   // Complete if:
   // - Has valid finishReason (stream definitively ended, even if error with no content), OR
-  // - Has text content (works for 'unknown' finishReason with content, or messages without metadata)
-  return hasValidFinishReason || hasValidFallbackFinishReason || !!hasTextContent;
+  // - Has text content (works for 'unknown' finishReason with content, or messages without metadata), OR
+  // - Has error flag (explicit error state, considered terminal for completion purposes)
+  return hasValidFinishReason || hasValidFallbackFinishReason || !!hasTextContent || hasErrorFlag || hasFallbackErrorFlag;
 }
 
 /**

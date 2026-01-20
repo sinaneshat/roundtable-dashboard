@@ -28,30 +28,58 @@ import { useSyncedRefs } from './use-synced-refs';
 function sanitizeMessagesForAiSdk(messages: UIMessage[]): UIMessage[] {
   return messages.map((msg) => {
     // Only process assistant messages (user messages don't have streaming state)
-    if (msg.role !== MessageRoles.ASSISTANT || !msg.parts || msg.parts.length === 0) {
+    if (msg.role !== MessageRoles.ASSISTANT) {
       return msg;
     }
 
-    // Check if any text part has streaming state
-    const hasStreamingPart = msg.parts.some((p) => {
-      return p && typeof p === 'object' && 'state' in p && p.state === TextPartStates.STREAMING;
-    });
-
-    if (!hasStreamingPart) {
+    // ✅ FIX: Handle messages with null/undefined/empty parts
+    // AI SDK expects valid parts array - malformed parts cause "Cannot read properties of undefined (reading 'text')"
+    if (!msg.parts || !Array.isArray(msg.parts) || msg.parts.length === 0) {
+      // Return message with empty parts array to prevent AI SDK errors
       return msg;
     }
 
-    // Mark all streaming parts as done to prevent resume errors
-    // Using structuredClone to safely create a mutable copy
+    // ✅ FIX: Filter and sanitize parts to prevent AI SDK errors
+    // 1. Remove null/undefined parts
+    // 2. Ensure text/reasoning parts have valid 'text' property
+    // 3. Mark streaming parts as done
     const clonedMsg = structuredClone(msg);
-    if (clonedMsg.parts) {
-      for (const part of clonedMsg.parts) {
-        if (part && typeof part === 'object' && 'state' in part && part.state === TextPartStates.STREAMING) {
-          (part as { state: string }).state = 'done';
+    const sanitizedParts: typeof clonedMsg.parts = [];
+
+    for (const part of clonedMsg.parts) {
+      // Skip null/undefined parts
+      if (!part || typeof part !== 'object') {
+        continue;
+      }
+
+      // Handle text parts - ensure they have valid text property
+      if (part.type === MessagePartTypes.TEXT || part.type === MessagePartTypes.REASONING) {
+        // ✅ FIX: Ensure text property exists and is a string
+        // AI SDK accesses part.text directly, causing error if undefined
+        if (!('text' in part) || typeof part.text !== 'string') {
+          // Skip malformed text parts or create with empty string
+          sanitizedParts.push({
+            ...part,
+            text: '',
+            // Mark as done to prevent resume attempts
+            ...('state' in part ? { state: 'done' } : {}),
+          });
+          continue;
         }
+
+        // Mark streaming text parts as done
+        if ('state' in part && part.state === TextPartStates.STREAMING) {
+          sanitizedParts.push({ ...part, state: 'done' });
+        } else {
+          sanitizedParts.push(part);
+        }
+      } else {
+        // Non-text parts (tool-invocation, etc.) - pass through
+        sanitizedParts.push(part);
       }
     }
 
+    clonedMsg.parts = sanitizedParts;
     return clonedMsg;
   });
 }

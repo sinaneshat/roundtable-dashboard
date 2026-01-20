@@ -5,10 +5,9 @@
  * All values are converted to pixels for maximum email client compatibility.
  */
 
-import { getAppBaseUrl } from '@/lib/config/base-urls';
-
-// Environment configuration - uses centralized URL config
-export const baseUrl = getAppBaseUrl();
+// Email assets must use production URLs - localhost URLs are blocked by email clients
+// and flagged as harmful by Google. Always use the public web app URL.
+export const EMAIL_ASSETS_BASE_URL = 'https://roundtable.now';
 
 // Brand Colors - Aligned with global.css design system light mode (OKLCH converted to hex)
 export const colors = {
@@ -251,13 +250,15 @@ export const layouts = {
   },
 };
 
-// Asset URLs
+// Asset URLs - Always use production URL for email client compatibility
+// Logo is at /public/logo.png in web app, served at root URL
 export const assets = {
-  logo: `${baseUrl}/static/logo.png`,
-  logoBlack: `${baseUrl}/static/logo.png`,
-  logoRound: `${baseUrl}/static/logo.png`,
-  logoRoundWhite: `${baseUrl}/static/logo.png`,
-  logoRoundBlack: `${baseUrl}/static/logo.png`,
-  fallbackAvatar: `${baseUrl}/static/images/avatar-placeholder.png`,
-  placeholder: `${baseUrl}/static/images/placeholder/placeholder.svg`,
+  logo: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
+  logoBlack: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
+  logoRound: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
+  logoRoundWhite: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
+  logoRoundBlack: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
+  // Use logo as fallback for missing avatar/placeholder assets
+  fallbackAvatar: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
+  placeholder: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
 };
