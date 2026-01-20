@@ -1,4 +1,4 @@
-import { useQuery, useSuspenseQuery } from '@tanstack/react-query';
+import { useSuspenseQuery } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useMemo } from 'react';
 
@@ -95,38 +95,17 @@ function ChatThreadRoute() {
   // - Errors are caught by route errorComponent
   const { data: queryData } = useSuspenseQuery(threadBySlugQueryOptions(slug));
 
-  // Stream resumption state - prefetched in loader, now hydrated via query cache
-  // Uses useQuery (not suspense) since stream state is optional
-  const { data: streamData } = useQuery({
-    ...streamResumptionQueryOptions(loaderData.threadId ?? ''),
-    enabled: !!loaderData.threadId,
-  });
-
-  // ✅ SSR HYDRATION: Auxiliary data prefetched in loader, hydrated via query cache
-  // Uses useQuery (not suspense) since these are optional
-  const { data: changelogData } = useQuery({
-    ...threadChangelogQueryOptions(loaderData.threadId ?? ''),
-    enabled: !!loaderData.threadId,
-  });
-
-  const { data: feedbackData } = useQuery({
-    ...threadFeedbackQueryOptions(loaderData.threadId ?? ''),
-    enabled: !!loaderData.threadId,
-  });
-
-  const { data: preSearchesData } = useQuery({
-    ...threadPreSearchesQueryOptions(loaderData.threadId ?? ''),
-    enabled: !!loaderData.threadId,
-  });
+  // ✅ ANTI-PATTERN FIX: Use loaderData directly instead of useQuery
+  // TanStack Router integration automatically dehydrates/hydrates query cache
+  // Using useQuery here is redundant and causes unnecessary client-side fetches
+  // The loader already ensureQueryData for all auxiliary data, so just use loaderData
+  // React Query cache is already hydrated - mutations will invalidate as needed
+  const streamResumptionState = loaderData.streamResumption ?? null;
+  const changelog = loaderData.changelog;
+  const feedback = loaderData.feedback;
+  const preSearches = loaderData.preSearches;
 
   const threadData = queryData?.success ? queryData.data : null;
-
-  // ✅ SSR HYDRATION: Use loaderData for SSR (useQuery returns undefined on first SSR render)
-  // useQuery takes over on client for reactivity/updates after mutations
-  const streamResumptionState = streamData?.success ? streamData.data : (loaderData.streamResumption ?? null);
-  const changelog = changelogData?.success ? changelogData.data?.items : loaderData.changelog;
-  const feedback = feedbackData?.success ? feedbackData.data?.feedback : loaderData.feedback;
-  const preSearches = preSearchesData?.success ? preSearchesData.data?.items : loaderData.preSearches;
 
   const user = useMemo(() => ({
     id: session?.user?.id ?? '',
