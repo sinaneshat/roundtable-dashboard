@@ -73,6 +73,7 @@
     "react-dom": "19.2.3",
     "react-hook-form": "^7.70.0",
     "react-markdown": "^10.1.0",
+    "schema-dts": "^1.1.5",
     "shiki": "^3.20.0",
     "streamdown": "^1.6.10",
     "tailwind-merge": "^3.4.0",

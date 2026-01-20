@@ -1,64 +1,107 @@
-import { createJsonLd } from '@/utils';
+import type { JsonLdData } from '@/lib/seo';
+import {
+  createArticleJsonLd,
+  createOrganizationJsonLd,
+  createProductJsonLd,
+  createSoftwareAppJsonLd,
+  serializeJsonLd,
+} from '@/lib/seo';
 
 /**
  * Props for the StructuredData component
- * Used to generate JSON-LD structured data for SEO
+ * Uses discriminated union for type-safe props based on schema type
  */
-type StructuredDataProps = {
+type BaseProps = {
   /** Schema.org type for the structured data */
   type?: 'WebApplication' | 'Organization' | 'Product' | 'Article';
-  /** Name of the entity */
-  name?: string;
-  /** Description of the entity */
-  description?: string;
-  /** URL of the entity */
-  url?: string;
-  /** Base URL for the application (prevents hydration mismatch) */
-  baseUrl?: string;
-  /** Logo URL for the entity */
-  logo?: string;
-  /** Image URL for the entity */
-  image?: string;
-  /** Array of social media URLs */
-  sameAs?: string[];
-  /** Author name (for Article type) */
-  author?: string;
-  /** Publication date (for Article type) */
-  datePublished?: string;
-  /** Last modified date (for Article type) */
-  dateModified?: string;
-  /** Price (for Product type) */
-  price?: number;
-  /** Currency code (for Product type) */
-  currency?: string;
 };
+
+type ArticleProps = BaseProps & {
+  type: 'Article';
+  /** Headline for the article */
+  headline: string;
+  /** Description of the article */
+  description: string;
+  /** Path to the article */
+  path: string;
+  /** Author name */
+  author?: string;
+  /** Publication date */
+  datePublished?: string;
+  /** Last modified date */
+  dateModified?: string;
+  /** Image URL */
+  image?: string;
+};
+
+type ProductProps = BaseProps & {
+  type: 'Product';
+  /** Product name */
+  name: string;
+  /** Product description */
+  description: string;
+  /** Price */
+  price: number;
+  /** Currency code */
+  currency?: string;
+  /** Path to product page */
+  path?: string;
+};
+
+type StructuredDataProps
+  = | { type?: 'WebApplication' }
+    | { type: 'Organization' }
+    | ArticleProps
+    | ProductProps;
 
 /**
  * StructuredData component that injects JSON-LD structured data into the page
  *
- * This component follows React best practices for JSON-LD injection:
- * - Uses dangerouslySetInnerHTML with proper XSS protection
- * - Sanitizes content by replacing '<' characters with Unicode equivalents
- * - Generates structured data based on Schema.org specifications
- *
- * Enhanced to support:
- * - WebApplication: For the main application
+ * Uses type-safe schema-dts builders for Schema.org structured data:
+ * - WebApplication: For the main application (default)
  * - Organization: For company/brand information
- * - Product: For pricing plans and products (with price support)
- * - Article: For blog posts and content (with author and date support)
- *
- * @param props - Configuration for the structured data
- * @returns JSX script element with JSON-LD content
+ * - Product: For pricing plans and products
+ * - Article: For blog posts and content
  */
 export function StructuredData(props: StructuredDataProps) {
-  const structuredData = createJsonLd(props);
+  let structuredData: JsonLdData;
+
+  switch (props.type) {
+    case 'Organization':
+      structuredData = createOrganizationJsonLd();
+      break;
+    case 'Article':
+      structuredData = createArticleJsonLd({
+        headline: props.headline,
+        description: props.description,
+        path: props.path,
+        author: props.author,
+        datePublished: props.datePublished,
+        dateModified: props.dateModified,
+        image: props.image,
+      });
+      break;
+    case 'Product':
+      structuredData = createProductJsonLd({
+        name: props.name,
+        description: props.description,
+        price: props.price,
+        currency: props.currency,
+        path: props.path,
+      });
+      break;
+    case 'WebApplication':
+    default:
+      structuredData = createSoftwareAppJsonLd();
+      break;
+  }
 
   return (
     <script
       type="application/ld+json"
       // eslint-disable-next-line react-dom/no-dangerously-set-innerhtml -- Required for JSON-LD structured data injection (SEO)
       dangerouslySetInnerHTML={{
-        __html: JSON.stringify(structuredData).replace(/</g, '\u003C'),
+        __html: serializeJsonLd(structuredData),
       }}
     />
   );

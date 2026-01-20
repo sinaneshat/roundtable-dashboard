@@ -36,6 +36,19 @@ export {
   getSeoHeaders,
 } from './helpers';
 
+// Type-safe JSON-LD builders (using schema-dts)
+export type { JsonLdData } from './json-ld';
+export {
+  createArticleJsonLd,
+  createBreadcrumbListJsonLd,
+  createFAQPageJsonLd,
+  createOrganizationJsonLd,
+  createProductJsonLd,
+  createSoftwareAppJsonLd,
+  createWebPageJsonLd,
+  createWebSiteJsonLd,
+  serializeJsonLd,
+} from './json-ld';
 // Schemas (single source of truth for types)
 export type {
   HeadConfig,

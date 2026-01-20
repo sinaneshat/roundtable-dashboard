@@ -1,8 +1,8 @@
 /**
  * Utils Barrel Export
  *
- * Re-exports from utility modules for cleaner imports.
+ * JSON-LD structured data utilities are now in @/lib/seo
+ * @see @/lib/seo for type-safe JSON-LD builders using schema-dts
  */
 
-// Metadata utilities (JSON-LD structured data)
-export { createBreadcrumbJsonLd, createFaqJsonLd, createJsonLd } from './metadata';
+export {};
