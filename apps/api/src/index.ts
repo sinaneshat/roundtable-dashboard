@@ -354,8 +354,11 @@ app.use('*', requestLogger);
 app.use('*', contextStorage());
 
 // Security headers
+// crossOriginResourcePolicy: 'cross-origin' allows OG images to be loaded cross-origin
+// The OG preview in ShareDialog loads from API origin (8787) while frontend is on (5173)
 app.use('*', secureHeaders({
   contentSecurityPolicy: {},
+  crossOriginResourcePolicy: 'cross-origin',
 }));
 
 app.use('*', requestId());
@@ -395,6 +398,17 @@ app.use('*', async (c, next) => {
 
 // CORS
 app.use('*', async (c, next) => {
+  // OG images need to be accessible from ANY origin (social media crawlers, external sites)
+  // Use includes() to match /og/ regardless of path prefix (handles both /og/chat and /api/v1/og/chat)
+  if (c.req.path.includes('/og/')) {
+    return cors({
+      origin: '*',
+      credentials: false, // * origin cannot use credentials
+      allowMethods: ['GET', 'OPTIONS'],
+      allowHeaders: ['Content-Type'],
+    })(c, next);
+  }
+
   const allowedOrigins = getAllowedOriginsFromContext(c);
 
   const middleware = cors({
