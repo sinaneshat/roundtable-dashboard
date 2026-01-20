@@ -3,8 +3,8 @@
   "main": "worker.ts",
   "name": "roundtable-api",
   "account_id": "499b6c3c38f75f7f7dc7d3127954b921",
-  "compatibility_date": "2024-12-30",
-  "compatibility_flags": ["nodejs_compat", "global_fetch_strictly_public"],
+  "compatibility_date": "2025-01-15",
+  "compatibility_flags": ["nodejs_compat"],
   "minify": true,
   "upload_source_maps": false, // source maps add 40MB+ to upload, disabled
   "rules": [
@@ -18,7 +18,8 @@
     "port": 8787
   },
   "observability": {
-    "enabled": true
+    "enabled": true,
+    "head_sampling_rate": 1
   },
   "placement": {
     "mode": "smart"
@@ -151,7 +152,7 @@
         { "binding": "UPLOADS_R2_BUCKET", "bucket_name": "roundtable-dashboard-r2-uploads-preview-weur", "preview_bucket_name": "roundtable-dashboard-r2-uploads-preview-weur" }
       ],
       "browser": { "binding": "BROWSER" },
-      "ai": { "binding": "AI" },
+      "ai": { "binding": "AI", "remote": true },
       "durable_objects": {
         "bindings": [
           { "name": "UPLOAD_CLEANUP_SCHEDULER", "class_name": "UploadCleanupScheduler", "script_name": "roundtable-api-preview" }
@@ -178,7 +179,7 @@
       "name": "roundtable-api-production",
       "upload_source_maps": false,
       "placement": { "mode": "smart" },
-      "observability": { "enabled": true },
+      "observability": { "enabled": true, "head_sampling_rate": 0.1 },
       "limits": { "cpu_ms": 300000 },
       "routes": [
         {
@@ -212,7 +213,7 @@
         { "binding": "UPLOADS_R2_BUCKET", "bucket_name": "roundtable-dashboard-r2-uploads-prod-weur", "preview_bucket_name": "roundtable-dashboard-r2-uploads-prod-weur" }
       ],
       "browser": { "binding": "BROWSER" },
-      "ai": { "binding": "AI" },
+      "ai": { "binding": "AI", "remote": true },
       "durable_objects": {
         "bindings": [
           { "name": "UPLOAD_CLEANUP_SCHEDULER", "class_name": "UploadCleanupScheduler", "script_name": "roundtable-api-production" }

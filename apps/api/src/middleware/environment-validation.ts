@@ -6,10 +6,12 @@
  * and integration with existing error handling patterns.
  */
 
+import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createError } from '@/common/error-handling';
+import type { ApiEnv } from '@/types';
 
 // ============================================================================
 // ENVIRONMENT VARIABLE DEFINITIONS
@@ -216,21 +218,25 @@ export function validateEnvironmentConfiguration(env: CloudflareEnv): {
  * Environment validation middleware that runs on application startup
  * Validates all required environment variables and provides detailed error reporting
  * Uses Hono context for per-request env access in Cloudflare Workers
+ *
+ * OFFICIAL HONO PATTERN: Uses createMiddleware<ApiEnv> for proper typing
  */
 export function createEnvironmentValidationMiddleware() {
-  return async (c: { env: CloudflareEnv }, next: () => Promise<void>) => {
+  return createMiddleware<ApiEnv>(async (c, next) => {
     // Use Hono context env directly - no need for external import
     const env = c.env;
     if (!env) {
       // Fallback when env is not available - skip validation
-      return next();
+      await next();
+      return;
     }
 
     // Skip validation in test environment
     // NODE_ENV is inlined at build time, so process.env is acceptable here
     // env.NODE_ENV is typed as 'development' | 'production' from wrangler vars
     if (process.env.NODE_ENV === 'test') {
-      return next();
+      await next();
+      return;
     }
 
     const validation = validateEnvironmentConfiguration(env);
@@ -255,6 +261,6 @@ export function createEnvironmentValidationMiddleware() {
       }
     }
 
-    return next();
-  };
+    await next();
+  });
 }

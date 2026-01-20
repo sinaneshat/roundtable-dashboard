@@ -9,12 +9,14 @@
  * - prod: Essential request logs only (method, path, status, duration)
  * - preview/local: Detailed logs with headers, timing breakdown
  *
+ * OFFICIAL HONO PATTERN: Uses createMiddleware for proper typing
+ *
  * @see https://developers.cloudflare.com/workers/observability/logs/workers-logs/
  */
 
 import type { RequestLogLevel } from '@roundtable/shared/enums';
 import { REQUEST_LOG_LEVEL_BY_ENV, RequestLogLevels } from '@roundtable/shared/enums';
-import type { Context, Next } from 'hono';
+import { createMiddleware } from 'hono/factory';
 
 import type { ApiEnv } from '@/types';
 
@@ -73,7 +75,7 @@ type RequestLogEntry = {
  *
  * Usage: app.use('*', requestLogger);
  */
-export async function requestLogger(c: Context<ApiEnv>, next: Next): Promise<void | Response> {
+export const requestLogger = createMiddleware<ApiEnv>(async (c, next) => {
   const startTime = Date.now();
 
   // Process request
@@ -123,4 +125,4 @@ export async function requestLogger(c: Context<ApiEnv>, next: Next): Promise<voi
     // eslint-disable-next-line no-console
     console.log(logEntry);
   }
-}
+});

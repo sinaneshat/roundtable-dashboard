@@ -7,9 +7,13 @@
  * Adds to context:
  * - startTime: Request start timestamp
  * - performanceMetrics: Aggregated performance data
+ *
+ * OFFICIAL HONO PATTERN: Uses createMiddleware for proper typing
  */
 
-import type { Context, Next } from 'hono';
+import { createMiddleware } from 'hono/factory';
+
+import type { ApiEnv } from '@/types';
 
 // Performance metrics stored in context
 export type DbQueryTiming = {
@@ -43,10 +47,11 @@ function isPerformanceTrackingEnabled(): boolean {
  * Sets up timing and extracts Cloudflare placement info
  * Stores metrics in request context (not global state) for concurrency safety
  */
-export async function performanceTracking(c: Context, next: Next): Promise<void | Response> {
+export const performanceTracking = createMiddleware<ApiEnv>(async (c, next) => {
   // Skip if not enabled
   if (!isPerformanceTrackingEnabled()) {
-    return next();
+    await next();
+    return;
   }
 
   const startTime = Date.now();
@@ -88,13 +93,13 @@ export async function performanceTracking(c: Context, next: Next): Promise<void 
       headers,
     });
   }
-}
+});
 
 /**
  * Format performance metrics for API response
  * Returns object to be included in response meta
  */
-export function formatPerformanceForResponse(c?: Context): Record<string, unknown> | undefined {
+export function formatPerformanceForResponse(c?: { get: (key: string) => unknown }): Record<string, unknown> | undefined {
   if (!isPerformanceTrackingEnabled()) {
     return undefined;
   }

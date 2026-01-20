@@ -33,7 +33,7 @@
   "dependencies": {
     "@cf-wasm/resvg": "^0.3.3",
     "@hono/zod-openapi": "^1.2.0",
-    "@openrouter/ai-sdk-provider": "^1.5.4",
+    "@openrouter/ai-sdk-provider": "^2.0.0",
     "@react-email/components": "^0.0.33",
     "@roundtable/shared": "workspace:*",
     "@scalar/hono-api-reference": "^0.9.30",

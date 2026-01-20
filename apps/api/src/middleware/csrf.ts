@@ -1,5 +1,5 @@
-import type { Context, MiddlewareHandler } from 'hono';
 import { csrf } from 'hono/csrf';
+import { createMiddleware } from 'hono/factory';
 
 import { getAllowedOriginsFromContext } from '@/lib/config/base-urls';
 import type { ApiEnv } from '@/types';
@@ -15,6 +15,8 @@ import type { ApiEnv } from '@/types';
  * Only validates unsafe methods (POST, PATCH, PUT, DELETE) with form-submittable content types.
  * Uses centralized URL config from base-urls.ts for allowed origins.
  *
+ * OFFICIAL HONO PATTERN: Uses createMiddleware for proper typing and wrapping
+ *
  * @see https://hono.dev/docs/middleware/builtin/csrf
  */
 
@@ -22,12 +24,13 @@ import type { ApiEnv } from '@/types';
  * Dynamic CSRF middleware that configures allowed origins based on environment
  * Follows Hono's recommended pattern for dynamic origin validation
  */
-export const csrfProtection: MiddlewareHandler<ApiEnv> = async (c: Context<ApiEnv>, next) => {
+export const csrfProtection = createMiddleware<ApiEnv>(async (c, next) => {
   // Skip CSRF check for API key authentication (follows security best practices)
   // API keys in headers are not subject to CSRF attacks
   const apiKey = c.req.header('x-api-key');
   if (apiKey) {
-    return next();
+    await next();
+    return;
   }
 
   // Use centralized URL config for allowed origins
@@ -45,5 +48,5 @@ export const csrfProtection: MiddlewareHandler<ApiEnv> = async (c: Context<ApiEn
     },
   });
 
-  return middleware(c, next);
-};
+  await middleware(c, next);
+});

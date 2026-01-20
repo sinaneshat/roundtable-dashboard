@@ -329,7 +329,10 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
       ...(shouldSyncFormValues
         ? {
             enableWebSearch: thread.enableWebSearch,
-            selectedMode: ChatModeSchema.catch(DEFAULT_CHAT_MODE).parse(thread.mode),
+            selectedMode: (() => {
+              const result = ChatModeSchema.safeParse(thread.mode);
+              return result.success ? result.data : DEFAULT_CHAT_MODE;
+            })(),
           }
         : {}),
     }, false, 'thread/setThread');
@@ -1517,9 +1520,10 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       : FORM_DEFAULTS.selectedParticipants;
 
     const selectedMode = preferences?.selectedMode
-      ? (ChatModeSchema.safeParse(preferences.selectedMode).success
-          ? ChatModeSchema.parse(preferences.selectedMode)
-          : FORM_DEFAULTS.selectedMode)
+      ? (() => {
+          const result = ChatModeSchema.safeParse(preferences.selectedMode);
+          return result.success ? result.data : FORM_DEFAULTS.selectedMode;
+        })()
       : FORM_DEFAULTS.selectedMode;
 
     set({

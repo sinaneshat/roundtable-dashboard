@@ -114,18 +114,10 @@ export function useVirtualizedTimeline({
     return () => resizeObserver.disconnect();
   }, [shouldEnable, listRef]);
 
-  // ✅ FIX: Custom onChange to avoid flushSync warning during render
-  // Default TanStack Virtual onChange uses flushSync which warns when called during render
-  // Using queueMicrotask defers the update and prevents the warning
-  const onChange = useCallback(() => {
-    queueMicrotask(() => {
-      forceUpdate(c => c + 1);
-    });
-  }, []);
-
-  // Initialize window virtualizer - OFFICIAL PATTERN
-  // Custom onChange avoids flushSync warning during render phase
-  // scrollMarginRef.current is read directly; forceUpdate triggers re-render when it changes
+  // Initialize window virtualizer - OFFICIAL REACT 19 PATTERN
+  // useFlushSync: false eliminates React 19 flushSync warnings during scroll
+  // Official docs: https://tanstack.com/virtual/latest/docs/framework/react/react-virtual#useflushsync
+  // React 19 batches updates naturally, so synchronous flushSync is not needed
   const virtualizer = useWindowVirtualizer({
     count: timelineItems.length,
     estimateSize: () => estimateSize,
@@ -134,7 +126,7 @@ export function useVirtualizedTimeline({
     paddingStart,
     paddingEnd,
     enabled: shouldEnable,
-    onChange,
+    useFlushSync: false, // React 19 compatibility - prevents flushSync warning
   });
 
   // Scroll position adjustment during streaming
@@ -195,7 +187,6 @@ export function useVirtualizedTimeline({
   useLayoutEffect(() => {
     if (timelineItems.length === 0 && scrollMarginRef.current !== 0) {
       scrollMarginRef.current = 0;
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
       forceUpdate(c => c + 1);
     }
   }, [timelineItems.length]);

@@ -124,10 +124,21 @@ export function isValidRoundNumber(value: unknown): value is RoundNumber {
  *
  * @param maxRound - Maximum round number found, or NO_ROUND_SENTINEL if none
  * @returns Next round number (maxRound + 1, or 0 if sentinel)
+ * @throws ZodError if calculated value is invalid (should never happen with valid input)
  */
 export function calculateNextRound(maxRound: RoundNumberWithSentinel): RoundNumber {
   const next = maxRound + 1;
-  return RoundNumberSchema.parse(next);
+  const result = RoundNumberSchema.safeParse(next);
+  if (!result.success) {
+    console.error('[calculateNextRound] Invalid round calculation:', {
+      maxRound,
+      next,
+      error: result.error.issues,
+    });
+    // This should never happen with valid input, but fallback to 0 for safety
+    return DEFAULT_ROUND_NUMBER;
+  }
+  return result.data;
 }
 
 /**
