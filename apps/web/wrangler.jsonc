@@ -6,11 +6,6 @@
   "compatibility_flags": ["nodejs_compat"],
   "upload_source_maps": true,
   "main": "@tanstack/react-start/server-entry",
-  "assets": {
-    "directory": "public",
-    "binding": "ASSETS",
-    "not_found_handling": "single-page-application"
-  },
   "observability": {
     "enabled": true
   },

@@ -15,12 +15,12 @@ const APP_VERSION = rootPkg.version;
 
 export default defineConfig({
   plugins: [
-    // Cloudflare Workers integration - must be first
-    cloudflare({ viteEnvironment: { name: 'ssr' } }),
     // Tailwind CSS v4
     tailwindcss(),
     // TypeScript path aliases
     tsconfigPaths(),
+    // Cloudflare Workers integration
+    cloudflare({ viteEnvironment: { name: 'ssr' } }),
     // TanStack Start framework
     tanstackStart({
       prerender: {
