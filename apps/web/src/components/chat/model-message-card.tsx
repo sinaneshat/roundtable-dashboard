@@ -268,6 +268,11 @@ export const ModelMessageCard = memo(({
 
             {!hideActions && (() => {
               const isComplete = status === MessageStatuses.COMPLETE;
+              // ✅ FIX: Also check text parts don't have streaming state
+              // finishReason can be set before all text chunks are received
+              const hasStreamingTextParts = renderableParts.some(
+                p => p.type === MessagePartTypes.TEXT && 'state' in p && p.state === TextPartStates.STREAMING,
+              );
               const textContent = renderableParts
                 .filter(p => p.type === MessagePartTypes.TEXT)
                 .map(p => p.text)
@@ -275,7 +280,7 @@ export const ModelMessageCard = memo(({
                 .trim();
               const hasText = textContent.length > 0;
 
-              if (!isComplete || !hasText)
+              if (!isComplete || !hasText || hasStreamingTextParts)
                 return null;
 
               return (

@@ -488,6 +488,13 @@ export function useIncompleteRoundResumption(
       && accountedParticipants < enabledParticipants.length
       && !participantsChangedSinceRound;
 
+  // ✅ RESUMPTION DEBUG: Log incomplete round detection state with guard details
+  // This fires on every state change to track resumption detection
+  const guardDetails = !isIncomplete
+    ? ` guards: en=${enabled ? 1 : 0} str=${isStreaming ? 1 : 0} wait=${waitingToStartStreaming ? 1 : 0} sub=${isSubmissionInProgress ? 1 : 0} opt=${blockOnOptimistic ? 1 : 0} done=${isCompletedByServer ? 1 : 0} acc=${accountedParticipants}/${enabledParticipants.length} chg=${participantsChangedSinceRound ? 1 : 0}`
+    : '';
+  rlog.resume('detect', `r${currentRoundNumber ?? '-'} incomplete=${isIncomplete ? 1 : 0} resp=[${[...respondedParticipantIndices]}] inProg=[${[...inProgressParticipantIndices]}] total=${enabledParticipants.length} orphan=${orphanedPreSearch?.status ?? '-'} prefill=${streamResumptionPrefilled ? 1 : 0} phase=${currentResumptionPhase ?? '-'}${guardDetails}`);
+
   // Find the first missing participant index
   // ✅ AI SDK RESUME FIX: Skip BOTH responded AND in-progress participants
   // In-progress participants have partial content from AI SDK resume - accept as-is
@@ -961,6 +968,9 @@ export function useIncompleteRoundResumption(
 
     // Log what we detected before triggering
     rlog.trigger('resume', `P${effectiveNextParticipant} r${currentRoundNumber} responded=[${[...respondedParticipantIndices]}] inProgress=[${[...inProgressParticipantIndices]}] total=${enabledParticipants.length}`);
+
+    // ✅ RESUMPTION DEBUG: Log the actual trigger moment
+    rlog.resume('trigger', `🔄 RESUMING r${currentRoundNumber} from P${effectiveNextParticipant} - setting wait=1 nextP=${effectiveNextParticipant} streamR=${currentRoundNumber}`);
 
     // ✅ DOUBLE-TRIGGER FIX: Set round-level guard SYNCHRONOUSLY before ANY state updates
     roundTriggerInProgressRef.current = roundKey;

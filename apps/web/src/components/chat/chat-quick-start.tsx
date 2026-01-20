@@ -168,6 +168,8 @@ type ChatQuickStartProps = {
     participants: ParticipantConfig[],
   ) => void;
   className?: string;
+  /** Disable all suggestion buttons (e.g., during submission) */
+  disabled?: boolean;
 };
 export function QuickStartSkeleton({ className }: { className?: string }) {
   return (
@@ -202,6 +204,7 @@ export function QuickStartSkeleton({ className }: { className?: string }) {
 export function ChatQuickStart({
   onSuggestionClick,
   className,
+  disabled = false,
 }: ChatQuickStartProps) {
   // ✅ HYDRATION FIX: Initialize with null, set on client via useEffect
   // Previously used useState initializers with new Date() which caused hydration
@@ -369,17 +372,20 @@ export function ChatQuickStart({
             <motion.button
               key={suggestion.title}
               initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              whileHover={{
-                scale: 1.01,
-                transition: { duration: 0.2, ease: 'easeOut' },
-              }}
-              whileTap={{ scale: 0.99, transition: { duration: 0.1 } }}
+              animate={{ opacity: disabled ? 0.5 : 1, y: 0 }}
+              whileHover={disabled
+                ? undefined
+                : {
+                    scale: 1.01,
+                    transition: { duration: 0.2, ease: 'easeOut' },
+                  }}
+              whileTap={disabled ? undefined : { scale: 0.99, transition: { duration: 0.1 } }}
               transition={{
                 duration: 0.4,
                 delay: index * 0.1,
                 ease: [0.25, 0.46, 0.45, 0.94],
               }}
+              disabled={disabled}
               onClick={() =>
                 onSuggestionClick(
                   suggestion.prompt,
@@ -387,11 +393,12 @@ export function ChatQuickStart({
                   suggestion.participants,
                 )}
               className={cn(
-                'group/suggestion w-full text-left px-4 py-3 rounded-2xl cursor-pointer focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation',
-                'hover:bg-white/[0.07]',
-                'active:bg-black/20',
+                'group/suggestion w-full text-left px-4 py-3 rounded-2xl focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation',
                 'transition-all duration-200 ease-out',
                 !isLast && 'border-b border-white/[0.02]',
+                disabled
+                  ? 'cursor-not-allowed opacity-50'
+                  : 'cursor-pointer hover:bg-white/[0.07] active:bg-black/20',
               )}
             >
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-3">

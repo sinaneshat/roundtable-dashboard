@@ -1558,6 +1558,8 @@ export function useMultiParticipantChat(
         && initialMessages.length > 0;
 
     if (shouldHydrate) {
+      // ✅ RESUMPTION DEBUG: Log AI SDK hydration
+      rlog.resume('hydrate', `AI SDK empty, hydrating with ${initialMessages.length} msgs t=${threadId?.slice(-8) ?? '-'}`);
       // ✅ CRITICAL FIX: Deep clone messages to break Immer proxy freeze
       // Store messages come from Zustand+Immer which freezes all arrays (Object.freeze)
       // AI SDK needs mutable arrays to push streaming parts during response generation
@@ -1858,9 +1860,17 @@ export function useMultiParticipantChat(
     // When passed from trigger, these messages are guaranteed to be persisted (from PATCH response)
     const freshMessages = messagesOverride || initialMessages;
 
+    // ✅ RESUMPTION DEBUG: Log entry to continueFromParticipant
+    rlog.resume('cfp-entry', `P${fromIndex} status=${status} sdkMsgs=${messages.length} override=${messagesOverride?.length ?? '-'} hydrated=${hasHydratedRef.current ? 1 : 0}`);
+
+    // ✅ FIX: When messagesOverride provided with messages, bypass AI SDK hydration checks
+    // Same pattern as startRound - caller can provide fresh messages from store
+    const hasMessagesOverride = messagesOverride && messagesOverride.length > 0;
+
     // ✅ CRITICAL FIX: ATOMIC check-and-set to prevent race conditions
     // Same pattern as startRound - must happen FIRST before any other logic
     if (isTriggeringRef.current) {
+      rlog.resume('cfp-exit', `P${fromIndex} EXIT: already triggering`);
       return;
     }
     isTriggeringRef.current = true;
@@ -1885,8 +1895,16 @@ export function useMultiParticipantChat(
     }
 
     // ✅ Guards: Wait for dependencies to be ready
-    // ✅ FIX: Require AI SDK to be fully ready before sending
-    if (messages.length === 0 || status !== AiSdkStatuses.READY) {
+    // ✅ FIX: Bypass messages.length check when messagesOverride provided (same as startRound)
+    if (!hasMessagesOverride && (messages.length === 0 || status !== AiSdkStatuses.READY)) {
+      rlog.resume('cfp-exit', `P${fromIndex} EXIT: sdk not ready (msgs=${messages.length} status=${status})`);
+      isTriggeringRef.current = false;
+      return;
+    }
+
+    // Still check status even with override - need AI SDK to be in ready state
+    if (hasMessagesOverride && status !== AiSdkStatuses.READY) {
+      rlog.resume('cfp-exit', `P${fromIndex} EXIT: sdk status not ready (status=${status})`);
       isTriggeringRef.current = false;
       return;
     }
@@ -1894,12 +1912,14 @@ export function useMultiParticipantChat(
     // ✅ FIX: Ensure threadId is valid before proceeding
     const effectiveThreadId = callbackRefs.threadId.current;
     if (!effectiveThreadId || effectiveThreadId.trim() === '') {
+      rlog.resume('cfp-exit', `P${fromIndex} EXIT: no threadId`);
       isTriggeringRef.current = false;
       return;
     }
 
-    // ✅ FIX: Ensure AI SDK has been hydrated with initial messages
-    if (!hasHydratedRef.current) {
+    // ✅ FIX: Bypass hydration check when messagesOverride provided (same as startRound)
+    if (!hasMessagesOverride && !hasHydratedRef.current) {
+      rlog.resume('cfp-exit', `P${fromIndex} EXIT: not hydrated yet`);
       isTriggeringRef.current = false;
       return;
     }
@@ -2468,16 +2488,21 @@ export function useMultiParticipantChat(
   useLayoutEffect(() => {
     // Only act when AI SDK says it's streaming but we haven't acknowledged it
     if (status === AiSdkStatuses.STREAMING && !isExplicitlyStreaming && !isTriggeringRef.current) {
+      // ✅ RESUMPTION DEBUG: Log AI SDK resume detection attempt
+      rlog.resume('sdk-resume', `AI SDK streaming, explicit=${isExplicitlyStreaming ? 1 : 0} triggering=${isTriggeringRef.current ? 1 : 0} msgs=${messagesRef.current.length}`);
       const streamResult = handleResumedStreamDetection();
 
       // ✅ FIX: Handle 'blocked' - server prefilled, let custom resumption handle
       // Don't set any streaming state, let incomplete-round-resumption.ts handle it
       if (streamResult === 'blocked') {
-        // AI SDK resume blocked, custom resumption will trigger correct participant
+        // ✅ RESUMPTION DEBUG: Log blocked resume
+        rlog.resume('sdk-resume', `BLOCKED - server prefilled, letting custom resumption handle`);
         return;
       }
 
       if (streamResult === true) {
+        // ✅ RESUMPTION DEBUG: Log successful resume detection
+        rlog.resume('sdk-resume', `✓ detected resumed stream, waiting for data...`);
         // Record message count at resume detection for phantom detection
         messagesAtResumeDetectionRef.current = messagesRef.current.length;
 
@@ -2486,6 +2511,8 @@ export function useMultiParticipantChat(
         phantomResumeTimeoutRef.current = setTimeout(() => {
           // Check if we're still streaming and no new messages arrived
           if (isStreamingRef.current && messagesRef.current.length === messagesAtResumeDetectionRef.current) {
+            // ✅ RESUMPTION DEBUG: Log phantom resume detection
+            rlog.resume('phantom', `⚠ no data in 5s, msgs still ${messagesRef.current.length} - clearing streaming for retry`);
             // Phantom resume detected - no actual data flowing
             // Clear streaming state to allow incomplete round resumption to trigger
             isStreamingRef.current = false;
@@ -2508,6 +2535,8 @@ export function useMultiParticipantChat(
   // This means real data is flowing and the resume was successful
   useLayoutEffect(() => {
     if (phantomResumeTimeoutRef.current && messages.length > messagesAtResumeDetectionRef.current) {
+      // ✅ RESUMPTION DEBUG: Log successful data flow after resume
+      rlog.resume('sdk-resume', `✓ data flowing, msgs ${messagesAtResumeDetectionRef.current}→${messages.length}, canceling phantom timeout`);
       clearTimeout(phantomResumeTimeoutRef.current);
       phantomResumeTimeoutRef.current = null;
     }
@@ -2562,11 +2591,14 @@ export function useMultiParticipantChat(
     }
 
     // ✅ DEAD STREAM DETECTED: Stream ended but participant didn't complete
+    // ✅ RESUMPTION DEBUG: Log dead stream detection
+    rlog.resume('dead-stream', `⚠ stream→ready but no finishReason, clearing for retry`);
     // Clear streaming state so incomplete-round-resumption can retry
     // Use a short timeout to avoid race with legitimate stream continuation
     const deadStreamTimeoutId = setTimeout(() => {
       // Double-check we're still in the same state
       if (isStreamingRef.current) {
+        rlog.resume('dead-stream', `clearing stuck streaming state after 500ms`);
         isStreamingRef.current = false;
         setIsExplicitlyStreaming(false);
       }

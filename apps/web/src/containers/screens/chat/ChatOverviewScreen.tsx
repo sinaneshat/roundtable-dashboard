@@ -26,8 +26,8 @@ import {
   useChatStoreApi,
   useModelPreferencesStore,
 } from '@/components/providers';
-import Image from '@/components/ui/image';
 import { LogoGlow } from '@/components/ui/logo-glow';
+import { LogoShader } from '@/components/ui/logo-shader';
 import { BRAND } from '@/constants';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
 import {
@@ -970,35 +970,14 @@ export default function ChatOverviewScreen() {
                         transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
                       >
                         <LogoGlow />
-                        <motion.div
-                          className="relative w-full h-full"
-                          animate={{
-                            rotate: 360,
-                            scale: [1, 1.03, 1],
-                          }}
-                          transition={{
-                            rotate: {
-                              duration: 60,
-                              repeat: Infinity,
-                              ease: 'linear',
-                            },
-                            scale: {
-                              duration: 4,
-                              repeat: Infinity,
-                              ease: 'easeInOut',
-                            },
-                          }}
-                          style={{ willChange: 'transform' }}
-                        >
-                          <Image
+                        <div className="relative w-full h-full">
+                          <LogoShader
                             src={BRAND.logos.main}
-                            alt={BRAND.name}
-                            className="w-full h-full object-contain"
                             width={96}
                             height={96}
-                            priority
+                            className="w-full h-full"
                           />
-                        </motion.div>
+                        </div>
                       </motion.div>
 
                       <div className="flex flex-col items-center gap-1.5">
@@ -1030,7 +1009,7 @@ export default function ChatOverviewScreen() {
                         exit={{ opacity: 0, scale: 0.95 }}
                         transition={{ delay: 0.45, duration: 0.4, ease: 'easeOut' }}
                       >
-                        <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
+                        <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} disabled={isOperationBlocked} />
                       </motion.div>
 
                       {!isMobile && (

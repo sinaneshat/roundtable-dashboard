@@ -279,7 +279,7 @@ function Sidebar({
             : undefined}
           className={cn(
             'bg-card flex h-full w-full flex-col rounded-2xl p-2',
-            'border-0 shadow-lg',
+            'border-0',
             isCollapsed && 'cursor-ew-resize focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 outline-none',
           )}
         >
@@ -355,7 +355,7 @@ function SidebarInset({ className, ...props }: ComponentProps<'main'>) {
     <main
       data-slot="sidebar-inset"
       className={cn(
-        'relative flex w-full flex-1 flex-col',
+        'relative flex w-full flex-1 flex-col bg-background',
         'md:peer-data-[variant=inset]:m-2 md:peer-data-[variant=inset]:ms-0 md:peer-data-[variant=inset]:rounded-xl md:peer-data-[variant=inset]:shadow-sm md:peer-data-[variant=inset]:peer-data-[state=collapsed]:ms-2',
         className,
       )}

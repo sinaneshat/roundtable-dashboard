@@ -114,8 +114,8 @@ export const ChatInput = memo(({
 
   const isFreeUserBlocked = isFreeUser && hasUsedTrial;
 
-  const isInputDisabled = disabled || isQuotaExceeded || isFreeUserBlocked;
-  const isMicDisabled = disabled || isQuotaExceeded || isFreeUserBlocked;
+  const isInputDisabled = disabled || isQuotaExceeded || isFreeUserBlocked || isSubmitting;
+  const isMicDisabled = disabled || isQuotaExceeded || isFreeUserBlocked || isSubmitting;
   const isOverLimit = value.length > STRING_LIMITS.MESSAGE_MAX;
   const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting || isLoadingStats || creditEstimate.isLoading || isFreeUserBlocked;
   // In auto mode, skip participant validation - AI will select models based on prompt

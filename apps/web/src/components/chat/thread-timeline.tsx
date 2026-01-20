@@ -1,3 +1,4 @@
+import { MessagePartTypes, TextPartStates } from '@roundtable/shared';
 import { useEffect, useMemo, useRef } from 'react';
 
 import { Actions } from '@/components/ai-elements/actions';
@@ -218,6 +219,14 @@ export function ThreadTimeline({
                 return null;
               }
 
+              // ✅ FIX: Check if moderator message still has streaming text parts
+              const hasStreamingTextParts = moderatorMessage.parts?.some(
+                p => p.type === MessagePartTypes.TEXT && 'state' in p && p.state === TextPartStates.STREAMING,
+              );
+              if (hasStreamingTextParts) {
+                return null;
+              }
+
               const moderatorText = extractTextFromMessage(moderatorMessage);
 
               return (
@@ -285,6 +294,7 @@ export function ThreadTimeline({
     <div
       ref={listRef}
       data-virtualized-timeline
+      className="bg-transparent"
       style={{
         // OFFICIAL PATTERN: Always use height, not minHeight
         // getTotalSize() updates as items are measured, so height naturally grows

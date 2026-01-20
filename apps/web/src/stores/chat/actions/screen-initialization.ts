@@ -90,6 +90,11 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     rlog.init('effect', `t=${threadId?.slice(-8) ?? '-'} rdy=${isReady ? 1 : 0} initd=${alreadyInitialized ? 1 : 0} parts=${participants.length} msgs=${ssrMessages.length} phase=${streamResumptionState?.currentPhase ?? '-'} patch=${freshIsPatchInProgress ? 1 : 0}`);
     rlog.init('guard', `resum=${freshState.streamResumptionPrefilled ? 1 : 0} same=${storeThreadId === threadId ? 1 : 0} store=${storeMessages.length} db=${ssrMessages.length} resumR=${freshState.resumptionRoundNumber ?? '-'} storeLoaded=${storeAlreadyLoaded ? 1 : 0}`);
 
+    // ✅ RESUMPTION DEBUG: Log server-provided resumption state
+    if (streamResumptionState) {
+      rlog.resume('prefill-detect', `phase=${streamResumptionState.currentPhase} r=${streamResumptionState.roundNumber ?? '-'} nextP=${streamResumptionState.nextParticipantIndex ?? '-'} complete=${streamResumptionState.roundComplete ? 1 : 0} preSearch=${streamResumptionState.preSearchStatus ?? '-'} mod=${streamResumptionState.moderatorStatus ?? '-'}`);
+    }
+
     // ✅ CRITICAL FIX: Skip if store already has this thread with more/equal data
     // This handles navigation from overview→thread after round started streaming
     if (storeHasMoreData || storeAlreadyLoaded) {
