@@ -186,9 +186,18 @@ export function ChatView({
   // ✅ SSR FIX: Compute effective data EARLY for use in completedRoundNumbers
   // Store hydration happens in useLayoutEffect (client-only), so server renders with empty store
   // Fall back to initialMessages/initialParticipants/initialPreSearches for SSR content paint
-  const effectiveMessages = messages.length > 0 ? messages : (initialMessages ?? []);
-  const effectiveParticipants = contextParticipants.length > 0 ? contextParticipants : (initialParticipants ?? []);
-  const effectivePreSearches = preSearches.length > 0 ? preSearches : (initialPreSearches ?? []);
+  const effectiveMessages = useMemo(
+    () => messages.length > 0 ? messages : (initialMessages ?? []),
+    [messages, initialMessages],
+  );
+  const effectiveParticipants = useMemo(
+    () => contextParticipants.length > 0 ? contextParticipants : (initialParticipants ?? []),
+    [contextParticipants, initialParticipants],
+  );
+  const effectivePreSearches = useMemo(
+    () => preSearches.length > 0 ? preSearches : (initialPreSearches ?? []),
+    [preSearches, initialPreSearches],
+  );
 
   // ✅ MOVED UP: Need completedRoundNumbers early for shouldSkipAuxiliaryQueries
   // ✅ PERF FIX: Use ref to stabilize Set reference - only create new Set when contents change

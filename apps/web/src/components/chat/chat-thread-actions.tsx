@@ -23,6 +23,7 @@ import {
 import { useToggleFavoriteMutation, useTogglePublicMutation } from '@/hooks/mutations';
 import { useThreadQuery } from '@/hooks/queries';
 import { useMediaQuery } from '@/hooks/utils';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
 import type { ChatThread, ChatThreadFlexible } from '@/services/api';
 
@@ -82,7 +83,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
     ? togglePublicMutation.variables.isPublic
     : threadIsPublic;
 
-  const shareUrl = `${import.meta.env.VITE_APP_URL || (typeof window !== 'undefined' ? window.location.origin : '')}/public/chat/${slug}`;
+  const shareUrl = `${getAppBaseUrl()}/public/chat/${slug}`;
 
   const handleToggleFavorite = () => {
     toggleFavoriteMutation.mutate({

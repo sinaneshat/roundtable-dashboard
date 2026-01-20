@@ -66,6 +66,28 @@ export function isWebappEnv(value: unknown): value is WebappEnv {
 }
 
 /**
+ * Check if we're in a prerender/SSG build context.
+ * During prerender, external API calls will fail because the build environment
+ * can't resolve production DNS. We detect this and return localhost URLs instead.
+ *
+ * Detection: SSR context (no window) + NOT on Cloudflare Workers runtime
+ */
+export function isPrerender(): boolean {
+  // Client-side: never prerender
+  if (typeof window !== 'undefined')
+    return false;
+
+  // SSR during prerender: check if we're in a build context
+  // Cloudflare Workers have globalThis.caches, Node.js build context doesn't
+  const isCloudflareWorkers = typeof globalThis !== 'undefined'
+    && 'caches' in globalThis
+    && typeof (globalThis as unknown as { caches: unknown }).caches === 'object';
+
+  // If we're in SSR but NOT on Cloudflare Workers, we're likely in prerender/build
+  return !isCloudflareWorkers;
+}
+
+/**
  * Static URL configuration for each environment
  *
  * ARCHITECTURE (TanStack Start + Separate API):
@@ -188,12 +210,22 @@ export function getBaseUrls() {
  *
  * SERVER-SIDE (SSR/server functions): Returns full backend URL
  * - Direct backend access for server-side data fetching
+ *
+ * PRERENDER/SSG: Returns localhost URL
+ * - During prerender, external DNS can't be resolved
+ * - Static pages shouldn't make API calls anyway (guarded elsewhere)
  */
 export function getApiBaseUrl(): string {
   // Client-side: ALWAYS use relative URL through TanStack Start proxy
   // The proxy route (/api/$) handles forwarding to correct backend
   if (typeof window !== 'undefined') {
     return '/api/v1';
+  }
+
+  // Prerender/SSG: use localhost to avoid DNS failures for external domains
+  // Static pages shouldn't make API calls anyway (handled by isStaticRoute check)
+  if (isPrerender()) {
+    return BASE_URLS[WEBAPP_ENVS.LOCAL].api;
   }
 
   // Server-side: use full backend URL for direct access

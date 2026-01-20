@@ -4,6 +4,7 @@ import type { LanguageModelUsage, UIMessage } from 'ai';
 
 import { createError } from '@/common/error-handling';
 import type { ErrorContext } from '@/core';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { DEFAULT_AI_PARAMS } from '@/services/billing';
 import type { ApiEnv } from '@/types';
 
@@ -70,7 +71,7 @@ class OpenRouterService {
     this.client = createOpenRouter({
       apiKey: config.apiKey,
       headers: {
-        'HTTP-Referer': config.appUrl || 'https://roundtable.now',
+        'HTTP-Referer': config.appUrl || getAppBaseUrl(),
         'X-Title': config.appName || 'Roundtable AI Chat',
       },
     });
@@ -156,6 +157,6 @@ export function initializeOpenRouter(env: ApiEnv['Bindings']): void {
   openRouterService.initialize({
     apiKey: env.OPENROUTER_API_KEY,
     appName: env.APP_NAME || 'Roundtable AI Chat',
-    appUrl: 'https://roundtable.now',
+    appUrl: getAppBaseUrl(),
   });
 }

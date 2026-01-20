@@ -1,7 +1,7 @@
 import { apiKeyClient, magicLinkClient } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
 
-import { getApiBaseUrl } from '@/lib/config/base-urls';
+import { BASE_URLS, getApiBaseUrl, isPrerender, WEBAPP_ENVS } from '@/lib/config/base-urls';
 
 /**
  * Get base URL for auth client
@@ -11,11 +11,19 @@ import { getApiBaseUrl } from '@/lib/config/base-urls';
  * - API (including Better Auth) runs on port 8787 (Wrangler)
  * - In LOCAL development: Use relative URL through Vite proxy (same-origin for cookies)
  * - In production/preview: Use full API server URL
+ * - During prerender/SSG: Use local env URL to avoid DNS failures
  *
  * The API base URL includes /api/v1, but Better Auth is at /api/auth,
  * so we extract just the origin from the API URL (or use empty string for proxy).
  */
 export function getAuthBaseUrl(): string {
+  // During prerender, use local env URL to avoid DNS failures for external domains
+  // Static pages shouldn't make auth API calls anyway (handled by isStaticRoute check)
+  if (isPrerender()) {
+    const localApiUrl = BASE_URLS[WEBAPP_ENVS.LOCAL].api;
+    return localApiUrl.replace('/api/v1', '');
+  }
+
   const apiUrl = getApiBaseUrl();
 
   // Check if running in local development (client-side)

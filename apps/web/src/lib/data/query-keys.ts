@@ -302,12 +302,16 @@ export const invalidationPatterns = {
     queryKeys.uploads.lists(),
   ],
 
-  // Leave thread - invalidate thread-specific caches when navigating away
+  // Leave thread - invalidate ALL thread-specific caches when navigating away
   // Used by navigation-reset.ts when user leaves a thread to start a new chat
+  // CRITICAL: Must include ALL thread-specific data to prevent stale state
   leaveThread: (threadId: string) => [
     queryKeys.threads.messages(threadId),
     queryKeys.threads.preSearches(threadId),
     queryKeys.threads.feedback(threadId),
+    queryKeys.threads.streamResumption(threadId),
+    queryKeys.threads.changelog(threadId),
+    queryKeys.threads.detail(threadId),
   ],
 } as const;
 

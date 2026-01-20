@@ -21,8 +21,8 @@ Object.defineProperty(globalThis, 'TextEncoder', {
   configurable: true,
 });
 
-// Environment variables
-process.env.VITE_APP_URL = 'http://localhost:3000';
+// Environment variables (matches BASE_URLS.local in base-urls.ts)
+process.env.VITE_APP_URL = 'http://localhost:5173';
 process.env.VITE_WEBAPP_ENV = 'local';
 
 // Mock matchMedia

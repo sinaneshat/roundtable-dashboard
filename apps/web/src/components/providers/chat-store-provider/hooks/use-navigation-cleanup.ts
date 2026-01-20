@@ -2,13 +2,15 @@
  * Navigation Cleanup Hook
  *
  * Handles comprehensive cleanup when navigating between routes.
- * Stops streaming, clears pending operations, and resets state.
+ * Stops streaming, clears pending operations, resets state, and invalidates queries.
  */
 
+import { useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@tanstack/react-router';
 import type { RefObject } from 'react';
 import { useEffect } from 'react';
 
+import { invalidationPatterns } from '@/lib/data/query-keys';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseNavigationCleanupParams = {
@@ -24,6 +26,7 @@ export function useNavigationCleanup({
   prevPathnameRef,
 }: UseNavigationCleanupParams) {
   const { pathname } = useLocation();
+  const queryClient = useQueryClient();
 
   useEffect(() => {
     const prevPath = prevPathnameRef.current;
@@ -70,6 +73,17 @@ export function useNavigationCleanup({
       currentState.clearAllPreSearchTracking();
     }
 
+    // ✅ CRITICAL: Invalidate queries for the OLD thread when navigating between threads
+    // This prevents stale data from the previous thread bleeding into the new thread
+    if (isNavigatingBetweenThreads || isLeavingThread) {
+      const oldThreadId = currentState.thread?.id || currentState.createdThreadId;
+      if (oldThreadId) {
+        invalidationPatterns.leaveThread(oldThreadId).forEach((key) => {
+          queryClient.invalidateQueries({ queryKey: key });
+        });
+      }
+    }
+
     // Full reset when navigating between different threads
     if (isNavigatingBetweenThreads) {
       currentState.resetForThreadNavigation();
@@ -88,5 +102,5 @@ export function useNavigationCleanup({
     }
 
     prevPathnameRef.current = pathname;
-  }, [pathname, store, prevPathnameRef]);
+  }, [pathname, store, prevPathnameRef, queryClient]);
 }

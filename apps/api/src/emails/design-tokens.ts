@@ -5,9 +5,23 @@
  * All values are converted to pixels for maximum email client compatibility.
  */
 
-// Email assets must use production URLs - localhost URLs are blocked by email clients
-// and flagged as harmful by Google. Always use the public web app URL.
-export const EMAIL_ASSETS_BASE_URL = 'https://roundtable.now';
+import { BASE_URLS, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+
+/**
+ * Get the base URL for email assets.
+ * Email clients block localhost URLs, so we use production URL for local dev.
+ * For preview/prod, use the appropriate environment URL.
+ */
+function getEmailAssetsBaseUrl(): string {
+  const env = getWebappEnv();
+  // Local dev: use production URL (localhost blocked by email clients)
+  if (env === WEBAPP_ENVS.LOCAL) {
+    return BASE_URLS[WEBAPP_ENVS.PROD].app;
+  }
+  return BASE_URLS[env].app;
+}
+
+export const EMAIL_ASSETS_BASE_URL = getEmailAssetsBaseUrl();
 
 // Brand Colors - Aligned with global.css design system light mode (OKLCH converted to hex)
 export const colors = {

@@ -15,6 +15,7 @@ import { eq, or } from 'drizzle-orm';
 
 import { createHandler } from '@/core';
 import { chatMessage, chatParticipant, chatThread, getDbAsync } from '@/db';
+import { getWebappEnvFromContext, WEBAPP_ENVS } from '@/lib/config/base-urls';
 import { OG_COLORS as SHARED_OG_COLORS } from '@/lib/ui/og-colors';
 import type { ApiEnv } from '@/types';
 
@@ -747,7 +748,8 @@ export const ogImageHandler: RouteHandler<typeof ogImageRoute, ApiEnv> = createH
   },
   async (c) => {
     // Check for local dev FIRST - satori uses WASM which doesn't work in local dev
-    const isLocalDev = c.env.WEBAPP_ENV === 'local';
+    // Use robust environment detection (checks c.env, process.env, NODE_ENV fallback)
+    const isLocalDev = getWebappEnvFromContext(c) === WEBAPP_ENVS.LOCAL;
 
     try {
       const query = c.req.query();
