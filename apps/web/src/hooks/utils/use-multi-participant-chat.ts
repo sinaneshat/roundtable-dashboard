@@ -1983,6 +1983,13 @@ export function useMultiParticipantChat(
       return;
     }
 
+    // ✅ FIX: If AI SDK already has messages, consider it already hydrated
+    // This handles cases where P0 completed streaming and AI SDK has messages,
+    // but hasHydratedRef wasn't set because no explicit hydration was needed
+    if (messages.length > 0 && !hasHydratedRef.current) {
+      hasHydratedRef.current = true;
+    }
+
     // ✅ Guards: Wait for dependencies to be ready
     // ✅ FIX: Require AI SDK to be fully ready before sending
     if (messages.length === 0 || status !== AiSdkStatuses.READY) {

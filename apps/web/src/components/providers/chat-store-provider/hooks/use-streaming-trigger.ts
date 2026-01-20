@@ -303,6 +303,11 @@ export function useStreamingTrigger({
       rlog.trigger('streaming-trigger', 'clearing wait - streaming started');
       freshState.setWaitingToStartStreaming(false);
       freshState.setHasSentPendingMessage(true);
+      // ✅ FIX: Also clear nextParticipantToTrigger to prevent re-trigger after stream ends
+      // Without this, use-round-resumption sees the old nextP value and triggers again
+      if (freshState.nextParticipantToTrigger !== null) {
+        freshState.setNextParticipantToTrigger(null);
+      }
     }
   }, [waitingToStart, chatIsStreaming, store]);
 

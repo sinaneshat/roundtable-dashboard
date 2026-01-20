@@ -102,9 +102,19 @@ export default defineConfig({
   ssr: {
     optimizeDeps: {
       include: ['react', 'react-dom', 'react/jsx-runtime', 'react/jsx-dev-runtime'],
+      // CRITICAL: Disable keepNames to prevent __name helper injection in SSR
+      esbuildOptions: {
+        keepNames: false,
+      },
     },
     // Don't externalize React - bundle it to ensure single copy
     noExternal: ['react', 'react-dom'],
+  },
+  // Client-side dependency optimization
+  optimizeDeps: {
+    esbuildOptions: {
+      keepNames: false,
+    },
   },
   build: {
     // Source maps only for local/preview, not production
@@ -179,8 +189,8 @@ export default defineConfig({
     'process.env': {},
     '__APP_VERSION__': JSON.stringify(APP_VERSION),
   },
-  // Strip console.* and debugger in production builds
   // CRITICAL: keepNames: false prevents __name helper injection that breaks Cloudflare SSR hydration
+  // Applied globally to both client and SSR builds
   esbuild: isProd
     ? {
         drop: ['console', 'debugger'],
