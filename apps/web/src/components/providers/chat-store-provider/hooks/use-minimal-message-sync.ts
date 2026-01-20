@@ -65,6 +65,8 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
   const prevMessagesRef = useRef<UIMessage[]>([]);
   const hasHydratedRef = useRef<string | null>(null);
   const pendingSyncRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // ✅ FIX: Track last synced thread ID to prevent cross-thread message contamination
+  const lastSyncedThreadIdRef = useRef<string | null>(null);
 
   // ✅ PERF FIX: Use granular selectors instead of subscribing to full state
   const threadId = useStore(store, s => s.thread?.id);
@@ -78,7 +80,19 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
 
   // ✅ PERF FIX: Memoized sync function that reads store state directly
   const syncToStore = useCallback(() => {
-    const currentStoreMessages = store.getState().messages;
+    const currentState = store.getState();
+    const currentThreadId = currentState.thread?.id;
+    const currentStoreMessages = currentState.messages;
+
+    // ✅ FIX: Skip sync if thread changed - chat messages are stale from previous thread
+    // initializeThread clears AI SDK messages, but there's a brief window where sync can run
+    if (currentThreadId && lastSyncedThreadIdRef.current && currentThreadId !== lastSyncedThreadIdRef.current) {
+      // Thread changed, skip sync until AI SDK catches up with empty messages
+      if (chatMessages.length > 0) {
+        return;
+      }
+    }
+    lastSyncedThreadIdRef.current = currentThreadId ?? null;
 
     const filteredChatMessages = chatMessages.filter((m) => {
       if (m.role !== MessageRoles.USER)
@@ -132,10 +146,11 @@ export function useMinimalMessageSync({ store, chat }: UseMinimalMessageSyncPara
     hasHydratedRef.current = threadId;
   }, [threadId, chatMessages.length, store]);
 
-  // Reset hydration flag on thread change
+  // Reset refs on thread change to prevent cross-thread contamination
   useEffect(() => {
     if (threadId !== hasHydratedRef.current) {
       hasHydratedRef.current = null;
+      prevMessagesRef.current = [];
     }
   }, [threadId]);
 

@@ -1099,6 +1099,14 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
     rlog.init('thread', `resum=${isResumingStream ? 1 : 0} same=${isSameThread ? 1 : 0} store=${storeMessages.length} db=${newMessages.length} resumR=${resumptionRound ?? '-'}`);
 
+    // ✅ CRITICAL FIX: Clear AI SDK messages when switching to a DIFFERENT thread
+    // Without this, the AI SDK still has old thread's messages, and useMinimalMessageSync
+    // will merge them back into the store, causing stale data to flash briefly on navigation.
+    // Must happen BEFORE we set new messages to prevent the sync hook from mixing threads.
+    if (!isSameThread && currentState.chatSetMessages) {
+      currentState.chatSetMessages([]);
+    }
+
     let messagesToSet: UIMessage[];
 
     if (isSameThread && storeMessages.length > 0) {

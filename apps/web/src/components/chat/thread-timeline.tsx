@@ -205,7 +205,7 @@ export function ThreadTimeline({
               />
             </UnifiedErrorBoundary>
 
-            {!isStreaming && !isReadOnly && (() => {
+            {streamingRoundNumber !== item.roundNumber && !isReadOnly && (() => {
               const moderatorMessage = item.data.find(msg => isModeratorMessage(msg));
 
               if (!moderatorMessage) {

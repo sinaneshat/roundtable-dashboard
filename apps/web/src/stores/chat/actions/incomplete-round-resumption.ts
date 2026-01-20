@@ -1064,9 +1064,11 @@ export function useIncompleteRoundResumption(
       // Streaming started successfully
       sawStreamingRef.current = true;
       wasWaitingRef.current = false;
-      // ✅ DOUBLE-TRIGGER FIX: Clear round-level guard when streaming starts
-      // This allows subsequent participant triggers after the first one completes
-      roundTriggerInProgressRef.current = null;
+      // ✅ FIX: Do NOT clear roundTriggerInProgressRef here
+      // Subsequent participants (P1, P2, etc.) are triggered internally by use-multi-participant-chat.ts,
+      // NOT by this resumption effect. Keeping the guard set prevents duplicate startRound calls
+      // when isStreaming briefly becomes false between participants.
+      // The guard is cleared on threadId change (line 537) or on actual trigger failure (line 1057).
       // Clear retry toggle timeout
       if (retryToggleTimeoutRef.current) {
         clearTimeout(retryToggleTimeoutRef.current);

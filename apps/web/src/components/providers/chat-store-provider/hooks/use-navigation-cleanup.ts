@@ -68,8 +68,13 @@ export function useNavigationCleanup({
       currentState.setWaitingToStartStreaming(false);
     }
 
-    // Clear tracking when navigating to /chat
-    if (isGoingToOverview && (isLeavingThread || isComingFromNonChatPage)) {
+    // ✅ FIX: Full reset when navigating to /chat overview
+    // Without this, old thread data remains in store and can flash briefly
+    if (isGoingToOverview && isLeavingThread) {
+      currentState.resetToOverview();
+    }
+    // Clear tracking when coming from non-chat pages
+    if (isGoingToOverview && isComingFromNonChatPage) {
       currentState.clearAllPreSearchTracking();
     }
 
