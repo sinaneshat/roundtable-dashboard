@@ -837,9 +837,11 @@ export function ChatView({
             className="fixed inset-x-0 z-30"
             style={{
               bottom: `${keyboardOffset}px`,
-              // Dynamic left offset based on sidebar state (md+ only via CSS)
+              // Dynamic left offset for desktop based on sidebar state
               // FLOATING variant: collapsed = icon + padding (6rem), expanded = 20rem
-              left: undefined, // Mobile: use inset-x-0 (no offset)
+              left: isDesktop
+                ? (isSidebarCollapsed ? 'calc(var(--sidebar-width-icon) + 2rem)' : 'var(--sidebar-width)')
+                : undefined,
             }}
           >
             <div className="absolute inset-0 -bottom-4 bg-gradient-to-t from-background from-85% to-transparent pointer-events-none" />
