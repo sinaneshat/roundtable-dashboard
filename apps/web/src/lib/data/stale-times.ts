@@ -54,8 +54,8 @@ export const STALE_TIMES = {
   // ============================================================================
   threads: 60 * 1000, // 1 minute - sidebar list, invalidated on mutations
   threadsSidebar: 30 * 1000, // 30s - lightweight sidebar endpoint, shorter TTL for fresher titles
-  threadDetail: 2 * 60 * 1000, // 2 minutes - thread metadata rarely changes, instant nav
-  threadMessages: 2 * 60 * 1000, // 2 minutes - messages are immutable once created
+  threadDetail: 0, // NO CACHE - private threads must always be fresh for real-time collaboration
+  threadMessages: 0, // NO CACHE - messages may be added via streaming, must always be fresh
   threadChangelog: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
   threadModerators: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
   threadFeedback: Infinity, // Never stale - invalidated only on mutation

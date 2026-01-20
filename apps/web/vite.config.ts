@@ -43,6 +43,47 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
-  // Let Vite handle chunk splitting automatically for optimal results
-  // Manual chunks can cause circular dependency issues (e.g., Radix initialization errors)
+  // Manual chunk splitting for large vendor libraries
+  // Only splits truly independent libraries to avoid circular deps
+  environments: {
+    client: {
+      build: {
+        rollupOptions: {
+          output: {
+            manualChunks: (id) => {
+              if (!id.includes('node_modules'))
+                return undefined;
+
+              // Shiki - code highlighting (1.3MB), fully independent
+              if (id.includes('shiki') || id.includes('@shikijs'))
+                return 'shiki';
+
+              // Markdown processing chain - independent of React
+              if (id.includes('react-markdown') || id.includes('remark') || id.includes('rehype') || id.includes('unified') || id.includes('micromark') || id.includes('mdast'))
+                return 'markdown';
+
+              // PostHog analytics - independent
+              if (id.includes('posthog'))
+                return 'analytics';
+
+              // Motion library - independent
+              if (id.includes('motion'))
+                return 'motion';
+
+              // Date utilities - independent
+              if (id.includes('date-fns'))
+                return 'date-fns';
+
+              // Zod - validation library, independent
+              if (id.includes('zod'))
+                return 'zod';
+
+              // Let Vite handle React, TanStack, Radix - they have interdependencies
+              return undefined;
+            },
+          },
+        },
+      },
+    },
+  },
 });

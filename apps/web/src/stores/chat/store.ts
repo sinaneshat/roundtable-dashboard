@@ -755,17 +755,34 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     return true;
   },
 
-  handleResumedStreamComplete: (_roundNumber, participantIndex) => {
+  handleResumedStreamComplete: (roundNumber, participantIndex) => {
     const state = get();
     const { participants } = state;
+    const enabledParticipants = participants.filter(p => p.isEnabled);
     const nextIndex = participantIndex + 1;
-    const hasMoreParticipants = nextIndex < participants.length;
+    const hasMoreParticipants = nextIndex < enabledParticipants.length;
 
-    set({
-      streamResumptionState: null,
-      nextParticipantToTrigger: hasMoreParticipants ? nextIndex : null,
-      waitingToStartStreaming: hasMoreParticipants,
-    }, false, 'streamResumption/handleResumedStreamComplete');
+    if (hasMoreParticipants) {
+      // More participants to trigger
+      set({
+        streamResumptionState: null,
+        nextParticipantToTrigger: nextIndex,
+        waitingToStartStreaming: true,
+      }, false, 'streamResumption/handleResumedStreamComplete');
+    } else {
+      // ✅ MODERATOR TRIGGER FIX: All participants done, transition to moderator phase
+      // This triggers the moderator effect in use-moderator-trigger.ts
+      // Previously, we just set nextParticipantToTrigger: null without triggering moderator
+      set({
+        streamResumptionState: null,
+        nextParticipantToTrigger: null,
+        waitingToStartStreaming: false,
+        // Transition to moderator phase so moderator trigger effect fires
+        currentResumptionPhase: RoundPhases.MODERATOR,
+        isModeratorStreaming: true,
+        resumptionRoundNumber: roundNumber,
+      }, false, 'streamResumption/handleResumedStreamComplete');
+    }
   },
 
   handleStreamResumptionFailure: (_error) => {
@@ -1245,6 +1262,33 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       priority: index,
     }));
 
+    // ✅ STALE PREFILL VALIDATION: Check if prefilled round has messages to support it
+    // KV stream resumption state can be stale if user navigated away during streaming
+    // and the KV wasn't updated when the stream completed/failed.
+    // If resumptionRoundNumber says we need to resume round N, but messages don't have
+    // a user message for round N, the prefill is stale and should be cleared.
+    let validatedResumption = currentState.streamResumptionPrefilled;
+    let validatedResumptionPhase = currentState.currentResumptionPhase;
+    let validatedResumptionRoundNumber = currentState.resumptionRoundNumber;
+
+    if (currentState.streamResumptionPrefilled && currentState.resumptionRoundNumber !== null) {
+      const resumeRound = currentState.resumptionRoundNumber;
+      const hasUserMessageForResumeRound = messagesToSet.some((m) => {
+        if (m.role !== MessageRoles.USER)
+          return false;
+        const msgRound = getRoundNumber(m.metadata);
+        return msgRound === resumeRound;
+      });
+
+      // If prefill says round N but no user message exists for round N, prefill is stale
+      if (!hasUserMessageForResumeRound && resumeRound > 0) {
+        rlog.init('thread', `⚠️ STALE PREFILL: r${resumeRound} has no user msg, clearing resumption`);
+        validatedResumption = false;
+        validatedResumptionPhase = null;
+        validatedResumptionRoundNumber = null;
+      }
+    }
+
     // ✅ BUG FIX: Preserve streaming state during active operations
     // Preserve state when:
     // 1. streamResumptionPrefilled: Server detected incomplete round (resumption)
@@ -1265,15 +1309,17 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     // ✅ FIX: For COMPLETE/IDLE phases, streamResumptionPrefilled=true is ONLY used
     // to block incomplete-round-resumption hook from triggering. We should NOT preserve
     // streaming state (like streamingRoundNumber) because there's nothing to resume.
-    const resumptionPhase = currentState.currentResumptionPhase;
-    const isActiveResumption = currentState.streamResumptionPrefilled
+    //
+    // ✅ STALE PREFILL FIX: Use validated resumption variables (cleared if stale)
+    const resumptionPhase = validatedResumptionPhase;
+    const isActiveResumption = validatedResumption
       && resumptionPhase !== RoundPhases.COMPLETE
       && resumptionPhase !== RoundPhases.IDLE;
     const hasActiveFormSubmission
       = currentState.configChangeRoundNumber !== null
         || currentState.isWaitingForChangelog;
     const preserveStreamingState = isActiveResumption || hasActiveFormSubmission;
-    const resumptionRoundNumber = currentState.resumptionRoundNumber;
+    const resumptionRoundNumber = validatedResumptionRoundNumber;
 
     set({
       // ✅ CONDITIONAL: Only reset streaming state if NOT resuming or active submission
@@ -1306,6 +1352,11 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       hasEarlyOptimisticMessage: preserveStreamingState ? currentState.hasEarlyOptimisticMessage : false,
       streamResumptionState: preserveStreamingState ? currentState.streamResumptionState : null,
       resumptionAttempts: preserveStreamingState ? currentState.resumptionAttempts : new Set<string>(),
+      // ✅ STALE PREFILL FIX: Apply validated resumption state (cleared if stale)
+      streamResumptionPrefilled: validatedResumption,
+      currentResumptionPhase: validatedResumptionPhase,
+      resumptionRoundNumber: validatedResumptionRoundNumber,
+      prefilledForThreadId: validatedResumption ? currentState.prefilledForThreadId : null,
       pendingAnimations: preserveStreamingState ? currentState.pendingAnimations : new Set<number>(),
       animationResolvers: preserveStreamingState ? currentState.animationResolvers : new Map(),
       thread,

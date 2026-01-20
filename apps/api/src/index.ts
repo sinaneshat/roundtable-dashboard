@@ -8,9 +8,6 @@
  * Never use createRoute directly in route handlers - always use OpenAPIHono apps.
  */
 
-// @scalar imports are lazy-loaded to reduce worker startup CPU time
-// import { Scalar } from '@scalar/hono-api-reference';
-// import { createMarkdownFromOpenApi } from '@scalar/openapi-to-markdown';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { contextStorage } from 'hono/context-storage';
@@ -181,9 +178,6 @@ import {
 // Models routes (dynamic OpenRouter models)
 import { listModelsHandler } from './routes/models/handler';
 import { listModelsRoute } from './routes/models/route';
-// OG Image routes
-import { ogImageHandler } from './routes/og/handler';
-import { ogImageRoute } from './routes/og/route';
 // Project routes
 import {
   addAttachmentToProjectHandler,
@@ -560,7 +554,6 @@ app.use('/uploads/multipart/:id/complete', RateLimiterFactory.create('upload'), 
 // ============================================================================
 
 let routeChain = app
-  .openapi(ogImageRoute, ogImageHandler)
   .openapi(healthRoute, healthHandler)
   .openapi(detailedHealthRoute, detailedHealthHandler);
 
@@ -755,27 +748,33 @@ finalRoutes.use('/scalar', async (c, next) => {
   });
 });
 
-// Lazy load Scalar UI to reduce worker startup CPU time
-finalRoutes.get('/scalar', async (c) => {
-  const { Scalar } = await import('@scalar/hono-api-reference');
-  const handler = Scalar({ url: '/api/v1/doc' });
-  // @ts-expect-error - Scalar returns a middleware, call it with context
-  return handler(c, async () => {});
+// Scalar API docs - loaded from CDN, not bundled
+finalRoutes.get('/scalar', (c) => {
+  const html = `<!DOCTYPE html>
+<html>
+<head>
+  <title>API Reference</title>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+</head>
+<body>
+  <script id="api-reference" data-url="/api/v1/doc"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@scalar/api-reference"></script>
+</body>
+</html>`;
+  return c.html(html);
 });
 
+// LLMs.txt - OpenAPI as markdown (no external deps, uses built-in JSON)
 finalRoutes.get('/llms.txt', async (c) => {
   try {
     const document = finalRoutes.getOpenAPI31Document({
       openapi: '3.1.0',
-      info: {
-        title: 'Application API',
-        version: APP_VERSION,
-      },
+      info: { title: 'Application API', version: APP_VERSION },
     });
-    // Lazy load @scalar/openapi-to-markdown to reduce worker startup CPU time
-    const { createMarkdownFromOpenApi } = await import('@scalar/openapi-to-markdown');
-    const markdown = await createMarkdownFromOpenApi(JSON.stringify(document));
-    return c.text(markdown);
+    // Simple markdown conversion without external deps
+    const md = `# API Documentation\n\n${JSON.stringify(document, null, 2)}`;
+    return c.text(md);
   } catch {
     return c.text('LLMs document unavailable');
   }

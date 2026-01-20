@@ -615,7 +615,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // STEP 10: Initialize OpenRouter and Prepare Messages
       // =========================================================================
       initializeOpenRouter(c.env);
-      const client = openRouterService.getClient();
+      const client = await openRouterService.getClient();
 
       // Get model info for token limits and pricing
       const modelInfo = getModelById(participant.modelId);

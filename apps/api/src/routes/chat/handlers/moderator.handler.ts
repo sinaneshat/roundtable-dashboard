@@ -126,7 +126,7 @@ async function generateCouncilModerator(
   const llmStartTime = performance.now();
 
   initializeOpenRouter(env);
-  const client = openRouterService.getClient();
+  const client = await openRouterService.getClient();
   const moderatorModelId = AIModels.COUNCIL_MODERATOR;
   const moderatorModelName = extractModeratorModelName(moderatorModelId);
 

@@ -28,12 +28,20 @@ export const Route = createFileRoute('/public/chat/$slug')({
 
     // Extract data for head() metadata and component props
     const initialData: PublicThreadData | null = response?.success ? response.data : null;
-    return { initialData };
+
+    // Count user messages (rounds) for cache invalidation
+    const roundCount = initialData?.messages?.filter(m => m.role === 'user').length ?? 0;
+
+    return { initialData, roundCount };
   },
-  // ISR: Cache for 1 hour, allow stale for 7 days while revalidating
-  headers: () => ({
-    'Cache-Control': 'public, max-age=3600, s-maxage=3600, stale-while-revalidate=604800',
-  }),
+  // ISR: Cache for 1 day, invalidate via ETag when rounds change
+  headers: ({ loaderData }) => {
+    const roundCount = loaderData?.roundCount ?? 0;
+    return {
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800',
+      'ETag': `"rounds-${roundCount}"`,
+    };
+  },
   pendingComponent: PublicChatSkeleton,
   head: ({ loaderData, params }) => {
     const thread = loaderData?.initialData?.thread;

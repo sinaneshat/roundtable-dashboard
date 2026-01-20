@@ -1,5 +1,4 @@
 import { z } from '@hono/zod-openapi';
-import { createOpenRouter } from '@openrouter/ai-sdk-provider';
 import type { LanguageModelUsage, UIMessage } from 'ai';
 
 import { createError } from '@/common/error-handling';
@@ -9,18 +8,26 @@ import { DEFAULT_AI_PARAMS } from '@/services/billing';
 import type { ApiEnv } from '@/types';
 
 // ============================================================================
-// LAZY AI SDK LOADING
+// LAZY AI SDK & OPENROUTER LOADING
 // ============================================================================
 
-// Cache the AI SDK module to avoid repeated dynamic imports
+// Cache modules to avoid repeated dynamic imports
 // This is critical for Cloudflare Workers which have a 400ms startup limit
 let aiSdkModule: typeof import('ai') | null = null;
+let openRouterModule: typeof import('@openrouter/ai-sdk-provider') | null = null;
 
 async function getAiSdk() {
   if (!aiSdkModule) {
     aiSdkModule = await import('ai');
   }
   return aiSdkModule;
+}
+
+async function getOpenRouterSdk() {
+  if (!openRouterModule) {
+    openRouterModule = await import('@openrouter/ai-sdk-provider');
+  }
+  return openRouterModule;
 }
 
 function isValidOpenRouterModelId(modelId: string): boolean {
@@ -48,11 +55,16 @@ export const GenerateTextParamsSchema = z.object({
 
 export type GenerateTextParams = z.infer<typeof GenerateTextParamsSchema>;
 
+// Type for the OpenRouter client (inferred from createOpenRouter return type)
+type OpenRouterClient = Awaited<ReturnType<typeof getOpenRouterSdk>>['createOpenRouter'] extends
+(...args: infer _A) => infer R ? R : never;
+
 class OpenRouterService {
-  private client: ReturnType<typeof createOpenRouter> | null = null;
+  private client: OpenRouterClient | null = null;
+  private config: OpenRouterServiceConfig | null = null;
 
   initialize(config: OpenRouterServiceConfig): void {
-    if (this.client) {
+    if (this.config) {
       return;
     }
 
@@ -68,23 +80,31 @@ class OpenRouterService {
       );
     }
 
-    this.client = createOpenRouter({
-      apiKey: config.apiKey,
-      headers: {
-        'HTTP-Referer': config.appUrl || getAppBaseUrl(),
-        'X-Title': config.appName || 'Roundtable AI Chat',
-      },
-    });
+    // Store config for lazy client creation
+    this.config = validationResult.data;
   }
 
-  public getClient(): ReturnType<typeof createOpenRouter> {
-    if (!this.client) {
+  public async getClient(): Promise<OpenRouterClient> {
+    if (!this.config) {
       const context: ErrorContext = {
         errorType: 'configuration',
         service: 'openrouter',
       };
       throw createError.internal('OpenRouter service not initialized. Call initialize() first.', context);
     }
+
+    // Lazy create client on first use
+    if (!this.client) {
+      const { createOpenRouter } = await getOpenRouterSdk();
+      this.client = createOpenRouter({
+        apiKey: this.config.apiKey,
+        headers: {
+          'HTTP-Referer': this.config.appUrl || getAppBaseUrl(),
+          'X-Title': this.config.appName || 'Roundtable AI Chat',
+        },
+      });
+    }
+
     return this.client;
   }
 
@@ -106,10 +126,10 @@ class OpenRouterService {
     finishReason: string;
     usage: LanguageModelUsage;
   }> {
-    // ✅ LAZY LOAD AI SDK: Load at method invocation, not module startup
+    // ✅ LAZY LOAD AI SDK & OpenRouter: Load at method invocation, not module startup
     const { generateText, convertToModelMessages } = await getAiSdk();
 
-    const client = this.getClient();
+    const client = await this.getClient();
     this.validateModelId(params.modelId);
 
     const systemPrompt = params.system

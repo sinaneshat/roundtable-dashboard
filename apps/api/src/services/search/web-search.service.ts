@@ -113,11 +113,11 @@ function htmlToMarkdown(html: string): string {
     return html.replace(/<[^>]*>/g, '').trim();
   }
 }
-export function streamSearchQuery(
+export async function streamSearchQuery(
   userMessage: string,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
-): ReturnType<typeof streamText> {
+): Promise<ReturnType<typeof streamText>> {
   try {
     validateModelForOperation(AIModels.WEB_SEARCH, 'web-search-query-generation', {
       structuredOutput: true,
@@ -126,7 +126,7 @@ export function streamSearchQuery(
     });
 
     initializeOpenRouter(env);
-    const client = openRouterService.getClient();
+    const client = await openRouterService.getClient();
 
     return streamText({
       model: client.chat(AIModels.WEB_SEARCH),
@@ -194,7 +194,7 @@ export async function generateSearchQuery(
     });
 
     initializeOpenRouter(env);
-    const client = openRouterService.getClient();
+    const client = await openRouterService.getClient();
 
     const result = await generateText({
       model: client.chat(modelId),
@@ -1091,7 +1091,7 @@ async function generateImageDescriptions(
 
   try {
     initializeOpenRouter(env);
-    const client = openRouterService.getClient();
+    const client = await openRouterService.getClient();
 
     // Process images in batches of 3 for efficiency
     const batchSize = 3;
@@ -1216,13 +1216,13 @@ async function generateImageDescriptions(
  * @param logger - Optional logger
  * @returns Stream object with textStream for progressive rendering
  */
-export function streamAnswerSummary(
+export async function streamAnswerSummary(
   query: string,
   results: WebSearchResultItem[],
   mode: WebSearchActiveAnswerMode,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
-): ReturnType<typeof streamText> {
+): Promise<ReturnType<typeof streamText>> {
   if (results.length === 0) {
     throw createError.badRequest(
       'No search results available for answer generation',
@@ -1235,7 +1235,7 @@ export function streamAnswerSummary(
 
   try {
     initializeOpenRouter(env);
-    const client = openRouterService.getClient();
+    const client = await openRouterService.getClient();
 
     // Build context from search results
     const context = results

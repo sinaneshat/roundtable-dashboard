@@ -281,7 +281,7 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
 
         // Initialize OpenRouter
         initializeOpenRouter(c.env);
-        const client = openRouterService.getClient();
+        const client = await openRouterService.getClient();
 
         // ✅ STREAM: Use streamText with Output.object() for structured output
         const analysisStream = streamText({

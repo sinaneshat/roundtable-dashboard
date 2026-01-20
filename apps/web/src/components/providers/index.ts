@@ -1,5 +1,6 @@
 export { AppProviders } from './app-providers';
 export { ChatLayoutProviders } from './chat-layout-providers';
+// V1 store provider (legacy) - V2 available at ./chat-store-provider-v2
 export {
   ChatStoreContext,
   ChatStoreDemoProvider,

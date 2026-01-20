@@ -857,7 +857,7 @@ async function toolGenerateResponses(
   const previousMessages = await chatMessagesToUIMessages(dbMessages);
 
   initializeOpenRouter(env);
-  const client = openRouterService.getClient();
+  const client = await openRouterService.getClient();
   const userTier = await getUserTier(user.id);
 
   // ✅ BILLING: Enforce user has credits before generating responses

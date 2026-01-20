@@ -499,7 +499,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
           // ✅ NORMAL FLOW: Attempt AI generation for searchable queries
           try {
-            const queryStream = streamSearchQuery(queryMessage, c.env);
+            const queryStream = await streamSearchQuery(queryMessage, c.env);
 
             // ✅ INCREMENTAL STREAMING: Stream each query update as it's generated
             // Track best partial result for graceful fallback if final validation fails
