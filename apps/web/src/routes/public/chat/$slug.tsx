@@ -5,7 +5,7 @@ import PublicChatThreadScreen from '@/containers/screens/chat/PublicChatThreadSc
 import { getApiBaseUrl, getAppBaseUrl } from '@/lib/config/base-urls';
 import { queryKeys } from '@/lib/data/query-keys';
 import { STALE_TIMES } from '@/lib/data/stale-times';
-import type { PublicThreadData } from '@/services/api';
+import type { ApiMessage, PublicThreadData } from '@/services/api';
 import { getPublicThreadService } from '@/services/api';
 
 export const Route = createFileRoute('/public/chat/$slug')({
@@ -30,7 +30,7 @@ export const Route = createFileRoute('/public/chat/$slug')({
     const initialData: PublicThreadData | null = response?.success ? response.data : null;
 
     // Count user messages (rounds) for cache invalidation
-    const roundCount = initialData?.messages?.filter(m => m.role === 'user').length ?? 0;
+    const roundCount = initialData?.messages?.filter((m: ApiMessage) => m.role === 'user').length ?? 0;
 
     return { initialData, roundCount };
   },

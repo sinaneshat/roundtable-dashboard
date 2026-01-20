@@ -18,9 +18,10 @@ import { STALE_TIMES } from '@/lib/data/stale-times';
 
 describe('rate limit prevention', () => {
   describe('stale times configuration', () => {
-    it('threadMessages should have staleTime >= 5 seconds to prevent redundant fetches', () => {
-      // 5 seconds prevents rapid refetches during streaming transitions
-      expect(STALE_TIMES.threadMessages).toBeGreaterThanOrEqual(5 * 1000);
+    it('threadMessages should have staleTime = 0 (always fresh - streaming updates)', () => {
+      // Messages use NO CACHE - may be added via streaming, must always be fresh
+      // Rate limit prevention handled by ONE-WAY DATA FLOW pattern (store is source of truth)
+      expect(STALE_TIMES.threadMessages).toBe(0);
     });
 
     it('threadModerators should be Infinity for ONE-WAY DATA FLOW pattern', () => {

@@ -724,13 +724,14 @@ describe('query Cache Pre-population - Prevent Server Fetches', () => {
 
     // This prevents hydration mismatches and unnecessary refetches
     expect(serverSideStaleTime).toBe(clientSideStaleTime);
-    expect(serverSideStaleTime).toBe(2 * 60 * 1000); // 2 minutes - optimized for navigation
+    // NO CACHE - private threads must always be fresh for real-time collaboration
+    expect(serverSideStaleTime).toBe(0);
   });
 
-  it('should verify messages use medium staleTime for navigation performance', () => {
-    // Messages use 2-minute stale time for instant navigation
-    // New messages arrive via streaming, not polling
-    expect(STALE_TIMES.threadMessages).toBe(2 * 60 * 1000); // 2 minutes
+  it('should verify messages use NO CACHE for streaming updates', () => {
+    // Messages use NO CACHE - may be added via streaming, must always be fresh
+    // Rate limit prevention handled by ONE-WAY DATA FLOW pattern (store is source of truth)
+    expect(STALE_TIMES.threadMessages).toBe(0);
 
     // But changelog is Infinity (ONE-WAY DATA FLOW)
     expect(STALE_TIMES.threadChangelog).toBe(Infinity);
@@ -761,11 +762,14 @@ describe('navigation Refetch Patterns', () => {
     consoleLogSpy.mockRestore();
   });
 
-  it('should NOT refetch on navigation if within staleTime', async () => {
+  it('should use staleTime = 0 for threadDetail to ensure fresh data for real-time collaboration', async () => {
     const threadId = 'thread_123';
     const threadDetailKey = queryKeys.threads.detail(threadId);
 
-    // Simulate initial page load
+    // Verify staleTime configuration
+    expect(STALE_TIMES.threadDetail).toBe(0);
+
+    // Simulate initial fetch
     await queryClient.prefetchQuery({
       queryKey: threadDetailKey,
       queryFn: async () => {
@@ -775,23 +779,19 @@ describe('navigation Refetch Patterns', () => {
       staleTime: STALE_TIMES.threadDetail,
     });
 
-    // Simulate navigation away and back (within staleTime)
+    // With staleTime = 0, TanStack Query considers data immediately stale
+    // This means it will always refetch on mount for fresh data
+    // Essential for real-time collaboration where multiple users may modify threads
     const state = queryClient.getQueryState(threadDetailKey);
-    const timeSinceUpdate = state ? Date.now() - state.dataUpdatedAt : Infinity;
-    const isStale = timeSinceUpdate > STALE_TIMES.threadDetail;
+    expect(state?.data).toBeDefined(); // Data is cached but considered stale
 
-    if (!isStale) {
-      // Use cached data
-      tracker.recordFetch(threadDetailKey, true);
-    } else {
-      // Would refetch if stale
-      tracker.recordFetch(threadDetailKey, false);
-    }
+    // Verify initial fetch was recorded
+    expect(tracker.getCacheMissCount('detail')).toBe(1);
 
-    // ASSERTIONS
-    expect(isStale).toBe(false); // Data still fresh
-    expect(tracker.getCacheMissCount('detail')).toBe(1); // Only initial fetch
-    expect(tracker.getCacheHitCount('detail')).toBe(1); // Navigation used cache
+    // Document the expected behavior:
+    // - staleTime: 0 means data is immediately stale after fetch
+    // - TanStack Query will refetch on mount/navigation for fresh data
+    // - This ensures real-time collaboration support
   });
 
   it('should disable automatic refetch behaviors for pre-search', () => {

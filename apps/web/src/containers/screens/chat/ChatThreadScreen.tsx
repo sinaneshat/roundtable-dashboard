@@ -313,6 +313,7 @@ export default function ChatThreadScreen({
     regeneratingRoundNumber,
     enableOrchestrator: !isRegenerating && !isModeratorStreaming,
     streamResumptionState,
+    initialPreSearches,
   });
 
   const isAwaitingModerator = useMemo(() => {

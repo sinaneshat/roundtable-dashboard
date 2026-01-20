@@ -40,16 +40,25 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
     const options = threadBySlugQueryOptions(params.slug);
     const isServer = typeof window === 'undefined';
 
+    // ✅ FIX: Check cache FIRST for SPA navigation (flow-controller pre-populates cache)
+    // For threadDetail with staleTime: 0, ensureQueryData always refetches even with cache.
+    // Skip fetch if cache exists AND has prefetch meta (indicating fresh data from flow-controller)
+    const cachedThreadData = !isServer ? queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey) : null;
+    const hasPrefetchMeta = cachedThreadData?.meta?.requestId === 'prefetch';
+
     // ensureQueryData internally checks staleTime and only fetches if data is stale/missing
     // @see https://tanstack.com/router/latest/docs/framework/react/guide/external-data-loading
     // ✅ FIX: Wrap in try-catch to handle SSR errors gracefully (e.g., 401 unauthorized)
     // On error, return empty data and let component handle via useQuery
-    try {
-      await queryClient.ensureQueryData(options);
-    } catch (error) {
-      console.error('[ChatThread] Loader error:', error);
-      // Return empty loader data - component will re-fetch via useQuery
-      return { threadTitle: null, threadId: null, preSearches: undefined, changelog: undefined, feedback: undefined, streamResumption: undefined };
+    // ✅ FIX: Skip fetch if flow-controller already populated cache (prevents skeleton flash)
+    if (!hasPrefetchMeta) {
+      try {
+        await queryClient.ensureQueryData(options);
+      } catch (error) {
+        console.error('[ChatThread] Loader error:', error);
+        // Return empty loader data - component will re-fetch via useQuery
+        return { threadTitle: null, threadId: null, preSearches: undefined, changelog: undefined, feedback: undefined, streamResumption: undefined };
+      }
     }
 
     // Get thread ID from cached data for auxiliary fetches
@@ -84,13 +93,21 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
         feedback = feedbackResult?.success ? feedbackResult.data?.feedback : undefined;
         preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
       } else {
-        // ✅ SPA NAVIGATION: Use ensureQueryData to respect cache
-        // - New thread: flow-controller pre-populates cache → returns immediately (no network)
+        // ✅ SPA NAVIGATION: Check cache FIRST before ensureQueryData
+        // - New thread: flow-controller pre-populates cache → use cached data (no network)
         // - Existing thread: fetches if cache empty/invalidated, uses cache if valid
         // - Thread→Thread: Previous thread cache invalidated by leaveThread pattern
+        const cachedChangelog = queryClient.getQueryData(changelogOptions.queryKey);
+        const cachedPreSearches = queryClient.getQueryData(preSearchesOptions.queryKey);
+
+        // ✅ FIX: Only fetch what's NOT already in cache
         const [changelogResult, preSearchesResult] = await Promise.all([
-          queryClient.ensureQueryData(changelogOptions).catch(() => null),
-          queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
+          cachedChangelog
+            ? Promise.resolve(cachedChangelog)
+            : queryClient.ensureQueryData(changelogOptions).catch(() => null),
+          cachedPreSearches
+            ? Promise.resolve(cachedPreSearches)
+            : queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
         ]);
         changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
         preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;

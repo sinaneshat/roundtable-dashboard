@@ -1,5 +1,5 @@
 import type { ChatMode, ScreenMode } from '@roundtable/shared';
-import { ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, RoundPhases, ScreenModes } from '@roundtable/shared';
+import { ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, RoundPhases, ScreenModes, SidebarStates } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -14,12 +14,14 @@ import type { ModelSelectionModalProps } from '@/components/chat/model-selection
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { useChatStore, useChatStoreApi } from '@/components/providers';
+import { useSidebarOptional } from '@/components/ui/sidebar';
 import { useCustomRolesQuery, useModelsQuery, useThreadChangelogQuery, useThreadFeedbackQuery } from '@/hooks/queries';
 import type { TimelineItem, UseChatAttachmentsReturn } from '@/hooks/utils';
 import {
   useBoolean,
   useChatScroll,
   useFreeTrialState,
+  useMediaQuery,
   useOrderedModels,
   useThreadTimeline,
   useVisualViewportPosition,
@@ -460,6 +462,13 @@ export function ChatView({
 
   const inputContainerRef = useRef<HTMLDivElement | null>(null);
 
+  // Sidebar state for dynamic input positioning
+  // FLOATING variant with ICON collapsible: collapsed = 6rem (icon + padding), expanded = 20rem
+  const sidebarContext = useSidebarOptional();
+  const isSidebarCollapsed = sidebarContext?.state === SidebarStates.COLLAPSED;
+  // Desktop-first SSR: default to true on server, hydrate to actual viewport
+  const isDesktop = useMediaQuery('(min-width: 768px)', true);
+
   const threadActions = useThreadActions({
     slug: slug || '',
     isRoundInProgress: isStreaming || isModeratorStreaming,
@@ -825,8 +834,13 @@ export function ChatView({
 
           <div
             ref={inputContainerRef}
-            className="fixed inset-x-0 z-30 md:left-[var(--sidebar-width)]"
-            style={{ bottom: `${keyboardOffset}px` }}
+            className="fixed inset-x-0 z-30"
+            style={{
+              bottom: `${keyboardOffset}px`,
+              // Dynamic left offset based on sidebar state (md+ only via CSS)
+              // FLOATING variant: collapsed = icon + padding (6rem), expanded = 20rem
+              left: undefined, // Mobile: use inset-x-0 (no offset)
+            }}
           >
             <div className="absolute inset-0 -bottom-4 bg-gradient-to-t from-background from-85% to-transparent pointer-events-none" />
             <div className="w-full max-w-4xl mx-auto px-5 md:px-6 pt-4 pb-4 relative">

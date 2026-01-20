@@ -53,11 +53,12 @@ function isBreadcrumbPath(path: string): path is BreadcrumbPath {
 /** Minimal thread schema for header actions - only fields needed for ChatThreadActions */
 const RouteThreadSchema = z.object({
   id: z.string(),
-  title: z.string().nullish(),
+  // Transform null to undefined to match ChatThreadFlexible's expected type
+  title: z.string().nullish().transform(v => v ?? undefined),
   isPublic: z.boolean().optional(),
   isFavorite: z.boolean().optional(),
 });
-type RouteThread = z.infer<typeof RouteThreadSchema>;
+type RouteThread = z.output<typeof RouteThreadSchema>;
 
 /** Thread route loader data schema */
 const ThreadLoaderDataSchema = z.object({
@@ -75,21 +76,24 @@ const RouteParamsSchema = z.object({
 /** Safely extract thread from loader data using Zod validation */
 function extractThreadFromLoaderData(loaderData: unknown): RouteThread | null {
   const result = ThreadLoaderDataSchema.safeParse(loaderData);
-  if (!result.success) return null;
+  if (!result.success)
+    return null;
   return result.data.threadData?.thread ?? null;
 }
 
 /** Safely extract thread title from loader data using Zod validation */
 function extractThreadTitle(loaderData: unknown): string | null {
   const result = ThreadLoaderDataSchema.safeParse(loaderData);
-  if (!result.success) return null;
+  if (!result.success)
+    return null;
   return result.data.threadTitle ?? null;
 }
 
 /** Safely extract slug from route params using Zod validation */
 function extractSlugFromParams(params: unknown): string | null {
   const result = RouteParamsSchema.safeParse(params);
-  if (!result.success) return null;
+  if (!result.success)
+    return null;
   return result.data.slug;
 }
 
@@ -147,7 +151,7 @@ function NavigationHeaderComponent({
     navigate({ to: '/chat' });
   }, [handleNavigationReset, navigate]);
 
-  const isStaticRoute = pathname ? pathname in BREADCRUMB_MAP : false;
+  const isStaticRoute = isBreadcrumbPath(pathname);
   const hasActiveThread = pathname === '/chat' && !showInitialUI && (createdThreadId || thread);
   const isOnThreadPage = pathname?.startsWith('/chat/') && pathname !== '/chat' && !isStaticRoute;
   // Skip fetching when we have thread data in the store from an active chat session

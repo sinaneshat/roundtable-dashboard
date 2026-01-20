@@ -26,6 +26,8 @@ export type UseScreenInitializationOptions = {
   enableOrchestrator?: boolean;
   /** Stream resumption state from server - will be prefilled BEFORE initializeThread */
   streamResumptionState?: ThreadStreamResumptionState | null;
+  /** Pre-search data hydrated from server - when provided, V1 orchestrator is disabled */
+  initialPreSearches?: unknown[];
 };
 
 export function useScreenInitialization(options: UseScreenInitializationOptions) {
@@ -36,6 +38,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     initialMessages,
     enableOrchestrator = true,
     streamResumptionState,
+    initialPreSearches,
   } = options;
 
   const actions = useChatStore(useShallow(s => ({
@@ -157,7 +160,14 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // verifyAndFetchFreshMessages() retries DB reads before SSR completes
   // No client-side fetch-fresh needed - proper SSR paint guaranteed
 
-  const preSearchOrchestratorEnabled = mode === ScreenModes.THREAD && Boolean(thread?.id) && enableOrchestrator;
+  // ✅ FIX: Disable V1 pre-search orchestrator when pre-searches are server-hydrated
+  // V2 system handles pre-search via SSE streams only when needed
+  // When initialPreSearches is provided (from SSR loader), skip V1 orchestrator entirely
+  const hasServerHydratedPreSearches = Array.isArray(initialPreSearches);
+  const preSearchOrchestratorEnabled = mode === ScreenModes.THREAD
+    && Boolean(thread?.id)
+    && enableOrchestrator
+    && !hasServerHydratedPreSearches;
   getPreSearchOrchestrator({
     threadId: thread?.id || '',
     enabled: preSearchOrchestratorEnabled,

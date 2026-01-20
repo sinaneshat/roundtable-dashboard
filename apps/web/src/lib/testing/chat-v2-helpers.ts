@@ -5,10 +5,11 @@
  * Includes store factories, mock SSE responses, and flow simulation helpers.
  */
 
-import { MessageStatuses, PreSearchSseEvents } from '@roundtable/shared';
+import { ChatModes, MessageStatuses, PreSearchSseEvents } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 
-import type { ChatStoreApi, FlowContext, FlowState, PreSearchResult } from '@/stores/chat-v2';
+import type { ParticipantConfig } from '@/lib/schemas';
+import type { ChatMode, ChatStoreApi, FlowContext, FlowState, PreSearchResult } from '@/stores/chat-v2';
 import { createChatStore, INITIAL_FLOW_STATE } from '@/stores/chat-v2';
 
 // ============================================================================
@@ -75,14 +76,19 @@ export function createIdleFlowState(): FlowState {
  */
 export function createCreatingThreadState(overrides?: {
   message?: string;
-  mode?: 'auto' | 'council' | 'debate';
-  participants?: Array<{ modelId: string; role: string | null }>;
+  mode?: ChatMode;
+  participants?: ParticipantConfig[];
 }): FlowState {
   return {
     type: 'creating_thread',
     message: overrides?.message ?? 'Test message',
-    mode: overrides?.mode ?? 'council',
-    participants: overrides?.participants ?? [{ modelId: 'gpt-4', role: null }],
+    mode: overrides?.mode ?? ChatModes.DEBATING,
+    participants: overrides?.participants ?? [{
+      id: 'participant-1',
+      modelId: 'gpt-4',
+      role: null,
+      priority: 0,
+    }],
   };
 }
 

@@ -122,8 +122,9 @@ describe('stale time values', () => {
     expect(STALE_TIMES.models).toBe(Infinity);
   });
 
-  it('threadDetail staleTime should be 2 minutes', () => {
-    expect(STALE_TIMES.threadDetail).toBe(2 * 60 * 1000);
+  it('threadDetail staleTime should be 0 (NO CACHE - real-time collaboration)', () => {
+    // Private threads must always be fresh for real-time collaboration
+    expect(STALE_TIMES.threadDetail).toBe(0);
   });
 
   it('threadsSidebar staleTime should be 30 seconds', () => {

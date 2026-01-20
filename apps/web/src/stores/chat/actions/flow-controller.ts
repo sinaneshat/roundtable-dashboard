@@ -202,6 +202,15 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     if (hasUpdatedUrlRef.current)
       return;
 
+    const slug = threadState.currentThread.slug;
+    const threadId = threadState.createdThreadId;
+
+    // ✅ FIX: Pre-populate cache BEFORE URL change to prevent skeleton flash
+    // Route loader's ensureQueryData will find data in cache → no network request → no skeleton
+    if (slug && threadId) {
+      prepopulateQueryCache(threadId, slug, session);
+    }
+
     // Set ref IMMEDIATELY to prevent re-entry
     hasUpdatedUrlRef.current = true;
     startTransition(() => {
@@ -209,7 +218,6 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     });
 
     // ✅ TanStack Router: Navigate to update URL with AI-generated slug
-    const slug = threadState.currentThread.slug;
     queueMicrotask(() => {
       router.navigate({
         to: '/chat/$slug',
@@ -221,7 +229,10 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     isActive,
     threadState.currentThread?.isAiGeneratedTitle,
     threadState.currentThread?.slug,
+    threadState.createdThreadId,
     router,
+    prepopulateQueryCache,
+    session,
   ]);
 
   // ============================================================================
