@@ -342,7 +342,11 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
       }
       console.error('[Moderator] triggerModerator error:', error);
     } finally {
+      const preState = store.getState();
+      rlog.sync('mod-complete-pre', `r${roundNumber} streamR=${preState.streamingRoundNumber ?? '-'} wait=${preState.waitingToStartStreaming ? 1 : 0} nextP=${preState.nextParticipantToTrigger !== null ? 1 : 0}`);
       store.getState().completeStreaming();
+      const postState = store.getState();
+      rlog.sync('mod-complete-post', `streamR=${postState.streamingRoundNumber ?? '-'} wait=${postState.waitingToStartStreaming ? 1 : 0} nextP=${postState.nextParticipantToTrigger !== null ? 1 : 0} msgs=${postState.messages.length}`);
       triggeringRoundRef.current = null;
       abortControllerRef.current = null;
       retryCountRef.current = 0;

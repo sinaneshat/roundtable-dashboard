@@ -8,7 +8,8 @@ import { PricingCard } from '@/components/ui/pricing-card';
 import { useIsMounted } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import { isSubscriptionActive } from '@/lib/utils';
-import type { Price, Product, Subscription } from '@/types/billing';
+import type { Price, Product } from '@/services/api/billing/products';
+import type { Subscription } from '@/services/api/billing/subscriptions';
 
 type PricingContentProps = {
   products: Product[];

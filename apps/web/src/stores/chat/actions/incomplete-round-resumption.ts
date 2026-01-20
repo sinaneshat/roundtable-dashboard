@@ -977,6 +977,9 @@ export function useIncompleteRoundResumption(
     // Log what we detected before triggering
     rlog.trigger('resume', `P${effectiveNextParticipant} r${currentRoundNumber} responded=[${[...respondedParticipantIndices]}] inProgress=[${[...inProgressParticipantIndices]}] total=${enabledParticipants.length}`);
 
+    // ✅ DEBUG: Log detailed state before setting resumption
+    rlog.msg('resume-SET', `r${currentRoundNumber} p${effectiveNextParticipant} msgs=${messages.length} enabled=${enabledParticipants.length}`);
+
     // ✅ DOUBLE-TRIGGER FIX: Set round-level guard SYNCHRONOUSLY before ANY state updates
     roundTriggerInProgressRef.current = roundKey;
 

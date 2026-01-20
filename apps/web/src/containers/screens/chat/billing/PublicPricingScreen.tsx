@@ -19,7 +19,8 @@ import { useTranslations } from '@/lib/i18n';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
 import dynamic from '@/lib/utils/dynamic';
-import type { Price, Product, Subscription } from '@/types/billing';
+import type { Price, Product } from '@/services/api/billing/products';
+import type { Subscription } from '@/services/api/billing/subscriptions';
 
 const CancelSubscriptionDialog = dynamic(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => ({ default: m.CancelSubscriptionDialog })),

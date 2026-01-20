@@ -2212,6 +2212,8 @@ export function useMultiParticipantChat(
     // ✅ CRITICAL: isTriggeringRef stays TRUE until async work completes
     queueMicrotask(async () => {
       try {
+        // ✅ DEBUG: Log when AI SDK will create a user message
+        rlog.msg('cfp-send', `r${roundNumber} p${fromIndexToUse} userMsgId=${lastUserMessage.id.slice(-8)} text=${userText.slice(0, 20)}...`);
         // Trigger streaming for the specified participant
         await aiSendMessage({
           text: userText,

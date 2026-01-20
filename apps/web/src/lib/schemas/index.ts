@@ -172,7 +172,3 @@ export {
   RoundNumberWithSentinelSchema,
   safeParseRoundNumber,
 } from './round-schemas';
-// Model schemas
-// Note: Model type is imported from @/services/api in model-schemas.ts
-// Re-export it here for convenience (RPC-derived type)
-export type { Model } from '@/services/api';

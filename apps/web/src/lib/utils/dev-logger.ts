@@ -128,9 +128,14 @@ function formatDebugValue(key: string, value: string | number | boolean | null |
 }
 
 const RLOG_DEBOUNCE_MS = 300;
+const RLOG_RAPID_DEBOUNCE_MS = 1000; // Longer debounce for rapid-fire logs
 const rlogDebounceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
 const rlogLastLogged: Record<string, string> = {};
+const rlogFireCounts: Record<string, { count: number; lastFlush: number }> = {};
 let rlogEnabled = isDev;
+
+// Track keys that fire rapidly and should be suppressed with counts
+const RAPID_FIRE_KEYS = new Set(['noprefill-check', 'noprefill-skip', 'noprefill-completion']);
 
 function getRlogStyle(category: RlogCategory): string {
   return RLOG_CATEGORY_STYLES[category];
@@ -142,6 +147,26 @@ function rlogLog(category: RlogCategory, key: string, message: string): void {
 
   const logKey = `${category}:${key}`;
   const fullMessage = `[${category}] ${message}`;
+
+  // For rapid-fire logs, use longer debounce and show fire counts
+  if (RAPID_FIRE_KEYS.has(key)) {
+    const now = Date.now();
+    const tracker = rlogFireCounts[logKey] || { count: 0, lastFlush: now };
+
+    tracker.count++;
+
+    // Flush every RAPID_DEBOUNCE_MS
+    if (now - tracker.lastFlush >= RLOG_RAPID_DEBOUNCE_MS) {
+      const countStr = tracker.count > 1 ? ` [${tracker.count}X]` : '';
+      // eslint-disable-next-line no-console
+      console.log(`%c[${category}]${countStr} ${message}`, getRlogStyle(category));
+      tracker.count = 0;
+      tracker.lastFlush = now;
+    }
+
+    rlogFireCounts[logKey] = tracker;
+    return;
+  }
 
   if (rlogLastLogged[logKey] === fullMessage)
     return;

@@ -14,8 +14,8 @@ import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId } from '@/lib/utils/product-logic';
+import type { Subscription } from '@/services/api/billing/subscriptions';
 import { validateUsageStatsCache } from '@/stores/chat/actions/types';
-import type { Subscription } from '@/types/billing';
 
 // Glass button styles for billing pages (consistent with chat toolbar)
 const glassButtonPrimary = 'h-11 rounded-xl bg-white text-black font-medium hover:bg-white/90 transition-colors';

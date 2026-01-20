@@ -4,47 +4,19 @@
  * UI-ONLY UTILITIES: Provider icons, avatars, display formatting
  */
 
-import { MessageRoles, PROVIDER_COLORS } from '@roundtable/shared';
+import { MessageRoles } from '@roundtable/shared';
 
 // ============================================================================
 // MODEL DISPLAY HELPERS
 // ============================================================================
 
-export function getProviderFromModelId(modelId: string): string {
+function getProviderFromModelId(modelId: string): string {
   return modelId.includes('/') ? (modelId.split('/')[0] || 'unknown') : 'unknown';
 }
 
-export function getDisplayNameFromModelId(modelId: string): string {
+function getDisplayNameFromModelId(modelId: string): string {
   return modelId.includes('/') ? modelId.split('/').pop() || modelId : modelId;
 }
-
-export function extractModelName(modelId: string): string {
-  const parts = modelId.split('/');
-  const modelPart = parts[parts.length - 1] || modelId;
-
-  return modelPart
-    .split('-')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
-// ============================================================================
-// ROLE DEFINITIONS (UI Constants Only)
-// ============================================================================
-
-export const DEFAULT_ROLES = [
-  'The Ideator',
-  'Devil\'s Advocate',
-  'Builder',
-  'Practical Evaluator',
-  'Visionary Thinker',
-  'Domain Expert',
-  'User Advocate',
-  'Implementation Strategist',
-  'The Data Analyst',
-] as const;
-
-export type DefaultRole = typeof DEFAULT_ROLES[number];
 
 // ============================================================================
 // PROVIDER ICON MAPPING (UI Preferences Only)
@@ -72,21 +44,6 @@ const PROVIDER_ICON_MAP: Record<string, string> = {
 };
 
 // ============================================================================
-// PROVIDER NAME FORMATTING (Dynamic with minimal overrides)
-// ============================================================================
-
-const PROVIDER_NAME_OVERRIDES: Record<string, string> = {
-  'openai': 'OpenAI',
-  'xai': 'xAI',
-  'x-ai': 'xAI',
-  'openrouter': 'OpenRouter',
-  'deepseek': 'DeepSeek',
-  'mistralai': 'Mistral AI',
-  'mistral': 'Mistral',
-  'microsoft': 'Microsoft',
-};
-
-// ============================================================================
 // PROVIDER ICON UTILITIES
 // ============================================================================
 
@@ -94,68 +51,6 @@ export function getProviderIcon(provider: string): string {
   const normalizedProvider = provider.toLowerCase().trim();
   const iconFileName = PROVIDER_ICON_MAP[normalizedProvider] || PROVIDER_ICON_MAP.openrouter;
   return `/static/icons/ai-models/${iconFileName}`;
-}
-
-export function getProviderName(provider: string): string {
-  const normalizedProvider = provider.toLowerCase().trim();
-
-  if (PROVIDER_NAME_OVERRIDES[normalizedProvider]) {
-    return PROVIDER_NAME_OVERRIDES[normalizedProvider];
-  }
-
-  return provider
-    .split('-')
-    .map(word => word.charAt(0).toUpperCase() + word.slice(1))
-    .join(' ');
-}
-
-export function getModelIconInfo(modelId: string): {
-  icon: string;
-  providerName: string;
-  provider: string;
-} {
-  const providerPart = modelId.includes('/') ? modelId.split('/')[0] : modelId;
-  const provider = providerPart?.toLowerCase().trim() || 'openrouter';
-
-  return {
-    icon: getProviderIcon(provider),
-    providerName: getProviderName(provider),
-    provider,
-  };
-}
-
-// ============================================================================
-// MODEL COLOR THEMING (Tailwind Color Classes)
-// Uses centralized PROVIDER_COLORS from @roundtable/shared
-// ============================================================================
-
-export function getModelColorClass(avatarSrc: string, isUser: boolean = false): string {
-  if (isUser)
-    return PROVIDER_COLORS.user;
-
-  const lowerSrc = avatarSrc.toLowerCase();
-
-  // Match provider keywords in avatar source path
-  const providerMatches: [string[], keyof typeof PROVIDER_COLORS][] = [
-    [['claude', 'anthropic'], 'anthropic'],
-    [['gpt', 'openai'], 'openai'],
-    [['gemini', 'google'], 'google'],
-    [['llama', 'meta'], 'meta'],
-    [['mistral'], 'mistral'],
-    [['cohere'], 'cohere'],
-    [['deepseek'], 'deepseek'],
-    [['qwen'], 'qwen'],
-    [['xai', 'grok'], 'xai'],
-    [['kimi', 'moonshotai'], 'moonshotai'],
-  ];
-
-  for (const [keywords, providerKey] of providerMatches) {
-    if (keywords.some(keyword => lowerSrc.includes(keyword))) {
-      return PROVIDER_COLORS[providerKey];
-    }
-  }
-
-  return PROVIDER_COLORS.openrouter;
 }
 
 // ============================================================================

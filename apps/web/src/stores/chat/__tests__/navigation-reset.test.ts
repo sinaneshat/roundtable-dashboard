@@ -89,10 +89,14 @@ describe('query Cache Invalidation', () => {
       const threadId = 'thread-123';
       const keys = getQueryKeysToInvalidate(threadId);
 
-      expect(keys).toHaveLength(3);
+      // leaveThread returns all thread-specific keys to ensure complete cache invalidation
+      expect(keys).toHaveLength(6);
       expect(keys).toContainEqual(queryKeys.threads.messages(threadId));
       expect(keys).toContainEqual(queryKeys.threads.preSearches(threadId));
       expect(keys).toContainEqual(queryKeys.threads.feedback(threadId));
+      expect(keys).toContainEqual(queryKeys.threads.streamResumption(threadId));
+      expect(keys).toContainEqual(queryKeys.threads.changelog(threadId));
+      expect(keys).toContainEqual(queryKeys.threads.detail(threadId));
     });
 
     it('generates unique keys for different thread IDs', () => {

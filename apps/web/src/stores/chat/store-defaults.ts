@@ -329,6 +329,7 @@ export const REGENERATION_STATE_RESET = {
 /**
  * Stream resumption state that must be cleared when round completes
  * Prevents stale resumption phase from blocking UI updates in subsequent rounds
+ * ✅ FIX: Include nextParticipantToTrigger to prevent infinite round triggering
  */
 export const STREAM_RESUMPTION_STATE_RESET = {
   currentResumptionPhase: null,
@@ -336,7 +337,8 @@ export const STREAM_RESUMPTION_STATE_RESET = {
   preSearchResumption: null,
   moderatorResumption: null,
   streamResumptionPrefilled: false,
-} satisfies Pick<StreamResumptionSliceState, 'currentResumptionPhase' | 'resumptionRoundNumber' | 'preSearchResumption' | 'moderatorResumption' | 'streamResumptionPrefilled'>;
+  nextParticipantToTrigger: null,
+} satisfies Pick<StreamResumptionSliceState, 'currentResumptionPhase' | 'resumptionRoundNumber' | 'preSearchResumption' | 'moderatorResumption' | 'streamResumptionPrefilled' | 'nextParticipantToTrigger'>;
 
 // ============================================================================
 // AGGREGATED DEFAULT STATES FOR RESET OPERATIONS

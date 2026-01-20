@@ -28,7 +28,7 @@ import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls
 import { useTranslations } from '@/lib/i18n';
 import { showApiErrorToast } from '@/lib/toast';
 import dynamic from '@/lib/utils/dynamic';
-import type { Subscription } from '@/types/billing';
+import type { Subscription } from '@/services/api/billing/subscriptions';
 
 const CancelSubscriptionDialog = dynamic<CancelSubscriptionDialogProps>(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => ({ default: m.CancelSubscriptionDialog })),

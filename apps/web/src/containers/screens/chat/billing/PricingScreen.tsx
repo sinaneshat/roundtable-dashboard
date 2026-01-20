@@ -16,7 +16,8 @@ import {
 import { useTranslations } from '@/lib/i18n';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';
-import type { Product, Subscription } from '@/types/billing';
+import type { Product } from '@/services/api/billing/products';
+import type { Subscription } from '@/services/api/billing/subscriptions';
 
 export default function PricingScreen() {
   const navigate = useNavigate();

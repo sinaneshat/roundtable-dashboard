@@ -221,8 +221,8 @@ describe('stop Button In-Flight Race Conditions', () => {
       expect(state.currentParticipantIndex).toBe(0);
       expect(state.waitingToStartStreaming).toBe(false);
       expect(state.streamingRoundNumber).toBeNull();
-      // ✅ completeStreaming spreads STREAM_RESUMPTION_STATE_RESET which does NOT reset nextParticipantToTrigger
-      // nextParticipantToTrigger is only reset by clearStreamResumption()
+      // ✅ FIX: completeStreaming now resets nextParticipantToTrigger via STREAM_RESUMPTION_STATE_RESET
+      expect(state.nextParticipantToTrigger).toBeNull();
       expect(state.isModeratorStreaming).toBe(false);
     });
 
@@ -810,9 +810,10 @@ describe('stop Button In-Flight Race Conditions', () => {
       // Stop
       store.getState().completeStreaming();
 
-      // ✅ completeStreaming clears STREAM_RESUMPTION_STATE_RESET fields (phase-related)
-      // But does NOT clear streamResumptionState, resumptionAttempts, nextParticipantToTrigger
+      // ✅ completeStreaming clears STREAM_RESUMPTION_STATE_RESET fields (phase-related + nextParticipantToTrigger)
+      // But does NOT clear streamResumptionState, resumptionAttempts
       expect(store.getState().currentResumptionPhase).toBeNull();
+      expect(store.getState().nextParticipantToTrigger).toBeNull();
       expect(store.getState().resumptionRoundNumber).toBeNull();
       expect(store.getState().streamResumptionPrefilled).toBe(false);
     });

@@ -381,7 +381,7 @@ describe('round Flow Race Conditions', () => {
       expect(state.isStreaming).toBe(false);
     });
 
-    it('should reset currentParticipantIndex but NOT nextParticipantToTrigger', () => {
+    it('should reset both currentParticipantIndex and nextParticipantToTrigger', () => {
       store.getState().setCurrentParticipantIndex(2);
       store.getState().setNextParticipantToTrigger({ index: 1, participantId: 'p2' });
       store.getState().setIsStreaming(true);
@@ -390,7 +390,8 @@ describe('round Flow Race Conditions', () => {
 
       const state = store.getState();
       expect(state.currentParticipantIndex).toBe(0); // Reset
-      expect(state.nextParticipantToTrigger).toEqual({ index: 1, participantId: 'p2' }); // Preserved for resumption
+      // ✅ FIX: nextParticipantToTrigger is now reset to prevent infinite round triggering
+      expect(state.nextParticipantToTrigger).toBeNull();
     });
   });
 

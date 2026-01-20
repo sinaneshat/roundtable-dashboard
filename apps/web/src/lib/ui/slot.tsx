@@ -7,12 +7,21 @@ type SlotProps = {
   children?: ReactNode;
 } & HTMLAttributes<HTMLElement>;
 
-type MergedProps = Record<string, unknown> & {
+// MergedProps must accept any valid React props since we're merging props from
+// an unknown child element. This includes HTML attributes, data attributes,
+// aria attributes, event handlers, and custom component props.
+type MergedProps = {
+  [key: string]: unknown;
   className?: string;
   ref?: Ref<unknown>;
 };
 
-type ElementProps = Record<string, unknown>;
+// ElementProps represents React element props which can contain any valid
+// HTML/React attribute. We cannot be more specific here without losing
+// the ability to merge props from arbitrary components.
+type ElementProps = {
+  [key: string]: unknown;
+};
 
 function isSlottableChild(child: ReactNode): child is ReactElement {
   return isValidElement(child);
@@ -26,7 +35,7 @@ function isElementProps(props: unknown): props is ElementProps {
   return typeof props === 'object' && props !== null;
 }
 
-function hasClassNameProp(props: ElementProps): props is ElementProps & { className?: unknown } {
+function hasClassNameProp(props: ElementProps): props is ElementProps & { className?: string } {
   return 'className' in props;
 }
 

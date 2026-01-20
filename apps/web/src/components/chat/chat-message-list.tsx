@@ -936,7 +936,7 @@ export const ChatMessageList = memo(
                         <div
                           dir="auto"
                           className={cn(
-                            'max-w-[85%] ml-auto w-fit',
+                            'max-w-[85%] ml-auto w-fit min-w-0 overflow-hidden',
                             'bg-secondary text-secondary-foreground',
                             'rounded-2xl rounded-br-md px-4 py-3',
                             'text-base leading-relaxed',

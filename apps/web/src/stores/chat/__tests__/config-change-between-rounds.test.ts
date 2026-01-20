@@ -760,9 +760,9 @@ describe('config Change Between Rounds - Store State Isolation', () => {
         store.getState().completeStreaming();
 
         const state = store.getState();
-        // nextParticipantToTrigger is NOT part of STREAM_RESUMPTION_STATE_RESET
-        // This allows resumption tracking to persist across streaming completion
-        expect(state.nextParticipantToTrigger).toEqual({ index: 1, participantId: 'p2' });
+        // ✅ FIX: nextParticipantToTrigger IS now reset by STREAM_RESUMPTION_STATE_RESET
+        // This prevents infinite round triggering after moderator completes
+        expect(state.nextParticipantToTrigger).toBeNull();
         expect(state.waitingToStartStreaming).toBe(false);
       });
 

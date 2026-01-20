@@ -573,7 +573,7 @@ const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
     set({ isPatchInProgress: value }, false, 'flags/setIsPatchInProgress'),
 });
 
-const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({
+const createDataSlice: SliceCreator<DataSlice> = (set, get) => ({
   ...DATA_DEFAULTS,
 
   setRegeneratingRoundNumber: (value: number | null) =>
@@ -584,8 +584,13 @@ const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({
     set({ pendingAttachmentIds: value }, false, 'data/setPendingAttachmentIds'),
   setExpectedParticipantIds: (value: string[] | null) =>
     set({ expectedParticipantIds: value }, false, 'data/setExpectedParticipantIds'),
-  setStreamingRoundNumber: (value: number | null) =>
-    set({ streamingRoundNumber: value }, false, 'data/setStreamingRoundNumber'),
+  setStreamingRoundNumber: (value: number | null) => {
+    const prev = get().streamingRoundNumber;
+    if (prev !== value) {
+      rlog.msg('roundNum', `${prev ?? '-'} -> ${value ?? '-'}`);
+    }
+    set({ streamingRoundNumber: value }, false, 'data/setStreamingRoundNumber');
+  },
   setCurrentRoundNumber: (value: number | null) =>
     set({ currentRoundNumber: value }, false, 'data/setCurrentRoundNumber'),
   setConfigChangeRoundNumber: (value: number | null) =>
@@ -1118,10 +1123,17 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     const isResumingStream = currentState.streamResumptionPrefilled;
     const resumptionRound = currentState.resumptionRoundNumber;
 
+    // ✅ FIX: Also check for initial thread creation in progress
+    // During navigation from overview to thread after creation, we're actively streaming
+    // Store messages contain the current streaming content and must NOT be replaced
+    const isActivelyStreaming = currentState.createdThreadId === thread.id
+      && currentState.streamingRoundNumber !== null
+      && (currentState.waitingToStartStreaming || currentState.isStreaming);
+
     const resumptionPhaseForLog = currentState.currentResumptionPhase;
     const waitingForLog = currentState.waitingToStartStreaming;
     const nextPForLog = currentState.nextParticipantToTrigger;
-    rlog.init('thread', `resum=${isResumingStream ? 1 : 0} same=${isSameThread ? 1 : 0} store=${storeMessages.length} db=${newMessages.length} resumR=${resumptionRound ?? '-'}`);
+    rlog.init('thread', `resum=${isResumingStream ? 1 : 0} active=${isActivelyStreaming ? 1 : 0} same=${isSameThread ? 1 : 0} store=${storeMessages.length} db=${newMessages.length} resumR=${resumptionRound ?? '-'}`);
     rlog.init('thread-state', `wait=${waitingForLog ? 1 : 0} phase=${resumptionPhaseForLog ?? '-'} nextP=${nextPForLog !== null ? (typeof nextPForLog === 'number' ? nextPForLog : nextPForLog.index) : '-'}`);
 
     let messagesToSet: UIMessage[];
@@ -1137,10 +1149,11 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
         msg.parts?.some(p => 'state' in p && p.state === TextPartStates.STREAMING),
       );
 
-      // ✅ FIX: During stream resumption, keep store messages even if they have stale parts
+      // ✅ FIX: During stream resumption OR active streaming, keep store messages
       // The store has the latest round data that might not be in DB yet
-      // We only replace with DB messages if NOT resuming
-      if (hasStaleStreamingParts && newMessages.length > 0 && !isResumingStream) {
+      // We only replace with DB messages if NOT resuming AND NOT actively streaming
+      // isActivelyStreaming: Initial thread creation in progress - streaming parts are active, not stale
+      if (hasStaleStreamingParts && newMessages.length > 0 && !isResumingStream && !isActivelyStreaming) {
         // ✅ RACE CONDITION FIX: Don't blindly replace - MERGE messages
         // Race condition: P0 completes → backend saves → user refreshes immediately
         // SSR might fetch BEFORE the transaction commits, missing the latest message.
@@ -1163,8 +1176,9 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
         } else {
           messagesToSet = newMessages;
         }
-      } else if (isResumingStream) {
-        // ✅ FIX: During resumption, compare round numbers but prefer store messages for resumption round
+      } else if (isResumingStream || isActivelyStreaming) {
+        // ✅ FIX: During resumption OR active streaming, prefer store messages
+        // They contain the latest round data that might not be in DB yet
         const storeMaxRound = storeMessages.reduce((max, m) => {
           const round = getRoundNumber(m.metadata) ?? 0;
           return Math.max(max, round);
@@ -1175,8 +1189,9 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
           return Math.max(max, round);
         }, 0);
 
-        // During resumption: keep store if it has resumption round data OR has more/equal messages
-        if (storeMaxRound >= (resumptionRound ?? 0) || storeMaxRound >= newMaxRound) {
+        // During resumption/active streaming: keep store if it has current round data OR has more/equal messages
+        const targetRound = resumptionRound ?? currentState.streamingRoundNumber ?? 0;
+        if (storeMaxRound >= targetRound || storeMaxRound >= newMaxRound) {
           messagesToSet = storeMessages;
         } else {
           // ✅ RACE CONDITION FIX: Even during resumption, merge if store has messages DB doesn't
@@ -1253,11 +1268,17 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     // Preserve state when:
     // 1. streamResumptionPrefilled: Server detected incomplete round (resumption)
     // 2. Active form submission: handleUpdateThreadAndSend set up streaming state
+    // 3. Initial thread creation: createdThreadId matches and streaming is active
     //
     // Active form submission detection (must be specific, not just waitingToStartStreaming):
     // - configChangeRoundNumber !== null: Set by handleUpdateThreadAndSend BEFORE PATCH
     //   This is the key indicator that a form submission is in progress
     // - isWaitingForChangelog: Set AFTER PATCH (always set, cleared by use-changelog-sync)
+    //
+    // Initial thread creation detection:
+    // - createdThreadId matches thread.id: We created this thread in current session
+    // - streamingRoundNumber is set: Streaming is configured
+    // - waitingToStartStreaming or isStreaming: Active streaming happening
     //
     // NOTE: waitingToStartStreaming alone is NOT sufficient because it could be stale
     // state from a previous session. configChangeRoundNumber and isWaitingForChangelog
@@ -1276,7 +1297,14 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     const hasActiveFormSubmission
       = currentState.configChangeRoundNumber !== null
         || currentState.isWaitingForChangelog;
-    const preserveStreamingState = isActiveResumption || hasActiveFormSubmission;
+    // ✅ FIX: Detect initial thread creation in progress
+    // During navigation from overview to thread after creation, the route loader
+    // returns stale cached data. If we're actively streaming for this thread,
+    // we must preserve the streaming state to avoid resetting the round.
+    const isInitialCreationInProgress = currentState.createdThreadId === thread.id
+      && currentState.streamingRoundNumber !== null
+      && (currentState.waitingToStartStreaming || currentState.isStreaming);
+    const preserveStreamingState = isActiveResumption || hasActiveFormSubmission || isInitialCreationInProgress;
     const resumptionRoundNumber = currentState.resumptionRoundNumber;
 
     set({

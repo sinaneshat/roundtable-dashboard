@@ -8,7 +8,7 @@ import { useCountdownRedirect } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import { createStorageHelper } from '@/lib/utils/safe-storage';
 import type { SyncAfterCheckoutResponse } from '@/services/api';
-import type { Subscription } from '@/types/billing';
+import type { Subscription } from '@/services/api/billing/subscriptions';
 
 type ApiResponse<T> = { success: boolean; data?: T };
 

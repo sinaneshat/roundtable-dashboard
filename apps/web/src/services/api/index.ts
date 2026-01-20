@@ -356,11 +356,6 @@ export {
   getUserUsageStatsService,
 } from './usage';
 
-// Model schema from lib/schemas - uses z.custom<Model>() to trust RPC type
-export {
-  ModelSchema,
-} from '@/lib/schemas/model-schemas';
-
 // ============================================================================
 // Streaming Validation Schemas - Only for SSE Parsing
 // ============================================================================

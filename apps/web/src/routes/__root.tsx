@@ -270,8 +270,6 @@ function RootErrorComponent({ error, reset }: ErrorComponentProps) {
 }
 
 function RootDocument({ children }: { children: ReactNode }) {
-  const baseUrl = getAppBaseUrl();
-
   return (
     <html lang="en" className="dark">
       <head>
@@ -279,20 +277,7 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
         {children}
-        <StructuredData
-          type="WebApplication"
-          name={siteName}
-          description={siteDescription}
-          url={baseUrl}
-          baseUrl={baseUrl}
-          logo={`${baseUrl}/static/logo.svg`}
-          image={`${baseUrl}/static/og-image.png`}
-          sameAs={[
-            BRAND.social.twitter,
-            BRAND.social.linkedin,
-            BRAND.social.github,
-          ]}
-        />
+        <StructuredData type="WebApplication" />
         <Scripts />
       </body>
     </html>

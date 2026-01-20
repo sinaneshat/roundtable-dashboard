@@ -1,5 +1,5 @@
-import type { MessageStatus } from '@roundtable/shared';
-import { MessagePartTypes, MessageStatuses, TextPartStates } from '@roundtable/shared';
+import type { MessagePartType, MessageStatus } from '@roundtable/shared';
+import { MessagePartTypes, MessageStatuses, ReasoningPartTypes, TextPartStates } from '@roundtable/shared';
 import { memo, useLayoutEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import { useShallow } from 'zustand/react/shallow';
@@ -35,11 +35,11 @@ function isNonRenderableReasoningPart(part: MessagePart): boolean {
   if (part.type !== MessagePartTypes.REASONING) {
     return false;
   }
-  if (hasProperty(part, 'reasoningType', isNonEmptyString) && part.reasoningType === 'redacted') {
+  if (hasProperty(part, 'reasoningType', isNonEmptyString) && part.reasoningType === ReasoningPartTypes.REDACTED) {
     return true;
   }
   const text = part.text?.trim() ?? '';
-  return !text || text === '[REDACTED]' || /^\[REDACTED\]$/i.test(text);
+  return !text || /^\[REDACTED\]$/i.test(text);
 }
 
 type ModelMessageCardProps = {
@@ -206,7 +206,7 @@ export const ModelMessageCard = memo(({
                 className="mb-2"
               />
             )}
-            <div className="grid w-full" dir="auto" data-message-content>
+            <div className="grid w-full min-w-0" dir="auto" data-message-content>
               <div
                 style={{ gridArea: '1/1' }}
                 className={cn(
@@ -277,17 +277,18 @@ export const ModelMessageCard = memo(({
   );
 
   function renderContentParts() {
-    const PART_ORDER: Record<string, number> = {
+    const MESSAGE_PART_ORDER: Readonly<Record<MessagePartType, number>> = {
       [MessagePartTypes.REASONING]: 0,
       [MessagePartTypes.TEXT]: 1,
       [MessagePartTypes.TOOL_CALL]: 2,
       [MessagePartTypes.TOOL_RESULT]: 3,
       [MessagePartTypes.FILE]: 4,
       [MessagePartTypes.STEP_START]: 5,
+      [MessagePartTypes.SOURCE_URL]: 6,
+      [MessagePartTypes.SOURCE_DOCUMENT]: 7,
     };
-    const getOrder = (type: string): number => PART_ORDER[type] ?? 6;
     const sortedParts = [...renderableParts].sort((a, b) => {
-      return getOrder(a.type) - getOrder(b.type);
+      return MESSAGE_PART_ORDER[a.type] - MESSAGE_PART_ORDER[b.type];
     });
     return sortedParts.map((part, partIndex) => {
       if (part.type === MessagePartTypes.TEXT) {
@@ -303,7 +304,7 @@ export const ModelMessageCard = memo(({
             : groupAvailableSources;
 
           return (
-            <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`} dir="auto">
+            <div key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`} dir="auto" className="min-w-0 overflow-hidden">
               <CitedMessageContent
                 text={part.text}
                 citations={resolvedCitations}
@@ -321,7 +322,7 @@ export const ModelMessageCard = memo(({
           <div
             key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}
             dir="auto"
-            className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
+            className="min-w-0 overflow-hidden text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
           >
             {skipTransitions
               ? (

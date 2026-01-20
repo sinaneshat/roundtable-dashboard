@@ -13,7 +13,13 @@ import {
   threadFeedbackQueryOptions,
   threadPreSearchesQueryOptions,
 } from '@/lib/data/query-options';
-import type { GetThreadBySlugResponse } from '@/services/api';
+import type {
+  GetThreadBySlugResponse,
+  GetThreadChangelogResponse,
+  GetThreadFeedbackResponse,
+  GetThreadPreSearchesResponse,
+  GetThreadStreamResumptionStateResponse,
+} from '@/services/api';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
   // ✅ ROUTE-LEVEL CACHING: Match TanStack Query staleTime for efficient navigation
@@ -21,11 +27,17 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
   // TanStack Query still manages actual data freshness; this prevents duplicate loader calls
   staleTime: 2 * 60 * 1000, // 2 minutes - matches STALE_TIMES.threadDetail
 
+  // ✅ SKELETON FLASH FIX: Only show pending component after 300ms
+  // During thread creation, cache is pre-populated so navigation is instant
+  // This prevents unnecessary skeleton flash for quick SPA navigations
+  pendingMs: 300,
+
   // Prefetch thread data and stream resumption state for SSR hydration
   // Uses shared queryOptions to ensure consistent caching between server and client
   loader: async ({ params, context }) => {
     const { queryClient } = context;
     const options = threadBySlugQueryOptions(params.slug);
+    const isServer = typeof window === 'undefined';
 
     // ensureQueryData internally checks staleTime and only fetches if data is stale/missing
     // @see https://tanstack.com/router/latest/docs/framework/react/guide/external-data-loading
@@ -36,8 +48,7 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
     const threadId = cachedData?.success && cachedData.data?.thread?.id;
     const threadTitle = cachedData?.success && cachedData.data?.thread?.title ? cachedData.data.thread.title : null;
 
-    // ✅ SSR HYDRATION: Fetch auxiliary data and return directly for immediate SSR access
-    // useQuery doesn't return cached data on first SSR render, so pass via loaderData
+    // Auxiliary data: streamResumption, changelog, feedback, preSearches
     let preSearches;
     let changelog;
     let feedback;
@@ -49,19 +60,45 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
       const feedbackOptions = threadFeedbackQueryOptions(threadId);
       const preSearchesOptions = threadPreSearchesQueryOptions(threadId);
 
-      // Parallel fetch - all queries run concurrently
-      const [streamResult, changelogResult, feedbackResult, preSearchesResult] = await Promise.all([
-        queryClient.ensureQueryData(streamOptions).catch(() => null),
-        queryClient.ensureQueryData(changelogOptions).catch(() => null),
-        queryClient.ensureQueryData(feedbackOptions).catch(() => null),
-        queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
-      ]);
+      if (isServer) {
+        // ✅ SSR: Await all auxiliary data for proper hydration
+        // useQuery doesn't return cached data on first SSR render, so pass via loaderData
+        const [streamResult, changelogResult, feedbackResult, preSearchesResult] = await Promise.all([
+          queryClient.ensureQueryData(streamOptions).catch(() => null),
+          queryClient.ensureQueryData(changelogOptions).catch(() => null),
+          queryClient.ensureQueryData(feedbackOptions).catch(() => null),
+          queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
+        ]);
 
-      // Extract data from results
-      streamResumption = streamResult?.success ? streamResult.data : undefined;
-      changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
-      feedback = feedbackResult?.success ? feedbackResult.data?.feedback : undefined;
-      preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
+        streamResumption = streamResult?.success ? streamResult.data : undefined;
+        changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
+        feedback = feedbackResult?.success ? feedbackResult.data?.feedback : undefined;
+        preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
+      } else {
+        // ✅ SPA NAVIGATION: Use cached data immediately, prefetch missing in background
+        // This makes thread creation navigation instant - no blocking on auxiliary data
+        // Component handles missing data gracefully with ?? operators
+        const cachedStream = queryClient.getQueryData<GetThreadStreamResumptionStateResponse>(streamOptions.queryKey);
+        const cachedChangelog = queryClient.getQueryData<GetThreadChangelogResponse>(changelogOptions.queryKey);
+        const cachedFeedback = queryClient.getQueryData<GetThreadFeedbackResponse>(feedbackOptions.queryKey);
+        const cachedPreSearches = queryClient.getQueryData<GetThreadPreSearchesResponse>(preSearchesOptions.queryKey);
+
+        // Use cached data if available
+        streamResumption = cachedStream?.success ? cachedStream.data : undefined;
+        changelog = cachedChangelog?.success ? cachedChangelog.data?.items : undefined;
+        feedback = cachedFeedback?.success ? cachedFeedback.data?.feedback : undefined;
+        preSearches = cachedPreSearches?.success ? cachedPreSearches.data?.items : undefined;
+
+        // Prefetch missing data in background (non-blocking)
+        if (!cachedStream)
+          queryClient.prefetchQuery(streamOptions);
+        if (!cachedChangelog)
+          queryClient.prefetchQuery(changelogOptions);
+        if (!cachedFeedback)
+          queryClient.prefetchQuery(feedbackOptions);
+        if (!cachedPreSearches)
+          queryClient.prefetchQuery(preSearchesOptions);
+      }
     }
 
     return { threadTitle, threadId, preSearches, changelog, feedback, streamResumption };
@@ -118,10 +155,10 @@ function ChatThreadRoute() {
   // Using useQuery here is redundant and causes unnecessary client-side fetches
   // The loader already ensureQueryData for all auxiliary data, so just use loaderData
   // React Query cache is already hydrated - mutations will invalidate as needed
-  const streamResumptionState = loaderData.streamResumption ?? null;
-  const changelog = loaderData.changelog;
-  const feedback = loaderData.feedback;
-  const preSearches = loaderData.preSearches;
+  const streamResumptionState = loaderData?.streamResumption ?? null;
+  const changelog = loaderData?.changelog;
+  const feedback = loaderData?.feedback;
+  const preSearches = loaderData?.preSearches;
 
   const threadData = queryData?.success ? queryData.data : null;
 
