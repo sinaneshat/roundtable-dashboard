@@ -30,8 +30,17 @@ export const Route = createFileRoute('/auth/error')({
         { property: 'og:description', content: pageDescription },
         { property: 'og:type', content: 'website' },
         { property: 'og:url', content: `${siteUrl}/auth/error` },
+        { property: 'og:site_name', content: 'Roundtable' },
+        // Twitter
+        { name: 'twitter:card', content: 'summary' },
+        { name: 'twitter:site', content: '@roundtablenow' },
+        { name: 'twitter:title', content: pageTitle },
+        { name: 'twitter:description', content: pageDescription },
         // SEO - don't index error pages
         { name: 'robots', content: 'noindex, nofollow' },
+      ],
+      links: [
+        { rel: 'canonical', href: `${siteUrl}/auth/error` },
       ],
     };
   },

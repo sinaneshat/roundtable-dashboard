@@ -7,9 +7,9 @@ import {
   ChatSidebarPaginationSkeleton,
   SidebarThreadSkeletons,
 } from '@/components/chat/chat-sidebar-skeleton';
-import { CommandSearch } from '@/components/chat/command-search';
+import type { CommandSearchProps } from '@/components/chat/command-search';
 import { NavUser } from '@/components/chat/nav-user';
-import { ShareDialog } from '@/components/chat/share-dialog';
+import type { ShareDialogProps } from '@/components/chat/share-dialog';
 import { Icons } from '@/components/icons';
 import Image from '@/components/ui/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -33,8 +33,19 @@ import { useSidebarThreadsQuery, useThreadQuery } from '@/hooks/queries';
 import type { Session, User } from '@/lib/auth/types';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
+import dynamic from '@/lib/utils/dynamic';
 import type { ChatSidebarItem } from '@/services/api';
 import { useNavigationReset } from '@/stores/chat';
+
+const ShareDialog = dynamic<ShareDialogProps>(
+  () => import('@/components/chat/share-dialog').then(m => ({ default: m.ShareDialog })),
+  { ssr: false },
+);
+
+const CommandSearch = dynamic<CommandSearchProps>(
+  () => import('@/components/chat/command-search').then(m => ({ default: m.CommandSearch })),
+  { ssr: false },
+);
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
   /** Server-side session for hydration - prevents mismatch */
@@ -190,7 +201,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                   height={24}
                 />
               </Link>
-              <SidebarTrigger className="size-9 shrink-0" />
+              <SidebarTrigger className="min-h-11 min-w-11 shrink-0" />
             </div>
 
             <div className="hidden h-10 mb-2 group-data-[collapsible=icon]:flex items-center justify-center relative">
@@ -209,7 +220,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                 />
               </Link>
               <SidebarTrigger
-                className="size-10 absolute opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                className="min-h-11 min-w-11 absolute opacity-0 group-hover:opacity-100 transition-opacity duration-150"
                 iconClassName="size-4"
               />
             </div>

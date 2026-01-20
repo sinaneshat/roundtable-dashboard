@@ -61,7 +61,7 @@ function CodeBlockComponent({
     <CodeBlockContext value={contextValue}>
       <div
         className={cn(
-          'group relative min-w-0 w-full overflow-hidden rounded-2xl border bg-background text-foreground',
+          'group relative min-w-0 w-full rounded-2xl border bg-background text-foreground',
           className,
         )}
         {...props}
@@ -159,6 +159,7 @@ export function CodeBlockCopyButton({
       onClick={copyToClipboard}
       size="icon"
       variant="ghost"
+      aria-label={isCopied ? 'Copied' : 'Copy code'}
       {...props}
     >
       {children ?? <Icon size={14} />}

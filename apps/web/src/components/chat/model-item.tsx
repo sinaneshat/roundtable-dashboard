@@ -135,7 +135,7 @@ export function ModelItem({
       )}
       <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden">
         <Avatar className="size-8 sm:size-10 shrink-0">
-          <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
+          <AvatarImage src={getProviderIcon(model.provider)} alt={`${model.name} provider icon`} />
           <AvatarFallback className="text-[10px] sm:text-xs">
             {model.name.slice(0, 2).toUpperCase()}
           </AvatarFallback>

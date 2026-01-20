@@ -121,7 +121,7 @@ function NavigationHeaderComponent({
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden size-10 shrink-0"
+              className="md:hidden min-h-11 min-w-11 shrink-0"
               onClick={() => sidebarContext.setOpenMobile(true)}
               aria-label={t('accessibility.openSidebar')}
             >
@@ -220,7 +220,7 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
           <Button
             variant="ghost"
             size="icon"
-            className="size-10 shrink-0"
+            className="min-h-11 min-w-11 shrink-0"
             onClick={() => sidebarContext.setOpenMobile(true)}
             aria-label={t('accessibility.openSidebar')}
           >

@@ -77,7 +77,7 @@ export function WebSearchResultItem({
             {faviconSrc && (
               <AvatarImage
                 src={faviconSrc}
-                alt={cleanDomain}
+                alt={`${cleanDomain} favicon`}
                 onError={e => handleImageError(e, () => {
                   if (!faviconError.value) {
                     faviconError.onTrue();

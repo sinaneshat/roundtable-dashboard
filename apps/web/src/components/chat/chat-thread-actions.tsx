@@ -2,9 +2,9 @@ import { ComponentSizes, ComponentVariants, MessageStatuses } from '@roundtable/
 import { useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
-import { ChatRenameDialog } from '@/components/chat/chat-rename-dialog';
+import type { ChatRenameDialogProps } from '@/components/chat/chat-rename-dialog';
 import { ChatThreadMenuItems } from '@/components/chat/chat-thread-menu-items';
-import { ShareDialog } from '@/components/chat/share-dialog';
+import type { ShareDialogProps } from '@/components/chat/share-dialog';
 import { SocialShareButton } from '@/components/chat/social-share-button';
 import { Icons } from '@/components/icons';
 import { useChatStore } from '@/components/providers';
@@ -25,7 +25,18 @@ import { useThreadQuery } from '@/hooks/queries';
 import { useMediaQuery } from '@/hooks/utils';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
+import dynamic from '@/lib/utils/dynamic';
 import type { ChatThread, ChatThreadFlexible } from '@/services/api';
+
+const ShareDialog = dynamic<ShareDialogProps>(
+  () => import('@/components/chat/share-dialog').then(m => ({ default: m.ShareDialog })),
+  { ssr: false },
+);
+
+const ChatRenameDialog = dynamic<ChatRenameDialogProps>(
+  () => import('@/components/chat/chat-rename-dialog').then(m => ({ default: m.ChatRenameDialog })),
+  { ssr: false },
+);
 
 type ChatThreadActionsProps = {
   thread: ChatThread | ChatThreadFlexible;
@@ -178,7 +189,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                 variant={ComponentVariants.GHOST}
                 size={ComponentSizes.ICON}
                 aria-label={t('chat.moreOptions')}
-                className="size-9"
+                className="min-h-11 min-w-11"
                 disabled={isBusy}
               >
                 <Icons.moreHorizontal className="size-4" />
@@ -233,7 +244,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
               variant={ComponentVariants.GHOST}
               size={ComponentSizes.ICON}
               aria-label={t('moreOptions')}
-              className="size-9"
+              className="min-h-11 min-w-11"
               disabled={isBusy}
             >
               <Icons.moreVertical className="size-4" />

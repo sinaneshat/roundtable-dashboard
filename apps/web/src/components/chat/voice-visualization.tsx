@@ -64,6 +64,7 @@ export function VoiceVisualization({
                 repeat: Number.POSITIVE_INFINITY,
                 ease: 'easeInOut',
               }}
+              aria-hidden="true"
             >
               <Icons.mic className="size-3.5 text-blue-500" />
             </motion.div>

@@ -67,7 +67,7 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
             <Icons.lock className="w-8 h-8 text-destructive" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold">{t('chat.public.threadNotFound')}</h2>
+            <h1 className="text-2xl font-bold">{t('chat.public.threadNotFound')}</h1>
             <p className="text-muted-foreground">
               {t('chat.public.threadNotFoundDescription')}
             </p>
@@ -88,7 +88,7 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
             <Icons.lock className="w-8 h-8 text-destructive" />
           </div>
           <div className="space-y-2">
-            <h2 className="text-2xl font-bold">{t('chat.public.privateChat')}</h2>
+            <h1 className="text-2xl font-bold">{t('chat.public.privateChat')}</h1>
             <p className="text-muted-foreground">
               {t('chat.public.privateChatDescription')}
             </p>
@@ -108,6 +108,7 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
           id="public-chat-scroll-container"
           className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 sm:pt-20 pb-16"
         >
+          <h1 className="sr-only">{thread.title || t('chat.public.sharedConversation')}</h1>
           {timeline.length === 0
             ? (
                 <div className="flex items-center justify-center min-h-[50vh]">
@@ -116,7 +117,7 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
                       <Icons.sparkles className="w-7 h-7 sm:w-8 sm:h-8 text-muted-foreground" />
                     </div>
                     <div className="space-y-2">
-                      <h3 className="text-base sm:text-lg font-semibold">{t('chat.public.noMessagesYet')}</h3>
+                      <h2 className="text-base sm:text-lg font-semibold">{t('chat.public.noMessagesYet')}</h2>
                       <p className="text-sm text-muted-foreground">
                         {t('chat.public.noMessagesDescription')}
                       </p>

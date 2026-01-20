@@ -172,7 +172,7 @@ export function PublicPricingScreen() {
         <div className="flex-1 overflow-y-auto flex items-center justify-center">
           <div className="text-center px-4">
             <Icons.alertCircle className="size-12 mx-auto text-destructive mb-4" />
-            <h2 className="text-xl font-semibold mb-2">{t('pricing.error.title')}</h2>
+            <h1 className="text-xl font-semibold mb-2">{t('pricing.error.title')}</h1>
             <p className="text-muted-foreground mb-6">{t('pricing.error.description')}</p>
             <Button asChild>
               <Link to="/">{t('common.backToHome')}</Link>
@@ -194,6 +194,7 @@ export function PublicPricingScreen() {
       <ChatPage className="h-full min-h-[calc(100vh-4rem)]">
         <div className="flex-1 flex items-center justify-center min-h-[calc(100vh-8rem)]">
           <div className="w-full max-w-md mx-auto px-4 py-8">
+            <h1 className="sr-only">{t('pricing.pageTitle')}</h1>
             {product && price && (
               <PricingCard
                 key={product.id}

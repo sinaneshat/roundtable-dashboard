@@ -5,6 +5,7 @@ import { useMemo } from 'react';
 import { ThreadContentSkeleton } from '@/components/skeletons';
 import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
 import { useSession } from '@/lib/auth/client';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 import {
   streamResumptionQueryOptions,
   threadBySlugQueryOptions,
@@ -66,14 +67,31 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
     return { threadTitle, threadId, preSearches, changelog, feedback, streamResumption };
   },
   // Dynamic title from loader data
-  head: ({ loaderData }) => {
+  head: ({ loaderData, params }) => {
+    const siteUrl = getAppBaseUrl();
     const displayTitle = loaderData?.threadTitle
       ? `${loaderData.threadTitle} - Roundtable`
       : 'Chat - Roundtable';
+    const displayDescription = loaderData?.threadTitle
+      ? `View conversation: ${loaderData.threadTitle}`
+      : 'View your AI conversation with multiple models.';
     return {
       meta: [
         { title: displayTitle },
+        { name: 'description', content: displayDescription },
         { name: 'robots', content: 'noindex, nofollow' },
+        { property: 'og:title', content: displayTitle },
+        { property: 'og:description', content: displayDescription },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:url', content: `${siteUrl}/chat/${params.slug}` },
+        { property: 'og:site_name', content: 'Roundtable' },
+        { name: 'twitter:card', content: 'summary' },
+        { name: 'twitter:site', content: '@roundtablenow' },
+        { name: 'twitter:title', content: displayTitle },
+        { name: 'twitter:description', content: displayDescription },
+      ],
+      links: [
+        { rel: 'canonical', href: `${siteUrl}/chat/${params.slug}` },
       ],
     };
   },

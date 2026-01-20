@@ -5,6 +5,7 @@ import { z } from 'zod';
 
 import { BillingFailureSkeleton } from '@/components/billing/billing-failure-skeleton';
 import { BillingFailureClient } from '@/containers/screens/chat/billing/BillingFailureClient';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 // TanStack Router search params validation schema
 const billingFailureSearchSchema = z.object({
@@ -23,13 +24,28 @@ export const Route = createFileRoute('/_protected/chat/billing/failure')({
   pendingComponent: BillingFailureSkeleton,
   validateSearch: billingFailureSearchSchema,
   ssr: false,
-  head: () => ({
-    meta: [
-      { title: pageTitle },
-      { name: 'description', content: pageDescription },
-      { name: 'robots', content: 'noindex, nofollow' },
-    ],
-  }),
+  head: () => {
+    const siteUrl = getAppBaseUrl();
+    return {
+      meta: [
+        { title: pageTitle },
+        { name: 'description', content: pageDescription },
+        { name: 'robots', content: 'noindex, nofollow' },
+        { property: 'og:title', content: pageTitle },
+        { property: 'og:description', content: pageDescription },
+        { property: 'og:type', content: 'website' },
+        { property: 'og:url', content: `${siteUrl}/chat/billing/failure` },
+        { property: 'og:site_name', content: 'Roundtable' },
+        { name: 'twitter:card', content: 'summary' },
+        { name: 'twitter:site', content: '@roundtablenow' },
+        { name: 'twitter:title', content: pageTitle },
+        { name: 'twitter:description', content: pageDescription },
+      ],
+      links: [
+        { rel: 'canonical', href: `${siteUrl}/chat/billing/failure` },
+      ],
+    };
+  },
 });
 
 function BillingFailurePage() {

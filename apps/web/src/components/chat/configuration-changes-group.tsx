@@ -202,7 +202,7 @@ function ChangeItem({ change, isReadOnly }: ChangeItemProps) {
           )}
         >
           <Avatar className="size-4 sm:size-5 shrink-0">
-            <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
+            <AvatarImage src={getProviderIcon(model.provider)} alt={`${model.name} provider icon`} />
             <AvatarFallback className="text-[8px] sm:text-[10px]">
               {model.name.slice(0, 2).toUpperCase()}
             </AvatarFallback>
@@ -233,7 +233,7 @@ function ChangeItem({ change, isReadOnly }: ChangeItemProps) {
           )}
         >
           <Avatar className="size-4 sm:size-5 shrink-0">
-            <AvatarImage src={getProviderIcon(model.provider)} alt={model.name} />
+            <AvatarImage src={getProviderIcon(model.provider)} alt={`${model.name} provider icon`} />
             <AvatarFallback className="text-[8px] sm:text-[10px]">
               {model.name.slice(0, 2).toUpperCase()}
             </AvatarFallback>

@@ -154,3 +154,5 @@ export function ChatRenameDialog({
     </Dialog>
   );
 }
+
+export type { ChatRenameDialogProps };

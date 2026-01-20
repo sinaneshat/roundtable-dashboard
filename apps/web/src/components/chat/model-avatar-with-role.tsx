@@ -40,7 +40,7 @@ export function ModelAvatarWithRole({
       <Avatar className={cn(sizeMetadata.container, 'bg-card')}>
         <AvatarImage
           src={getProviderIcon(model.provider)}
-          alt={model.name}
+          alt={`${model.name} provider icon`}
           className={cn('object-contain p-1', isIncompatible && 'grayscale')}
         />
         <AvatarFallback className={cn(sizeMetadata.text, 'bg-card font-semibold')}>

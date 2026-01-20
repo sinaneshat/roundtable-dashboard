@@ -89,7 +89,7 @@ function ToastClose({
     <ToastPrimitives.Close
       data-slot="toast-close"
       className={cn(
-        'absolute end-2 top-2 rounded-full p-1 text-foreground/50 transition-opacity hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
+        'absolute end-2 top-2 rounded-full min-h-11 min-w-11 flex items-center justify-center text-foreground/50 transition-opacity hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         'md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100',
         'group-[.destructive]:text-destructive-foreground/80 group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus-visible:ring-destructive group-[.destructive]:focus-visible:ring-offset-destructive',
         className,

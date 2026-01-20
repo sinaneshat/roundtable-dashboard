@@ -136,9 +136,10 @@ function WebSearchDisplayComponent({
                       href={successfulResults[index]?.url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="hover:underline"
+                      className="hover:underline inline-flex items-center gap-1"
                     >
-                      {domain}
+                      <span>{domain}</span>
+                      <Icons.externalLink className="size-3 opacity-60" aria-hidden="true" />
                     </a>
                   </ChainOfThoughtSearchResult>
                 ))}

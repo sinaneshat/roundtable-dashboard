@@ -564,8 +564,11 @@
     "searchChatsDescription": "Search and navigate through your chat conversations",
     "share": "Share",
     "shareDialog": {
+      "copied": "Copied",
+      "copyLink": "Copy link",
       "copyLinkLabel": "Copy link",
       "generatingPreview": "Generating preview...",
+      "openInNewTab": "Open in new tab",
       "previewUnavailable": "Preview unavailable",
       "publicStatus": "Public"
     },

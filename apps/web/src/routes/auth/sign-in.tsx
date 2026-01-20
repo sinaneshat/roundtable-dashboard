@@ -56,6 +56,7 @@ export const Route = createFileRoute('/auth/sign-in')({
         { property: 'og:site_name', content: 'Roundtable' },
         // Twitter Card
         { name: 'twitter:card', content: 'summary_large_image' },
+        { name: 'twitter:site', content: '@roundtablenow' },
         { name: 'twitter:title', content: pageTitle },
         { name: 'twitter:description', content: pageDescription },
         { name: 'twitter:image', content: `${siteUrl}/static/og-image.png` },

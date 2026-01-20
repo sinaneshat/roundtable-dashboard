@@ -213,6 +213,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
+            aria-label={t('chat.searchChats')}
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
@@ -221,7 +222,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
           <button
             type="button"
             onClick={handleClose}
-            className="size-9 shrink-0 flex items-center justify-center hover:bg-white/[0.07] rounded-full transition-colors"
+            className="min-h-11 min-w-11 shrink-0 flex items-center justify-center hover:bg-white/[0.07] rounded-full transition-colors"
             aria-label={t('actions.close')}
           >
             <Icons.x className="size-5 text-muted-foreground" />
@@ -284,3 +285,5 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     </Dialog>
   );
 }
+
+export type { CommandSearchProps };

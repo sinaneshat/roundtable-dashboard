@@ -57,6 +57,7 @@ export const PresetNameForm = memo(({
         value={name}
         onChange={e => setName(e.target.value)}
         placeholder={t('chat.models.presets.namePlaceholder')}
+        aria-label={t('chat.models.presets.namePlaceholder')}
         disabled={isPending}
         className="h-8 w-28 sm:w-40 text-sm"
         onKeyDown={handleKeyDown}

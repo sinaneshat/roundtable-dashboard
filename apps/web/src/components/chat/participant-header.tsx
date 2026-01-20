@@ -30,7 +30,7 @@ export const ParticipantHeader = memo(({
   return (
     <div className="flex items-center gap-3 mb-6">
       <Avatar className="size-8 drop-shadow-[0_0_12px_hsl(var(--muted-foreground)/0.3)]">
-        <AvatarImage src={avatarSrc} alt={avatarName} className="object-contain p-0.5" />
+        <AvatarImage src={avatarSrc} alt={`${avatarName} avatar`} className="object-contain p-0.5" />
         <AvatarFallback className="text-[8px] bg-muted">
           {avatarName?.slice(0, 2).toUpperCase()}
         </AvatarFallback>

@@ -60,7 +60,7 @@ function AvatarGroupComponent({
             >
               <AvatarImage
                 src={getProviderIcon(model.provider)}
-                alt={model.name}
+                alt={`${model.name} provider icon`}
                 className="object-contain p-0.5 relative z-10"
               />
               <AvatarFallback className={cn(sizeMetadata.text, 'bg-card font-semibold relative z-10')}>

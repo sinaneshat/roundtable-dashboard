@@ -336,11 +336,14 @@ export const ChatInput = memo(({
                       variant={isListening ? ComponentVariants.DEFAULT : ComponentVariants.GHOST}
                       onClick={toggleSpeech}
                       disabled={isMicDisabled && !isListening}
+                      aria-label={isListening
+                        ? t('chat.toolbar.tooltips.stopRecording')
+                        : t('chat.toolbar.tooltips.microphone')}
                       title={isListening
                         ? t('chat.toolbar.tooltips.stopRecording')
                         : t('chat.toolbar.tooltips.microphone')}
                       className={cn(
-                        'size-8 sm:size-9 shrink-0 rounded-full',
+                        'min-h-11 min-w-11 shrink-0 rounded-full',
                         isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',
                       )}
                     >
@@ -355,7 +358,7 @@ export const ChatInput = memo(({
                           variant={ComponentVariants.WHITE}
                           size={ComponentSizes.ICON}
                           onClick={onStop}
-                          className="size-9 sm:size-10 shrink-0 touch-manipulation active:scale-95 transition-transform"
+                          className="min-h-11 min-w-11 shrink-0 touch-manipulation active:scale-95 transition-transform"
                           aria-label={t('chat.input.stopStreaming')}
                         >
                           <Icons.square className="size-4 sm:size-5" />
@@ -367,7 +370,7 @@ export const ChatInput = memo(({
                           variant={ComponentVariants.WHITE}
                           size={ComponentSizes.ICON}
                           disabled={isSubmitDisabled || !hasValidInput}
-                          className="size-9 sm:size-10 shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 disabled:bg-white/20 disabled:text-white/40"
+                          className="min-h-11 min-w-11 shrink-0 touch-manipulation active:scale-95 transition-transform disabled:active:scale-100 disabled:bg-white/20 disabled:text-white/40"
                           aria-label={isSubmitting ? t('chat.input.submitting') : t('chat.input.send')}
                         >
                           {isSubmitting

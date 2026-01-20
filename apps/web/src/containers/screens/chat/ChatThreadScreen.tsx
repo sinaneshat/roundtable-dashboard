@@ -363,6 +363,7 @@ export default function ChatThreadScreen({
 
   return (
     <>
+      <h1 className="sr-only">{thread.title || t('chat.thread.conversationTitle')}</h1>
       <ChatView
         user={user}
         slug={slug}

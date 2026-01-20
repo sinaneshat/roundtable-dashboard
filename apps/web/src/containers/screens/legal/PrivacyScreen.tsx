@@ -7,7 +7,6 @@ import {
   CardContent,
   CardDescription,
   CardHeader,
-  CardTitle,
 } from '@/components/ui/card';
 import { useTranslations } from '@/lib/i18n';
 
@@ -38,7 +37,7 @@ export default function PrivacyScreen() {
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-3xl">{t('legal.privacy.title')}</CardTitle>
+          <h1 className="text-3xl font-semibold mb-2">{t('legal.privacy.title')}</h1>
           <CardDescription>
             {t('legal.privacy.lastUpdated', { date: '2024-01-01' })}
           </CardDescription>

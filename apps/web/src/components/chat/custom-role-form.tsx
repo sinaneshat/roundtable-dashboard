@@ -63,6 +63,7 @@ export const CustomRoleForm = memo(({
                   onChange={field.onChange}
                   onBlur={field.onBlur}
                   placeholder={t('chat.models.modal.customRolePlaceholder')}
+                  aria-label={t('chat.models.modal.customRolePlaceholder')}
                   disabled={isPending || disabled}
                   className="h-8 text-sm"
                 />

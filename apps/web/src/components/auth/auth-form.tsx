@@ -152,7 +152,7 @@ function AuthFormContent() {
               >
                 <RHFTextField
                   name="email"
-                  title=""
+                  title={t('auth.email')}
                   placeholder={t('auth.emailPlaceholder')}
                   fieldType="email"
                   required

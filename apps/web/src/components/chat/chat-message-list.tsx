@@ -289,7 +289,7 @@ function AssistantGroupCard({
                                 className="text-primary hover:underline flex items-center gap-1"
                               >
                                 <span>{('title' in sourcePart && typeof sourcePart.title === 'string' ? sourcePart.title : null) || sourcePart.url}</span>
-                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <svg className="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" aria-hidden="true">
                                   <path
                                     strokeLinecap="round"
                                     strokeLinejoin="round"

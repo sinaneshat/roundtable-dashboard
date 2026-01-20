@@ -70,6 +70,7 @@ export const Route = createFileRoute('/public/chat/$slug')({
         { property: 'og:site_name', content: 'Roundtable' },
         // Twitter Card
         { name: 'twitter:card', content: 'summary_large_image' },
+        { name: 'twitter:site', content: '@roundtablenow' },
         { name: 'twitter:title', content: title },
         { name: 'twitter:description', content: description },
         { name: 'twitter:image', content: ogImageUrl },

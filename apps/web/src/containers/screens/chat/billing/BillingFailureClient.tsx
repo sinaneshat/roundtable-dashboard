@@ -109,7 +109,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
 
         <StaggerItem className="w-full text-left">
           <div className="rounded-lg border bg-card p-4 text-sm">
-            <h3 className="mb-2 font-semibold">{t('billing.failure.commonReasons.title')}</h3>
+            <h2 className="mb-2 font-semibold">{t('billing.failure.commonReasons.title')}</h2>
             <ul className="space-y-1 text-muted-foreground">
               <li>
                 •
@@ -136,7 +136,7 @@ export function BillingFailureClient({ failureData }: BillingFailureClientProps)
             <div className="flex items-start gap-3">
               <Icons.mail className="mt-0.5 size-5 text-muted-foreground" />
               <div className="text-left text-sm">
-                <h3 className="mb-1 font-semibold">{t('billing.failure.support.title')}</h3>
+                <h2 className="mb-1 font-semibold">{t('billing.failure.support.title')}</h2>
                 <p className="mb-2 text-muted-foreground">
                   {t('billing.failure.support.description')}
                 </p>

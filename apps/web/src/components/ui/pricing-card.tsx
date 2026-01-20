@@ -139,9 +139,9 @@ export function PricingCard({
               transition={{ delay: delay + 0.1, duration: 0.4 }}
               className="text-center"
             >
-              <h3 className="text-lg font-medium tracking-tight text-muted-foreground">
+              <h2 className="text-lg font-medium tracking-tight text-muted-foreground">
                 {name}
-              </h3>
+              </h2>
             </motion.div>
 
             <motion.div

@@ -76,7 +76,7 @@ export function ChatScrollButton({
           variant="outline"
           size="icon"
           className={cn(
-            'size-9 rounded-full shadow-md',
+            'min-h-11 min-w-11 rounded-full shadow-md',
             'bg-background/95 backdrop-blur-sm',
             'border-border/50',
             'hover:bg-accent hover:text-accent-foreground',
@@ -98,7 +98,7 @@ export function ChatScrollButton({
         variant="ghost"
         size="icon"
         className={cn(
-          'size-9',
+          'min-h-11 min-w-11',
           'hover:bg-accent hover:text-accent-foreground',
           'transition-all duration-200',
           className,

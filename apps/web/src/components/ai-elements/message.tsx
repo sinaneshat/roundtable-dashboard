@@ -80,7 +80,7 @@ export function MessageAvatar({
 }: MessageAvatarProps) {
   return (
     <Avatar className={cn('size-8', className)} {...props}>
-      <AvatarImage alt={name || 'Avatar'} className="mt-0 mb-0" src={src} />
+      <AvatarImage alt={name ? `${name} avatar` : 'User avatar'} className="mt-0 mb-0" src={src} />
       <AvatarFallback>{name?.slice(0, 2) || 'ME'}</AvatarFallback>
     </Avatar>
   );

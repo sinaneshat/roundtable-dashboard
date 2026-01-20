@@ -161,7 +161,7 @@ export const ChatInputToolbarMenu = memo(({
                   disabled={disabled || !enableAttachments}
                   onClick={handleAttachClick}
                   className={cn(
-                    'size-9 hover:bg-white/15',
+                    'min-h-11 min-w-11 hover:bg-white/15',
                     attachmentCount > 0 && 'border-primary/50 bg-primary/10 text-primary hover:bg-primary/20',
                   )}
                 >
@@ -191,7 +191,7 @@ export const ChatInputToolbarMenu = memo(({
                   aria-pressed={enableWebSearch}
                   data-testid="web-search-toggle"
                   className={cn(
-                    'size-9 transition-colors hover:bg-white/15',
+                    'min-h-11 min-w-11 transition-colors hover:bg-white/15',
                     enableWebSearch
                       ? 'border-blue-500/40 bg-blue-500/20 text-blue-300 hover:bg-blue-500/25'
                       : 'text-muted-foreground hover:text-foreground',
@@ -223,7 +223,8 @@ export const ChatInputToolbarMenu = memo(({
             variant={ComponentVariants.GLASS}
             size={ComponentSizes.ICON}
             disabled={disabled}
-            className="size-9"
+            className="min-h-11 min-w-11"
+            aria-label={t('moreOptions')}
           >
             <Icons.moreHorizontal className="size-4" />
           </Button>
