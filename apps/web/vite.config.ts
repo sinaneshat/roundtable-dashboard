@@ -180,9 +180,11 @@ export default defineConfig({
     '__APP_VERSION__': JSON.stringify(APP_VERSION),
   },
   // Strip console.* and debugger in production builds
+  // CRITICAL: keepNames: false prevents __name helper injection that breaks Cloudflare SSR hydration
   esbuild: isProd
     ? {
         drop: ['console', 'debugger'],
+        keepNames: false,
       }
-    : undefined,
+    : { keepNames: false },
 });
