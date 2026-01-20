@@ -374,6 +374,7 @@ export const DataActionsSchema = z.object({
   setPendingMessage: z.custom<SetPendingMessage>(),
   setPendingAttachmentIds: z.custom<SetPendingAttachmentIds>(),
   setExpectedParticipantIds: z.custom<SetExpectedParticipantIds>(),
+  batchUpdatePendingState: z.custom<(pendingMessage: string | null, expectedParticipantIds: string[] | null) => void>(),
   setStreamingRoundNumber: z.custom<SetStreamingRoundNumber>(),
   setCurrentRoundNumber: z.custom<SetCurrentRoundNumber>(),
   setConfigChangeRoundNumber: z.custom<SetConfigChangeRoundNumber>(),

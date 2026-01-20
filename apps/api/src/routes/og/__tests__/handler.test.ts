@@ -159,7 +159,6 @@ describe('oG Image Handler', () => {
       // CRITICAL: Without this, browsers block cross-origin <img> loading
       // The ShareDialog loads OG preview from API origin (different port in dev)
       // secureHeaders middleware must allow cross-origin resource policy
-      const expectedHeader = 'Cross-Origin-Resource-Policy';
       const expectedValue = 'cross-origin';
 
       // Verify the expected header value - 'same-origin' would BREAK cross-origin loading
@@ -194,7 +193,7 @@ describe('oG Image Handler', () => {
       // 2. Return Access-Control-Allow-Origin: * for all origins
       // 3. Disable credentials (required for * origin)
       const corsConfig = {
-        pathMatch: "path.includes('/og/')",
+        pathMatch: 'path.includes(\'/og/\')',
         origin: '*',
         credentials: false,
         reason: 'OG images are public assets that must be loadable from any origin',

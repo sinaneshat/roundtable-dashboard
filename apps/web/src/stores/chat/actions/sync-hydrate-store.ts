@@ -14,7 +14,7 @@ import { useLayoutEffect, useRef } from 'react';
 
 import { useChatStoreApi } from '@/components/providers/chat-store-provider/context';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant, ChatThread, RoundFeedbackData, StoredPreSearch, ThreadStreamResumptionState } from '@/services/api';
+import type { ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/services/api';
 
 export type SyncHydrateOptions = {
   mode: ScreenMode;
@@ -23,10 +23,6 @@ export type SyncHydrateOptions = {
   initialMessages?: UIMessage[];
   chatMode?: ChatMode | null;
   streamResumptionState?: ThreadStreamResumptionState | null;
-  /** Pre-search data prefetched on server for SSR hydration */
-  initialPreSearches?: StoredPreSearch[];
-  /** Feedback data prefetched on server for SSR hydration */
-  initialFeedback?: RoundFeedbackData[];
 };
 
 /**
@@ -47,8 +43,6 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     participants = [],
     initialMessages = [],
     streamResumptionState,
-    initialPreSearches,
-    initialFeedback,
   } = options;
 
   const storeApi = useChatStoreApi();
@@ -64,9 +58,19 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     const currentThreadId = state.thread?.id || state.createdThreadId;
     const isSameThread = threadId && currentThreadId === threadId;
     const isInitialized = state.hasInitiallyLoaded;
+    const storeMessages = state.messages || [];
 
     // Skip if already initialized for this thread
     if (isInitialized && isSameThread) {
+      return;
+    }
+
+    // ✅ CRITICAL FIX: Skip if store already has MORE messages than SSR data
+    // This prevents re-initialization with stale SSR data after navigation/remount
+    const storeHasMoreData = isSameThread && storeMessages.length > initialMessages.length;
+    if (storeHasMoreData) {
+      rlog.init('sync-hydrate', `skip: store has more data (store=${storeMessages.length} > ssr=${initialMessages.length})`);
+      hasHydrated.current = true;
       return;
     }
 
@@ -112,22 +116,8 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     // Initialize thread with SSR data
     state.initializeThread(thread, participants, initialMessages);
 
-    // ✅ SSR HYDRATION: Initialize pre-searches from server data
-    // This prevents client-side fetch for data already available from SSR
-    if (initialPreSearches && initialPreSearches.length > 0) {
-      state.setPreSearches(initialPreSearches);
-      rlog.init('sync-hydrate', `hydrated preSearches count=${initialPreSearches.length}`);
-    }
-
-    // ✅ SSR HYDRATION: Initialize feedback from server data
-    // This prevents client-side fetch for data already available from SSR
-    if (initialFeedback && initialFeedback.length > 0) {
-      state.loadFeedbackFromServer(initialFeedback);
-      rlog.init('sync-hydrate', `hydrated feedback count=${initialFeedback.length}`);
-    }
-
     hasHydrated.current = true;
-  }, [storeApi, mode, thread, threadId, participants, initialMessages, streamResumptionState, initialPreSearches, initialFeedback]);
+  }, [storeApi, mode, thread, threadId, participants, initialMessages, streamResumptionState]);
 
   // Reset hydration flag when thread changes
   useLayoutEffect(() => {

@@ -29,7 +29,7 @@ import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { getEnabledSortedParticipants, getParticipantIndex, getRoundNumber, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant, ChatThread, PreSearchQuery, PreSearchResult, RoundFeedbackData, StoredPreSearch, WebSearchResultItem } from '@/services/api';
+import type { ChatParticipant, ChatThread, PreSearchQuery, PreSearchResult, StoredPreSearch, WebSearchResultItem } from '@/services/api';
 
 import type { SendMessage, StartRound } from './store-action-types';
 import { isUpsertOptions } from './store-action-types';
@@ -167,11 +167,12 @@ const createFeedbackSlice: SliceCreator<FeedbackSlice> = set => ({
     }, false, 'feedback/setFeedback'),
   setPendingFeedback: feedback =>
     set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
-  loadFeedbackFromServer: (data: RoundFeedbackData[]) => {
+  loadFeedbackFromServer: (data) => {
     set({
-      feedbackByRound: new Map<number, FeedbackType | null>(
-        data.map(f => [f.roundNumber, f.feedbackType]),
-      ),
+      feedbackByRound: new Map(data.map((f) => {
+        const feedback = f as { roundNumber: number; feedbackType: FeedbackType | null };
+        return [feedback.roundNumber, feedback.feedbackType];
+      })),
       hasLoadedFeedback: true,
     }, false, 'feedback/loadFeedbackFromServer');
   },
@@ -329,10 +330,7 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
       ...(shouldSyncFormValues
         ? {
             enableWebSearch: thread.enableWebSearch,
-            selectedMode: (() => {
-              const result = ChatModeSchema.safeParse(thread.mode);
-              return result.success ? result.data : DEFAULT_CHAT_MODE;
-            })(),
+            selectedMode: ChatModeSchema.catch(DEFAULT_CHAT_MODE).parse(thread.mode),
           }
         : {}),
     }, false, 'thread/setThread');
@@ -573,24 +571,26 @@ const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
     set({ isPatchInProgress: value }, false, 'flags/setIsPatchInProgress'),
 });
 
-const createDataSlice: SliceCreator<DataSlice> = (set, get) => ({
+const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({
   ...DATA_DEFAULTS,
 
   setRegeneratingRoundNumber: (value: number | null) =>
     set({ regeneratingRoundNumber: value }, false, 'data/setRegeneratingRoundNumber'),
-  setPendingMessage: (value: string | null) =>
-    set({ pendingMessage: value }, false, 'data/setPendingMessage'),
+  setPendingMessage: (value: string | null) => {
+    rlog.msg('setPendingMsg', `${value === null ? 'CLEAR' : `SET="${value.slice(0, 20)}..."`}`);
+    set({ pendingMessage: value }, false, 'data/setPendingMessage');
+  },
   setPendingAttachmentIds: (value: string[] | null) =>
     set({ pendingAttachmentIds: value }, false, 'data/setPendingAttachmentIds'),
   setExpectedParticipantIds: (value: string[] | null) =>
     set({ expectedParticipantIds: value }, false, 'data/setExpectedParticipantIds'),
-  setStreamingRoundNumber: (value: number | null) => {
-    const prev = get().streamingRoundNumber;
-    if (prev !== value) {
-      rlog.msg('roundNum', `${prev ?? '-'} -> ${value ?? '-'}`);
-    }
-    set({ streamingRoundNumber: value }, false, 'data/setStreamingRoundNumber');
+  // ✅ PERF: Batch update pending state to prevent multiple re-renders
+  batchUpdatePendingState: (pendingMessage: string | null, expectedParticipantIds: string[] | null) => {
+    rlog.msg('batchPending', `msg=${pendingMessage === null ? 'null' : 'set'} expected=${expectedParticipantIds === null ? 'null' : 'set'}`);
+    set({ pendingMessage, expectedParticipantIds }, false, 'data/batchUpdatePendingState');
   },
+  setStreamingRoundNumber: (value: number | null) =>
+    set({ streamingRoundNumber: value }, false, 'data/setStreamingRoundNumber'),
   setCurrentRoundNumber: (value: number | null) =>
     set({ currentRoundNumber: value }, false, 'data/setCurrentRoundNumber'),
   setConfigChangeRoundNumber: (value: number | null) =>
@@ -831,10 +831,7 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     }, false, 'streamResumption/setCurrentResumptionPhase'),
 
   prefillStreamResumptionState: (threadId, serverState) => {
-    // ✅ DEBUG: Log current store state BEFORE prefill
-    const prePrefillState = get();
     rlog.phase('prefill', `t=${threadId.slice(-8)} phase=${serverState.currentPhase} r${serverState.roundNumber} done=${serverState.roundComplete ? 1 : 0} nextP=${serverState.participants?.nextParticipantToTrigger ?? '-'}`);
-    rlog.phase('prefill-pre', `modStream=${prePrefillState.isModeratorStreaming ? 1 : 0} wait=${prePrefillState.waitingToStartStreaming ? 1 : 0} nextP=${prePrefillState.nextParticipantToTrigger !== null ? 1 : 0}`);
 
     // ✅ FIX: For complete/idle phases, still set prefilled state to block incomplete-round-resumption
     // Previously we skipped entirely, leaving streamResumptionPrefilled=false and currentResumptionPhase=null.
@@ -842,16 +839,12 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     // allowing incomplete-round-resumption to run and re-trigger participants for completed rounds.
     // Now we set the phase to COMPLETE/IDLE so the guard works: `if (phase === COMPLETE) return`.
     if (serverState.roundComplete || serverState.currentPhase === RoundPhases.COMPLETE || serverState.currentPhase === RoundPhases.IDLE) {
-      rlog.phase('prefill-block', 'round complete/idle - blocking resumption, modStream=0');
+      rlog.phase('prefill-block', 'round complete/idle - blocking resumption');
       set({
         streamResumptionPrefilled: true,
         prefilledForThreadId: threadId,
         currentResumptionPhase: serverState.currentPhase === RoundPhases.IDLE ? RoundPhases.IDLE : RoundPhases.COMPLETE,
         resumptionRoundNumber: serverState.roundNumber,
-        // ✅ FIX: Explicitly clear streaming flags for complete/idle phases
-        // Zustand persist may restore stale flags from previous session
-        isModeratorStreaming: false,
-        waitingToStartStreaming: false,
       }, false, 'streamResumption/prefillStreamResumptionState_complete');
       return;
     }
@@ -876,10 +869,6 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
           };
         }
         stateUpdate.waitingToStartStreaming = true;
-        // ✅ FIX: Explicitly clear moderator flag for non-moderator phases
-        // Zustand persist may restore stale isModeratorStreaming=true from previous session
-        stateUpdate.isModeratorStreaming = false;
-        rlog.phase('prefill-case', `PRE_SEARCH: wait=1 modStream=0`);
         break;
 
       case RoundPhases.PARTICIPANTS: {
@@ -904,10 +893,6 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
         // Set waitingToStartStreaming regardless of whether nextParticipantToTrigger is set
         // (prefill happens before initializeThread, so participants array may be empty)
         stateUpdate.waitingToStartStreaming = true;
-        // ✅ FIX: Explicitly clear moderator flag for non-moderator phases
-        // Zustand persist may restore stale isModeratorStreaming=true from previous session
-        stateUpdate.isModeratorStreaming = false;
-        rlog.phase('prefill-case', `PARTICIPANTS: wait=1 modStream=0 nextP=${serverNextIndex ?? '-'}`);
         break;
       }
 
@@ -921,14 +906,10 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
         }
         stateUpdate.waitingToStartStreaming = true;
         stateUpdate.isModeratorStreaming = true;
-        rlog.phase('prefill-case', `MODERATOR: wait=1 modStream=1`);
         break;
     }
 
     set(stateUpdate, false, 'streamResumption/prefillStreamResumptionState');
-    // ✅ DEBUG: Log final state after prefill
-    const postPrefillState = get();
-    rlog.phase('prefill-post', `modStream=${postPrefillState.isModeratorStreaming ? 1 : 0} wait=${postPrefillState.waitingToStartStreaming ? 1 : 0} nextP=${postPrefillState.nextParticipantToTrigger !== null ? (typeof postPrefillState.nextParticipantToTrigger === 'number' ? postPrefillState.nextParticipantToTrigger : postPrefillState.nextParticipantToTrigger.index) : '-'}`);
   },
 });
 
@@ -995,17 +976,10 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
     ]);
   },
 
-  clearAnimations: () => {
-    // ✅ PERF FIX: Only update if there's something to clear
-    const current = get();
-    if (current.pendingAnimations.size === 0 && current.animationResolvers.size === 0) {
-      return; // Nothing to clear, skip update
-    }
+  clearAnimations: () =>
     set({
-      pendingAnimations: new Set<number>(),
-      animationResolvers: new Map<number, () => void>(),
-    }, false, 'animation/clearAnimations');
-  },
+      ...ANIMATION_DEFAULTS,
+    }, false, 'animation/clearAnimations'),
 });
 
 const createAttachmentsSlice: SliceCreator<AttachmentsSlice> = (set, get) => ({
@@ -1123,18 +1097,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     const isResumingStream = currentState.streamResumptionPrefilled;
     const resumptionRound = currentState.resumptionRoundNumber;
 
-    // ✅ FIX: Also check for initial thread creation in progress
-    // During navigation from overview to thread after creation, we're actively streaming
-    // Store messages contain the current streaming content and must NOT be replaced
-    const isActivelyStreaming = currentState.createdThreadId === thread.id
-      && currentState.streamingRoundNumber !== null
-      && (currentState.waitingToStartStreaming || currentState.isStreaming);
-
-    const resumptionPhaseForLog = currentState.currentResumptionPhase;
-    const waitingForLog = currentState.waitingToStartStreaming;
-    const nextPForLog = currentState.nextParticipantToTrigger;
-    rlog.init('thread', `resum=${isResumingStream ? 1 : 0} active=${isActivelyStreaming ? 1 : 0} same=${isSameThread ? 1 : 0} store=${storeMessages.length} db=${newMessages.length} resumR=${resumptionRound ?? '-'}`);
-    rlog.init('thread-state', `wait=${waitingForLog ? 1 : 0} phase=${resumptionPhaseForLog ?? '-'} nextP=${nextPForLog !== null ? (typeof nextPForLog === 'number' ? nextPForLog : nextPForLog.index) : '-'}`);
+    rlog.init('thread', `resum=${isResumingStream ? 1 : 0} same=${isSameThread ? 1 : 0} store=${storeMessages.length} db=${newMessages.length} resumR=${resumptionRound ?? '-'}`);
 
     let messagesToSet: UIMessage[];
 
@@ -1149,11 +1112,10 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
         msg.parts?.some(p => 'state' in p && p.state === TextPartStates.STREAMING),
       );
 
-      // ✅ FIX: During stream resumption OR active streaming, keep store messages
+      // ✅ FIX: During stream resumption, keep store messages even if they have stale parts
       // The store has the latest round data that might not be in DB yet
-      // We only replace with DB messages if NOT resuming AND NOT actively streaming
-      // isActivelyStreaming: Initial thread creation in progress - streaming parts are active, not stale
-      if (hasStaleStreamingParts && newMessages.length > 0 && !isResumingStream && !isActivelyStreaming) {
+      // We only replace with DB messages if NOT resuming
+      if (hasStaleStreamingParts && newMessages.length > 0 && !isResumingStream) {
         // ✅ RACE CONDITION FIX: Don't blindly replace - MERGE messages
         // Race condition: P0 completes → backend saves → user refreshes immediately
         // SSR might fetch BEFORE the transaction commits, missing the latest message.
@@ -1169,16 +1131,15 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
               return aRound - bRound;
             if (a.role !== b.role)
               return a.role === MessageRoles.USER ? -1 : 1;
-            const aPIdx = getParticipantIndex(a.metadata) ?? 999;
-            const bPIdx = getParticipantIndex(b.metadata) ?? 999;
+            const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
+            const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
             return aPIdx - bPIdx;
           });
         } else {
           messagesToSet = newMessages;
         }
-      } else if (isResumingStream || isActivelyStreaming) {
-        // ✅ FIX: During resumption OR active streaming, prefer store messages
-        // They contain the latest round data that might not be in DB yet
+      } else if (isResumingStream) {
+        // ✅ FIX: During resumption, compare round numbers but prefer store messages for resumption round
         const storeMaxRound = storeMessages.reduce((max, m) => {
           const round = getRoundNumber(m.metadata) ?? 0;
           return Math.max(max, round);
@@ -1189,9 +1150,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
           return Math.max(max, round);
         }, 0);
 
-        // During resumption/active streaming: keep store if it has current round data OR has more/equal messages
-        const targetRound = resumptionRound ?? currentState.streamingRoundNumber ?? 0;
-        if (storeMaxRound >= targetRound || storeMaxRound >= newMaxRound) {
+        // During resumption: keep store if it has resumption round data OR has more/equal messages
+        if (storeMaxRound >= (resumptionRound ?? 0) || storeMaxRound >= newMaxRound) {
           messagesToSet = storeMessages;
         } else {
           // ✅ RACE CONDITION FIX: Even during resumption, merge if store has messages DB doesn't
@@ -1206,8 +1166,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
                 return aRound - bRound;
               if (a.role !== b.role)
                 return a.role === MessageRoles.USER ? -1 : 1;
-              const aPIdx = getParticipantIndex(a.metadata) ?? 999;
-              const bPIdx = getParticipantIndex(b.metadata) ?? 999;
+              const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
+              const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
               return aPIdx - bPIdx;
             });
           } else {
@@ -1241,8 +1201,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
                 return aRound - bRound;
               if (a.role !== b.role)
                 return a.role === MessageRoles.USER ? -1 : 1;
-              const aPIdx = getParticipantIndex(a.metadata) ?? 999;
-              const bPIdx = getParticipantIndex(b.metadata) ?? 999;
+              const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
+              const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
               return aPIdx - bPIdx;
             });
           } else {
@@ -1268,17 +1228,11 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     // Preserve state when:
     // 1. streamResumptionPrefilled: Server detected incomplete round (resumption)
     // 2. Active form submission: handleUpdateThreadAndSend set up streaming state
-    // 3. Initial thread creation: createdThreadId matches and streaming is active
     //
     // Active form submission detection (must be specific, not just waitingToStartStreaming):
     // - configChangeRoundNumber !== null: Set by handleUpdateThreadAndSend BEFORE PATCH
     //   This is the key indicator that a form submission is in progress
     // - isWaitingForChangelog: Set AFTER PATCH (always set, cleared by use-changelog-sync)
-    //
-    // Initial thread creation detection:
-    // - createdThreadId matches thread.id: We created this thread in current session
-    // - streamingRoundNumber is set: Streaming is configured
-    // - waitingToStartStreaming or isStreaming: Active streaming happening
     //
     // NOTE: waitingToStartStreaming alone is NOT sufficient because it could be stale
     // state from a previous session. configChangeRoundNumber and isWaitingForChangelog
@@ -1297,14 +1251,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     const hasActiveFormSubmission
       = currentState.configChangeRoundNumber !== null
         || currentState.isWaitingForChangelog;
-    // ✅ FIX: Detect initial thread creation in progress
-    // During navigation from overview to thread after creation, the route loader
-    // returns stale cached data. If we're actively streaming for this thread,
-    // we must preserve the streaming state to avoid resetting the round.
-    const isInitialCreationInProgress = currentState.createdThreadId === thread.id
-      && currentState.streamingRoundNumber !== null
-      && (currentState.waitingToStartStreaming || currentState.isStreaming);
-    const preserveStreamingState = isActiveResumption || hasActiveFormSubmission || isInitialCreationInProgress;
+    const preserveStreamingState = isActiveResumption || hasActiveFormSubmission;
     const resumptionRoundNumber = currentState.resumptionRoundNumber;
 
     set({
@@ -1356,54 +1303,6 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       showInitialUI: false,
       hasInitiallyLoaded: true,
     }, false, 'operations/initializeThread');
-
-    // ✅ PRE-SEARCH RESUMPTION FIX: Create preSearch entry from resumption data
-    // When phase is PRE_SEARCH and preSearchResumption exists but preSearches is empty,
-    // we need to create a placeholder entry so PreSearchStream component can render and resume.
-    // This happens because prefillStreamResumptionState only sets preSearchResumption but
-    // doesn't have access to userQuery (which requires messages from initializeThread).
-    const stateAfterInit = get();
-    if (
-      stateAfterInit.currentResumptionPhase === RoundPhases.PRE_SEARCH
-      && stateAfterInit.preSearchResumption?.preSearchId
-      && stateAfterInit.preSearches.length === 0
-      && stateAfterInit.resumptionRoundNumber !== null
-    ) {
-      // Find the user query from the messages for this round
-      const userMessageForRound = messagesToSet.find((msg) => {
-        if (msg.role !== MessageRoles.USER) {
-          return false;
-        }
-        const msgRound = getRoundNumber(msg.metadata);
-        return msgRound === stateAfterInit.resumptionRoundNumber;
-      });
-
-      // Extract user query from the message
-      const userQuery = userMessageForRound
-        ? extractTextFromMessage(userMessageForRound)
-        : '';
-
-      rlog.init('presearch-resume', `creating preSearch entry from resumption: id=${stateAfterInit.preSearchResumption.preSearchId.slice(-8)} r=${stateAfterInit.resumptionRoundNumber} query=${userQuery.slice(0, 30)}...`);
-
-      // Create the preSearch entry for resumption
-      const resumptionPreSearch: StoredPreSearch = {
-        id: stateAfterInit.preSearchResumption.preSearchId,
-        threadId: thread.id,
-        roundNumber: stateAfterInit.resumptionRoundNumber,
-        userQuery,
-        status: stateAfterInit.preSearchResumption.status as StoredPreSearch['status'],
-        searchData: null,
-        createdAt: new Date().toISOString(),
-        completedAt: null,
-        errorMessage: null,
-      };
-
-      set({ preSearches: [resumptionPreSearch] }, false, 'operations/initializeThread_preSearchResumption');
-    }
-
-    // ✅ DEBUG: Log final state after initialization
-    const finalState = get();
-    rlog.init('thread-final', `wait=${finalState.waitingToStartStreaming ? 1 : 0} prefilled=${finalState.streamResumptionPrefilled ? 1 : 0} phase=${finalState.currentResumptionPhase ?? '-'} nextP=${finalState.nextParticipantToTrigger !== null ? (typeof finalState.nextParticipantToTrigger === 'number' ? finalState.nextParticipantToTrigger : finalState.nextParticipantToTrigger.index) : '-'}`);
   },
 
   updateParticipants: (participants: ChatParticipant[]) => {
@@ -1494,6 +1393,9 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     const needsNewPendingAnimations = currentState.pendingAnimations.size > 0;
     const needsNewAnimationResolvers = currentState.animationResolvers.size > 0;
 
+    // ✅ DEBUG: Track when completeStreaming clears pendingMessage
+    rlog.stream('end', `completeStreaming clearing pendingMessage=${currentState.pendingMessage ? 1 : 0}`);
+
     set({
       ...STREAMING_STATE_RESET,
       ...MODERATOR_STATE_RESET,
@@ -1548,10 +1450,9 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       : FORM_DEFAULTS.selectedParticipants;
 
     const selectedMode = preferences?.selectedMode
-      ? (() => {
-          const result = ChatModeSchema.safeParse(preferences.selectedMode);
-          return result.success ? result.data : FORM_DEFAULTS.selectedMode;
-        })()
+      ? (ChatModeSchema.safeParse(preferences.selectedMode).success
+          ? ChatModeSchema.parse(preferences.selectedMode)
+          : FORM_DEFAULTS.selectedMode)
       : FORM_DEFAULTS.selectedMode;
 
     set({

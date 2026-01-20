@@ -1,11 +1,7 @@
 import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
-import { SidebarLoadingFallback } from '@/components/loading';
 import { ChatLayoutProviders, PreferencesStoreProvider } from '@/components/providers';
-import { HeaderSkeleton, LogoAreaSkeleton } from '@/components/skeletons';
-import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
-import { Skeleton } from '@/components/ui/skeleton';
 import { useSession } from '@/lib/auth/client';
 import {
   modelsQueryOptions,
@@ -13,40 +9,6 @@ import {
   subscriptionsQueryOptions,
   usageQueryOptions,
 } from '@/lib/data/query-options';
-
-/**
- * Protected Layout Skeleton
- * Shown while beforeLoad auth check and loader prefetching runs
- *
- * This is a GENERIC skeleton that works for any child route.
- * Shows sidebar + header + centered loading indicator.
- * Each child route's pendingComponent shows route-specific skeletons.
- */
-function ProtectedLayoutSkeleton() {
-  return (
-    <SidebarProvider>
-      <SidebarLoadingFallback count={10} />
-      <SidebarInset className="flex flex-col relative">
-        {/* Header skeleton */}
-        <HeaderSkeleton variant="simple" />
-
-        {/* Generic centered loading content - works for any child route */}
-        <div className="flex-1 flex items-center justify-center">
-          <div className="flex flex-col items-center gap-6 text-center px-4">
-            {/* Logo area - uses shared LogoAreaSkeleton */}
-            <LogoAreaSkeleton size="large" showTitle showTagline />
-
-            {/* Simple loading indicator */}
-            <div className="w-full max-w-md space-y-4">
-              <Skeleton className="h-4 w-3/4 mx-auto" />
-              <Skeleton className="h-4 w-1/2 mx-auto" />
-            </div>
-          </div>
-        </div>
-      </SidebarInset>
-    </SidebarProvider>
-  );
-}
 
 export const Route = createFileRoute('/_protected')({
   // ✅ LAYOUT ROUTE CACHING: Prevent loader re-runs on child route navigations
@@ -94,7 +56,9 @@ export const Route = createFileRoute('/_protected')({
     return {};
   },
   component: ProtectedLayout,
-  pendingComponent: ProtectedLayoutSkeleton,
+  // NO pendingComponent - layout shell (sidebar, header) should remain stable
+  // Each child route has its own pendingComponent for content-specific loading states
+  // This prevents layout-level skeleton from overriding page-specific skeletons
 });
 
 /**

@@ -88,7 +88,7 @@ export default function ChatThreadScreen({
   streamResumptionState,
   initialPreSearches,
   initialChangelog: _initialChangelog,
-  initialFeedback,
+  initialFeedback: _initialFeedback,
 }: ChatThreadScreenProps) {
   const t = useTranslations();
   const isDeleteDialogOpen = useBoolean(false);
@@ -110,8 +110,6 @@ export default function ChatThreadScreen({
     participants,
     initialMessages: uiMessages,
     streamResumptionState,
-    initialPreSearches,
-    initialFeedback,
   });
 
   useThreadHeaderUpdater({ thread, slug, onDeleteClick: isDeleteDialogOpen.onTrue });

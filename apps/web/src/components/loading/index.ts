@@ -23,7 +23,6 @@
  */
 
 export { AuthCallbackSkeleton, AuthLoadingSkeleton } from './auth-loading-skeleton';
-export { ChatOverviewSkeleton, ChatThreadSkeleton } from './chat-thread-skeleton';
 export { PageLoadingFallback } from './page-loading-fallback';
 export { PublicChatSkeleton } from './public-chat-skeleton';
 export { SidebarLoadingFallback } from './sidebar-loading-fallback';

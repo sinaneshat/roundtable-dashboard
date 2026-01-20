@@ -1,6 +1,6 @@
 import type { MessagePartType, MessageStatus } from '@roundtable/shared';
 import { MessagePartTypes, MessageStatuses, ReasoningPartTypes, TextPartStates } from '@roundtable/shared';
-import { memo, useLayoutEffect, useRef } from 'react';
+import { memo, useEffect, useLayoutEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -25,6 +25,7 @@ import { isDataPart } from '@/lib/schemas/data-part-schema';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getRoleBadgeStyle, hasCitations, hasProperty, isNonEmptyString } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import type { AvailableSource, DbMessageMetadata, Model } from '@/services/api';
 import { isAssistantMessageMetadata } from '@/services/api';
 
@@ -122,6 +123,20 @@ export const ModelMessageCard = memo(({
 
   const isExpectingContent = status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING;
   const showShimmer = renderableParts.length === 0 && isExpectingContent;
+
+  // ✅ DEBUG: Track skeleton flashes - detect rapid shimmer on/off
+  const shimmerStartRef = useRef<number | null>(null);
+  useEffect(() => {
+    if (showShimmer && !shimmerStartRef.current) {
+      shimmerStartRef.current = Date.now();
+    } else if (!showShimmer && shimmerStartRef.current) {
+      const duration = Date.now() - shimmerStartRef.current;
+      if (duration < 200) {
+        rlog.msg('skeleton-flash', `p${participantIndex} duration=${duration}ms FLASH`);
+      }
+      shimmerStartRef.current = null;
+    }
+  }, [showShimmer, participantIndex]);
 
   const showStatusIndicator = (status === MessageStatuses.PENDING && parts.length === 0)
     || hasActualStreamingParts;

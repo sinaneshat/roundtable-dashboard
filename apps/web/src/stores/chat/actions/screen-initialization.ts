@@ -3,13 +3,12 @@
  */
 
 import type { ChatMode, ScreenMode } from '@roundtable/shared';
-import { RoundPhases, ScreenModes } from '@roundtable/shared';
+import { ScreenModes } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider/context';
-import { getModeratorMetadata } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/services/api';
 
@@ -42,6 +41,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   const actions = useChatStore(useShallow(s => ({
     setScreenMode: s.setScreenMode,
     initializeThread: s.initializeThread,
+    prefillStreamResumptionState: s.prefillStreamResumptionState,
     setThread: s.setThread,
     setParticipants: s.setParticipants,
     setMessages: s.setMessages,
@@ -78,17 +78,53 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     const freshIsWaitingForChangelog = freshState.isWaitingForChangelog;
     const freshPendingMessage = freshState.pendingMessage;
 
-    rlog.init('effect', `t=${threadId?.slice(-8) ?? '-'} rdy=${isReady ? 1 : 0} initd=${alreadyInitialized ? 1 : 0} parts=${participants.length} msgs=${initialMessages?.length ?? 0} phase=${streamResumptionState?.currentPhase ?? '-'} patch=${freshIsPatchInProgress ? 1 : 0}`);
+    // ✅ CRITICAL FIX: Check if store already has this thread with MORE messages than SSR
+    // This prevents re-initialization with stale SSR data after navigation/remount
+    // The ref is local to component instance, but store state persists across navigation
+    const storeThreadId = freshState.thread?.id || freshState.createdThreadId;
+    const storeMessages = freshState.messages || [];
+    const ssrMessages = initialMessages || [];
+    const storeHasMoreData = storeThreadId === threadId && storeMessages.length > ssrMessages.length;
+    const storeAlreadyLoaded = freshState.hasInitiallyLoaded && storeThreadId === threadId;
 
-    // ✅ DEDUP FIX: prefillStreamResumptionState is now called ONLY in useSyncHydrateStore
-    // (runs in useLayoutEffect, before this useEffect). Calling it here caused duplicate logs
-    // and redundant state updates. We just check if prefill already happened.
+    rlog.init('effect', `t=${threadId?.slice(-8) ?? '-'} rdy=${isReady ? 1 : 0} initd=${alreadyInitialized ? 1 : 0} parts=${participants.length} msgs=${ssrMessages.length} phase=${streamResumptionState?.currentPhase ?? '-'} patch=${freshIsPatchInProgress ? 1 : 0}`);
+    rlog.init('guard', `resum=${freshState.streamResumptionPrefilled ? 1 : 0} same=${storeThreadId === threadId ? 1 : 0} store=${storeMessages.length} db=${ssrMessages.length} resumR=${freshState.resumptionRoundNumber ?? '-'} storeLoaded=${storeAlreadyLoaded ? 1 : 0}`);
+
+    // ✅ CRITICAL FIX: Skip if store already has this thread with more/equal data
+    // This handles navigation from overview→thread after round started streaming
+    if (storeHasMoreData || storeAlreadyLoaded) {
+      rlog.init('skip', `storeHasMore=${storeHasMoreData ? 1 : 0} storeLoaded=${storeAlreadyLoaded ? 1 : 0} - skipping re-init`);
+      initializedThreadIdRef.current = threadId ?? null;
+
+      // ✅ CRITICAL FIX: Clear pendingMessage if it was already sent
+      // Without this, usePendingMessage sees stale pendingMessage and calls sendMessage again
+      // causing phantom duplicate rounds after round completion
+      if (freshState.hasSentPendingMessage && freshState.pendingMessage !== null) {
+        rlog.init('cleanup', `clearing stale pendingMessage after skip`);
+        storeApi.getState().setPendingMessage(null);
+        storeApi.getState().setExpectedParticipantIds(null);
+      }
+      return;
+    }
+
+    // ✅ CRITICAL FIX: Do NOT prefill resumption state when a form submission is in progress
+    // handleUpdateThreadAndSend calls clearStreamResumption() to clear stale state
+    // But if SSR returns stream-status data, prefillStreamResumptionState would re-set it
+    // This causes the cleared state to be restored, breaking the new submission flow
     const skipPrefillDueToFormSubmission = freshIsPatchInProgress
       || freshConfigChangeRoundNumber !== null
       || freshIsWaitingForChangelog
       || freshPendingMessage !== null;
 
-    // Check if prefill already happened (from useSyncHydrateStore) or should happen
+    // ✅ CRITICAL FIX: Prefill stream resumption state BEFORE initializeThread
+    // This was previously done in a separate effect that could fire AFTER initializeThread,
+    // causing initializeThread to check streamResumptionPrefilled=false and wipe messages.
+    // Now we prefill synchronously BEFORE initializeThread checks the flag.
+    if (threadId && streamResumptionState && !alreadyInitialized && !skipPrefillDueToFormSubmission) {
+      actions.prefillStreamResumptionState(threadId, streamResumptionState);
+    }
+
+    // Re-read the flag after potential prefill (Zustand updates are sync)
     const isResumption = freshState.streamResumptionPrefilled
       || (streamResumptionState && !streamResumptionState.roundComplete && !skipPrefillDueToFormSubmission);
     const hasActiveFormSubmission
@@ -116,50 +152,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
   // verifyAndFetchFreshMessages() retries DB reads before SSR completes
   // No client-side fetch-fresh needed - proper SSR paint guaranteed
 
-  // ✅ PERF: Get streaming state to skip pre-search orchestrator during initial creation
-  const {
-    streamingRoundNumber,
-    createdThreadId,
-    messages: storeMessages,
-    // ✅ FIX: Get resumption state to enable pre-search fetch during mid-round resumption
-    streamResumptionPrefilled,
-    currentResumptionPhase,
-  } = useChatStore(useShallow(s => ({
-    streamingRoundNumber: s.streamingRoundNumber,
-    createdThreadId: s.createdThreadId,
-    messages: s.messages,
-    streamResumptionPrefilled: s.streamResumptionPrefilled,
-    currentResumptionPhase: s.currentResumptionPhase,
-  })));
-
-  // ✅ PERF: Skip pre-search query during initial creation flow or when no completed rounds
-  // Pre-searches are created during streaming - no point fetching on first round
-  // Also skip when navigating to existing thread mid-first-round (no data exists yet)
-  const isInitialCreationFlow = Boolean(createdThreadId) && streamingRoundNumber === 0;
-
-  // ✅ FIX: Check if any rounds have completed by looking for moderator finish messages
-  // Pre-search data only exists after a round completes
-  const hasCompletedRounds = storeMessages.some((msg) => {
-    const metadata = getModeratorMetadata(msg.metadata);
-    return metadata && metadata.finishReason;
-  });
-
-  // ✅ FIX: Also enable pre-search fetch during mid-round resumption
-  // When resuming from participants/moderator phase with web search enabled,
-  // pre-search data exists even though the round hasn't completed yet.
-  // Pre-search happens BEFORE participants, so if we're in participants/moderator phase,
-  // the pre-search for that round has already completed.
-  const hasPreSearchResumptionData = thread?.enableWebSearch
-    && streamResumptionPrefilled
-    && (currentResumptionPhase === RoundPhases.PARTICIPANTS
-      || currentResumptionPhase === RoundPhases.MODERATOR);
-
-  const preSearchOrchestratorEnabled = mode === ScreenModes.THREAD
-    && Boolean(thread?.id)
-    && enableOrchestrator
-    && !isInitialCreationFlow
-    && (hasCompletedRounds || hasPreSearchResumptionData);
-
+  const preSearchOrchestratorEnabled = mode === ScreenModes.THREAD && Boolean(thread?.id) && enableOrchestrator;
   getPreSearchOrchestrator({
     threadId: thread?.id || '',
     enabled: preSearchOrchestratorEnabled,

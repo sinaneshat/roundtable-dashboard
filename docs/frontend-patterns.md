@@ -252,15 +252,20 @@ function ChatOverviewPage() {
 ```typescript
 // File: src/routes/_protected/chat/$slug.tsx
 import { createFileRoute } from '@tanstack/react-router';
-import { ChatThreadSkeleton } from '@/components/skeletons';
+import { ThreadContentSkeleton } from '@/components/skeletons';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
   component: ChatThreadPage,
-  pendingComponent: ChatThreadSkeleton, // Shows during navigation
+  pendingComponent: ThreadContentSkeleton, // Content-only skeleton, no sidebar/header
+  pendingMs: 300, // Delay skeleton flash for quick cached navigations
 });
 
-// Pattern: pendingComponent shows loading state during route transitions
-// Replaces Next.js loading.tsx pattern
+// Skeleton Architecture:
+// - Layout routes (_protected.tsx) should NOT have pendingComponent
+// - Layout shell (sidebar, header) remains stable during navigation
+// - Only child routes have pendingComponent for content-specific loading
+// - Use content-only skeletons (ThreadContentSkeleton, MainContentSkeleton)
+// - Avoid full-page skeletons that include sidebar/header
 ```
 
 **Error Boundary Pattern:**

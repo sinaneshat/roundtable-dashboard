@@ -81,10 +81,15 @@ export function ThreadTimeline({
   // scrollMargin: listRef.current?.offsetTop ?? 0
   const listRef = useRef<HTMLDivElement>(null);
 
-  // Debug logging for timeline render
+  // ✅ PERF: Track actual data changes vs re-renders
+  const prevDataRef = useRef({ items: 0, msgs: 0 });
   useEffect(() => {
     const msgCount = timelineItems.filter(i => i.type === 'messages').reduce((sum, i) => sum + i.data.length, 0);
-    rlog.init('timeline-render', `items=${timelineItems.length} msgs=${msgCount} virt=${disableVirtualization ? 0 : 1} ready=${isDataReady ? 1 : 0} elapsed=${Date.now() - mountTimeRef.current}ms`);
+    const hasDataChanged = prevDataRef.current.items !== timelineItems.length || prevDataRef.current.msgs !== msgCount;
+    if (hasDataChanged) {
+      rlog.init('timeline-data', `items=${timelineItems.length} msgs=${msgCount} virt=${disableVirtualization ? 0 : 1} ready=${isDataReady ? 1 : 0} elapsed=${Date.now() - mountTimeRef.current}ms`);
+      prevDataRef.current = { items: timelineItems.length, msgs: msgCount };
+    }
   }, [timelineItems, disableVirtualization, isDataReady]);
 
   // Collect all messages from timeline for thread-level copy action

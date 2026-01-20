@@ -8,6 +8,7 @@ import { useShallow } from 'zustand/react/shallow';
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import { extractFileContextForSearch, getCurrentRoundNumber, getEnabledParticipantModelIds } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import { executePreSearchStreamService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { getEffectiveWebSearchEnabled, readPreSearchStreamData } from '@/stores/chat';
@@ -64,15 +65,44 @@ export function usePendingMessage({
   useEffect(() => {
     const newRoundNumber = messages.length > 0 ? getCurrentRoundNumber(messages) : 0;
 
+    // ✅ DEBUG: Track pending message effect conditions
+    rlog.msg('pending-effect', `r=${newRoundNumber} pending=${pendingMessage ? 1 : 0} sent=${hasSentPendingMessage ? 1 : 0} streaming=${isStreaming ? 1 : 0} screen=${screenMode}`);
+
     if (screenMode === ScreenModes.PUBLIC) {
       return;
     }
 
     if (!pendingMessage || !expectedParticipantIds || hasSentPendingMessage || isStreaming) {
+      rlog.msg('pending-exit', `pending=${!!pendingMessage} expected=${!!expectedParticipantIds} sent=${hasSentPendingMessage} streaming=${isStreaming}`);
       return;
     }
 
     if (chat.isStreamingRef.current || chat.isTriggeringRef.current) {
+      return;
+    }
+
+    // ✅ FIX: Check if round already has assistant messages (message was sent via startRound)
+    // startRound sends the message directly without going through usePendingMessage,
+    // so hasSentPendingMessage is never set. Check if round already started instead.
+    const assistantMsgsInRound = messages.filter((m) => {
+      if (m.role !== MessageRoles.ASSISTANT)
+        return false;
+      const md = m.metadata;
+      if (!md || typeof md !== 'object')
+        return false;
+      if ('isModerator' in md && md.isModerator === true)
+        return false;
+      const msgRound = 'roundNumber' in md ? md.roundNumber : null;
+      return msgRound === newRoundNumber;
+    });
+    if (assistantMsgsInRound.length > 0) {
+      rlog.msg('pending-exit', `round ${newRoundNumber} already has ${assistantMsgsInRound.length} assistant msgs - skip`);
+      // ✅ PERF FIX: Clear stale state in single batch update to prevent multiple re-renders
+      const currentState = store.getState();
+      if (currentState.pendingMessage !== null || currentState.expectedParticipantIds !== null) {
+        rlog.msg('pending-clear', `clearing stale pendingMessage`);
+        currentState.batchUpdatePendingState(null, null);
+      }
       return;
     }
 
@@ -205,12 +235,20 @@ export function usePendingMessage({
 
     queueMicrotask(() => {
       if (chat.isStreamingRef.current) {
-        store.getState().setHasSentPendingMessage(false);
+        // ✅ FIX: Don't reset hasSentPendingMessage if streaming is in progress
+        // The message was already sent by a concurrent call - just skip this one
+        rlog.msg('pending-skip', `streaming already in progress, skipping send`);
         return;
       }
 
       try {
         const result = sendMessageRef.current?.(pendingMessage);
+
+        // ✅ FIX: Clear pendingMessage immediately after successful send
+        // This prevents phantom re-sends when isStreaming changes later
+        store.getState().setPendingMessage(null);
+        store.getState().setExpectedParticipantIds(null);
+        rlog.msg('pending-sent', `cleared pendingMessage after send`);
 
         if (result && typeof result.catch === 'function') {
           result.catch(() => {});

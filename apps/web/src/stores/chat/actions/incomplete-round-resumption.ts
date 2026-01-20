@@ -21,12 +21,12 @@ import {
   hasError as checkHasError, // eslint-disable-line perfectionist/sort-named-imports -- simple-import-sort conflicts with perfectionist on aliased imports
 } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
+import type { ChatParticipant } from '@/services/api';
 
 import {
   getMessageStreamingStatus,
   getModeratorMessageForRound,
   getParticipantCompletionStatus,
-  getRoundActualCompletionStatus,
   isMessageComplete,
 } from '../utils/participant-completion-gate';
 import { createOptimisticUserMessage } from '../utils/placeholder-factories';
@@ -94,8 +94,6 @@ export function useIncompleteRoundResumption(
     // ✅ CHANGELOG BLOCKING FIX: Add changelog flags for blocking during config changes
     isWaitingForChangelog,
     configChangeRoundNumber,
-    // ✅ PARTICIPANTS PHASE FIX: Track if provider still has pending trigger
-    nextParticipantToTrigger,
   } = useChatStore(useShallow(s => ({
     messages: s.messages,
     participants: s.participants,
@@ -117,8 +115,6 @@ export function useIncompleteRoundResumption(
     // ✅ CHANGELOG BLOCKING FIX: Add changelog flags for blocking during config changes
     isWaitingForChangelog: s.isWaitingForChangelog,
     configChangeRoundNumber: s.configChangeRoundNumber,
-    // ✅ PARTICIPANTS PHASE FIX: Track if provider still has pending trigger
-    nextParticipantToTrigger: s.nextParticipantToTrigger,
   })));
 
   // Actions - batched with useShallow for stable reference
@@ -208,26 +204,18 @@ export function useIncompleteRoundResumption(
     }
     staleWaitingStateRef.current = true;
 
-    // ✅ TIMING FIX: Read FRESH state from store, not stale selector values
-    // Race condition: This effect may run BEFORE useLayoutEffect prefill updates the store.
-    // Selector values are captured during render phase (before useLayoutEffect runs).
-    // The guard `if (streamResumptionPrefilled) return` fails because it sees stale `false`.
-    // By reading from store.getState(), we get the CURRENT value after any useLayoutEffect updates.
-    if (!store) {
-      return;
-    }
-    const freshState = store.getState();
-    if (freshState.streamResumptionPrefilled) {
-      rlog.init('stale-guard', `skip: prefilled=${freshState.streamResumptionPrefilled}`);
+    // ✅ PREFILL FIX: Don't clear state if it was just prefilled from server
+    // When prefillStreamResumptionState runs, it sets waitingToStartStreaming=true
+    // and streamResumptionPrefilled=true. This is NOT stale state - it's fresh
+    // resumption state that should be preserved for the resumption effects to handle.
+    if (streamResumptionPrefilled) {
       return;
     }
 
     // Detect stale state: waiting but no pending message and not streaming
-    // Read fresh values from store to avoid race conditions
     // This only fires if waitingToStartStreaming was ALREADY true at mount time
     // (leftover from crashed session), not if resumption hook just set it
-    if (freshState.waitingToStartStreaming && freshState.pendingMessage === null && !freshState.isStreaming) {
-      rlog.init('stale-clear', `clearing stale state: wait=1 pending=null streaming=0`);
+    if (waitingToStartStreaming && pendingMessage === null && !isStreaming) {
       // ✅ RACE CONDITION FIX: Clear ALL related stale state, not just waitingToStartStreaming
       // Previously only cleared waitingToStartStreaming, leaving nextParticipantToTrigger set.
       // This caused provider effect to see nextParticipantToTrigger=0 but waitingToStart=false,
@@ -238,7 +226,7 @@ export function useIncompleteRoundResumption(
       actions.setStreamingRoundNumber(null);
       actions.setCurrentParticipantIndex(0);
     }
-  }, [waitingToStartStreaming, pendingMessage, isStreaming, streamResumptionPrefilled, store, actions]);
+  }, [waitingToStartStreaming, pendingMessage, isStreaming, streamResumptionPrefilled, actions]);
 
   // ============================================================================
   // ✅ STALE isStreaming FIX: Clear stale isStreaming on page refresh
@@ -806,16 +794,13 @@ export function useIncompleteRoundResumption(
     // ✅ UNIFIED PHASES: Skip if server prefilled a different phase
     // When prefilled, phase-specific effects handle resumption
     if (streamResumptionPrefilled && currentResumptionPhase) {
-      // ✅ FIX: Only skip PARTICIPANTS phase if provider still has pending trigger
-      // Previously we returned early unconditionally, but this caused issues:
-      // - Server says P0 done (nextP=1), provider triggers P1
-      // - AI SDK resume completes P0's cached stream, clears nextParticipantToTrigger
-      // - But P1 was never actually triggered, and this effect can't run to trigger it
-      //
-      // Now: Only skip if nextParticipantToTrigger is still set (provider will handle).
-      // Once provider triggers and clears nextParticipantToTrigger, allow this effect
-      // to run its normal incomplete round detection to trigger remaining participants.
-      if (currentResumptionPhase === RoundPhases.PARTICIPANTS && nextParticipantToTrigger !== null) {
+      // ✅ FIX: Only skip PARTICIPANTS phase here - provider handles via prefilled nextParticipantToTrigger
+      // Previously we let 'participants' phase continue here, but that caused duplicate triggers:
+      // - Server says P0 done (nextP=1), but DB race means store has no P0 message
+      // - This effect calculates responded=[] and triggers P0 again
+      // - Provider's trigger effect also triggers based on prefilled nextP=1
+      // - Result: P0 triggered twice, messages duplicated
+      if (currentResumptionPhase === RoundPhases.PARTICIPANTS) {
         return;
       }
       // Pre-search and moderator have their own effects below - let them handle
@@ -977,9 +962,6 @@ export function useIncompleteRoundResumption(
     // Log what we detected before triggering
     rlog.trigger('resume', `P${effectiveNextParticipant} r${currentRoundNumber} responded=[${[...respondedParticipantIndices]}] inProgress=[${[...inProgressParticipantIndices]}] total=${enabledParticipants.length}`);
 
-    // ✅ DEBUG: Log detailed state before setting resumption
-    rlog.msg('resume-SET', `r${currentRoundNumber} p${effectiveNextParticipant} msgs=${messages.length} enabled=${enabledParticipants.length}`);
-
     // ✅ DOUBLE-TRIGGER FIX: Set round-level guard SYNCHRONOUSLY before ANY state updates
     roundTriggerInProgressRef.current = roundKey;
 
@@ -1016,8 +998,6 @@ export function useIncompleteRoundResumption(
     // ✅ UNIFIED PHASES: Include phase state for proper phase-based resumption
     currentResumptionPhase,
     streamResumptionPrefilled,
-    // ✅ PARTICIPANTS PHASE FIX: Re-run when provider clears nextParticipantToTrigger
-    nextParticipantToTrigger,
     // ✅ FIX: Now using state instead of ref, so it's in deps and triggers re-runs
     activeStreamCheckComplete,
     // ✅ CHANGELOG BLOCKING FIX: Include changelog flags so effect re-runs when cleared
@@ -1254,7 +1234,7 @@ export function useIncompleteRoundResumption(
     // If server says "moderator phase" but participants aren't complete, redirect to participants.
     const participantCompletionCheck = getParticipantCompletionStatus(
       messages,
-      participants,
+      participants as ChatParticipant[],
       resumptionRoundNumber,
     );
 
@@ -1293,7 +1273,7 @@ export function useIncompleteRoundResumption(
 
     const completionStatus = getParticipantCompletionStatus(
       messages,
-      participants,
+      participants as ChatParticipant[],
       resumptionRoundNumber,
     );
 
@@ -1373,75 +1353,46 @@ export function useIncompleteRoundResumption(
   const moderatorNoPrefillAttemptedRef = useRef<string | null>(null);
 
   useEffect(() => {
-    // ✅ DEBUG: Log effect entry for moderator no-prefill detection
-    rlog.moderator('noprefill-check', `r=${currentRoundNumber ?? '-'} modStream=${isCreatingModerator ? 1 : 0} streaming=${isStreaming ? 1 : 0} wait=${waitingToStartStreaming ? 1 : 0} prefilled=${streamResumptionPrefilled ? 1 : 0} phase=${currentResumptionPhase ?? '-'} parts=${enabledParticipants.length} msgs=${messages.length}`);
-
     // Skip if already creating moderator
     if (isCreatingModerator) {
-      rlog.moderator('noprefill-skip', 'already creating moderator');
       return;
     }
 
     // Skip if streaming
     if (isStreaming || waitingToStartStreaming) {
-      rlog.moderator('noprefill-skip', `streaming=${isStreaming ? 1 : 0} wait=${waitingToStartStreaming ? 1 : 0}`);
       return;
     }
 
     // Skip if no round to check
     if (currentRoundNumber === null) {
-      rlog.moderator('noprefill-skip', 'no round');
       return;
     }
 
     // Skip if this path is already being handled by the prefilled moderator effect
     // (when server DID detect moderator phase)
     if (streamResumptionPrefilled && currentResumptionPhase === RoundPhases.MODERATOR) {
-      rlog.moderator('noprefill-skip', 'prefilled moderator phase');
       return;
     }
 
     // Skip if already attempted
     const attemptKey = `${threadId}_mod_noprefill_r${currentRoundNumber}`;
     if (moderatorNoPrefillAttemptedRef.current === attemptKey) {
-      rlog.moderator('noprefill-skip', 'already attempted');
       return;
     }
 
     // Skip if no participants
     if (enabledParticipants.length === 0) {
-      rlog.moderator('noprefill-skip', 'no participants');
       return;
     }
 
     // Check if all participants have completed
     const completionStatus = getParticipantCompletionStatus(
       messages,
-      participants,
+      participants as ChatParticipant[],
       currentRoundNumber,
     );
 
-    rlog.moderator('noprefill-completion', `all=${completionStatus.allComplete ? 1 : 0} complete=${completionStatus.completedCount} expected=${completionStatus.expectedCount}`);
-
-    // ✅ CONFIG CHANGE FIX: If participant config changed since round started,
-    // the ID-based check will fail (0 matches). Fall back to message-based check
-    // which determines completion from the actual messages in the round.
-    // This handles the case where user changed participants between rounds.
-    let isAllComplete = completionStatus.allComplete;
-
-    if (!isAllComplete && completionStatus.completedCount === 0 && completionStatus.expectedCount > 0) {
-      // Zero matches suggests participant IDs changed - try message-based check
-      const actualStatus = getRoundActualCompletionStatus(messages, currentRoundNumber);
-      rlog.moderator('noprefill-actual', `all=${actualStatus.allComplete ? 1 : 0} complete=${actualStatus.completedCount} expected=${actualStatus.expectedCount}`);
-
-      if (actualStatus.allComplete && actualStatus.expectedCount > 0) {
-        // Round's actual participants have all completed
-        isAllComplete = true;
-      }
-    }
-
-    if (!isAllComplete) {
-      rlog.moderator('noprefill-skip', 'participants not complete');
+    if (!completionStatus.allComplete) {
       return;
     }
 
@@ -1450,7 +1401,6 @@ export function useIncompleteRoundResumption(
     if (moderatorMessage) {
       // Moderator already exists - check if complete
       const modStatus = getMessageStreamingStatus(moderatorMessage);
-      rlog.moderator('noprefill-skip', `moderator exists status=${modStatus}`);
       if (modStatus === MessageStatuses.COMPLETE) {
         return;
       }
@@ -1459,7 +1409,6 @@ export function useIncompleteRoundResumption(
     }
 
     // All participants complete, no moderator - trigger moderator!
-    rlog.moderator('noprefill-TRIGGER', `r${currentRoundNumber} - all ${enabledParticipants.length} participants complete, triggering moderator`);
     moderatorNoPrefillAttemptedRef.current = attemptKey;
 
     // Set state to trigger moderator via use-moderator-trigger hook

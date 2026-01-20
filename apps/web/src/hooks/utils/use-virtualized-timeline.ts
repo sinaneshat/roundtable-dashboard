@@ -1,7 +1,9 @@
 import type { Virtualizer } from '@tanstack/react-virtual';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import type { RefObject } from 'react';
-import { useCallback, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+
+import { rlog } from '@/lib/utils/dev-logger';
 
 import type { TimelineItem } from './use-thread-timeline';
 
@@ -113,6 +115,15 @@ export function useVirtualizedTimeline({
 
     return () => resizeObserver.disconnect();
   }, [shouldEnable, listRef]);
+
+  // ✅ DEBUG: Track item count changes for over-rendering detection
+  const prevItemCountRef = useRef(timelineItems.length);
+  useEffect(() => {
+    if (timelineItems.length !== prevItemCountRef.current) {
+      rlog.init('virt-items', `${prevItemCountRef.current}→${timelineItems.length} enabled=${shouldEnable ? 1 : 0}`);
+      prevItemCountRef.current = timelineItems.length;
+    }
+  }, [timelineItems.length, shouldEnable]);
 
   // Initialize window virtualizer - OFFICIAL REACT 19 PATTERN
   // useFlushSync: false eliminates React 19 flushSync warnings during scroll
