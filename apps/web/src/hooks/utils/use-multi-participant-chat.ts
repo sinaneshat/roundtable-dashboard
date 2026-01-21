@@ -761,12 +761,9 @@ export function useMultiParticipantChat(
       callbackRefs.setIsStreaming.current(true);
     }
 
-    // ✅ HANDOFF FIX: Clear handoff flag now that participant is actually streaming
-    // This flag was set in use-streaming-trigger.ts before clearing nextParticipantToTrigger
-    // Now that P1 (or next participant) is streaming, the handoff is complete
-    if (callbackRefs.setParticipantHandoffInProgress.current) {
-      callbackRefs.setParticipantHandoffInProgress.current(false);
-    }
+    // ✅ V4 FIX: DO NOT clear handoff flag here (too early!)
+    // Flag must stay TRUE until sendMessage succeeds inside microtask
+    // Otherwise cleanup sees handoff=0 and fires 10s forced cleanup
 
     // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
     // Same pattern as startRound for consistent error handling
@@ -778,6 +775,10 @@ export function useMultiParticipantChat(
         // Component may unmount or AI SDK may reinitialize between scheduling and execution
         // This prevents "Cannot read properties of undefined (reading 'state')" errors
         if (!isMountedRef.current || !aiSendMessageRef.current) {
+          // Clear handoff flag on unmount
+          if (callbackRefs.setParticipantHandoffInProgress.current) {
+            callbackRefs.setParticipantHandoffInProgress.current(false);
+          }
           isTriggeringRef.current = false;
           return;
         }
@@ -797,9 +798,17 @@ export function useMultiParticipantChat(
               isParticipantTrigger: true,
             },
           });
+          // ✅ V4 FIX: Clear handoff flag AFTER sendMessage succeeds (P1 now streaming)
+          if (callbackRefs.setParticipantHandoffInProgress.current) {
+            callbackRefs.setParticipantHandoffInProgress.current(false);
+          }
           // ✅ SUCCESS: Reset trigger lock after aiSendMessage succeeds
           isTriggeringRef.current = false;
         } catch (error) {
+          // ✅ V4 FIX: Clear handoff flag on error so we don't leave it stuck
+          if (callbackRefs.setParticipantHandoffInProgress.current) {
+            callbackRefs.setParticipantHandoffInProgress.current(false);
+          }
           // ✅ GRACEFUL ERROR HANDLING: Reset state to allow retry
           console.error('[triggerNextParticipant] aiSendMessage failed, resetting state:', error);
           isStreamingRef.current = false;
@@ -810,7 +819,10 @@ export function useMultiParticipantChat(
         }
       });
     } else {
-      // No sendMessage ref available, reset immediately
+      // No sendMessage ref available, clear handoff flag and reset
+      if (callbackRefs.setParticipantHandoffInProgress.current) {
+        callbackRefs.setParticipantHandoffInProgress.current(false);
+      }
       isTriggeringRef.current = false;
     }
     // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
@@ -978,6 +990,13 @@ export function useMultiParticipantChat(
     // ✅ DEBUG: Log all streaming data parts to trace when metadata arrives
     onData: (dataPart) => {
       rlog.msg('cite-data', `type=${dataPart?.type} keys=[${dataPart && typeof dataPart === 'object' ? Object.keys(dataPart).join(',') : 'null'}]`);
+
+      // ✅ V5 FIX: Clear handoff flag when streaming data arrives
+      // This is the TRUE signal that P1 started - not when sendMessage returns
+      // Called on every chunk but setter is idempotent (no-op if already false)
+      if (callbackRefs.setParticipantHandoffInProgress.current) {
+        callbackRefs.setParticipantHandoffInProgress.current(false);
+      }
     },
 
     // ✅ AI SDK RESUME PATTERN: Enable automatic stream resumption after page reload
@@ -1804,12 +1823,21 @@ export function useMultiParticipantChat(
     // 1. Transitioning from valid thread to empty (overview)
     // 2. Transitioning between different threads
     // 3. Transitioning from overview to a valid thread (entering from overview)
-    if ((wasValidThread && isNowEmpty) || isNowDifferentThread || isEnteringFromOverview) {
+    //
+    // ✅ V5 FIX: Only abort for EXISTING stream cancellation, not new thread creation
+    // When entering from overview, there's nothing to abort yet - streaming hasn't started
+    const shouldAbort = (wasValidThread && isNowEmpty) || isNowDifferentThread;
+    const shouldCleanup = shouldAbort || isEnteringFromOverview;
+
+    if (shouldCleanup) {
       // ✅ RACE CONDITION FIX: Signal pending microtasks to abort FIRST
       // Any queueMicrotask callbacks from startRound/continueFromParticipant that are
       // pending execution will check this flag and abort gracefully instead of
       // executing against a corrupted/stale AI SDK Chat instance
-      abortMicrotaskRef.current = true;
+      // ✅ V5 FIX: Only set abort flag when we're actually canceling existing streams
+      if (shouldAbort) {
+        abortMicrotaskRef.current = true;
+      }
 
       // ✅ NAVIGATION CLEANUP: Clear stale pending state to prevent cross-thread file reuse
       // Without this, pendingFileParts and pendingAttachmentIds persist in store after
