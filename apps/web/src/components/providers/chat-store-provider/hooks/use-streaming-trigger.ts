@@ -315,7 +315,8 @@ export function useStreamingTrigger({
       // The handoff flag acts as a guard that persists until the next participant actually starts
       if (freshState.nextParticipantToTrigger !== null) {
         freshState.setParticipantHandoffInProgress(true);
-        freshState.setNextParticipantToTrigger(null);
+        // ✅ V8 FIX: Don't clear nextParticipantToTrigger here
+        // Let incomplete-round-resumption clear it after triggering P1
       }
     }
   }, [waitingToStart, chatIsStreaming, store]);
