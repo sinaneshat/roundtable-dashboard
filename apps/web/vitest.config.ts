@@ -28,21 +28,33 @@ export default defineConfig({
       '**/__tests__/**/test-types.{js,jsx,ts,tsx}',
     ],
 
+    // Pool configuration (v4 syntax)
     pool: 'forks',
-    maxForks: 2,
-    minForks: 1,
+    maxWorkers: process.env.CI ? 2 : 4,
     isolate: true,
-    fileParallelism: true,
 
+    // Memory management - limit each worker to prevent OOM
+    vmMemoryLimit: '512Mb',
+
+    // File parallelism - controlled via env or CI
+    // Sequential in CI to avoid memory spikes, parallel locally
+    fileParallelism: !process.env.CI,
+
+    // Concurrent tests within a file - limit to prevent memory spikes
+    maxConcurrency: 5,
+
+    // Timeouts
     testTimeout: 15000,
     hookTimeout: 15000,
     teardownTimeout: 30000,
 
+    // Mock cleanup
     clearMocks: true,
     restoreMocks: true,
     unstubGlobals: true,
     unstubEnvs: true,
 
+    // Reporters
     reporters: process.env.CI ? ['verbose', 'json'] : ['default'],
     outputFile: process.env.CI ? { json: './test-results.json' } : undefined,
   },

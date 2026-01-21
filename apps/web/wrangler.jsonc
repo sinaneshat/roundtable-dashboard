@@ -48,7 +48,7 @@
       }
     },
     "production": {
-      "name": "roundtable-web",
+      "name": "roundtable-web-prod",
       "upload_source_maps": false,
       "observability": {
         "enabled": true
