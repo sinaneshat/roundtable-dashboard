@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "roundtable-web-prod",
+  "name": "roundtable-web",
   "account_id": "499b6c3c38f75f7f7dc7d3127954b921",
   "compatibility_date": "2026-01-20",
   "compatibility_flags": ["nodejs_compat"],
@@ -15,6 +15,7 @@
   "vars": {
     "VITE_APP_NAME": "Roundtable",
     "VITE_APP_URL": "http://localhost:5173",
+    "VITE_API_URL": "http://localhost:8787",
     "VITE_WEBAPP_ENV": "local",
     "VITE_MAINTENANCE": "false",
     "VITE_TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w4",
@@ -26,6 +27,7 @@
     "preview": {
       "name": "roundtable-web-preview",
       "upload_source_maps": true,
+      "placement": { "mode": "smart" },
       "observability": {
         "enabled": true,
         "head_sampling_rate": 0.1
@@ -39,6 +41,7 @@
       "vars": {
         "VITE_APP_NAME": "Roundtable",
         "VITE_APP_URL": "https://web-preview.roundtable.now",
+        "VITE_API_URL": "https://api-preview.roundtable.now",
         "VITE_WEBAPP_ENV": "preview",
         "VITE_MAINTENANCE": "false",
         "VITE_TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w5",
@@ -48,9 +51,12 @@
       }
     },
     "production": {
+      "name": "roundtable-web-prod",
       "upload_source_maps": false,
+      "placement": { "mode": "smart" },
       "observability": {
-        "enabled": true
+        "enabled": true,
+        "head_sampling_rate": 0.1
       },
       "routes": [
         {
@@ -61,6 +67,7 @@
       "vars": {
         "VITE_APP_NAME": "Roundtable",
         "VITE_APP_URL": "https://roundtable.now",
+        "VITE_API_URL": "https://api.roundtable.now",
         "VITE_WEBAPP_ENV": "prod",
         "VITE_MAINTENANCE": "false",
         "VITE_TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w6",
