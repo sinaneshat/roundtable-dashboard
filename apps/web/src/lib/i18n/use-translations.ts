@@ -8,7 +8,16 @@ import enCommon from '@/i18n/locales/en/common.json';
 
 import { getNestedValue } from './get-nested-value';
 
-export type Messages = Record<string, unknown>;
+/**
+ * Translation message value - can be a string or nested object of strings
+ */
+export type TranslationValue = string | { [key: string]: TranslationValue };
+
+/**
+ * Translation messages structure - recursive nested object
+ */
+export type Messages = { [key: string]: TranslationValue };
+
 export type TranslationFunction = (key: string, values?: Record<string, string | number>) => string;
 
 export const I18nContext = createContext<Messages>(enCommon as Messages);

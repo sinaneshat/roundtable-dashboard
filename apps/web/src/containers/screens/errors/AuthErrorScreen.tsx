@@ -16,7 +16,7 @@ import {
 } from '@/components/ui/empty';
 import { useTranslations } from '@/lib/i18n';
 
-const AUTH_ERROR_I18N_KEYS = {
+const AUTH_ERROR_I18N_KEYS: Record<AuthErrorType, { title: string; desc: string }> = {
   [AuthErrorTypes.CONFIGURATION]: { title: 'auth.errors.configuration', desc: 'auth.errors.configurationDesc' },
   [AuthErrorTypes.ACCESS_DENIED]: { title: 'auth.errors.accessDenied', desc: 'auth.errors.accessDeniedDesc' },
   [AuthErrorTypes.VERIFICATION]: { title: 'auth.errors.verification', desc: 'auth.errors.verificationDesc' },
@@ -29,7 +29,7 @@ const AUTH_ERROR_I18N_KEYS = {
   [AuthErrorTypes.DOMAIN_RESTRICTED]: { title: 'auth.errors.domainRestricted', desc: 'auth.errors.domainRestrictedDesc' },
   [AuthErrorTypes.UNABLE_TO_CREATE_USER]: { title: 'auth.errors.domainRestricted', desc: 'auth.errors.domainRestrictedDesc' },
   [AuthErrorTypes.DEFAULT]: { title: 'auth.errors.default', desc: 'auth.errors.defaultDesc' },
-} as const satisfies Record<AuthErrorType, { title: string; desc: string }>;
+};
 
 const routeApi = getRouteApi('/auth/error');
 
@@ -40,6 +40,11 @@ function AuthErrorContent() {
   const errorType = isValidAuthErrorType(rawError) ? rawError : DEFAULT_AUTH_ERROR_TYPE;
 
   const errorKeys = AUTH_ERROR_I18N_KEYS[errorType];
+
+  if (!errorKeys) {
+    throw new Error(`Missing i18n keys for auth error type: ${errorType}`);
+  }
+
   const errorInfo = {
     title: t(errorKeys.title),
     description: t(errorKeys.desc),

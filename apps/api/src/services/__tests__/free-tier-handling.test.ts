@@ -17,7 +17,7 @@
 import { PlanTypes, SubscriptionTiers } from '@roundtable/shared/enums';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import { CREDIT_CONFIG } from '@/lib/config';
 import { TIER_CONFIG } from '@/services/billing';
 
 // ============================================================================

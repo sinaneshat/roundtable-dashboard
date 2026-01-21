@@ -20,7 +20,7 @@ import type { PlanType } from '@roundtable/shared/enums';
 import { CreditActions, CreditTransactionTypes, PlanTypes, SubscriptionTiers } from '@roundtable/shared/enums';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import { CREDIT_CONFIG } from '@/lib/config';
 import { ensureUserCreditRecord, getUserCreditBalance } from '@/services/billing';
 import { ensureUserUsageRecord } from '@/services/usage';
 

@@ -5,7 +5,7 @@
  * All values are converted to pixels for maximum email client compatibility.
  */
 
-import { BASE_URLS, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { BASE_URLS, getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
 
 /**
  * Get the base URL for email assets.
@@ -15,10 +15,18 @@ import { BASE_URLS, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 function getEmailAssetsBaseUrl(): string {
   const env = getWebappEnv();
   // Local dev: use production URL (localhost blocked by email clients)
-  if (env === WEBAPP_ENVS.LOCAL) {
-    return BASE_URLS[WEBAPP_ENVS.PROD].app;
+  if (env === WebAppEnvs.LOCAL) {
+    const prodUrls = BASE_URLS[WebAppEnvs.PROD];
+    if (!prodUrls) {
+      throw new Error('Production BASE_URLS not configured');
+    }
+    return prodUrls.app;
   }
-  return BASE_URLS[env].app;
+  const envUrls = BASE_URLS[env];
+  if (!envUrls) {
+    throw new Error(`BASE_URLS not configured for environment: ${env}`);
+  }
+  return envUrls.app;
 }
 
 export const EMAIL_ASSETS_BASE_URL = getEmailAssetsBaseUrl();

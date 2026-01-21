@@ -22,7 +22,7 @@ import {
 import { useMemo } from 'react';
 
 import { useUsageStatsQuery } from '@/hooks/queries';
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import { CREDIT_CONFIG } from '@/lib/config';
 import type { CreditEstimationStatus } from '@/lib/enums/billing-ui';
 import { CreditEstimationStatuses } from '@/lib/enums/billing-ui';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';

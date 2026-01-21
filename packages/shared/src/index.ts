@@ -4,6 +4,9 @@
  * Shared code between API and web packages.
  */
 
+// Config - Shared configuration
+export * from './config';
+
 // Constants
 export * from './constants';
 

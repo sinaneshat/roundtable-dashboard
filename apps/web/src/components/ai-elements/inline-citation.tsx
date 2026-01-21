@@ -150,6 +150,10 @@ function InlineCitationCardTrigger({
 }: InlineCitationCardTriggerProps) {
   const config = SOURCE_TYPE_CONFIG[sourceType];
 
+  if (!config) {
+    return null;
+  }
+
   // Get display text: hostname for search results, type label for others
   const getDisplayText = () => {
     // For search results with URLs, show hostname
@@ -174,6 +178,8 @@ function InlineCitationCardTrigger({
     return shortLabels[sourceType] || (displayNumber?.toString() ?? '?');
   };
 
+  const IconComponent = config.icon;
+
   return (
     <PopoverTrigger asChild>
       <button
@@ -191,7 +197,7 @@ function InlineCitationCardTrigger({
             config.color,
           )}
         >
-          <config.icon className="size-3" />
+          <IconComponent className="size-3" />
           <span>{getDisplayText()}</span>
         </Badge>
       </button>
@@ -253,7 +259,12 @@ function InlineCitationSource({
 }: InlineCitationSourceProps) {
   const t = useTranslations();
   const config = SOURCE_TYPE_CONFIG[sourceType];
-  const Icon = config.icon;
+
+  if (!config) {
+    return null;
+  }
+
+  const IconComponent = config.icon;
   const isAttachment = sourceType === CitationSourceTypes.ATTACHMENT;
 
   // Extract hostname from URL for display (useful for search citations)
@@ -277,7 +288,7 @@ function InlineCitationSource({
     <div className={cn('space-y-2', className)}>
       <div className="flex items-start gap-2">
         <div className={cn('shrink-0 p-1.5 rounded-md bg-muted/50', config.color)}>
-          <Icon className="size-3.5" />
+          <IconComponent className="size-3.5" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">

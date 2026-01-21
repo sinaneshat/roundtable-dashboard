@@ -286,7 +286,11 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
         customerId = cachedCustomerId;
       }
 
-      const appUrl = BASE_URLS[getWebappEnvFromContext(c)].app;
+      const urls = BASE_URLS[getWebappEnvFromContext(c)];
+      if (!urls) {
+        throw createError.internal('Environment configuration not found', ErrorContextBuilders.validation('WEBAPP_ENV'));
+      }
+      const appUrl = urls.app;
       const defaultSuccessUrl = `${appUrl}/chat/billing/subscription-success`;
       const successUrl = body.successUrl || defaultSuccessUrl;
       const cancelUrl = body.cancelUrl || `${appUrl}/chat/pricing`;
@@ -345,7 +349,11 @@ export const createCustomerPortalSessionHandler: RouteHandler<typeof createCusto
         throw createError.badRequest('No Stripe customer found for this user. Please create a subscription first.', ErrorContextBuilders.resourceNotFound('customer', undefined, user.id));
       }
 
-      const appUrl = BASE_URLS[getWebappEnvFromContext(c)].app;
+      const urls = BASE_URLS[getWebappEnvFromContext(c)];
+      if (!urls) {
+        throw createError.internal('Environment configuration not found', ErrorContextBuilders.validation('WEBAPP_ENV'));
+      }
+      const appUrl = urls.app;
       const returnUrl = body.returnUrl || `${appUrl}/chat`;
 
       const session = await stripeService.createCustomerPortalSession({

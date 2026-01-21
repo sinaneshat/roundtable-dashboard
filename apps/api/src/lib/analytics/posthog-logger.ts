@@ -16,8 +16,8 @@
  * ```
  */
 
+import { NodeEnvs, POSTHOG_LOG_LEVEL_VALUES, PosthogLogLevels } from '@roundtable/shared';
 import type { PosthogLogLevel } from '@roundtable/shared/enums';
-import { POSTHOG_LOG_LEVEL_VALUES, PosthogLogLevels } from '@roundtable/shared/enums';
 
 import { getDistinctIdFromCookie, getPostHogClient } from './posthog-server';
 
@@ -30,7 +30,7 @@ type LogContext = {
   service?: string;
 };
 
-const MIN_LOG_LEVEL: PosthogLogLevel = process.env.NODE_ENV === 'production' ? PosthogLogLevels.INFO : PosthogLogLevels.DEBUG;
+const MIN_LOG_LEVEL: PosthogLogLevel = process.env.NODE_ENV === NodeEnvs.PRODUCTION ? PosthogLogLevels.INFO : PosthogLogLevels.DEBUG;
 
 function shouldLog(level: PosthogLogLevel): boolean {
   return POSTHOG_LOG_LEVEL_VALUES[level] >= POSTHOG_LOG_LEVEL_VALUES[MIN_LOG_LEVEL];

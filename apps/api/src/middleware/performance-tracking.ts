@@ -11,6 +11,7 @@
  * OFFICIAL HONO PATTERN: Uses createMiddleware for proper typing
  */
 
+import { WebAppEnvs } from '@roundtable/shared';
 import { createMiddleware } from 'hono/factory';
 
 import type { ApiEnv } from '@/types';
@@ -39,8 +40,8 @@ export type PerformanceMetrics = {
  * WEBAPP_ENV values: 'local' | 'preview' | 'prod' (from wrangler.jsonc)
  */
 function isPerformanceTrackingEnabled(): boolean {
-  const env = process.env.WEBAPP_ENV || 'local';
-  return env === 'local' || env === 'preview';
+  const env = process.env.WEBAPP_ENV || WebAppEnvs.LOCAL;
+  return env === WebAppEnvs.LOCAL || env === WebAppEnvs.PREVIEW;
 }
 
 /**
@@ -97,16 +98,56 @@ export const performanceTracking = createMiddleware<ApiEnv>(async (c, next) => {
 });
 
 /**
+ * Performance response format for API responses
+ */
+export type PerformanceResponseFormat = {
+  timing: {
+    total: number;
+    db: {
+      queryCount: number;
+      totalTime: number;
+      avgTime: number;
+      queries: Array<{
+        query: string;
+        duration: number;
+      }>;
+    };
+  };
+  cloudflare: {
+    placement: string;
+    ray: string;
+  };
+};
+
+/**
  * Format performance metrics for API response
  * Returns object to be included in response meta
  */
-export function formatPerformanceForResponse(c?: { get: (key: string) => unknown }): Record<string, unknown> | undefined {
+export function formatPerformanceForResponse(c?: { get: (key: string) => unknown }): PerformanceResponseFormat | undefined {
   if (!isPerformanceTrackingEnabled()) {
     return undefined;
   }
 
-  const metrics = c?.get('performanceMetrics') as PerformanceMetrics | undefined;
-  if (!metrics) {
+  // Type guard: Validate metrics structure at runtime
+  const rawMetrics = c?.get('performanceMetrics');
+  if (!rawMetrics || typeof rawMetrics !== 'object') {
+    return undefined;
+  }
+
+  // Runtime type validation for PerformanceMetrics
+  const metrics = rawMetrics as Record<string, unknown>;
+  if (
+    typeof metrics.requestStartTime !== 'number'
+    || typeof metrics.dbQueryCount !== 'number'
+    || typeof metrics.dbTotalTime !== 'number'
+    || !Array.isArray(metrics.dbQueries)
+  ) {
+    return undefined;
+  }
+
+  // Now safe to use as PerformanceMetrics
+  const typedMetrics = metrics as PerformanceMetrics;
+  if (!typedMetrics) {
     return undefined;
   }
 
@@ -114,22 +155,22 @@ export function formatPerformanceForResponse(c?: { get: (key: string) => unknown
 
   return {
     timing: {
-      total: now - metrics.requestStartTime,
+      total: now - typedMetrics.requestStartTime,
       db: {
-        queryCount: metrics.dbQueryCount,
-        totalTime: metrics.dbTotalTime,
-        avgTime: metrics.dbQueryCount > 0
-          ? Math.round(metrics.dbTotalTime / metrics.dbQueryCount)
+        queryCount: typedMetrics.dbQueryCount,
+        totalTime: typedMetrics.dbTotalTime,
+        avgTime: typedMetrics.dbQueryCount > 0
+          ? Math.round(typedMetrics.dbTotalTime / typedMetrics.dbQueryCount)
           : 0,
-        queries: metrics.dbQueries.map(q => ({
+        queries: typedMetrics.dbQueries.map(q => ({
           query: q.query,
           duration: q.duration,
         })),
       },
     },
     cloudflare: {
-      placement: metrics.cfPlacement || 'unknown',
-      ray: metrics.cfRay || 'unknown',
+      placement: typedMetrics.cfPlacement || 'unknown',
+      ray: typedMetrics.cfRay || 'unknown',
     },
   };
 }

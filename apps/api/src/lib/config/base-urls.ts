@@ -15,45 +15,22 @@
  * - Sync contexts: Use getWebappEnv()
  */
 
-import { z } from '@hono/zod-openapi';
+import type { WebAppEnv as WebappEnv } from '@roundtable/shared';
+import {
+  DEFAULT_WEBAPP_ENV,
+  isWebAppEnv as isWebappEnv,
+  NodeEnvs,
+  WEBAPP_ENVS,
+  WebAppEnvs,
+  WebAppEnvSchema as WebappEnvSchema,
+} from '@roundtable/shared';
 import { env as workersEnv } from 'cloudflare:workers';
 import type { Context } from 'hono';
 
 import type { ApiEnv } from '@/types';
 
-/**
- * Webapp environment values - 5-part enum pattern
- */
-
-// 1️⃣ ARRAY CONSTANT - Source of truth for values
-export const WEBAPP_ENV_VALUES = ['local', 'preview', 'prod'] as const;
-
-// 2️⃣ DEFAULT VALUE
-export const DEFAULT_WEBAPP_ENV: WebappEnv = 'local';
-
-// 3️⃣ ZOD SCHEMA - Runtime validation
-
-export const WebappEnvSchema = z.enum(WEBAPP_ENV_VALUES).openapi({
-  description: 'Webapp deployment environment',
-  example: 'prod',
-});
-
-// 4️⃣ TYPESCRIPT TYPE - Inferred from schema
-export type WebappEnv = z.infer<typeof WebappEnvSchema>;
-
-// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
-export const WEBAPP_ENVS = {
-  LOCAL: 'local' as const,
-  PREVIEW: 'preview' as const,
-  PROD: 'prod' as const,
-} as const;
-
-/**
- * Type guard to check if value is a valid WebappEnv
- */
-export function isWebappEnv(value: unknown): value is WebappEnv {
-  return WebappEnvSchema.safeParse(value).success;
-}
+// Re-export for backward compatibility
+export { DEFAULT_WEBAPP_ENV, isWebappEnv, WEBAPP_ENVS, type WebappEnv, WebAppEnvs, WebappEnvSchema };
 
 /**
  * Static URL configuration for each environment
@@ -64,15 +41,15 @@ export function isWebappEnv(value: unknown): value is WebappEnv {
  * - Prod: Web on roundtable.now, API on api.roundtable.now
  */
 export const BASE_URLS: Record<WebappEnv, { app: string; api: string }> = {
-  [WEBAPP_ENVS.LOCAL]: {
+  [WebAppEnvs.LOCAL]: {
     app: 'http://localhost:5173',
     api: 'http://localhost:8787/api/v1',
   },
-  [WEBAPP_ENVS.PREVIEW]: {
+  [WebAppEnvs.PREVIEW]: {
     app: 'https://web-preview.roundtable.now',
     api: 'https://api-preview.roundtable.now/api/v1',
   },
-  [WEBAPP_ENVS.PROD]: {
+  [WebAppEnvs.PROD]: {
     app: 'https://roundtable.now',
     api: 'https://api.roundtable.now/api/v1',
   },
@@ -97,7 +74,7 @@ export function getWebappEnvFromContext(c: Context<ApiEnv>): WebappEnv {
 
   // 3. Fall back to NODE_ENV detection
   const nodeEnv = c.env?.NODE_ENV || process.env.NODE_ENV;
-  return nodeEnv === 'development' ? WEBAPP_ENVS.LOCAL : WEBAPP_ENVS.PROD;
+  return nodeEnv === 'development' ? WebAppEnvs.LOCAL : WebAppEnvs.PROD;
 }
 
 /**
@@ -106,7 +83,7 @@ export function getWebappEnvFromContext(c: Context<ApiEnv>): WebappEnv {
 export function isDevelopmentFromContext(c: Context<ApiEnv>): boolean {
   const env = getWebappEnvFromContext(c);
   const nodeEnv = c.env?.NODE_ENV || process.env.NODE_ENV;
-  return env === WEBAPP_ENVS.LOCAL || nodeEnv === 'development';
+  return env === WebAppEnvs.LOCAL || nodeEnv === 'development';
 }
 
 /**
@@ -136,9 +113,12 @@ export function getAllowedOriginsFromContext(c: Context<ApiEnv>): string[] {
   }
 
   // Add environment-specific URL
-  const envUrl = BASE_URLS[env].app;
-  if (!envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
-    origins.push(envUrl);
+  const envUrls = BASE_URLS[env];
+  if (envUrls) {
+    const envUrl = envUrls.app;
+    if (!envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
+      origins.push(envUrl);
+    }
   }
 
   return origins;
@@ -170,9 +150,9 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
   }
 
   // 3. Fall back to NODE_ENV detection
-  return process.env.NODE_ENV === 'development'
-    ? WEBAPP_ENVS.LOCAL
-    : WEBAPP_ENVS.PROD;
+  return process.env.NODE_ENV === NodeEnvs.DEVELOPMENT
+    ? WebAppEnvs.LOCAL
+    : WebAppEnvs.PROD;
 }
 
 /**
@@ -204,9 +184,9 @@ export function getWebappEnv(): WebappEnv {
   }
 
   // 3. Fall back to NODE_ENV detection
-  return process.env.NODE_ENV === 'development'
-    ? WEBAPP_ENVS.LOCAL
-    : WEBAPP_ENVS.PROD;
+  return process.env.NODE_ENV === NodeEnvs.DEVELOPMENT
+    ? WebAppEnvs.LOCAL
+    : WebAppEnvs.PROD;
 }
 
 /**
@@ -221,7 +201,11 @@ export function getBaseUrls() {
  * Get API base URL for current environment
  */
 export function getApiBaseUrl(): string {
-  return getBaseUrls().api;
+  const urls = getBaseUrls();
+  if (!urls) {
+    throw new Error('BASE_URLS not configured for current environment');
+  }
+  return urls.api;
 }
 
 /**
@@ -230,7 +214,11 @@ export function getApiBaseUrl(): string {
  * (e.g., Better Auth which mounts at /api/auth, not /api/v1/auth)
  */
 export function getApiServerOrigin(): string {
-  const apiUrl = getBaseUrls().api;
+  const urls = getBaseUrls();
+  if (!urls) {
+    throw new Error('BASE_URLS not configured for current environment');
+  }
+  const apiUrl = urls.api;
   try {
     const url = new URL(apiUrl);
     return url.origin;
@@ -244,7 +232,11 @@ export function getApiServerOrigin(): string {
  * Get app base URL for current environment
  */
 export function getAppBaseUrl(): string {
-  return getBaseUrls().app;
+  const urls = getBaseUrls();
+  if (!urls) {
+    throw new Error('BASE_URLS not configured for current environment');
+  }
+  return urls.app;
 }
 
 /**
@@ -256,12 +248,20 @@ export function getProductionApiUrl(): string {
   // This ensures static pages can be built with real data
   const currentEnv = getWebappEnv();
 
-  if (currentEnv === WEBAPP_ENVS.LOCAL && process.env.NODE_ENV === 'production') {
+  if (currentEnv === WebAppEnvs.LOCAL && process.env.NODE_ENV === NodeEnvs.PRODUCTION) {
     // Building for production but env is local - use preview API
-    return BASE_URLS[WEBAPP_ENVS.PREVIEW].api;
+    const previewUrls = BASE_URLS[WebAppEnvs.PREVIEW];
+    if (!previewUrls) {
+      throw new Error('Preview BASE_URLS not configured');
+    }
+    return previewUrls.api;
   }
 
-  return BASE_URLS[currentEnv].api;
+  const urls = BASE_URLS[currentEnv];
+  if (!urls) {
+    throw new Error(`BASE_URLS not configured for environment: ${currentEnv}`);
+  }
+  return urls.api;
 }
 
 /**
@@ -270,5 +270,9 @@ export function getProductionApiUrl(): string {
  */
 export async function getApiUrlAsync(): Promise<string> {
   const currentEnv = await getWebappEnvAsync();
-  return BASE_URLS[currentEnv].api;
+  const urls = BASE_URLS[currentEnv];
+  if (!urls) {
+    throw new Error(`BASE_URLS not configured for environment: ${currentEnv}`);
+  }
+  return urls.api;
 }

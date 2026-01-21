@@ -1,4 +1,5 @@
 import type { RouteHandler } from '@hono/zod-openapi';
+import { WebAppEnvs } from '@roundtable/shared';
 import { DEFAULT_PROJECT_INDEX_STATUS } from '@roundtable/shared/enums';
 import { and, eq, like } from 'drizzle-orm';
 import { ulid } from 'ulid';
@@ -190,9 +191,9 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
     // Determine AutoRAG instance ID based on environment
     const autoragInstanceId
       = body.autoragInstanceId
-        || (c.env.WEBAPP_ENV === 'prod'
+        || (c.env.WEBAPP_ENV === WebAppEnvs.PROD
           ? 'roundtable-rag-prod'
-          : c.env.WEBAPP_ENV === 'preview'
+          : c.env.WEBAPP_ENV === WebAppEnvs.PREVIEW
             ? 'roundtable-rag-preview'
             : 'roundtable-rag-local');
 

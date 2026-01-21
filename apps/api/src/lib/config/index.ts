@@ -24,13 +24,10 @@ export {
   getWebappEnv,
   getWebappEnvAsync,
   isWebappEnv,
-  WEBAPP_ENV_VALUES,
   WEBAPP_ENVS,
+  WebAppEnvs,
   WebappEnvSchema,
 } from './base-urls';
-
-// Credit configuration
-export { CREDIT_CONFIG, PLAN_NAMES } from './credit-config';
 
 // Participant limits configuration
 export {
@@ -49,11 +46,14 @@ export {
   ParticipantSettingsSchema,
 } from './participant-settings';
 
-// Role prompts configuration
-export { createRoleSystemPrompt } from './role-prompts';
-
 // Tier names configuration
 export {
   getTierDisplayName,
   SUBSCRIPTION_TIER_NAMES,
 } from './tier-names';
+
+// Credit configuration (re-exported from shared package)
+export { CREDIT_CONFIG, PLAN_NAMES } from '@roundtable/shared';
+
+// Role prompts configuration (re-exported from shared package)
+export { createRoleSystemPrompt } from '@roundtable/shared';

@@ -23,15 +23,35 @@ import { cn } from '@/lib/ui/cn';
 import { safeExtractDomain } from '@/lib/utils';
 import type { WebSearchResultItem } from '@/services/api';
 
+/**
+ * Web search metadata from API response
+ */
+export type WebSearchMeta = {
+  requestId?: string;
+  provider?: string;
+  timestamp?: string;
+  [key: string]: unknown;
+};
+
+/**
+ * Auto parameters for web search configuration
+ */
+export type WebSearchAutoParameters = {
+  maxResults?: number;
+  searchDepth?: string;
+  includeImages?: boolean;
+  [key: string]: unknown;
+};
+
 export type WebSearchDisplayExtendedProps = {
   results: WebSearchResultItem[];
   className?: string;
-  meta?: Record<string, unknown>;
+  meta?: WebSearchMeta;
   answer?: string | null;
   isStreaming?: boolean;
   requestId?: string;
   query?: string;
-  autoParameters?: Record<string, unknown>;
+  autoParameters?: WebSearchAutoParameters;
   isLoading?: boolean;
 };
 

@@ -1,15 +1,15 @@
 /**
  * Role System Prompts Configuration
  *
- * ✅ CLIENT-SAFE: No server-only dependencies
  * ✅ SINGLE SOURCE OF TRUTH: System prompts for custom participant roles
+ * ✅ CLIENT-SAFE: No server-only dependencies
  *
  * Creates role-specific system prompts for AI participants.
  * Used when creating custom roles in the model selection modal.
  */
 
-import type { ChatMode } from '@roundtable/shared';
-import { ChatModes } from '@roundtable/shared';
+import type { ChatMode } from '../enums';
+import { ChatModes } from '../enums';
 
 /**
  * Participant roster placeholder - replaced at runtime with actual model names
@@ -148,5 +148,5 @@ ${basePrompt}`;
  * createRoleSystemPrompt('UX Designer', 'brainstorming')
  */
 export function createRoleSystemPrompt(roleName: string, mode?: ChatMode | null): string {
-  return buildParticipantSystemPrompt(roleName, mode);
+  return buildParticipantSystemPrompt(roleName, mode ?? null);
 }

@@ -15,7 +15,7 @@ import type { StripeSubscriptionStatus } from '@roundtable/shared/enums';
 import { StripeSubscriptionStatuses } from '@roundtable/shared/enums';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import { CREDIT_CONFIG } from '@/lib/config';
 import type {
   MockStripeEvent,
   MockStripeInvoice,

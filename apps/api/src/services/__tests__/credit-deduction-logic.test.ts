@@ -16,7 +16,7 @@
 import { CreditActions, CreditTransactionTypes, ModelPricingTiers } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
 
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import { CREDIT_CONFIG } from '@/lib/config';
 import type { ModelForPricing } from '@/services/billing';
 import {
   calculateBaseCredits,

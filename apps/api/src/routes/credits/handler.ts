@@ -3,7 +3,7 @@ import type { UsageStatus } from '@roundtable/shared/enums';
 import { CreditActions, PlanTypes, UsageStatuses } from '@roundtable/shared/enums';
 
 import { createHandler, Responses } from '@/core';
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import { CREDIT_CONFIG } from '@/lib/config';
 import {
   canAffordCredits,
   estimateStreamingCredits,

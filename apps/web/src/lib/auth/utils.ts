@@ -4,7 +4,7 @@
  * Reusable helper functions for authentication and email domain validation
  */
 
-import { BETTER_AUTH_SESSION_COOKIE_NAME } from '@roundtable/shared';
+import { BETTER_AUTH_SESSION_COOKIE_NAME, EMAIL_DOMAIN_CONFIG } from '@roundtable/shared';
 import { APIError } from 'better-auth/api';
 import { z } from 'zod';
 
@@ -20,7 +20,7 @@ import { isWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
  */
 const AuthRequestBodySchema = z.object({
   email: z.string().email().optional(),
-}).passthrough(); // Allow additional Better Auth fields
+}).passthrough();
 
 type AuthRequestBody = z.infer<typeof AuthRequestBodySchema>;
 
@@ -32,53 +32,6 @@ type AuthContext = {
   path: string;
   body?: AuthRequestBody;
 };
-
-/**
- * Authentication paths that require email domain validation
- * Following better-auth route patterns
- */
-const PROTECTED_AUTH_PATHS: readonly string[] = [
-  '/sign-up/email', // Email/password registration
-  '/sign-in/email', // Email/password sign-in (may auto-register)
-  '/sign-in/magic-link', // Magic link authentication (may auto-register)
-];
-
-/**
- * Specific email addresses allowed in local/preview environments
- * These are exceptions to the domain restriction
- * @see e2e/fixtures/test-users.ts for E2E test user definitions
- */
-const ALLOWED_EMAIL_EXCEPTIONS: readonly string[] = [
-  // E2E test users - required for Playwright tests
-  'e2e-free-test@roundtable.now',
-  'e2e-pro-test@roundtable.now',
-  'e2e-admin-test@roundtable.now',
-];
-
-/**
- * Configuration for email domain restrictions
- */
-export const EMAIL_DOMAIN_CONFIG = {
-  /**
-   * Allowed email domain for local and preview environments
-   */
-  ALLOWED_DOMAIN: '@deadpixel.ai',
-
-  /**
-   * Specific email addresses allowed as exceptions
-   */
-  ALLOWED_EXCEPTIONS: ALLOWED_EMAIL_EXCEPTIONS,
-
-  /**
-   * Error message for domain restriction violations
-   */
-  ERROR_MESSAGE: 'Access restricted: Only @deadpixel.ai email addresses are allowed in preview environments',
-
-  /**
-   * Authentication paths that require email domain validation
-   */
-  PROTECTED_PATHS: PROTECTED_AUTH_PATHS,
-} as const;
 
 export function isRestrictedEnvironment(): boolean {
   // Check import.meta.env (Vite build-time replacement)

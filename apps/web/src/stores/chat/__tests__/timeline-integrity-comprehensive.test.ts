@@ -35,8 +35,13 @@ import {
   createMockStoredPreSearch,
   createTestAssistantMessage,
   createTestUserMessage,
+  getMetadataFinishReason,
+  getMetadataRoundNumber,
+  hasAssistantMetadata,
+  hasUserMetadata,
+  isMetadataModerator,
 } from '@/lib/testing';
-import type { ChatThread, DbAssistantMessageMetadata, DbModeratorMessageMetadata, DbUserMessageMetadata } from '@/services/api';
+import type { ChatThread, DbModeratorMessageMetadata } from '@/services/api';
 
 import type { ChatStoreApi } from '../store';
 import { createChatStore } from '../store';
@@ -118,13 +123,9 @@ function buildTimelineFromStore(store: ChatStoreApi): TimelineElement[] {
   const roundNumbers = new Set<number>();
 
   state.messages.forEach((m) => {
-    if (
-      m.metadata
-      && typeof m.metadata === 'object'
-      && 'roundNumber' in m.metadata
-      && typeof m.metadata.roundNumber === 'number'
-    ) {
-      roundNumbers.add(m.metadata.roundNumber);
+    const roundNumber = getMetadataRoundNumber(m.metadata);
+    if (roundNumber !== null) {
+      roundNumbers.add(roundNumber);
     }
   });
 
@@ -138,11 +139,10 @@ function buildTimelineFromStore(store: ChatStoreApi): TimelineElement[] {
   for (const roundNumber of sortedRounds) {
     // User message for this round
     const userMsg = state.messages.find((m) => {
-      if (!m.metadata || typeof m.metadata !== 'object') {
+      if (!hasUserMetadata(m)) {
         return false;
       }
-      const metadata = m.metadata as DbUserMessageMetadata;
-      return metadata.role === MessageRoles.USER && metadata.roundNumber === roundNumber;
+      return m.metadata.roundNumber === roundNumber;
     });
 
     if (userMsg) {
@@ -166,41 +166,38 @@ function buildTimelineFromStore(store: ChatStoreApi): TimelineElement[] {
     // Participant messages for this round (sorted by participantIndex, excluding moderator)
     const participantMsgs = state.messages
       .filter((m) => {
-        if (!m.metadata || typeof m.metadata !== 'object') {
+        if (!hasAssistantMetadata(m)) {
           return false;
         }
-        const metadata = m.metadata as DbAssistantMessageMetadata & { isModerator?: boolean };
         return (
-          metadata.role === MessageRoles.ASSISTANT
-          && metadata.roundNumber === roundNumber
-          && !metadata.isModerator
+          m.metadata.roundNumber === roundNumber
+          && !isMetadataModerator(m.metadata)
         );
       })
       .sort((a, b) => {
-        const aMetadata = a.metadata as DbAssistantMessageMetadata;
-        const bMetadata = b.metadata as DbAssistantMessageMetadata;
-        const aIdx = aMetadata.participantIndex ?? 0;
-        const bIdx = bMetadata.participantIndex ?? 0;
+        if (!hasAssistantMetadata(a) || !hasAssistantMetadata(b)) {
+          return 0;
+        }
+        const aIdx = a.metadata.participantIndex ?? 0;
+        const bIdx = b.metadata.participantIndex ?? 0;
         return aIdx - bIdx;
       });
 
     for (const msg of participantMsgs) {
-      const metadata = msg.metadata as DbAssistantMessageMetadata;
-      timeline.push({
-        type: TimelineElementTypes.PARTICIPANT_MESSAGE,
-        roundNumber,
-        participantIndex: metadata.participantIndex,
-        timestamp: timestamp++,
-      });
+      if (hasAssistantMetadata(msg)) {
+        timeline.push({
+          type: TimelineElementTypes.PARTICIPANT_MESSAGE,
+          roundNumber,
+          participantIndex: msg.metadata.participantIndex,
+          timestamp: timestamp++,
+        });
+      }
     }
 
     // Moderator for this round - derived from moderator messages
     const moderatorMsg = state.messages.find((m) => {
-      if (!m.metadata || typeof m.metadata !== 'object') {
-        return false;
-      }
-      const metadata = m.metadata as { isModerator?: boolean; roundNumber?: number };
-      return metadata.isModerator === true && metadata.roundNumber === roundNumber;
+      const msgRoundNumber = getMetadataRoundNumber(m.metadata);
+      return isMetadataModerator(m.metadata) && msgRoundNumber === roundNumber;
     });
     if (moderatorMsg) {
       timeline.push({
@@ -504,11 +501,11 @@ describe('participant Sequential Execution', () => {
       store.getState().setMessages([...messages]);
 
       const completedCount = messages.filter((m) => {
-        if (!m.metadata || typeof m.metadata !== 'object') {
+        if (!hasAssistantMetadata(m)) {
           return false;
         }
-        const meta = m.metadata as DbAssistantMessageMetadata;
-        return meta.role === MessageRoles.ASSISTANT && meta.finishReason === FinishReasons.STOP;
+        const finishReason = getMetadataFinishReason(m.metadata);
+        return finishReason === FinishReasons.STOP;
       }).length;
 
       const allComplete = completedCount === participantCount;
@@ -782,14 +779,14 @@ describe('moderator Trigger Timing', () => {
       store.getState().setMessages([...allMessages]);
 
       const completedCount = store.getState().messages.filter((m) => {
-        if (!m.metadata || typeof m.metadata !== 'object') {
+        if (!hasAssistantMetadata(m)) {
           return false;
         }
-        const meta = m.metadata as DbAssistantMessageMetadata;
+        const roundNumber = getMetadataRoundNumber(m.metadata);
+        const finishReason = getMetadataFinishReason(m.metadata);
         return (
-          meta.role === MessageRoles.ASSISTANT
-          && meta.roundNumber === 0
-          && meta.finishReason === FinishReasons.STOP
+          roundNumber === 0
+          && finishReason === FinishReasons.STOP
         );
       }).length;
 

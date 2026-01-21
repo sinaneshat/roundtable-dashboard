@@ -9,6 +9,8 @@
  * - cancelCleanup() when upload attached to message/thread/project
  */
 
+import { WebAppEnvs } from '@roundtable/shared';
+
 import { createError } from '@/common/error-handling';
 import type { ErrorContext } from '@/core';
 import type {
@@ -81,7 +83,7 @@ export async function getUploadCleanupState(
 }
 
 export function isCleanupSchedulerAvailable(env: CloudflareEnv): boolean {
-  if (env.WEBAPP_ENV === 'local') {
+  if (env.WEBAPP_ENV === WebAppEnvs.LOCAL) {
     return false;
   }
   return env.UPLOAD_CLEANUP_SCHEDULER !== undefined;

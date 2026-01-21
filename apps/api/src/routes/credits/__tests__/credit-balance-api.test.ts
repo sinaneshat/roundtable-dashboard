@@ -2,7 +2,7 @@ import { PlanTypes } from '@roundtable/shared/enums';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { UserCreditBalance } from '@/db/validation';
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import { CREDIT_CONFIG } from '@/lib/config';
 import * as creditService from '@/services/billing';
 
 type MockDbResult<T> = T[];

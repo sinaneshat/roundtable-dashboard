@@ -1,5 +1,5 @@
+import { DevLogLevels, NodeEnvs, RLOG_CATEGORY_STYLES, RlogCategories } from '@roundtable/shared';
 import type { DebugData, DevLogLevel, RlogCategory, RlogStreamAction } from '@roundtable/shared/enums';
-import { DevLogLevels, RLOG_CATEGORY_STYLES, RlogCategories } from '@roundtable/shared/enums';
 
 type LogEntry = {
   key: string;
@@ -22,7 +22,7 @@ const EXCESSIVE_UPDATE_THRESHOLD = 10;
 const logCache = new Map<string, LogEntry>();
 const updateCounts = new Map<string, UpdateTracker>();
 
-const isDev = process.env.NODE_ENV === 'development';
+const isDev = process.env.NODE_ENV === NodeEnvs.DEVELOPMENT;
 
 /* eslint-disable no-console */
 function getConsoleMethod(level: DevLogLevel): typeof console.debug {

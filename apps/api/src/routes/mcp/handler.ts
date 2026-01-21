@@ -8,6 +8,7 @@
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
+import { WebAppEnvs } from '@roundtable/shared';
 import {
   CreditActions,
   DEFAULT_CHAT_MODE,
@@ -1235,9 +1236,9 @@ async function toolCreateProject(
 
   // Determine AutoRAG instance ID based on environment
   const autoragInstanceId
-    = env.WEBAPP_ENV === 'prod'
+    = env.WEBAPP_ENV === WebAppEnvs.PROD
       ? 'roundtable-rag-prod'
-      : env.WEBAPP_ENV === 'preview'
+      : env.WEBAPP_ENV === WebAppEnvs.PREVIEW
         ? 'roundtable-rag-preview'
         : 'roundtable-rag-local';
 

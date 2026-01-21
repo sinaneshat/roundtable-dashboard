@@ -17,9 +17,9 @@ import {
 
 import { transition } from '../flow-machine';
 
-describe('V2 error handling', () => {
+describe('v2 error handling', () => {
   describe('network errors', () => {
-    it('ERROR event transitions any state to error', () => {
+    it('error event transitions any state to error', () => {
       const states = [
         { type: 'idle' as const },
         { type: 'creating_thread' as const, message: 'test', mode: 'council' as const, participants: [] },
@@ -34,9 +34,7 @@ describe('V2 error handling', () => {
       for (const state of states) {
         const result = transition(state, { type: 'ERROR', error: 'Network failed' }, context);
         expect(result.type).toBe('error');
-        if (result.type === 'error') {
-          expect(result.error).toBe('Network failed');
-        }
+        expect(result).toHaveProperty('error', 'Network failed');
       }
     });
 
@@ -47,11 +45,9 @@ describe('V2 error handling', () => {
       const result = transition(state, { type: 'ERROR', error: 'Pre-search failed' }, context);
 
       expect(result.type).toBe('error');
-      if (result.type === 'error') {
-        expect(result.threadId).toBe('t1');
-        expect(result.round).toBe(2);
-        expect(result.error).toBe('Pre-search failed');
-      }
+      expect(result).toHaveProperty('threadId', 't1');
+      expect(result).toHaveProperty('round', 2);
+      expect(result).toHaveProperty('error', 'Pre-search failed');
     });
 
     it('streaming failure preserves thread context', () => {
@@ -61,10 +57,8 @@ describe('V2 error handling', () => {
       const result = transition(state, { type: 'ERROR', error: 'Stream error' }, context);
 
       expect(result.type).toBe('error');
-      if (result.type === 'error') {
-        expect(result.threadId).toBe('t1');
-        expect(result.round).toBe(1);
-      }
+      expect(result).toHaveProperty('threadId', 't1');
+      expect(result).toHaveProperty('round', 1);
     });
 
     it('error from idle has no thread context', () => {
@@ -74,10 +68,8 @@ describe('V2 error handling', () => {
       const result = transition(state, { type: 'ERROR', error: 'Early failure' }, context);
 
       expect(result.type).toBe('error');
-      if (result.type === 'error') {
-        expect(result.threadId).toBeUndefined();
-        expect(result.round).toBeUndefined();
-      }
+      expect(result).not.toHaveProperty('threadId');
+      expect(result).not.toHaveProperty('round');
     });
 
     it('error from creating_thread has no thread context', () => {
@@ -92,43 +84,37 @@ describe('V2 error handling', () => {
       const result = transition(state, { type: 'ERROR', error: 'Thread creation failed' }, context);
 
       expect(result.type).toBe('error');
-      if (result.type === 'error') {
-        expect(result.threadId).toBeUndefined();
-        expect(result.round).toBeUndefined();
-      }
+      expect(result).not.toHaveProperty('threadId');
+      expect(result).not.toHaveProperty('round');
     });
   });
 
   describe('retry from error', () => {
-    it('RETRY with threadId and web search -> pre_search', () => {
+    it('retry with threadId and web search -> pre_search', () => {
       const state = createErrorFlowState({ threadId: 't1', round: 0 });
       const context = createTestFlowContext({ enableWebSearch: true, participantCount: 2 });
 
       const result = transition(state, { type: 'RETRY', round: 0 }, context);
 
       expect(result.type).toBe('pre_search');
-      if (result.type === 'pre_search') {
-        expect(result.threadId).toBe('t1');
-        expect(result.round).toBe(0);
-      }
+      expect(result).toHaveProperty('threadId', 't1');
+      expect(result).toHaveProperty('round', 0);
     });
 
-    it('RETRY with threadId and no web search -> streaming', () => {
+    it('retry with threadId and no web search -> streaming', () => {
       const state = createErrorFlowState({ threadId: 't1', round: 0 });
       const context = createTestFlowContext({ enableWebSearch: false, participantCount: 3 });
 
       const result = transition(state, { type: 'RETRY', round: 0 }, context);
 
       expect(result.type).toBe('streaming');
-      if (result.type === 'streaming') {
-        expect(result.threadId).toBe('t1');
-        expect(result.round).toBe(0);
-        expect(result.participantIndex).toBe(0);
-        expect(result.totalParticipants).toBe(3);
-      }
+      expect(result).toHaveProperty('threadId', 't1');
+      expect(result).toHaveProperty('round', 0);
+      expect(result).toHaveProperty('participantIndex', 0);
+      expect(result).toHaveProperty('totalParticipants', 3);
     });
 
-    it('RETRY without threadId stays in error', () => {
+    it('retry without threadId stays in error', () => {
       const state: ReturnType<typeof createErrorFlowState> = {
         type: 'error',
         error: 'No context',
@@ -140,19 +126,17 @@ describe('V2 error handling', () => {
       expect(result.type).toBe('error');
     });
 
-    it('RETRY preserves round context', () => {
+    it('retry preserves round context', () => {
       const state = createErrorFlowState({ threadId: 't1', round: 3 });
       const context = createTestFlowContext({ enableWebSearch: true });
 
       const result = transition(state, { type: 'RETRY', round: 3 }, context);
 
       expect(result.type).toBe('pre_search');
-      if (result.type === 'pre_search') {
-        expect(result.round).toBe(3);
-      }
+      expect(result).toHaveProperty('round', 3);
     });
 
-    it('RESET from error -> idle', () => {
+    it('reset from error -> idle', () => {
       const state = createErrorFlowState({ threadId: 't1', round: 0 });
       const context = createTestFlowContext();
 
@@ -163,7 +147,7 @@ describe('V2 error handling', () => {
   });
 
   describe('abort handling', () => {
-    it('AbortError should not dispatch ERROR (handled in hooks)', () => {
+    it('abortError should not dispatch ERROR (handled in hooks)', () => {
       // AbortError handling is done at the hook level, not in the state machine
       // The state machine only sees ERROR events that are explicitly dispatched
       // This test documents that the state machine doesn't have special abort handling
@@ -206,11 +190,9 @@ describe('V2 error handling', () => {
 
       const flow = store.getState().flow;
       expect(flow.type).toBe('error');
-      if (flow.type === 'error') {
-        expect(flow.error).toBe('Something went wrong');
-        expect(flow.threadId).toBe('t1');
-        expect(flow.round).toBe(1);
-      }
+      expect(flow).toHaveProperty('error', 'Something went wrong');
+      expect(flow).toHaveProperty('threadId', 't1');
+      expect(flow).toHaveProperty('round', 1);
     });
 
     it('store dispatch ERROR clears threadId/round if not in thread state', () => {
@@ -225,10 +207,8 @@ describe('V2 error handling', () => {
 
       const flow = store.getState().flow;
       expect(flow.type).toBe('error');
-      if (flow.type === 'error') {
-        expect(flow.threadId).toBeUndefined();
-        expect(flow.round).toBeUndefined();
-      }
+      expect(flow).not.toHaveProperty('threadId');
+      expect(flow).not.toHaveProperty('round');
     });
 
     it('can retry from error state in store', () => {
@@ -289,9 +269,8 @@ describe('V2 error handling', () => {
       });
 
       const result3 = transition(state, { type: 'RETRY', round: 0 }, contextWith3);
-      if (result3.type === 'streaming') {
-        expect(result3.totalParticipants).toBe(3);
-      }
+      expect(result3.type).toBe('streaming');
+      expect(result3).toHaveProperty('totalParticipants', 3);
 
       // Context with 5 participants
       const contextWith5 = createTestFlowContext({
@@ -300,9 +279,8 @@ describe('V2 error handling', () => {
       });
 
       const result5 = transition(state, { type: 'RETRY', round: 0 }, contextWith5);
-      if (result5.type === 'streaming') {
-        expect(result5.totalParticipants).toBe(5);
-      }
+      expect(result5.type).toBe('streaming');
+      expect(result5).toHaveProperty('totalParticipants', 5);
     });
   });
 
@@ -320,10 +298,8 @@ describe('V2 error handling', () => {
       const result = transition(state, { type: 'ERROR', error: 'Update failed' }, context);
 
       expect(result.type).toBe('error');
-      if (result.type === 'error') {
-        expect(result.threadId).toBe('t1');
-        expect(result.round).toBe(2);
-      }
+      expect(result).toHaveProperty('threadId', 't1');
+      expect(result).toHaveProperty('round', 2);
     });
 
     it('error during awaiting_changelog preserves context', () => {
@@ -337,10 +313,8 @@ describe('V2 error handling', () => {
       const result = transition(state, { type: 'ERROR', error: 'Changelog failed' }, context);
 
       expect(result.type).toBe('error');
-      if (result.type === 'error') {
-        expect(result.threadId).toBe('t1');
-        expect(result.round).toBe(1);
-      }
+      expect(result).toHaveProperty('threadId', 't1');
+      expect(result).toHaveProperty('round', 1);
     });
 
     it('error during round_complete preserves context', () => {
@@ -354,10 +328,8 @@ describe('V2 error handling', () => {
       const result = transition(state, { type: 'ERROR', error: 'Unexpected error' }, context);
 
       expect(result.type).toBe('error');
-      if (result.type === 'error') {
-        expect(result.threadId).toBe('t1');
-        expect(result.round).toBe(0);
-      }
+      expect(result).toHaveProperty('threadId', 't1');
+      expect(result).toHaveProperty('round', 0);
     });
   });
 

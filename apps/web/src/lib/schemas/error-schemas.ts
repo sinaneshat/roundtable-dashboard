@@ -185,6 +185,8 @@ export function categorizeErrorMessage(errorMessage: string): ErrorCategory {
  * ✅ UTILITY: Get human-readable error message for category
  */
 export function getErrorCategoryMessage(category: ErrorCategory): string {
+  const defaultMessage = 'An unknown error occurred';
+
   const messages: Record<ErrorCategory, string> = {
     // Frontend-style categories
     model_not_found: 'The requested model could not be found',
@@ -196,12 +198,12 @@ export function getErrorCategoryMessage(category: ErrorCategory): string {
     authentication: 'Authentication failed',
     silent_failure: 'The operation failed silently',
     empty_response: 'No response was generated',
-    unknown: 'An unknown error occurred',
+    unknown: defaultMessage,
     // Backend-style categories (from AIProviderErrorCategory)
     provider_rate_limit: 'Rate limit exceeded, please try again later',
     provider_network: 'Network error occurred, please check your connection',
     model_content_filter: 'Content was filtered by safety systems',
   };
 
-  return messages[category] || messages.unknown;
+  return messages[category] ?? defaultMessage;
 }

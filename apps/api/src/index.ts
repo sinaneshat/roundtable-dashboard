@@ -8,6 +8,7 @@
  * Never use createRoute directly in route handlers - always use OpenAPIHono apps.
  */
 
+import { WebAppEnvs } from '@roundtable/shared';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { contextStorage } from 'hono/context-storage';
@@ -281,8 +282,8 @@ import {
 // Environment Detection (sync, build-time check)
 // WEBAPP_ENV values: 'local' | 'preview' | 'prod' (from wrangler.jsonc)
 // ============================================================================
-const WEBAPP_ENV = process.env.WEBAPP_ENV || 'local';
-const IS_DEV_ENVIRONMENT = WEBAPP_ENV === 'local' || WEBAPP_ENV === 'preview';
+const WEBAPP_ENV = process.env.WEBAPP_ENV || WebAppEnvs.LOCAL;
+const IS_DEV_ENVIRONMENT = WEBAPP_ENV === WebAppEnvs.LOCAL || WEBAPP_ENV === WebAppEnvs.PREVIEW;
 
 // ============================================================================
 // Step 1: Create the main OpenAPIHono app with defaultHook (following docs)

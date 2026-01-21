@@ -698,10 +698,6 @@ describe('useIncompleteRoundResumption', () => {
   // STATE FLAG MANAGEMENT TESTS
   // ==========================================================================
   describe('state Flag Management', () => {
-    // TODO: This test requires mocking React's use() hook to properly test
-    // store.getState() calls in effects. Update test infrastructure to support this.
-    it.todo('should clear stale waitingToStartStreaming on refresh');
-
     it('should clear stale isStreaming after timeout', async () => {
       // SCENARIO: isStreaming stuck true after refresh
       setupMockStore({

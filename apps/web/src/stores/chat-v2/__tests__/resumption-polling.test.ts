@@ -5,8 +5,7 @@
  * Verifies that incomplete rounds trigger polling and sync correctly.
  */
 
-import { MessageStatuses } from '@roundtable/shared';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   createRoundCompleteFlowState,
@@ -15,9 +14,11 @@ import {
   createV2AssistantMessage,
   createV2ModeratorMessage,
   createV2UserMessage,
+  getMetadataRoundNumber,
+  isMetadataModerator,
 } from '@/lib/testing';
 
-describe('V2 resumption', () => {
+describe('v2 resumption', () => {
   describe('page refresh scenarios', () => {
     it('incomplete round 0 (user only) is detected correctly', () => {
       const messages = [
@@ -26,13 +27,13 @@ describe('V2 resumption', () => {
 
       // Check if round is incomplete (has user but no moderator)
       const hasUserMessage = messages.some((m) => {
-        const meta = m.metadata as Record<string, unknown>;
-        return meta?.roundNumber === 0 && meta?.role === 'user';
+        const roundNumber = getMetadataRoundNumber(m.metadata);
+        return roundNumber === 0 && m.role === 'user';
       });
 
       const hasModeratorMessage = messages.some((m) => {
-        const meta = m.metadata as Record<string, unknown>;
-        return meta?.roundNumber === 0 && meta?.isModerator === true;
+        const roundNumber = getMetadataRoundNumber(m.metadata);
+        return roundNumber === 0 && isMetadataModerator(m.metadata);
       });
 
       expect(hasUserMessage).toBe(true);
@@ -49,13 +50,13 @@ describe('V2 resumption', () => {
       ];
 
       const hasUserMessage = messages.some((m) => {
-        const meta = m.metadata as Record<string, unknown>;
-        return meta?.roundNumber === 0 && meta?.role === 'user';
+        const roundNumber = getMetadataRoundNumber(m.metadata);
+        return roundNumber === 0 && m.role === 'user';
       });
 
       const hasModeratorMessage = messages.some((m) => {
-        const meta = m.metadata as Record<string, unknown>;
-        return meta?.roundNumber === 0 && meta?.isModerator === true;
+        const roundNumber = getMetadataRoundNumber(m.metadata);
+        return roundNumber === 0 && isMetadataModerator(m.metadata);
       });
 
       expect(hasUserMessage).toBe(true);
@@ -71,13 +72,13 @@ describe('V2 resumption', () => {
       ];
 
       const hasUserMessage = messages.some((m) => {
-        const meta = m.metadata as Record<string, unknown>;
-        return meta?.roundNumber === 0 && meta?.role === 'user';
+        const roundNumber = getMetadataRoundNumber(m.metadata);
+        return roundNumber === 0 && m.role === 'user';
       });
 
       const hasModeratorMessage = messages.some((m) => {
-        const meta = m.metadata as Record<string, unknown>;
-        return meta?.roundNumber === 0 && meta?.isModerator === true;
+        const roundNumber = getMetadataRoundNumber(m.metadata);
+        return roundNumber === 0 && isMetadataModerator(m.metadata);
       });
 
       expect(hasUserMessage).toBe(true);
@@ -93,8 +94,8 @@ describe('V2 resumption', () => {
       ];
 
       const hasModeratorMessage = messages.some((m) => {
-        const meta = m.metadata as Record<string, unknown>;
-        return meta?.roundNumber === 0 && meta?.isModerator === true;
+        const roundNumber = getMetadataRoundNumber(m.metadata);
+        return roundNumber === 0 && isMetadataModerator(m.metadata);
       });
 
       // Round is complete - has moderator
@@ -114,13 +115,13 @@ describe('V2 resumption', () => {
       ];
 
       const round0Complete = messages.some((m) => {
-        const meta = m.metadata as Record<string, unknown>;
-        return meta?.roundNumber === 0 && meta?.isModerator === true;
+        const roundNumber = getMetadataRoundNumber(m.metadata);
+        return roundNumber === 0 && isMetadataModerator(m.metadata);
       });
 
       const round1Complete = messages.some((m) => {
-        const meta = m.metadata as Record<string, unknown>;
-        return meta?.roundNumber === 1 && meta?.isModerator === true;
+        const roundNumber = getMetadataRoundNumber(m.metadata);
+        return roundNumber === 1 && isMetadataModerator(m.metadata);
       });
 
       expect(round0Complete).toBe(true);
@@ -132,27 +133,6 @@ describe('V2 resumption', () => {
     it('transforms messages correctly', () => {
       const store = createTestChatStoreV2();
 
-      // Simulate what syncFromBackend does internally
-      const backendMessages = [
-        {
-          id: 'msg-1',
-          threadId: 't1',
-          role: 'user',
-          content: 'Hello',
-          roundNumber: 0,
-          createdAt: new Date().toISOString(),
-        },
-        {
-          id: 'msg-2',
-          threadId: 't1',
-          role: 'assistant',
-          content: 'Response',
-          roundNumber: 0,
-          isModerator: true,
-          createdAt: new Date().toISOString(),
-        },
-      ];
-
       // The actual syncFromBackend transforms ChatMessage[] to UIMessage[]
       // Here we verify the store accepts the transformed format
       store.getState().setMessages([
@@ -160,9 +140,10 @@ describe('V2 resumption', () => {
         createV2ModeratorMessage({ id: 'msg-2', roundNumber: 0, content: 'Response' }),
       ]);
 
-      expect(store.getState().messages).toHaveLength(2);
-      expect(store.getState().messages[0].role).toBe('user');
-      expect(store.getState().messages[1].role).toBe('assistant');
+      const messages = store.getState().messages;
+      expect(messages).toHaveLength(2);
+      expect(messages[0].role).toBe('user');
+      expect(messages[1].role).toBe('assistant');
     });
 
     it('builds preSearches Map correctly', () => {
@@ -197,16 +178,16 @@ describe('V2 resumption', () => {
       // Determine max round
       let maxRound = 0;
       for (const msg of messages) {
-        const meta = msg.metadata as Record<string, unknown>;
-        if (meta && typeof meta.roundNumber === 'number') {
-          maxRound = Math.max(maxRound, meta.roundNumber);
+        const roundNumber = getMetadataRoundNumber(msg.metadata);
+        if (roundNumber !== null) {
+          maxRound = Math.max(maxRound, roundNumber);
         }
       }
 
       // Check if complete
       const isComplete = messages.some((m) => {
-        const meta = m.metadata as Record<string, unknown>;
-        return meta?.roundNumber === maxRound && meta?.isModerator === true;
+        const roundNumber = getMetadataRoundNumber(m.metadata);
+        return roundNumber === maxRound && isMetadataModerator(m.metadata);
       });
 
       expect(maxRound).toBe(0);
@@ -224,16 +205,16 @@ describe('V2 resumption', () => {
       // Determine max round
       let maxRound = 0;
       for (const msg of messages) {
-        const meta = msg.metadata as Record<string, unknown>;
-        if (meta && typeof meta.roundNumber === 'number') {
-          maxRound = Math.max(maxRound, meta.roundNumber);
+        const roundNumber = getMetadataRoundNumber(msg.metadata);
+        if (roundNumber !== null) {
+          maxRound = Math.max(maxRound, roundNumber);
         }
       }
 
       // Check if complete
       const isComplete = messages.some((m) => {
-        const meta = m.metadata as Record<string, unknown>;
-        return meta?.roundNumber === maxRound && meta?.isModerator === true;
+        const roundNumber = getMetadataRoundNumber(m.metadata);
+        return roundNumber === maxRound && isMetadataModerator(m.metadata);
       });
 
       expect(maxRound).toBe(1);
@@ -254,9 +235,7 @@ describe('V2 resumption', () => {
 
       const flow = store.getState().flow;
       expect(flow.type).toBe('round_complete');
-      if (flow.type === 'round_complete') {
-        expect(flow.round).toBe(2);
-      }
+      expect(flow.type === 'round_complete' && flow.round).toBe(2);
     });
   });
 
@@ -381,7 +360,7 @@ describe('V2 resumption', () => {
   });
 
   describe('flow state after LOAD_THREAD', () => {
-    it('LOAD_THREAD with complete messages sets round_complete', () => {
+    it('lOAD_THREAD with complete messages sets round_complete', () => {
       const store = createTestChatStoreV2({
         selectedParticipants: [
           { modelId: 'gpt-4', role: null, priority: 1 },
@@ -408,12 +387,12 @@ describe('V2 resumption', () => {
       });
 
       expect(store.getState().flow.type).toBe('round_complete');
-      if (store.getState().flow.type === 'round_complete') {
-        expect(store.getState().flow.round).toBe(0);
-      }
+      const flowState = store.getState().flow;
+      expect(flowState.type).toBe('round_complete');
+      expect(flowState.type === 'round_complete' && flowState.round).toBe(0);
     });
 
-    it('LOAD_THREAD with incomplete messages sets round_complete at previous round', () => {
+    it('lOAD_THREAD with incomplete messages sets round_complete at previous round', () => {
       const store = createTestChatStoreV2({
         selectedParticipants: [
           { modelId: 'gpt-4', role: null, priority: 1 },
@@ -440,10 +419,10 @@ describe('V2 resumption', () => {
       });
 
       expect(store.getState().flow.type).toBe('round_complete');
-      if (store.getState().flow.type === 'round_complete') {
-        // Should be at previous completed round
-        expect(store.getState().flow.round).toBe(0);
-      }
+      const flowState = store.getState().flow;
+      expect(flowState.type).toBe('round_complete');
+      // Should be at previous completed round
+      expect(flowState.type === 'round_complete' && flowState.round).toBe(0);
     });
   });
 });

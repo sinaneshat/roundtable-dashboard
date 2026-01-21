@@ -6,7 +6,7 @@
  * In-memory Map is used as fallback for local development only.
  */
 
-import { HttpMethods } from '@roundtable/shared/enums';
+import { HttpMethods, WebAppEnvs } from '@roundtable/shared';
 import type { Context } from 'hono';
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
@@ -16,7 +16,7 @@ import * as z from 'zod';
 import type { ApiEnv } from '@/types';
 
 // Skip rate limiting in local development for e2e tests
-const isLocalDevelopment = process.env.WEBAPP_ENV === 'local';
+const isLocalDevelopment = process.env.WEBAPP_ENV === WebAppEnvs.LOCAL;
 
 // Paths that skip rate limiting entirely (health checks, benchmarks)
 // Note: c.req.path in Hono middleware doesn't include /api/v1 prefix

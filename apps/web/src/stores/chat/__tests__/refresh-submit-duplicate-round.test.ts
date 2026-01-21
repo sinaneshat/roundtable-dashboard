@@ -46,9 +46,6 @@ import type { StoredPreSearch } from '@/services/api';
 
 import type { ChatStore } from '../store-schemas';
 
-// Type alias for backwards compatibility with test helpers
-type PreSearchRecord = StoredPreSearch;
-
 // ============================================================================
 // MOCK SETUP
 // ============================================================================
@@ -127,7 +124,7 @@ function createCompleteRound(
  */
 function simulatePageRefreshState(
   currentMessages: UIMessage[],
-  preSearches: PreSearchRecord[],
+  preSearches: StoredPreSearch[],
   additionalState?: Partial<ChatStore>,
 ): Partial<ChatStore> {
   return {
@@ -156,7 +153,7 @@ function simulatePageRefreshState(
 function calculateIsIncomplete(state: {
   messages: UIMessage[];
   participants: { id: string; isEnabled: boolean; priority: number }[];
-  preSearches: PreSearchRecord[];
+  preSearches: StoredPreSearch[];
   isStreaming: boolean;
   waitingToStartStreaming: boolean;
   hasEarlyOptimisticMessage: boolean;
@@ -537,7 +534,7 @@ describe('refresh + Submit = Duplicate Round Bug', () => {
       const t0State = {
         messages: createCompleteRound(0, 1),
         participants: createMockParticipants(1),
-        preSearches: [] as PreSearchRecord[],
+        preSearches: [] as StoredPreSearch[],
         isStreaming: false,
         waitingToStartStreaming: false,
         hasEarlyOptimisticMessage: false,

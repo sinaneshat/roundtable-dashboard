@@ -19,7 +19,7 @@
 import { CreditActions, CreditTransactionTypes } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
 
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import { CREDIT_CONFIG } from '@/lib/config';
 import {
   calculateBaseCredits,
   tokensToCredits,

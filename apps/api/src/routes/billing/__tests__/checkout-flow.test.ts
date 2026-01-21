@@ -1,7 +1,7 @@
 import { PurchaseTypes } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
 
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import { CREDIT_CONFIG } from '@/lib/config';
 
 describe('checkout Flow', () => {
   describe('customer Creation Order', () => {

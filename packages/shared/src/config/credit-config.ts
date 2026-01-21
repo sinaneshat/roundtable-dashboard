@@ -1,4 +1,13 @@
-import type { PlanType } from '@roundtable/shared/enums';
+/**
+ * Credit Configuration
+ *
+ * ✅ SINGLE SOURCE OF TRUTH: Credit and plan configuration shared between API and web
+ * ✅ NO SERVER-ONLY DEPENDENCIES: Safe for client-side usage
+ *
+ * Defines credit costs, plan details, and pricing for the billing system.
+ */
+
+import type { PlanType } from '../enums';
 import {
   MODEL_TIER_CREDIT_MULTIPLIERS,
   ModelPricingTiers,
@@ -7,7 +16,7 @@ import {
   SubscriptionTiers,
   TIER_MONTHLY_CREDITS,
   TIER_PRICE_CENTS,
-} from '@roundtable/shared/enums';
+} from '../enums';
 
 export const CREDIT_CONFIG = {
   TOKENS_PER_CREDIT: 1000,
@@ -31,7 +40,7 @@ export const CREDIT_CONFIG = {
     fileReading: 100,
     analysisGeneration: 2000,
     customRoleCreation: 50,
-    autoModeAnalysis: 500, // ~500 tokens for prompt analysis (Gemini 2.5 Flash)
+    autoModeAnalysis: 500,
   },
 
   RESERVATION_MULTIPLIER: 1.5,

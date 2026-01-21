@@ -1,3 +1,4 @@
+import { NodeEnvs } from '@roundtable/shared';
 import { env as workersEnv } from 'cloudflare:workers';
 import { drizzle as drizzleD1 } from 'drizzle-orm/d1';
 
@@ -87,7 +88,7 @@ async function initLocalDb() {
 
   const db = drizzleBetter(sqlite, {
     schema,
-    logger: process.env.NODE_ENV === 'development',
+    logger: process.env.NODE_ENV === NodeEnvs.DEVELOPMENT,
   });
 
   return db;
@@ -254,7 +255,7 @@ async function createDbInstanceAsync(): Promise<DbInstance> {
 
     return drizzleD1(d1Database, {
       schema,
-      logger: process.env.NODE_ENV !== 'production',
+      logger: process.env.NODE_ENV !== NodeEnvs.PRODUCTION,
       cache: kvCache,
     });
   }

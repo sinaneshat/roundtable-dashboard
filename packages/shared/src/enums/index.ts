@@ -390,12 +390,14 @@ export {
   DEFAULT_HEALTH_STATUS,
   DEFAULT_HTTP_METHOD,
   DEFAULT_LOG_FORMAT,
+  DEFAULT_NODE_ENV,
   DEFAULT_OAUTH_STATUS,
   DEFAULT_OG_TYPE,
   DEFAULT_SORT_DIRECTION,
   DEFAULT_STORAGE_PURPOSE,
   DEFAULT_TASK_PRIORITY,
   DEFAULT_TEXT_INPUT_VARIANT,
+  DEFAULT_WEBAPP_ENV,
   DEFAULT_WITH_OPTIONS_VARIANT,
   EMAIL_PROVIDERS,
   type EmailProvider,
@@ -418,11 +420,17 @@ export {
   HttpMethods,
   HttpMethodSchema,
   isCircuitBreakerState,
+  isNodeEnv,
   isValidOgType,
+  isWebAppEnv,
   LOG_FORMATS,
   type LogFormat,
   LogFormats,
   LogFormatSchema,
+  NODE_ENVS,
+  type NodeEnv,
+  NodeEnvs,
+  NodeEnvSchema,
   OAUTH_STATUSES,
   type OAuthStatus,
   OAuthStatuses,
@@ -448,6 +456,10 @@ export {
   type TextInputVariant,
   TextInputVariants,
   TextInputVariantSchema,
+  WEBAPP_ENVS,
+  type WebAppEnv,
+  WebAppEnvs,
+  WebAppEnvSchema,
   WITH_OPTIONS_VARIANTS,
   type WithOptionsVariant,
   WithOptionsVariants,
@@ -803,6 +815,16 @@ export {
   PlaceholderPrefixes,
   PlaceholderPrefixSchema,
 } from './prompts';
+
+// Rate limiting enums
+export {
+  DEFAULT_RATE_LIMIT_PRESET,
+  isRateLimitPreset,
+  RATE_LIMIT_PRESETS,
+  type RateLimitPreset,
+  RateLimitPresets,
+  RateLimitPresetSchema,
+} from './rate-limiting';
 
 // Role enums and mappings
 export {

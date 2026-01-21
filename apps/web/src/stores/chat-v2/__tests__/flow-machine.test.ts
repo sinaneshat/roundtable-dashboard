@@ -41,7 +41,7 @@ describe('flow-machine', () => {
     // ========================================================================
 
     describe('global events', () => {
-      it('RESET from any state returns idle', () => {
+      it('reset from any state returns idle', () => {
         const states = [
           createIdleFlowState(),
           createCreatingThreadState(),
@@ -61,21 +61,19 @@ describe('flow-machine', () => {
         }
       });
 
-      it('ERROR from any state returns error with context preserved', () => {
+      it('error from any state returns error with context preserved', () => {
         const state = createStreamingFlowState({ threadId: 'thread-1', round: 2 });
         const context = createTestFlowContext();
 
         const result = transition(state, { type: 'ERROR', error: 'Test error' }, context);
 
         expect(result.type).toBe('error');
-        if (result.type === 'error') {
-          expect(result.threadId).toBe('thread-1');
-          expect(result.round).toBe(2);
-          expect(result.error).toBe('Test error');
-        }
+        expect(result).toHaveProperty('threadId', 'thread-1');
+        expect(result).toHaveProperty('round', 2);
+        expect(result).toHaveProperty('error', 'Test error');
       });
 
-      it('STOP from stoppable states returns round_complete', () => {
+      it('stop from stoppable states returns round_complete', () => {
         const stoppableStates = [
           createPreSearchFlowState({ threadId: 't1', round: 1 }),
           createStreamingFlowState({ threadId: 't1', round: 1 }),
@@ -87,14 +85,12 @@ describe('flow-machine', () => {
         for (const state of stoppableStates) {
           const result = transition(state, { type: 'STOP' }, context);
           expect(result.type).toBe('round_complete');
-          if (result.type === 'round_complete') {
-            expect(result.threadId).toBe('t1');
-            expect(result.round).toBe(1);
-          }
+          expect(result).toHaveProperty('threadId', 't1');
+          expect(result).toHaveProperty('round', 1);
         }
       });
 
-      it('STOP from non-stoppable states returns same state', () => {
+      it('stop from non-stoppable states returns same state', () => {
         const nonStoppableStates = [
           createIdleFlowState(),
           createCreatingThreadState(),
@@ -119,7 +115,7 @@ describe('flow-machine', () => {
     // ========================================================================
 
     describe('state: idle', () => {
-      it('SUBMIT_MESSAGE -> creating_thread', () => {
+      it('submit message -> creating_thread', () => {
         const state = createIdleFlowState();
         const context = createTestFlowContext();
 
@@ -132,13 +128,11 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('creating_thread');
-        if (result.type === 'creating_thread') {
-          expect(result.message).toBe('Hello');
-          expect(result.mode).toBe('council');
-        }
+        expect(result).toHaveProperty('message', 'Hello');
+        expect(result).toHaveProperty('mode', 'council');
       });
 
-      it('LOAD_THREAD with complete round -> round_complete at correct round', () => {
+      it('load thread with complete round -> round_complete at correct round', () => {
         const state = createIdleFlowState();
         const messages = [
           createV2UserMessage({ roundNumber: 0 }),
@@ -156,13 +150,11 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('round_complete');
-        if (result.type === 'round_complete') {
-          expect(result.threadId).toBe('thread-1');
-          expect(result.round).toBe(0);
-        }
+        expect(result).toHaveProperty('threadId', 'thread-1');
+        expect(result).toHaveProperty('round', 0);
       });
 
-      it('LOAD_THREAD with incomplete round -> round_complete at previous round', () => {
+      it('load thread with incomplete round -> round_complete at previous round', () => {
         const state = createIdleFlowState();
         // Round 1 started but no moderator
         const messages = [
@@ -182,9 +174,7 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('round_complete');
-        if (result.type === 'round_complete') {
-          expect(result.round).toBe(0); // Previous completed round
-        }
+        expect(result).toHaveProperty('round', 0); // Previous completed round
       });
 
       it('other events stay idle', () => {
@@ -209,7 +199,7 @@ describe('flow-machine', () => {
     // ========================================================================
 
     describe('state: creating_thread', () => {
-      it('THREAD_CREATED + web search -> pre_search', () => {
+      it('thread created + web search -> pre_search', () => {
         const state = createCreatingThreadState();
         const context = createTestFlowContext({ enableWebSearch: true, participantCount: 2 });
 
@@ -220,13 +210,11 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('pre_search');
-        if (result.type === 'pre_search') {
-          expect(result.threadId).toBe('new-thread');
-          expect(result.round).toBe(0);
-        }
+        expect(result).toHaveProperty('threadId', 'new-thread');
+        expect(result).toHaveProperty('round', 0);
       });
 
-      it('THREAD_CREATED + no web search -> streaming (index 0)', () => {
+      it('thread created + no web search -> streaming (index 0)', () => {
         const state = createCreatingThreadState();
         const context = createTestFlowContext({ enableWebSearch: false, participantCount: 2 });
 
@@ -237,12 +225,10 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('streaming');
-        if (result.type === 'streaming') {
-          expect(result.threadId).toBe('new-thread');
-          expect(result.round).toBe(0);
-          expect(result.participantIndex).toBe(0);
-          expect(result.totalParticipants).toBe(2);
-        }
+        expect(result).toHaveProperty('threadId', 'new-thread');
+        expect(result).toHaveProperty('round', 0);
+        expect(result).toHaveProperty('participantIndex', 0);
+        expect(result).toHaveProperty('totalParticipants', 2);
       });
 
       it('other events stay in creating_thread', () => {
@@ -263,7 +249,7 @@ describe('flow-machine', () => {
     // ========================================================================
 
     describe('state: pre_search', () => {
-      it('PRE_SEARCH_COMPLETE (correct round) -> streaming', () => {
+      it('pre search complete (correct round) -> streaming', () => {
         const state = createPreSearchFlowState({ threadId: 't1', round: 0 });
         const context = createTestFlowContext({ participantCount: 3 });
 
@@ -273,15 +259,13 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('streaming');
-        if (result.type === 'streaming') {
-          expect(result.threadId).toBe('t1');
-          expect(result.round).toBe(0);
-          expect(result.participantIndex).toBe(0);
-          expect(result.totalParticipants).toBe(3);
-        }
+        expect(result).toHaveProperty('threadId', 't1');
+        expect(result).toHaveProperty('round', 0);
+        expect(result).toHaveProperty('participantIndex', 0);
+        expect(result).toHaveProperty('totalParticipants', 3);
       });
 
-      it('PRE_SEARCH_COMPLETE (wrong round) -> stays pre_search', () => {
+      it('pre search complete (wrong round) -> stays pre_search', () => {
         const state = createPreSearchFlowState({ threadId: 't1', round: 1 });
         const context = createTestFlowContext();
 
@@ -311,7 +295,7 @@ describe('flow-machine', () => {
     // ========================================================================
 
     describe('state: streaming', () => {
-      it('PARTICIPANT_COMPLETE -> advances participantIndex', () => {
+      it('participant complete -> advances participantIndex', () => {
         const state = createStreamingFlowState({
           threadId: 't1',
           round: 0,
@@ -326,13 +310,11 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('streaming');
-        if (result.type === 'streaming') {
-          expect(result.participantIndex).toBe(1);
-          expect(result.totalParticipants).toBe(3);
-        }
+        expect(result).toHaveProperty('participantIndex', 1);
+        expect(result).toHaveProperty('totalParticipants', 3);
       });
 
-      it('PARTICIPANT_COMPLETE (last participant) -> awaiting_moderator', () => {
+      it('participant complete (last participant) -> awaiting_moderator', () => {
         const state = createStreamingFlowState({
           threadId: 't1',
           round: 0,
@@ -347,13 +329,11 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('awaiting_moderator');
-        if (result.type === 'awaiting_moderator') {
-          expect(result.threadId).toBe('t1');
-          expect(result.round).toBe(0);
-        }
+        expect(result).toHaveProperty('threadId', 't1');
+        expect(result).toHaveProperty('round', 0);
       });
 
-      it('ALL_PARTICIPANTS_COMPLETE -> awaiting_moderator', () => {
+      it('all participants complete -> awaiting_moderator', () => {
         const state = createStreamingFlowState({
           threadId: 't1',
           round: 2,
@@ -368,9 +348,7 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('awaiting_moderator');
-        if (result.type === 'awaiting_moderator') {
-          expect(result.round).toBe(2);
-        }
+        expect(result).toHaveProperty('round', 2);
       });
 
       it('other events stay in streaming', () => {
@@ -391,7 +369,7 @@ describe('flow-machine', () => {
     // ========================================================================
 
     describe('state: awaiting_moderator', () => {
-      it('MODERATOR_STARTED -> moderator_streaming', () => {
+      it('moderator started -> moderator_streaming', () => {
         const state = createAwaitingModeratorFlowState({ threadId: 't1', round: 0 });
         const context = createTestFlowContext();
 
@@ -400,13 +378,11 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('moderator_streaming');
-        if (result.type === 'moderator_streaming') {
-          expect(result.threadId).toBe('t1');
-          expect(result.round).toBe(0);
-        }
+        expect(result).toHaveProperty('threadId', 't1');
+        expect(result).toHaveProperty('round', 0);
       });
 
-      it('MODERATOR_COMPLETE -> round_complete (skip streaming)', () => {
+      it('moderator complete -> round_complete (skip streaming)', () => {
         const state = createAwaitingModeratorFlowState({ threadId: 't1', round: 0 });
         const context = createTestFlowContext();
 
@@ -436,7 +412,7 @@ describe('flow-machine', () => {
     // ========================================================================
 
     describe('state: moderator_streaming', () => {
-      it('MODERATOR_COMPLETE -> round_complete', () => {
+      it('moderator complete -> round_complete', () => {
         const state = createModeratorStreamingFlowState({ threadId: 't1', round: 1 });
         const context = createTestFlowContext();
 
@@ -446,10 +422,8 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('round_complete');
-        if (result.type === 'round_complete') {
-          expect(result.threadId).toBe('t1');
-          expect(result.round).toBe(1);
-        }
+        expect(result).toHaveProperty('threadId', 't1');
+        expect(result).toHaveProperty('round', 1);
       });
 
       it('other events stay in moderator_streaming', () => {
@@ -470,7 +444,7 @@ describe('flow-machine', () => {
     // ========================================================================
 
     describe('state: round_complete', () => {
-      it('SUBMIT_MESSAGE -> updating_thread with next round', () => {
+      it('submit message -> updating_thread with next round', () => {
         const state = createRoundCompleteFlowState({ threadId: 't1', round: 0 });
         const context = createTestFlowContext();
 
@@ -484,15 +458,13 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('updating_thread');
-        if (result.type === 'updating_thread') {
-          expect(result.threadId).toBe('t1');
-          expect(result.round).toBe(1);
-          expect(result.message).toBe('Follow up');
-          expect(result.hasConfigChanges).toBe(true);
-        }
+        expect(result).toHaveProperty('threadId', 't1');
+        expect(result).toHaveProperty('round', 1);
+        expect(result).toHaveProperty('message', 'Follow up');
+        expect(result).toHaveProperty('hasConfigChanges', true);
       });
 
-      it('RETRY + web search -> pre_search', () => {
+      it('retry + web search -> pre_search', () => {
         const state = createRoundCompleteFlowState({ threadId: 't1', round: 2 });
         const context = createTestFlowContext({ enableWebSearch: true, participantCount: 2 });
 
@@ -502,12 +474,10 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('pre_search');
-        if (result.type === 'pre_search') {
-          expect(result.round).toBe(2);
-        }
+        expect(result).toHaveProperty('round', 2);
       });
 
-      it('RETRY + no web search -> streaming', () => {
+      it('retry + no web search -> streaming', () => {
         const state = createRoundCompleteFlowState({ threadId: 't1', round: 1 });
         const context = createTestFlowContext({ enableWebSearch: false, participantCount: 3 });
 
@@ -517,11 +487,9 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('streaming');
-        if (result.type === 'streaming') {
-          expect(result.round).toBe(1);
-          expect(result.participantIndex).toBe(0);
-          expect(result.totalParticipants).toBe(3);
-        }
+        expect(result).toHaveProperty('round', 1);
+        expect(result).toHaveProperty('participantIndex', 0);
+        expect(result).toHaveProperty('totalParticipants', 3);
       });
 
       it('other events stay in round_complete', () => {
@@ -542,7 +510,7 @@ describe('flow-machine', () => {
     // ========================================================================
 
     describe('state: updating_thread', () => {
-      it('UPDATE_THREAD_COMPLETE + config changes -> awaiting_changelog', () => {
+      it('update thread complete + config changes -> awaiting_changelog', () => {
         const state = createUpdatingThreadFlowState({
           threadId: 't1',
           round: 1,
@@ -555,13 +523,11 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('awaiting_changelog');
-        if (result.type === 'awaiting_changelog') {
-          expect(result.threadId).toBe('t1');
-          expect(result.round).toBe(1);
-        }
+        expect(result).toHaveProperty('threadId', 't1');
+        expect(result).toHaveProperty('round', 1);
       });
 
-      it('UPDATE_THREAD_COMPLETE + web search -> pre_search', () => {
+      it('update thread complete + web search -> pre_search', () => {
         const state = createUpdatingThreadFlowState({
           threadId: 't1',
           round: 1,
@@ -576,7 +542,7 @@ describe('flow-machine', () => {
         expect(result.type).toBe('pre_search');
       });
 
-      it('UPDATE_THREAD_COMPLETE + no config changes + no web search -> streaming', () => {
+      it('update thread complete + no config changes + no web search -> streaming', () => {
         const state = createUpdatingThreadFlowState({
           threadId: 't1',
           round: 1,
@@ -592,10 +558,8 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('streaming');
-        if (result.type === 'streaming') {
-          expect(result.round).toBe(1);
-          expect(result.participantIndex).toBe(0);
-        }
+        expect(result).toHaveProperty('round', 1);
+        expect(result).toHaveProperty('participantIndex', 0);
       });
 
       it('other events stay in updating_thread', () => {
@@ -616,7 +580,7 @@ describe('flow-machine', () => {
     // ========================================================================
 
     describe('state: awaiting_changelog', () => {
-      it('CHANGELOG_RECEIVED + web search -> pre_search', () => {
+      it('changelog received + web search -> pre_search', () => {
         const state = createAwaitingChangelogFlowState({ threadId: 't1', round: 1 });
         const context = createTestFlowContext({ enableWebSearch: true });
 
@@ -625,12 +589,10 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('pre_search');
-        if (result.type === 'pre_search') {
-          expect(result.round).toBe(1);
-        }
+        expect(result).toHaveProperty('round', 1);
       });
 
-      it('CHANGELOG_RECEIVED + no web search -> streaming', () => {
+      it('changelog received + no web search -> streaming', () => {
         const state = createAwaitingChangelogFlowState({ threadId: 't1', round: 1 });
         const context = createTestFlowContext({
           enableWebSearch: false,
@@ -642,9 +604,7 @@ describe('flow-machine', () => {
         }, context);
 
         expect(result.type).toBe('streaming');
-        if (result.type === 'streaming') {
-          expect(result.round).toBe(1);
-        }
+        expect(result).toHaveProperty('round', 1);
       });
 
       it('other events stay in awaiting_changelog', () => {
@@ -665,7 +625,7 @@ describe('flow-machine', () => {
     // ========================================================================
 
     describe('state: error', () => {
-      it('RETRY with context + web search -> pre_search', () => {
+      it('retry with context + web search -> pre_search', () => {
         const state = createErrorFlowState({ threadId: 't1', round: 0 });
         const context = createTestFlowContext({ enableWebSearch: true });
 
@@ -677,7 +637,7 @@ describe('flow-machine', () => {
         expect(result.type).toBe('pre_search');
       });
 
-      it('RETRY with context + no web search -> streaming', () => {
+      it('retry with context + no web search -> streaming', () => {
         const state = createErrorFlowState({ threadId: 't1', round: 0 });
         const context = createTestFlowContext({
           enableWebSearch: false,
@@ -692,7 +652,7 @@ describe('flow-machine', () => {
         expect(result.type).toBe('streaming');
       });
 
-      it('RETRY without threadId -> stays error', () => {
+      it('retry without threadId -> stays error', () => {
         const state: ReturnType<typeof createErrorFlowState> = {
           type: 'error',
           error: 'No thread',
@@ -834,7 +794,7 @@ describe('flow-machine', () => {
   // INITIAL STATE
   // ==========================================================================
 
-  describe('INITIAL_FLOW_STATE', () => {
+  describe('initial flow state', () => {
     it('is idle', () => {
       expect(INITIAL_FLOW_STATE.type).toBe('idle');
     });

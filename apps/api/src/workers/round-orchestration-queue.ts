@@ -27,7 +27,7 @@ import type { Message, MessageBatch } from '@cloudflare/workers-types';
 import { BETTER_AUTH_SESSION_COOKIE_NAME, MessagePartTypes, RoundOrchestrationMessageTypes, UIMessageRoles } from '@roundtable/shared/enums';
 
 import type { WebappEnv } from '@/lib/config/base-urls';
-import { BASE_URLS, isWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { BASE_URLS, isWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
 import { calculateExponentialBackoff } from '@/lib/utils/queue-utils';
 import type {
   CheckRoundCompletionQueueMessage,
@@ -56,8 +56,12 @@ const BASE_RETRY_DELAY_SECONDS = 60;
  */
 function getBaseUrl(env: CloudflareEnv): string {
   const webappEnv = env.WEBAPP_ENV;
-  const validEnv: WebappEnv = isWebappEnv(webappEnv) ? webappEnv : WEBAPP_ENVS.LOCAL;
-  return BASE_URLS[validEnv].app;
+  const validEnv: WebappEnv = isWebappEnv(webappEnv) ? webappEnv : WebAppEnvs.LOCAL;
+  const urls = BASE_URLS[validEnv];
+  if (!urls) {
+    throw new Error(`BASE_URLS not configured for environment: ${validEnv}`);
+  }
+  return urls.app;
 }
 
 /**

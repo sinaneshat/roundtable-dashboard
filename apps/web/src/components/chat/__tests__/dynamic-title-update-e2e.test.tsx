@@ -1,11 +1,12 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import userEvent from '@testing-library/user-event';
 import type { ReactNode } from 'react';
 import React, { useEffect, useRef } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import testMessages from '@/i18n/locales/en/common.json';
 import { I18nProvider } from '@/lib/i18n';
-import { act, render, screen, userEvent } from '@/lib/testing';
+import { act, render, screen } from '@/lib/testing';
 import type { ChatSidebarItem } from '@/services/api';
 
 const mockPush = vi.fn();

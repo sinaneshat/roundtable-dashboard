@@ -500,9 +500,13 @@ export function createChatStore() {
 function getMaxRoundFromMessages(messages: UIMessage[]): number {
   let maxRound = 0;
   for (const msg of messages) {
-    const meta = msg.metadata as Record<string, unknown> | undefined;
-    if (meta && typeof meta.roundNumber === 'number') {
-      maxRound = Math.max(maxRound, meta.roundNumber);
+    // Type-safe metadata extraction using utility function
+    const metadata = msg.metadata;
+    if (metadata && typeof metadata === 'object' && 'roundNumber' in metadata) {
+      const roundNumber = metadata.roundNumber;
+      if (typeof roundNumber === 'number') {
+        maxRound = Math.max(maxRound, roundNumber);
+      }
     }
   }
   return maxRound;
@@ -513,11 +517,15 @@ function getMaxRoundFromMessages(messages: UIMessage[]): number {
  */
 function hasModeratorForRound(messages: UIMessage[], round: number): boolean {
   return messages.some((msg) => {
-    const meta = msg.metadata as Record<string, unknown> | undefined;
+    const metadata = msg.metadata;
+    if (!metadata || typeof metadata !== 'object')
+      return false;
+
     return (
-      meta
-      && meta.roundNumber === round
-      && meta.isModerator === true
+      'roundNumber' in metadata
+      && metadata.roundNumber === round
+      && 'isModerator' in metadata
+      && metadata.isModerator === true
     );
   });
 }

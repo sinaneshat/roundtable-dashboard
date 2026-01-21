@@ -14,6 +14,7 @@
  */
 
 import { z } from '@hono/zod-openapi';
+import { NodeEnvs, WebAppEnvs } from '@roundtable/shared';
 
 import type { getDbAsync } from '@/db';
 import type { TypedLogger } from '@/types/logger';
@@ -475,7 +476,7 @@ export function isModelImagePartUrl(value: unknown): value is ModelImagePartUrl 
 // CONSTANTS
 // ============================================================================
 
-const IS_LOCAL_DEV = process.env.WEBAPP_ENV === 'local' || process.env.NODE_ENV === 'development';
+const IS_LOCAL_DEV = process.env.WEBAPP_ENV === WebAppEnvs.LOCAL || process.env.NODE_ENV === NodeEnvs.DEVELOPMENT;
 
 /**
  * Maximum file size to load into worker memory

@@ -411,13 +411,13 @@ export function structureAIProviderError(
   const errMsg = isErrorInstance
     ? error.message.substring(0, 200)
     : (typeof error === 'object' && error !== null ? JSON.stringify(error).substring(0, 500) : String(error));
-  const errStatus = error && typeof error === 'object' && 'statusCode' in error ? (error as Record<string, unknown>).statusCode : '-';
-  const errBody = error && typeof error === 'object' && 'responseBody' in error
-    ? String((error as Record<string, unknown>).responseBody).substring(0, 200)
-    : '-';
-  console.error(`[StructErr] model=${participantContext?.modelId ?? '-'} isErr=${isErrorInstance} status=${errStatus} msg=${errMsg} body=${errBody}`);
 
+  // Use extractAISdkError for type-safe error field extraction
   const aiError = extractAISdkError(error);
+  const errStatus = aiError?.statusCode ?? '-';
+  const errBody = aiError?.responseBody ? aiError.responseBody.substring(0, 200) : '-';
+
+  console.error(`[StructErr] model=${participantContext?.modelId ?? '-'} isErr=${isErrorInstance} status=${errStatus} msg=${errMsg} body=${errBody}`);
 
   const errorName = getErrorName(error) ?? 'UnknownError';
   let errorMessage = getErrorMessage(error);

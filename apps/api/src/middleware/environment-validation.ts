@@ -6,6 +6,7 @@
  * and integration with existing error handling patterns.
  */
 
+import { NodeEnvs } from '@roundtable/shared';
 import { createMiddleware } from 'hono/factory';
 import { HTTPException } from 'hono/http-exception';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
@@ -171,8 +172,11 @@ export function validateEnvironmentConfiguration(env: CloudflareEnv): {
 
   // Validate boolean environment variables
   // MAINTENANCE is an optional runtime var that may be set via wrangler secret
-  const maintenance = (env as CloudflareEnv & { MAINTENANCE?: string }).MAINTENANCE;
-  if (maintenance !== undefined && typeof maintenance === 'string' && !['true', 'false'].includes(maintenance)) {
+  // Type guard: Check if MAINTENANCE exists on env at runtime
+  const maintenance = 'MAINTENANCE' in env && typeof env.MAINTENANCE === 'string'
+    ? env.MAINTENANCE
+    : undefined;
+  if (maintenance !== undefined && !['true', 'false'].includes(maintenance)) {
     warnings.push(`MAINTENANCE should be 'true' or 'false'`);
   }
 
@@ -232,10 +236,10 @@ export function createEnvironmentValidationMiddleware() {
     }
 
     // Skip validation in test environment (vitest sets NODE_ENV='test')
-    // Cast to string since cloudflare types only define 'development' | 'production'
-    // but vitest runtime can set 'test'
-    const nodeEnv = process.env.NODE_ENV as string | undefined;
-    if (nodeEnv === 'test') {
+    // Type guard: process.env.NODE_ENV may be 'test' at runtime even though CloudflareEnv
+    // type only defines 'development' | 'production'
+    const nodeEnv = process.env.NODE_ENV;
+    if (nodeEnv === NodeEnvs.TEST) {
       await next();
       return;
     }
@@ -245,14 +249,14 @@ export function createEnvironmentValidationMiddleware() {
     // Validate results
     if (!validation.isValid) {
       // In production, fail fast on critical errors
-      if (env.NODE_ENV === 'production' && validation.missingCritical.length > 0) {
+      if (env.NODE_ENV === NodeEnvs.PRODUCTION && validation.missingCritical.length > 0) {
         throw new HTTPException(HttpStatusCodes.INTERNAL_SERVER_ERROR, {
           message: 'Application misconfiguration detected',
         });
       }
 
       // In development, provide detailed error information
-      if (env.NODE_ENV === 'development') {
+      if (env.NODE_ENV === NodeEnvs.DEVELOPMENT) {
         const errorDetails = [
           ...validation.errors,
           ...validation.missingCritical.map(v => `Missing critical: ${v}`),

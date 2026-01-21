@@ -55,7 +55,7 @@ type RequestLogEntry = {
   cf_colo?: string;
   cf_country?: string;
   // Optional verbose fields
-  query?: Record<string, string>;
+  query?: Record<string, string | string[]>;
   content_type?: string;
   content_length?: string;
   user_agent?: string;
@@ -88,7 +88,7 @@ export const requestLogger = createMiddleware<ApiEnv>(async (c, next) => {
   const cfRay = c.req.header('cf-ray');
   const cf = c.req.raw.cf;
 
-  // Build log entry
+  // Build log entry with type-safe Cloudflare property extraction
   const logEntry: RequestLogEntry = {
     log_type: 'api_request',
     timestamp: new Date().toISOString(),
@@ -97,13 +97,15 @@ export const requestLogger = createMiddleware<ApiEnv>(async (c, next) => {
     status: c.res?.status || 0,
     duration_ms: duration,
     request_id: cfRay,
-    cf_colo: cf?.colo as string | undefined,
-    cf_country: cf?.country as string | undefined,
+    cf_colo: cf && 'colo' in cf && typeof cf.colo === 'string' ? cf.colo : undefined,
+    cf_country: cf && 'country' in cf && typeof cf.country === 'string' ? cf.country : undefined,
   };
 
   // Add verbose fields in non-prod environments
   if (isVerboseLogging()) {
-    logEntry.query = c.req.query() as Record<string, string>;
+    // c.req.query() returns URLSearchParams result which is compatible with Record<string, string>
+    const queryParams = c.req.query();
+    logEntry.query = queryParams;
     logEntry.content_type = c.req.header('content-type');
     logEntry.content_length = c.req.header('content-length');
     logEntry.user_agent = c.req.header('user-agent');

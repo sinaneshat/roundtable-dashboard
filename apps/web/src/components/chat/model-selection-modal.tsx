@@ -1,4 +1,4 @@
-import type { ModelCapabilityTag, ModelSelectionTab, SubscriptionTier } from '@roundtable/shared';
+import type { ModelCapabilityTag, ModelSelectionTab, PredefinedRoleTemplate, SubscriptionTier } from '@roundtable/shared';
 import {
   ChatModes,
   DEFAULT_MODEL_SELECTION_TAB,
@@ -15,6 +15,7 @@ import { AnimatePresence, motion, Reorder } from 'motion/react';
 import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
+import type { Icon } from '@/components/icons';
 import { Icons } from '@/components/icons';
 import { PresetCardSkeleton } from '@/components/skeletons';
 import { Button } from '@/components/ui/button';
@@ -54,6 +55,19 @@ import { ModelItem } from './model-item';
 import { ModelPresetCard } from './model-preset-card';
 import { PresetNameForm } from './preset-name-form';
 import { RoleColorBadge } from './role-color-badge';
+
+type IconsKey = keyof typeof Icons;
+
+function isValidIconKey(key: string): key is IconsKey {
+  return key in Icons;
+}
+
+function getRoleIcon(iconName: string): Icon {
+  if (isValidIconKey(iconName)) {
+    return Icons[iconName];
+  }
+  return Icons.lightbulb;
+}
 
 export type ModelSelectionModalProps = {
   open: boolean;
@@ -588,8 +602,8 @@ export function ModelSelectionModal({
                   >
                     <ScrollArea className="h-[min(420px,50vh)]">
                       <div className="flex flex-col">
-                        {PREDEFINED_ROLE_TEMPLATES.map((role) => {
-                          const Icon = Icons[role.iconName];
+                        {PREDEFINED_ROLE_TEMPLATES.map((role: PredefinedRoleTemplate) => {
+                          const Icon = getRoleIcon(role.iconName);
                           const currentRole = selectedModelData?.participant?.role
                             ?? (selectedModelForRole ? pendingRoles[selectedModelForRole]?.role : undefined);
                           const isSelected = currentRole === role.name;

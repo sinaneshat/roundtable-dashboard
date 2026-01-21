@@ -204,9 +204,12 @@ export function useRoundPolling({
           return;
         }
 
-        // Schedule next poll - ref is cleared in stopPolling cleanup
-        const timeoutId = window.setTimeout(poll, pollInterval);
-        pollingRef.current = timeoutId;
+        // Schedule next poll
+        // Timeout is stored in pollingRef and cleared by stopPolling() in useEffect cleanup (line 217)
+        // eslint-disable-next-line react-web-api/no-leaked-timeout
+        pollingRef.current = window.setTimeout(() => {
+          void poll();
+        }, pollInterval);
       };
 
       // Start first poll via immediate invocation

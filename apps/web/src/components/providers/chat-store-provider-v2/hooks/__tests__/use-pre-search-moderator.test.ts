@@ -5,15 +5,14 @@
  * Verifies the SSE parsing fix that uses event:+data: format.
  */
 
-import { MessageStatuses, PreSearchSseEvents } from '@roundtable/shared';
+import { MessageStatuses } from '@roundtable/shared';
 import { act, renderHook, waitFor } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  createChunkedSSEFetchResponse,
+  createMockSSEFetchResponse,
   createModeratorDoneEvent,
   createModeratorMessageEvent,
-  createMockSSEFetchResponse,
   createPreSearchDoneEvent,
   createPreSearchResultEvent,
   createTestChatStoreV2,
@@ -74,48 +73,7 @@ describe('usePreSearchModerator', () => {
       expect(preSearch?.results?.[0].title).toBe('Result 1');
     });
 
-    // Note: This test is skipped because mock streams don't reliably complete
-    // event processing before the test assertions run. The "done" event parsing
-    // is validated by the "updates store with intermediate results" test which
-    // uses createMockSSEFetchResponse successfully.
-    it.skip('parses "event: done" correctly and dispatches PRE_SEARCH_COMPLETE', async () => {
-      const store = createTestChatStoreV2({
-        flow: { type: 'pre_search', threadId: 'thread-1', round: 0 },
-        selectedParticipants: [
-          { modelId: 'gpt-4', role: null, priority: 1 },
-          { modelId: 'claude-3', role: null, priority: 2 },
-        ],
-      });
-
-      const events = [
-        createPreSearchDoneEvent({
-          queries: [{ query: 'final query' }],
-          results: [{ title: 'Final', url: 'https://final.com' }],
-        }),
-      ];
-
-      mockFetch.mockResolvedValueOnce(createMockSSEFetchResponse(events));
-
-      const { result } = renderHook(() => usePreSearchModerator({ store }));
-
-      act(() => {
-        result.current.startPreSearch('thread-1', 0);
-      });
-
-      // Wait for preSearch to be marked complete (the primary indicator of done event processing)
-      await waitFor(() => {
-        const preSearch = store.getState().preSearches.get(0);
-        return preSearch?.status === MessageStatuses.COMPLETE;
-      }, { timeout: 5000 });
-
-      const preSearch = store.getState().preSearches.get(0);
-      expect(preSearch?.status).toBe(MessageStatuses.COMPLETE);
-
-      // The flow should have transitioned to streaming (but mock stream timing may vary)
-      // Just verify preSearch completion is the critical test - flow transition is tested in flow-machine.test.ts
-      const flowType = store.getState().flow.type;
-      expect(['pre_search', 'streaming']).toContain(flowType);
-    });
+    it.todo('parses "event: done" correctly and dispatches PRE_SEARCH_COMPLETE - blocked: mock stream timing unreliable');
 
     it('updates store with intermediate results', async () => {
       const store = createTestChatStoreV2();
@@ -152,119 +110,11 @@ describe('usePreSearchModerator', () => {
       expect(preSearch?.results).toHaveLength(2);
     });
 
-    // Note: Chunked SSE tests are difficult to simulate correctly in Jest/Vitest
-    // because mock streams don't have the same timing characteristics as real streams.
-    // The core SSE parsing is tested by the happy-path tests above.
-    it.skip('handles split events across chunks', async () => {
-      const store = createTestChatStoreV2();
-      const events = [
-        createPreSearchDoneEvent({
-          queries: [{ query: 'chunked query' }],
-          results: [{ title: 'Chunked Result', url: 'https://chunk.com' }],
-        }),
-      ];
+    it.todo('handles split events across chunks - blocked: mock streams lack real timing characteristics');
 
-      // Use small chunk size to simulate split events
-      mockFetch.mockResolvedValueOnce(createChunkedSSEFetchResponse(events, 10));
+    it.todo('handles buffered multiple events in one chunk - blocked: mock streams cannot simulate SSE buffering behavior');
 
-      const { result } = renderHook(() => usePreSearchModerator({ store }));
-
-      act(() => {
-        result.current.startPreSearch('thread-1', 0);
-      });
-
-      await waitFor(() => {
-        const preSearch = store.getState().preSearches.get(0);
-        return preSearch?.status === MessageStatuses.COMPLETE;
-      }, { timeout: 5000 });
-
-      const preSearch = store.getState().preSearches.get(0);
-      expect(preSearch?.query).toBe('chunked query');
-    });
-
-    // Note: Multi-event buffering is difficult to test because mock streams
-    // don't reliably simulate real SSE buffering behavior.
-    it.skip('handles buffered multiple events in one chunk', async () => {
-      const store = createTestChatStoreV2();
-
-      // Create SSE text with multiple events in one chunk
-      const sseText = [
-        `event: ${PreSearchSseEvents.RESULT}`,
-        'data: {"query":"multi-event","results":[{"title":"R1","url":"https://r1.com"}]}',
-        '',
-        `event: ${PreSearchSseEvents.DONE}`,
-        'data: {"queries":[{"query":"multi-event"}],"results":[{"title":"R1","url":"https://r1.com"}]}',
-        '',
-      ].join('\n');
-
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(sseText));
-          controller.close();
-        },
-      });
-
-      mockFetch.mockResolvedValueOnce(new Response(stream, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
-      }));
-
-      const { result } = renderHook(() => usePreSearchModerator({ store }));
-
-      act(() => {
-        result.current.startPreSearch('thread-1', 0);
-      });
-
-      await waitFor(() => {
-        const preSearch = store.getState().preSearches.get(0);
-        return preSearch?.status === MessageStatuses.COMPLETE;
-      });
-
-      const preSearch = store.getState().preSearches.get(0);
-      expect(preSearch?.status).toBe(MessageStatuses.COMPLETE);
-    });
-
-    // Note: Error recovery testing for SSE streams requires precise timing control
-    // that mock streams cannot provide reliably.
-    it.skip('handles malformed JSON gracefully', async () => {
-      const store = createTestChatStoreV2();
-
-      const sseText = [
-        `event: ${PreSearchSseEvents.RESULT}`,
-        'data: {invalid json}',
-        '',
-        `event: ${PreSearchSseEvents.DONE}`,
-        'data: {"queries":[{"query":"after-error"}],"results":[]}',
-        '',
-      ].join('\n');
-
-      const stream = new ReadableStream({
-        start(controller) {
-          controller.enqueue(new TextEncoder().encode(sseText));
-          controller.close();
-        },
-      });
-
-      mockFetch.mockResolvedValueOnce(new Response(stream, {
-        status: 200,
-        headers: { 'Content-Type': 'text/event-stream' },
-      }));
-
-      const { result } = renderHook(() => usePreSearchModerator({ store }));
-
-      act(() => {
-        result.current.startPreSearch('thread-1', 0);
-      });
-
-      // Should still complete despite malformed JSON in first event
-      await waitFor(() => {
-        const preSearch = store.getState().preSearches.get(0);
-        return preSearch?.status === MessageStatuses.COMPLETE;
-      });
-
-      const preSearch = store.getState().preSearches.get(0);
-      expect(preSearch?.query).toBe('after-error');
-    });
+    it.todo('handles malformed JSON gracefully - blocked: mock streams lack precise timing control for error recovery');
 
     it('handles abort without error dispatch', async () => {
       const store = createTestChatStoreV2();
@@ -320,9 +170,9 @@ describe('usePreSearchModerator', () => {
       });
 
       expect(store.getState().flow.type).toBe('error');
-      if (store.getState().flow.type === 'error') {
-        expect(store.getState().flow.error).toContain('Pre-search failed');
-      }
+      const flowState = store.getState().flow;
+      expect(flowState.type).toBe('error');
+      expect(flowState.type === 'error' && flowState.error).toContain('Pre-search failed');
     });
   });
 
@@ -525,157 +375,10 @@ describe('usePreSearchModerator', () => {
   // The abort functionality is tested indirectly through the "handles abort without
   // error dispatch" tests above, which verify the hook doesn't dispatch ERROR on abort.
   describe('abort management', () => {
-    it.skip('startPreSearch aborts previous pre-search', async () => {
-      const store = createTestChatStoreV2();
-      let firstAborted = false;
+    it.todo('startPreSearch aborts previous pre-search - blocked: AbortController signals do not propagate to ReadableStream.cancel in JSDOM');
 
-      // First stream - tracks if it gets aborted
-      const stream1 = new ReadableStream({
-        start(_controller) {
-          // Never closes
-        },
-        cancel() {
-          firstAborted = true;
-        },
-      });
+    it.todo('startModerator aborts previous moderator - blocked: AbortController signals do not propagate to ReadableStream.cancel in JSDOM');
 
-      // Second stream - completes immediately
-      const events = [
-        createPreSearchDoneEvent({ queries: [], results: [] }),
-      ];
-
-      mockFetch
-        .mockResolvedValueOnce(new Response(stream1, {
-          status: 200,
-          headers: { 'Content-Type': 'text/event-stream' },
-        }))
-        .mockResolvedValueOnce(createMockSSEFetchResponse(events));
-
-      const { result } = renderHook(() => usePreSearchModerator({ store }));
-
-      // Start first pre-search
-      act(() => {
-        result.current.startPreSearch('thread-1', 0);
-      });
-
-      await new Promise(r => setTimeout(r, 50));
-
-      // Start second pre-search (should abort first)
-      act(() => {
-        result.current.startPreSearch('thread-1', 1);
-      });
-
-      await waitFor(() => {
-        return firstAborted;
-      }, { timeout: 2000 });
-
-      expect(firstAborted).toBe(true);
-    });
-
-    it.skip('startModerator aborts previous moderator', async () => {
-      const store = createTestChatStoreV2({
-        flow: { type: 'moderator_streaming', threadId: 'thread-1', round: 0 },
-      });
-      let firstAborted = false;
-
-      // First stream
-      const stream1 = new ReadableStream({
-        start(_controller) {
-          // Never closes
-        },
-        cancel() {
-          firstAborted = true;
-        },
-      });
-
-      // Second stream
-      const moderatorMessage = createV2ModeratorMessage({
-        id: 'mod-second',
-        roundNumber: 0,
-      });
-      const events = [
-        createModeratorMessageEvent(moderatorMessage),
-        createModeratorDoneEvent(),
-      ];
-
-      mockFetch
-        .mockResolvedValueOnce(new Response(stream1, {
-          status: 200,
-          headers: { 'Content-Type': 'text/event-stream' },
-        }))
-        .mockResolvedValueOnce(createMockSSEFetchResponse(events));
-
-      const { result } = renderHook(() => usePreSearchModerator({ store }));
-
-      // Start first moderator
-      act(() => {
-        result.current.startModerator('thread-1', 0, ['msg-1']);
-      });
-
-      await new Promise(r => setTimeout(r, 50));
-
-      // Start second moderator (should abort first)
-      act(() => {
-        result.current.startModerator('thread-1', 1, ['msg-2']);
-      });
-
-      await waitFor(() => {
-        return firstAborted;
-      }, { timeout: 2000 });
-
-      expect(firstAborted).toBe(true);
-    });
-
-    it.skip('stopAll aborts both pre-search and moderator', async () => {
-      const store = createTestChatStoreV2();
-      let preSearchAborted = false;
-      let moderatorAborted = false;
-
-      const preSearchStream = new ReadableStream({
-        start(_controller) {},
-        cancel() {
-          preSearchAborted = true;
-        },
-      });
-
-      const moderatorStream = new ReadableStream({
-        start(_controller) {},
-        cancel() {
-          moderatorAborted = true;
-        },
-      });
-
-      mockFetch
-        .mockResolvedValueOnce(new Response(preSearchStream, {
-          status: 200,
-          headers: { 'Content-Type': 'text/event-stream' },
-        }))
-        .mockResolvedValueOnce(new Response(moderatorStream, {
-          status: 200,
-          headers: { 'Content-Type': 'text/event-stream' },
-        }));
-
-      const { result } = renderHook(() => usePreSearchModerator({ store }));
-
-      // Start both
-      act(() => {
-        result.current.startPreSearch('thread-1', 0);
-        result.current.startModerator('thread-1', 0, ['msg-1']);
-      });
-
-      await new Promise(r => setTimeout(r, 50));
-
-      // Stop all
-      act(() => {
-        result.current.stopAll();
-      });
-
-      await waitFor(() => {
-        return preSearchAborted && moderatorAborted;
-      }, { timeout: 2000 });
-
-      expect(preSearchAborted).toBe(true);
-      expect(moderatorAborted).toBe(true);
-    });
+    it.todo('stopAll aborts both pre-search and moderator - blocked: AbortController signals do not propagate to ReadableStream.cancel in JSDOM');
   });
 });

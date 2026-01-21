@@ -38,9 +38,6 @@ export {
   getEnabledChatModes,
 } from './chat-modes';
 
-// Credit configuration
-export { CREDIT_CONFIG, PLAN_NAMES } from './credit-config';
-
 // Model presets configuration
 export type {
   ModelPreset,
@@ -72,6 +69,7 @@ export {
   ToastNamespaces,
   ToastNamespaceSchema,
 } from './model-presets';
+
 // Participant limits configuration
 export {
   EXAMPLE_PARTICIPANT_COUNTS,
@@ -88,11 +86,15 @@ export {
   normalizeParticipantSettings,
   ParticipantSettingsSchema,
 } from './participant-settings';
-// Role prompts configuration
-export { createRoleSystemPrompt } from './role-prompts';
 
 // Tier names configuration
 export {
   getTierDisplayName,
   SUBSCRIPTION_TIER_NAMES,
 } from './tier-names';
+
+// Credit configuration (re-exported from shared package)
+export { CREDIT_CONFIG, PLAN_NAMES } from '@roundtable/shared';
+
+// Role prompts configuration (re-exported from shared package)
+export { createRoleSystemPrompt } from '@roundtable/shared';

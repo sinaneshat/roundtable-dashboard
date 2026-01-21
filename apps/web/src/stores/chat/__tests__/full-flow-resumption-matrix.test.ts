@@ -29,6 +29,7 @@ import {
   createTestAssistantMessage,
   createTestModeratorMessage,
   createTestUserMessage,
+  getMetadataFinishReason,
 } from '@/lib/testing';
 import type { ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 import {
@@ -621,8 +622,8 @@ describe('moderator Phase Resumption', () => {
       expect(moderatorMessage?.metadata).toBeDefined();
 
       // Moderator is incomplete
-      const metadata = moderatorMessage?.metadata as { finishReason?: string } | undefined;
-      expect(metadata?.finishReason).toBe(FinishReasons.UNKNOWN);
+      const finishReason = moderatorMessage ? getMetadataFinishReason(moderatorMessage.metadata) : null;
+      expect(finishReason).toBe(FinishReasons.UNKNOWN);
     });
 
     it('all participants still marked complete', () => {
@@ -655,8 +656,8 @@ describe('moderator Phase Resumption', () => {
       const moderatorMessage = getModeratorMessageForRound(messages, 0);
       expect(moderatorMessage).toBeDefined();
 
-      const metadata = moderatorMessage?.metadata as { finishReason?: string } | undefined;
-      expect(metadata?.finishReason).toBe(FinishReasons.STOP);
+      const finishReason = moderatorMessage ? getMetadataFinishReason(moderatorMessage.metadata) : null;
+      expect(finishReason).toBe(FinishReasons.STOP);
 
       // Round is complete
       const completionStatus = getParticipantCompletionStatus(messages, participants, 0);
@@ -864,13 +865,13 @@ describe('message Isolation - No Leakage Between Participants', () => {
     expect(p2Msg).toBeDefined();
 
     // Each has distinct content/state
-    const p0Meta = p0Msg?.metadata as { finishReason?: string } | undefined;
-    const p1Meta = p1Msg?.metadata as { finishReason?: string } | undefined;
-    const p2Meta = p2Msg?.metadata as { finishReason?: string } | undefined;
+    const p0FinishReason = p0Msg ? getMetadataFinishReason(p0Msg.metadata) : null;
+    const p1FinishReason = p1Msg ? getMetadataFinishReason(p1Msg.metadata) : null;
+    const p2FinishReason = p2Msg ? getMetadataFinishReason(p2Msg.metadata) : null;
 
-    expect(p0Meta?.finishReason).toBe(FinishReasons.STOP);
-    expect(p1Meta?.finishReason).toBe(FinishReasons.STOP);
-    expect(p2Meta?.finishReason).toBeNull(); // Still streaming (null = not finished)
+    expect(p0FinishReason).toBe(FinishReasons.STOP);
+    expect(p1FinishReason).toBe(FinishReasons.STOP);
+    expect(p2FinishReason).toBeNull(); // Still streaming (null = not finished)
   });
 });
 

@@ -1,9 +1,8 @@
 import { SUBSCRIPTION_TIERS, SubscriptionTiers } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
 
-import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
 import {
+  CREDIT_CONFIG,
   getMaxModelsForTier,
   getMonthlyCreditsForTier,
   getTierFromProductId,
@@ -11,6 +10,7 @@ import {
   MAX_MODEL_PRICING_BY_TIER,
   MAX_MODELS_BY_TIER,
   MAX_OUTPUT_TOKENS_BY_TIER,
+  SUBSCRIPTION_TIER_NAMES,
   TIER_CONFIG,
   TIER_QUOTAS,
 } from '@/services/billing';

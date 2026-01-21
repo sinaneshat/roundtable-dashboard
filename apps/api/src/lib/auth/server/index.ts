@@ -1,3 +1,4 @@
+import { EMAIL_DOMAIN_CONFIG, NodeEnvs } from '@roundtable/shared';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { createAuthMiddleware } from 'better-auth/api';
@@ -8,7 +9,7 @@ import { db } from '@/db';
 import * as authSchema from '@/db/tables/auth';
 import { getApiServerOrigin, getAppBaseUrl } from '@/lib/config/base-urls';
 
-import { EMAIL_DOMAIN_CONFIG, isAllowedEmailDomain, isRestrictedEnvironment, validateEmailDomain } from '../utils';
+import { isAllowedEmailDomain, isRestrictedEnvironment, validateEmailDomain } from '../utils';
 
 /**
  * Check if running in production mode (NODE_ENV === 'production')
@@ -17,12 +18,12 @@ import { EMAIL_DOMAIN_CONFIG, isAllowedEmailDomain, isRestrictedEnvironment, val
 function isProductionMode(): boolean {
   try {
     if (workersEnv.NODE_ENV) {
-      return workersEnv.NODE_ENV === 'production';
+      return workersEnv.NODE_ENV === NodeEnvs.PRODUCTION;
     }
   } catch {
     // Workers env not available
   }
-  return process.env.NODE_ENV === 'production';
+  return process.env.NODE_ENV === NodeEnvs.PRODUCTION;
 }
 
 /**
@@ -32,12 +33,12 @@ function isProductionMode(): boolean {
 function isDevelopmentMode(): boolean {
   try {
     if (workersEnv.NODE_ENV) {
-      return workersEnv.NODE_ENV === 'development';
+      return workersEnv.NODE_ENV === NodeEnvs.DEVELOPMENT;
     }
   } catch {
     // Workers env not available
   }
-  return process.env.NODE_ENV === 'development';
+  return process.env.NODE_ENV === NodeEnvs.DEVELOPMENT;
 }
 
 /**

@@ -7,11 +7,11 @@
  * @see /docs/backend-patterns.md - Handler conventions
  */
 
+import { Resvg } from '@cf-wasm/resvg/workerd';
+import { satori } from '@cf-wasm/satori/workerd';
 import type { RouteHandler } from '@hono/zod-openapi';
 import type { ChatMode } from '@roundtable/shared/enums';
 import { OgImageTypes, ThreadStatusSchema } from '@roundtable/shared/enums';
-import { Resvg } from '@cf-wasm/resvg/workerd';
-import { satori } from '@cf-wasm/satori/workerd';
 import { eq, or } from 'drizzle-orm';
 
 import { BRAND } from '@/constants';
@@ -21,8 +21,8 @@ import { getDbAsync } from '@/db';
 import { PublicThreadCacheTags } from '@/db/cache/cache-tags';
 import {
   getLogoBase64Sync,
-  getModelIconBase64Sync,
   getModeIconBase64Sync,
+  getModelIconBase64Sync,
   getOGFontsSync,
 } from '@/lib/ui/og-assets.generated';
 import { getModeColor, OG_COLORS, OG_HEIGHT, OG_WIDTH } from '@/lib/ui/og-colors';
@@ -127,16 +127,19 @@ async function generateOgImage(params: {
               gap: 16,
             }}
           >
-            {logoBase64 ? (
-              <img
-                src={logoBase64}
-                width={56}
-                height={56}
-                style={{ borderRadius: 28 }}
-              />
-            ) : (
-              <div style={{ display: 'flex', width: 56, height: 56 }} />
-            )}
+            {logoBase64
+              ? (
+                  <img
+                    src={logoBase64}
+                    width={56}
+                    height={56}
+                    alt={BRAND.displayName}
+                    style={{ borderRadius: 28 }}
+                  />
+                )
+              : (
+                  <div style={{ display: 'flex', width: 56, height: 56 }} />
+                )}
             <span
               style={{
                 fontSize: 28,
@@ -159,33 +162,37 @@ async function generateOgImage(params: {
             }}
           >
             {/* Mode badge */}
-            {mode ? (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  marginBottom: 24,
-                  gap: 12,
-                }}
-              >
-                {modeIconBase64 ? (
-                  <img src={modeIconBase64} width={28} height={28} />
-                ) : (
-                  <div style={{ display: 'flex', width: 28, height: 28 }} />
-                )}
-                <span
-                  style={{
-                    fontSize: 20,
-                    fontWeight: 600,
-                    color: modeColor,
-                    textTransform: 'capitalize',
-                  }}
-                >
-                  {mode}
-                </span>
-              </div>
-            ) : null}
+            {mode
+              ? (
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      marginBottom: 24,
+                      gap: 12,
+                    }}
+                  >
+                    {modeIconBase64
+                      ? (
+                          <img src={modeIconBase64} width={28} height={28} alt={mode} />
+                        )
+                      : (
+                          <div style={{ display: 'flex', width: 28, height: 28 }} />
+                        )}
+                    <span
+                      style={{
+                        fontSize: 20,
+                        fontWeight: 600,
+                        color: modeColor,
+                        textTransform: 'capitalize',
+                      }}
+                    >
+                      {mode}
+                    </span>
+                  </div>
+                )
+              : null}
 
             {/* Title */}
             <span
@@ -202,38 +209,42 @@ async function generateOgImage(params: {
             </span>
 
             {/* Model icons row with glass effect */}
-            {modelIcons.length > 0 ? (
-              <div
-                style={{
-                  display: 'flex',
-                  flexDirection: 'row',
-                  gap: 16,
-                  marginBottom: 32,
-                }}
-              >
-                {modelIcons.map(({ icon, modelId }) => (
+            {modelIcons.length > 0
+              ? (
                   <div
-                    key={modelId}
                     style={{
                       display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                      width: 64,
-                      height: 64,
-                      backgroundColor: 'rgba(255, 255, 255, 0.05)',
-                      borderRadius: 16,
-                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                      flexDirection: 'row',
+                      gap: 16,
+                      marginBottom: 32,
                     }}
                   >
-                    {icon ? (
-                      <img src={icon} width={36} height={36} />
-                    ) : (
-                      <div style={{ display: 'flex', width: 36, height: 36 }} />
-                    )}
+                    {modelIcons.map(({ icon, modelId }) => (
+                      <div
+                        key={modelId}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          width: 64,
+                          height: 64,
+                          backgroundColor: 'rgba(255, 255, 255, 0.05)',
+                          borderRadius: 16,
+                          border: '1px solid rgba(255, 255, 255, 0.1)',
+                        }}
+                      >
+                        {icon
+                          ? (
+                              <img src={icon} width={36} height={36} alt={modelId} />
+                            )
+                          : (
+                              <div style={{ display: 'flex', width: 36, height: 36 }} />
+                            )}
+                      </div>
+                    ))}
                   </div>
-                ))}
-              </div>
-            ) : null}
+                )
+              : null}
 
             {/* Stats */}
             <div style={{ display: 'flex', flexDirection: 'row', gap: 48, marginTop: 24 }}>
@@ -346,15 +357,73 @@ async function generateFallbackOgImage(): Promise<ArrayBuffer> {
  */
 function createErrorFallbackResponse(): Response {
   const transparentPng = new Uint8Array([
-    0x89, 0x50, 0x4E, 0x47, 0x0D, 0x0A, 0x1A, 0x0A,
-    0x00, 0x00, 0x00, 0x0D, 0x49, 0x48, 0x44, 0x52,
-    0x00, 0x00, 0x00, 0x01, 0x00, 0x00, 0x00, 0x01,
-    0x08, 0x06, 0x00, 0x00, 0x00, 0x1F, 0x15, 0xC4,
-    0x89, 0x00, 0x00, 0x00, 0x0A, 0x49, 0x44, 0x41,
-    0x54, 0x78, 0x9C, 0x63, 0x00, 0x01, 0x00, 0x00,
-    0x05, 0x00, 0x01, 0x0D, 0x0A, 0x2D, 0xB4, 0x00,
-    0x00, 0x00, 0x00, 0x49, 0x45, 0x4E, 0x44, 0xAE,
-    0x42, 0x60, 0x82,
+    0x89,
+    0x50,
+    0x4E,
+    0x47,
+    0x0D,
+    0x0A,
+    0x1A,
+    0x0A,
+    0x00,
+    0x00,
+    0x00,
+    0x0D,
+    0x49,
+    0x48,
+    0x44,
+    0x52,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x00,
+    0x01,
+    0x08,
+    0x06,
+    0x00,
+    0x00,
+    0x00,
+    0x1F,
+    0x15,
+    0xC4,
+    0x89,
+    0x00,
+    0x00,
+    0x00,
+    0x0A,
+    0x49,
+    0x44,
+    0x41,
+    0x54,
+    0x78,
+    0x9C,
+    0x63,
+    0x00,
+    0x01,
+    0x00,
+    0x00,
+    0x05,
+    0x00,
+    0x01,
+    0x0D,
+    0x0A,
+    0x2D,
+    0xB4,
+    0x00,
+    0x00,
+    0x00,
+    0x00,
+    0x49,
+    0x45,
+    0x4E,
+    0x44,
+    0xAE,
+    0x42,
+    0x60,
+    0x82,
   ]);
   return new Response(transparentPng.buffer as ArrayBuffer, {
     status: 200,

@@ -6,7 +6,7 @@
  */
 
 import { MessageStatuses } from '@roundtable/shared';
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   createAwaitingModeratorFlowState,
@@ -23,7 +23,7 @@ import {
 
 import { transition } from '../flow-machine';
 
-describe('V2 race condition prevention', () => {
+describe('v2 race condition prevention', () => {
   describe('concurrent participant completion', () => {
     it('rapid PARTICIPANT_COMPLETE events serialize correctly', () => {
       const store = createTestChatStoreV2({
@@ -61,16 +61,14 @@ describe('V2 race condition prevention', () => {
 
       // First completion
       let newState = transition(state, { type: 'PARTICIPANT_COMPLETE', participantIndex: 0 }, context);
-      if (newState.type === 'streaming') {
-        currentIndex = newState.participantIndex;
-      }
+      expect(newState.type).toBe('streaming');
+      currentIndex = newState.type === 'streaming' ? newState.participantIndex : currentIndex;
       expect(currentIndex).toBe(1);
 
       // Same completion event again (should still advance based on event's index)
       newState = transition(newState, { type: 'PARTICIPANT_COMPLETE', participantIndex: 1 }, context);
-      if (newState.type === 'streaming') {
-        currentIndex = newState.participantIndex;
-      }
+      expect(newState.type).toBe('streaming');
+      currentIndex = newState.type === 'streaming' ? newState.participantIndex : currentIndex;
       expect(currentIndex).toBe(2);
     });
 
@@ -96,9 +94,7 @@ describe('V2 race condition prevention', () => {
       // Should still be streaming, not awaiting_moderator
       const flow = store.getState().flow;
       expect(flow.type).toBe('streaming');
-      if (flow.type === 'streaming') {
-        expect(flow.participantIndex).toBe(2);
-      }
+      expect(flow.type === 'streaming' && flow.participantIndex).toBe(2);
     });
 
     it('out-of-order completion handled correctly', () => {
@@ -115,16 +111,12 @@ describe('V2 race condition prevention', () => {
       // Complete participant 0
       state = transition(state, { type: 'PARTICIPANT_COMPLETE', participantIndex: 0 }, context);
       expect(state.type).toBe('streaming');
-      if (state.type === 'streaming') {
-        expect(state.participantIndex).toBe(1);
-      }
+      expect(state.type === 'streaming' && state.participantIndex).toBe(1);
 
       // Complete participant 1
       state = transition(state, { type: 'PARTICIPANT_COMPLETE', participantIndex: 1 }, context);
       expect(state.type).toBe('streaming');
-      if (state.type === 'streaming') {
-        expect(state.participantIndex).toBe(2);
-      }
+      expect(state.type === 'streaming' && state.participantIndex).toBe(2);
 
       // Complete participant 2 (last)
       state = transition(state, { type: 'PARTICIPANT_COMPLETE', participantIndex: 2 }, context);
@@ -178,9 +170,7 @@ describe('V2 race condition prevention', () => {
 
       // Should still be in pre_search for round 1
       expect(result.type).toBe('pre_search');
-      if (result.type === 'pre_search') {
-        expect(result.round).toBe(1);
-      }
+      expect(result.type === 'pre_search' && result.round).toBe(1);
     });
   });
 
@@ -268,7 +258,7 @@ describe('V2 race condition prevention', () => {
   });
 
   describe('navigation during streaming', () => {
-    it('RESET clears flow state', () => {
+    it('rESET clears flow state', () => {
       const store = createTestChatStoreV2({
         flow: createStreamingFlowState({ threadId: 't1', round: 0 }),
         messages: [createV2UserMessage({ roundNumber: 0 })],
@@ -316,9 +306,7 @@ describe('V2 race condition prevention', () => {
       // participantCount should be 2 (from selectedParticipants)
       const flow = store.getState().flow;
       expect(flow.type).toBe('streaming');
-      if (flow.type === 'streaming') {
-        expect(flow.totalParticipants).toBe(2);
-      }
+      expect(flow.type === 'streaming' && flow.totalParticipants).toBe(2);
     });
 
     it('round comparison in streaming state prevents stale dispatches', () => {

@@ -6,24 +6,17 @@
  */
 
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { act, renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  createMockSSEFetchResponse,
-  createModeratorDoneEvent,
-  createModeratorMessageEvent,
-  createPreSearchDoneEvent,
-  createPreSearchResultEvent,
   createRoundCompleteFlowState,
   createTestChatStoreV2,
-  createTestFlowContext,
   createV2AssistantMessage,
   createV2ModeratorMessage,
   createV2UserMessage,
 } from '@/lib/testing';
-
 import { reset } from '@/stores/chat-v2/reset';
 
 import { ChatStoreContext } from '../context';
@@ -39,7 +32,7 @@ vi.mock('@/lib/toast', () => ({
   showApiErrorToast: vi.fn(),
 }));
 
-describe('V2 provider integration', () => {
+describe('v2 provider integration', () => {
   let mockFetch: ReturnType<typeof vi.fn>;
   const originalFetch = globalThis.fetch;
   let queryClient: QueryClient;
@@ -224,10 +217,9 @@ describe('V2 provider integration', () => {
 
       expect(store.getState().flow.type).toBe('streaming');
       const flowAfterPreSearch = store.getState().flow;
-      if (flowAfterPreSearch.type === 'streaming') {
-        expect(flowAfterPreSearch.participantIndex).toBe(0);
-        expect(flowAfterPreSearch.totalParticipants).toBe(2);
-      }
+      expect(flowAfterPreSearch.type).toBe('streaming');
+      expect(flowAfterPreSearch.type === 'streaming' && flowAfterPreSearch.participantIndex).toBe(0);
+      expect(flowAfterPreSearch.type === 'streaming' && flowAfterPreSearch.totalParticipants).toBe(2);
 
       // 4. First participant complete (streaming -> streaming with next index)
       act(() => {
@@ -239,9 +231,7 @@ describe('V2 provider integration', () => {
 
       const flowAfterP1 = store.getState().flow;
       expect(flowAfterP1.type).toBe('streaming');
-      if (flowAfterP1.type === 'streaming') {
-        expect(flowAfterP1.participantIndex).toBe(1);
-      }
+      expect(flowAfterP1.type === 'streaming' && flowAfterP1.participantIndex).toBe(1);
 
       // 5. Last participant complete (streaming -> awaiting_moderator)
       act(() => {
@@ -270,10 +260,9 @@ describe('V2 provider integration', () => {
 
       expect(store.getState().flow.type).toBe('round_complete');
       const finalFlow = store.getState().flow;
-      if (finalFlow.type === 'round_complete') {
-        expect(finalFlow.round).toBe(0);
-        expect(finalFlow.threadId).toBe('new-thread');
-      }
+      expect(finalFlow.type).toBe('round_complete');
+      expect(finalFlow.type === 'round_complete' && finalFlow.round).toBe(0);
+      expect(finalFlow.type === 'round_complete' && finalFlow.threadId).toBe('new-thread');
     });
 
     it('follow-up with config changes includes changelog step', () => {
@@ -300,10 +289,9 @@ describe('V2 provider integration', () => {
 
       expect(store.getState().flow.type).toBe('updating_thread');
       const updatingFlow = store.getState().flow;
-      if (updatingFlow.type === 'updating_thread') {
-        expect(updatingFlow.hasConfigChanges).toBe(true);
-        expect(updatingFlow.round).toBe(1);
-      }
+      expect(updatingFlow.type).toBe('updating_thread');
+      expect(updatingFlow.type === 'updating_thread' && updatingFlow.hasConfigChanges).toBe(true);
+      expect(updatingFlow.type === 'updating_thread' && updatingFlow.round).toBe(1);
 
       // Update complete - should go to awaiting_changelog
       act(() => {
@@ -595,7 +583,7 @@ describe('V2 provider integration', () => {
     });
   });
 
-  describe('UI state management', () => {
+  describe('uI state management', () => {
     it('title animation state management', () => {
       const store = createTestChatStoreV2();
 

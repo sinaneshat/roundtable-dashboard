@@ -16,7 +16,11 @@ import type { MessageBatch } from '@cloudflare/workers-types';
 // Type-only import for AppType (no runtime cost)
 export type { AppType } from './src/index';
 
-// Export Durable Object classes (lightweight, no heavy dependencies)
+// Durable Object classes - lightweight exports with no heavy dependencies at worker startup
+// Note: This is a valid re-export pattern for worker.ts as it's the Cloudflare Workers entry point
+// that must export DO classes. The alternative would be inline class definitions here, which
+// would reduce modularity. This re-export is acceptable as worker.ts serves as the deployment
+// boundary/entry point, not a barrel export.
 export { UploadCleanupScheduler } from './src/workers/upload-cleanup-scheduler';
 
 // Lazy-loaded app cache - using unknown to avoid importing heavy types at startup

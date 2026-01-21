@@ -743,17 +743,14 @@ describe('submit Loading - Error Recovery', () => {
 describe('submit Loading - Regression Prevention', () => {
   it('regression: loading must not depend solely on mutation.isPending', () => {
     /**
-     * This test documents the bug that was fixed.
-     * The old code only used isSubmitting (from mutation.isPending) for loading.
-     * This caused a delay because isPending only becomes true AFTER
-     * the mutation function is called (async operation starts).
-     *
-     * Fix: waitingToStartStreaming is set SYNCHRONOUSLY at the start,
-     * before any async operations.
+     * Verifies that loading state shows immediately when submit is triggered.
+     * waitingToStartStreaming is set SYNCHRONOUSLY before async operations,
+     * preventing delay from mutation.isPending which only becomes true AFTER
+     * the mutation function is called.
      */
     const store = createChatStore();
 
-    // Simulate the NEW behavior: waitingToStartStreaming set first
+    // waitingToStartStreaming set first, before async operations
     store.getState().setWaitingToStartStreaming(true);
 
     // Even without isSubmitting, should show loading

@@ -30,7 +30,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { DbTextPartSchema } from '@/db/schemas/chat-metadata';
 import type { UserCreditBalance } from '@/db/validation';
-import { CREDIT_CONFIG } from '@/lib/config/credit-config';
+import { CREDIT_CONFIG } from '@/lib/config';
 import { getModelById } from '@/services/models';
 
 import type { ModelForPricing } from './product-logic.service';

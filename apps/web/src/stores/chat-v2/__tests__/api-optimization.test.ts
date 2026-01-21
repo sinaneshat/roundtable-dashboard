@@ -5,7 +5,7 @@
  * Ensures no redundant API calls during the chat flow.
  */
 
-import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   createPreSearchFlowState,
@@ -18,7 +18,7 @@ import {
 import { canStop, canSubmitMessage, isFlowActive, transition } from '../flow-machine';
 import { reset } from '../reset';
 
-describe('V2 API optimization', () => {
+describe('v2 API optimization', () => {
   describe('deduplication via state machine', () => {
     it('state machine prevents duplicate transitions', () => {
       // The state machine inherently prevents duplicate API calls by:
@@ -200,7 +200,7 @@ describe('V2 API optimization', () => {
   });
 
   describe('navigation cleanup', () => {
-    it('RESET prevents any further API calls', () => {
+    it('reset prevents any further API calls', () => {
       const store = createTestChatStoreV2({
         flow: createStreamingFlowState({ threadId: 't1', round: 0 }),
       });
@@ -314,15 +314,13 @@ describe('V2 API optimization', () => {
 
       const context1 = createTestFlowContext({ participantCount: 1 });
       const result1 = transition(state, event, context1);
-      if (result1.type === 'streaming') {
-        expect(result1.totalParticipants).toBe(1);
-      }
+      expect(result1.type).toBe('streaming');
+      expect(result1).toHaveProperty('totalParticipants', 1);
 
       const context5 = createTestFlowContext({ participantCount: 5 });
       const result5 = transition(state, event, context5);
-      if (result5.type === 'streaming') {
-        expect(result5.totalParticipants).toBe(5);
-      }
+      expect(result5.type).toBe('streaming');
+      expect(result5).toHaveProperty('totalParticipants', 5);
     });
 
     it('enableWebSearch affects transition target', () => {

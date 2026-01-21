@@ -15,6 +15,7 @@
 
 import { ChatModes, MessageRoles } from '@roundtable/shared';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
+import userEvent from '@testing-library/user-event';
 import type { UIMessage } from 'ai';
 import type { ReactNode } from 'react';
 import React from 'react';
@@ -25,7 +26,7 @@ import type { PendingAttachment } from '@/hooks/utils';
 import testMessages from '@/i18n/locales/en/common.json';
 import { I18nProvider } from '@/lib/i18n';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
-import { act, render, screen, userEvent } from '@/lib/testing';
+import { act, render, screen } from '@/lib/testing';
 import { toastManager } from '@/lib/toast';
 import { filesHaveDocuments, filesHaveImages, getDetailedIncompatibleModelIds } from '@/lib/utils/file-capability';
 import type { ChatParticipant, ChatThread, Model } from '@/services/api';

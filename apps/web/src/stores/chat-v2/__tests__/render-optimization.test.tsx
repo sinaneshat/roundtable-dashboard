@@ -9,18 +9,15 @@ import { act, renderHook } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import { describe, expect, it, vi } from 'vitest';
 
+import { ChatStoreContext } from '@/components/providers/chat-store-provider-v2/context';
+import { useChatStore } from '@/components/providers/chat-store-provider-v2/use-chat-store';
 import {
-  createRoundCompleteFlowState,
   createStreamingFlowState,
   createTestChatStoreV2,
-  createV2AssistantMessage,
   createV2UserMessage,
 } from '@/lib/testing';
 
-import { ChatStoreContext } from '@/components/providers/chat-store-provider-v2/context';
-import { useChatStore } from '@/components/providers/chat-store-provider-v2/use-chat-store';
-
-describe('V2 render optimization', () => {
+describe('v2 render optimization', () => {
   function createWrapper(store: ReturnType<typeof createTestChatStoreV2>) {
     return function Wrapper({ children }: { children: ReactNode }) {
       return <ChatStoreContext value={store}>{children}</ChatStoreContext>;
@@ -147,7 +144,7 @@ describe('V2 render optimization', () => {
       let inputRenderCount = 0;
       let messageRenderCount = 0;
 
-      const { result: flowResult } = renderHook(
+      renderHook(
         () => {
           flowRenderCount++;
           return useChatStore(state => state.flow);
@@ -155,7 +152,7 @@ describe('V2 render optimization', () => {
         { wrapper: createWrapper(store) },
       );
 
-      const { result: inputResult } = renderHook(
+      renderHook(
         () => {
           inputRenderCount++;
           return useChatStore(state => state.inputValue);
@@ -163,7 +160,7 @@ describe('V2 render optimization', () => {
         { wrapper: createWrapper(store) },
       );
 
-      const { result: messageResult } = renderHook(
+      renderHook(
         () => {
           messageRenderCount++;
           return useChatStore(state => state.messages);
@@ -264,7 +261,7 @@ describe('V2 render optimization', () => {
 
       // Reference should change (new array)
       expect(newMessages).not.toBe(initialMessages);
-      expect(newMessages.length).toBe(1);
+      expect(newMessages).toHaveLength(1);
     });
 
     it('preSearches map reference changes on update', () => {
@@ -366,9 +363,8 @@ describe('V2 render optimization', () => {
       // Immediately after dispatch, state is updated
       expect(store.getState().flow.type).toBe('streaming');
       const flow = store.getState().flow;
-      if (flow.type === 'streaming') {
-        expect(flow.participantIndex).toBe(1);
-      }
+      expect(flow.type).toBe('streaming');
+      expect(flow.type === 'streaming' && flow.participantIndex).toBe(1);
     });
 
     it('multiple dispatches in sequence are all synchronous', () => {

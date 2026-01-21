@@ -123,6 +123,66 @@ export const Environments = {
 } as const;
 
 // ============================================================================
+// WEBAPP_ENV (Application Environment)
+// ============================================================================
+
+// 1. ARRAY CONSTANT - Source of truth for values
+export const WEBAPP_ENVS = ['local', 'preview', 'prod'] as const;
+
+// 2. DEFAULT VALUE
+export const DEFAULT_WEBAPP_ENV: WebAppEnv = 'local';
+
+// 3. ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const WebAppEnvSchema = z.enum(WEBAPP_ENVS).openapi({
+  description: 'Web application deployment environment (from wrangler.jsonc)',
+  example: 'preview',
+});
+
+// 4. TYPESCRIPT TYPE - Inferred from Zod schema
+export type WebAppEnv = z.infer<typeof WebAppEnvSchema>;
+
+// 5. CONSTANT OBJECT - For usage in code (prevents typos)
+export const WebAppEnvs = {
+  LOCAL: 'local' as const,
+  PREVIEW: 'preview' as const,
+  PROD: 'prod' as const,
+} as const;
+
+export function isWebAppEnv(value: unknown): value is WebAppEnv {
+  return WebAppEnvSchema.safeParse(value).success;
+}
+
+// ============================================================================
+// NODE_ENV (Node.js Runtime Environment)
+// ============================================================================
+
+// 1. ARRAY CONSTANT - Source of truth for values
+export const NODE_ENVS = ['test', 'production', 'development'] as const;
+
+// 2. DEFAULT VALUE
+export const DEFAULT_NODE_ENV: NodeEnv = 'development';
+
+// 3. ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const NodeEnvSchema = z.enum(NODE_ENVS).openapi({
+  description: 'Node.js runtime environment (NODE_ENV)',
+  example: 'production',
+});
+
+// 4. TYPESCRIPT TYPE - Inferred from Zod schema
+export type NodeEnv = z.infer<typeof NodeEnvSchema>;
+
+// 5. CONSTANT OBJECT - For usage in code (prevents typos)
+export const NodeEnvs = {
+  TEST: 'test' as const,
+  PRODUCTION: 'production' as const,
+  DEVELOPMENT: 'development' as const,
+} as const;
+
+export function isNodeEnv(value: unknown): value is NodeEnv {
+  return NodeEnvSchema.safeParse(value).success;
+}
+
+// ============================================================================
 // SORT DIRECTION
 // ============================================================================
 

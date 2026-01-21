@@ -32,38 +32,20 @@
  * - Client components: Use getApiBaseUrl() (returns '/api/v1' via proxy)
  */
 
-import { z } from 'zod';
+import type { WebAppEnv as WebappEnv } from '@roundtable/shared/enums';
+import {
+  DEFAULT_WEBAPP_ENV,
+  isWebAppEnv as isWebappEnv,
+  WEBAPP_ENVS,
+  WebAppEnvs,
+  WebAppEnvSchema as WebappEnvSchema,
+} from '@roundtable/shared/enums';
 
-/**
- * Webapp environment values - 5-part enum pattern
- */
-
-// 1️⃣ ARRAY CONSTANT - Source of truth for values
-export const WEBAPP_ENV_VALUES = ['local', 'preview', 'prod'] as const;
-
-// 2️⃣ DEFAULT VALUE
-export const DEFAULT_WEBAPP_ENV: WebappEnv = 'local';
-
-// 3️⃣ ZOD SCHEMA - Runtime validation
-
-export const WebappEnvSchema = z.enum(WEBAPP_ENV_VALUES);
-
-// 4️⃣ TYPESCRIPT TYPE - Inferred from schema
-export type WebappEnv = z.infer<typeof WebappEnvSchema>;
-
-// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
-export const WEBAPP_ENVS = {
-  LOCAL: 'local' as const,
-  PREVIEW: 'preview' as const,
-  PROD: 'prod' as const,
-} as const;
-
-/**
- * Type guard to check if value is a valid WebappEnv
- */
-export function isWebappEnv(value: unknown): value is WebappEnv {
-  return WebappEnvSchema.safeParse(value).success;
-}
+// Re-export for local usage with preferred naming
+export { DEFAULT_WEBAPP_ENV, isWebappEnv, type WebappEnv, WebappEnvSchema };
+// Export the constant object as WEBAPP_ENVS (LOCAL, PREVIEW, PROD properties)
+// and the array as WEBAPP_ENV_VALUES
+export { WEBAPP_ENVS as WEBAPP_ENV_VALUES, WebAppEnvs as WEBAPP_ENVS };
 
 /**
  * Check if we're in a prerender/SSG build context.
@@ -96,15 +78,15 @@ export function isPrerender(): boolean {
  * - Prod: Web on roundtable.now, API on api.roundtable.now
  */
 export const BASE_URLS: Record<WebappEnv, { app: string; api: string }> = {
-  [WEBAPP_ENVS.LOCAL]: {
+  [WebAppEnvs.LOCAL]: {
     app: 'http://localhost:5173',
     api: 'http://localhost:8787/api/v1',
   },
-  [WEBAPP_ENVS.PREVIEW]: {
+  [WebAppEnvs.PREVIEW]: {
     app: 'https://web-preview.roundtable.now',
     api: 'https://api-preview.roundtable.now/api/v1',
   },
-  [WEBAPP_ENVS.PROD]: {
+  [WebAppEnvs.PROD]: {
     app: 'https://roundtable.now',
     api: 'https://api.roundtable.now/api/v1',
   },
@@ -137,19 +119,19 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
   // 3. Server-side: use NODE_ENV
   if (typeof window === 'undefined') {
     return import.meta.env.MODE === 'development'
-      ? WEBAPP_ENVS.LOCAL
-      : WEBAPP_ENVS.PROD;
+      ? WebAppEnvs.LOCAL
+      : WebAppEnvs.PROD;
   }
 
   // 4. Client-side: detect from hostname
   const hostname = window.location.hostname;
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return WEBAPP_ENVS.LOCAL;
+    return WebAppEnvs.LOCAL;
   }
   if (hostname.includes('preview') || hostname.includes('-preview')) {
-    return WEBAPP_ENVS.PREVIEW;
+    return WebAppEnvs.PREVIEW;
   }
-  return WEBAPP_ENVS.PROD;
+  return WebAppEnvs.PROD;
 }
 
 /**
@@ -177,19 +159,19 @@ export function getWebappEnv(): WebappEnv {
   // 3. Server-side: use NODE_ENV
   if (typeof window === 'undefined') {
     return import.meta.env.MODE === 'development'
-      ? WEBAPP_ENVS.LOCAL
-      : WEBAPP_ENVS.PROD;
+      ? WebAppEnvs.LOCAL
+      : WebAppEnvs.PROD;
   }
 
   // 4. Client-side: detect from hostname
   const hostname = window.location.hostname;
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return WEBAPP_ENVS.LOCAL;
+    return WebAppEnvs.LOCAL;
   }
   if (hostname.includes('preview') || hostname.includes('-preview')) {
-    return WEBAPP_ENVS.PREVIEW;
+    return WebAppEnvs.PREVIEW;
   }
-  return WEBAPP_ENVS.PROD;
+  return WebAppEnvs.PROD;
 }
 
 /**
@@ -225,7 +207,7 @@ export function getApiBaseUrl(): string {
   // Prerender/SSG: use localhost to avoid DNS failures for external domains
   // Static pages shouldn't make API calls anyway (handled by isStaticRoute check)
   if (isPrerender()) {
-    return BASE_URLS[WEBAPP_ENVS.LOCAL].api;
+    return BASE_URLS[WebAppEnvs.LOCAL].api;
   }
 
   // Server-side: use full backend URL for direct access
@@ -258,9 +240,9 @@ export function getProductionApiUrl(): string {
   // This ensures static pages can be built with real data
   const currentEnv = getWebappEnv();
 
-  if (currentEnv === WEBAPP_ENVS.LOCAL && import.meta.env.MODE === 'production') {
+  if (currentEnv === WebAppEnvs.LOCAL && import.meta.env.MODE === 'production') {
     // Building for production but env is local - use preview API
-    return BASE_URLS[WEBAPP_ENVS.PREVIEW].api;
+    return BASE_URLS[WebAppEnvs.PREVIEW].api;
   }
 
   return BASE_URLS[currentEnv].api;

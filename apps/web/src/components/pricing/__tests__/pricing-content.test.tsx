@@ -11,6 +11,7 @@
  */
 
 import { BillingIntervals, StripeSubscriptionStatuses, UIBillingIntervals } from '@roundtable/shared';
+import userEvent from '@testing-library/user-event';
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -22,7 +23,6 @@ import {
   createTrialingSubscription,
   render,
   screen,
-  userEvent,
 } from '@/lib/testing';
 
 import { PricingContent } from '../pricing-content';

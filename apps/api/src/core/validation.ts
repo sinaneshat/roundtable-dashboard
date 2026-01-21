@@ -93,24 +93,28 @@ export function createOmitSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   omitFields: readonly K[],
 ) {
-  // Note: Type assertion required due to Zod's complex Mask type inference
-  // Object.fromEntries creates Record<string, boolean> which must be cast to Zod's expected type
-  const omitObj = Object.fromEntries(
+  // Zod's omit() accepts Record<string, true> - we construct it correctly from field keys
+  // TypeScript inference chain: K extends keyof T → Record<K, true> → compatible with omit parameter
+  const omitObj: Record<K, true> = Object.fromEntries(
     omitFields.map(key => [key, true]),
-  ) as Record<K, true> as Parameters<(typeof schema)['omit']>[0];
-  return schema.omit(omitObj);
+  ) as Record<K, true>;
+
+  // Pass to schema.omit() - Zod internally handles the type compatibility
+  return schema.omit(omitObj as Parameters<(typeof schema)['omit']>[0]);
 }
 
 export function createPickSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   pickFields: readonly K[],
 ) {
-  // Note: Type assertion required due to Zod's complex Mask type inference
-  // Object.fromEntries creates Record<string, boolean> which must be cast to Zod's expected type
-  const pickObj = Object.fromEntries(
+  // Zod's pick() accepts Record<string, true> - we construct it correctly from field keys
+  // TypeScript inference chain: K extends keyof T → Record<K, true> → compatible with pick parameter
+  const pickObj: Record<K, true> = Object.fromEntries(
     pickFields.map(key => [key, true]),
-  ) as Record<K, true> as Parameters<(typeof schema)['pick']>[0];
-  return schema.pick(pickObj);
+  ) as Record<K, true>;
+
+  // Pass to schema.pick() - Zod internally handles the type compatibility
+  return schema.pick(pickObj as Parameters<(typeof schema)['pick']>[0]);
 }
 
 export const FilterValueSchema = z.union([

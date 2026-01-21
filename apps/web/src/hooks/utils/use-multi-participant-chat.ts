@@ -1712,7 +1712,7 @@ export function useMultiParticipantChat(
     }
 
     prevThreadIdRef.current = currentId;
-  }, [threadId]);
+  }, [threadId, setMessages, setCurrentRound, setCurrentParticipantIndex, setIsExplicitlyStreaming]);
 
   /**
    * Start a new round with existing participants

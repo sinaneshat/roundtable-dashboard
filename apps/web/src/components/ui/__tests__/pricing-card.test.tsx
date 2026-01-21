@@ -15,7 +15,8 @@
 import { UIBillingIntervals } from '@roundtable/shared';
 import { describe, expect, it, vi } from 'vitest';
 
-import { render, screen, userEvent } from '@/lib/testing';
+import { render, screen } from '@/lib/testing';
+import userEvent from '@testing-library/user-event';
 
 import { PricingCard } from '../pricing-card';
 

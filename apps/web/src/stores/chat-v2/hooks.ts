@@ -116,27 +116,6 @@ export function useFlowState() {
 }
 
 /**
- * Derived flow state booleans (for backwards compatibility with components)
- */
-export function useFlowDerivedState() {
-  return useStoreShallow((s) => {
-    const flow = s.flow;
-    return {
-      isIdle: flow.type === 'idle',
-      isCreatingThread: flow.type === 'creating_thread',
-      isPreSearch: flow.type === 'pre_search',
-      isStreaming: flow.type === 'streaming',
-      isAwaitingModerator: flow.type === 'awaiting_moderator',
-      isModeratorStreaming: flow.type === 'moderator_streaming',
-      isRoundComplete: flow.type === 'round_complete',
-      isError: flow.type === 'error',
-      isActive: isFlowActive(flow),
-      canSubmit: canSubmitCheck(flow),
-    };
-  });
-}
-
-/**
  * Current streaming participant (when in streaming state)
  */
 export function useCurrentStreamingParticipant() {

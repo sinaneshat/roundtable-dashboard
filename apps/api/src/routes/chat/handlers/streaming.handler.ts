@@ -1161,13 +1161,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           const errMsg = isErrorInstance
             ? error.message.substring(0, 150)
             : (typeof error === 'object' && error !== null ? JSON.stringify(error).substring(0, 500) : String(error));
-          const errStatus = error && typeof error === 'object' && 'statusCode' in error ? (error as Record<string, unknown>).statusCode : '-';
-          const errBody = error && typeof error === 'object' && 'responseBody' in error
-            ? String((error as Record<string, unknown>).responseBody).substring(0, 300)
-            : '-';
-          const errCause = error && typeof error === 'object' && 'cause' in error
-            ? String((error as Record<string, unknown>).cause).substring(0, 100)
-            : '-';
+
+          // Use extractAISdkError for type-safe error field extraction
+          const aiError = extractAISdkError(error);
+          const errStatus = aiError?.statusCode ?? '-';
+          const errBody = aiError?.responseBody ? aiError.responseBody.substring(0, 300) : '-';
+          const errCause = aiError?.cause ? String(aiError.cause).substring(0, 100) : '-';
+
           console.error(`[Stream:P${participantIndex}] ERROR model=${participant.modelId} isErr=${isErrorInstance} name=${errName} status=${errStatus}`);
           console.error(`[Stream:P${participantIndex}] ERROR_DETAIL msg=${errMsg}`);
           console.error(`[Stream:P${participantIndex}] ERROR_EXTRA body=${errBody} cause=${errCause}`);
