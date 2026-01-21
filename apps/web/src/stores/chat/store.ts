@@ -856,6 +856,30 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
       resumptionScopeThreadId: threadId,
     }, false, 'resumption/setScope'),
 
+  // ✅ SMART STALE DETECTION: Reconcile prefilled state with actual active stream
+  // Called when AI SDK auto-resumes a valid stream that matches expected state
+  reconcileWithActiveStream: (streamingParticipantIndex) => {
+    const state = get();
+    const currentNextP = state.nextParticipantToTrigger;
+
+    // Extract index from either object form or raw number
+    const expectedNextIndex = typeof currentNextP === 'object' && currentNextP !== null
+      ? currentNextP.index
+      : currentNextP;
+
+    // If server triggered a later participant than prefilled, update state
+    if (streamingParticipantIndex >= (expectedNextIndex ?? 0)) {
+      rlog.resume('reconcile', `P${streamingParticipantIndex} active, updating nextP from ${expectedNextIndex} to ${streamingParticipantIndex + 1}`);
+      set({
+        // Next AFTER current streaming participant
+        nextParticipantToTrigger: streamingParticipantIndex + 1,
+        currentParticipantIndex: streamingParticipantIndex,
+        // Already streaming - don't need to wait
+        waitingToStartStreaming: false,
+      }, false, 'streamResumption/reconcileWithActiveStream');
+    }
+  },
+
   prefillStreamResumptionState: (threadId, serverState) => {
     rlog.phase('prefill', `t=${threadId.slice(-8)} phase=${serverState.currentPhase} r${serverState.roundNumber} done=${serverState.roundComplete ? 1 : 0} nextP=${serverState.participants?.nextParticipantToTrigger ?? '-'}`);
 

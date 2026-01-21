@@ -426,6 +426,15 @@ export type PrefillStreamResumptionState = (
  */
 export type SetResumptionScope = (threadId: string) => void;
 
+/**
+ * ✅ SMART STALE DETECTION: Reconcile prefilled state with actual active stream
+ * Called when AI SDK auto-resumes a valid stream that matches expected state.
+ * Updates store to reflect that server already triggered this participant.
+ *
+ * @param streamingParticipantIndex - The participant index currently streaming
+ */
+export type ReconcileWithActiveStream = (streamingParticipantIndex: number) => void;
+
 // ============================================================================
 // ANIMATION ACTIONS (Animation completion tracking)
 // ============================================================================

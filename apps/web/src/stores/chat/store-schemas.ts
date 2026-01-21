@@ -75,6 +75,7 @@ import type {
   OnComplete,
   PrefillStreamResumptionState,
   PrepareForNewMessage,
+  ReconcileWithActiveStream,
   RegisterAnimation,
   RemoveAttachment,
   RemoveParticipant,
@@ -120,8 +121,8 @@ import type {
   SetPendingMessage,
   SetPreSearches,
   SetRegeneratingRoundNumber,
-  SetScreenMode,
   SetResumptionScope,
+  SetScreenMode,
   SetSelectedMode,
   SetSelectedParticipants,
   SetSendMessage,
@@ -565,6 +566,8 @@ export const StreamResumptionActionsSchema = z.object({
   setCurrentResumptionPhase: z.custom<(phase: RoundPhase) => void>(),
   /** ✅ SCOPE VERSIONING: Set thread scope for resumption validation */
   setResumptionScope: z.custom<SetResumptionScope>(),
+  /** ✅ SMART STALE DETECTION: Reconcile prefilled state with actual active stream */
+  reconcileWithActiveStream: z.custom<ReconcileWithActiveStream>(),
 });
 
 export const StreamResumptionSliceSchema = z.intersection(StreamResumptionSliceStateSchema, StreamResumptionActionsSchema);

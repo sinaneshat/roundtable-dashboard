@@ -76,6 +76,9 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     streamResumptionPrefilled,
     pendingAttachmentIds,
     pendingFileParts,
+    // ✅ SMART STALE DETECTION: Prefilled state for stream validation
+    resumptionRoundNumber,
+    nextParticipantToTrigger,
   } = useStore(store, useShallow(s => ({
     thread: s.thread,
     participants: s.participants,
@@ -85,6 +88,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     streamResumptionPrefilled: s.streamResumptionPrefilled,
     pendingAttachmentIds: s.pendingAttachmentIds,
     pendingFileParts: s.pendingFileParts,
+    // ✅ SMART STALE DETECTION: Prefilled state for stream validation
+    resumptionRoundNumber: s.resumptionRoundNumber,
+    nextParticipantToTrigger: typeof s.nextParticipantToTrigger === 'object' && s.nextParticipantToTrigger !== null
+      ? s.nextParticipantToTrigger.index
+      : s.nextParticipantToTrigger,
   })));
 
   // ✅ PERF FIX: Get stable action references separately (actions don't change)
@@ -326,6 +334,12 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     },
     // ✅ PERF FIX: Disable resume for newly created threads - nothing to resume
     isNewlyCreatedThread: Boolean(createdThreadId),
+    // ✅ SMART STALE DETECTION: Pass prefilled state for stream validation
+    resumptionRoundNumber,
+    nextParticipantToTrigger,
+    onReconcileWithActiveStream: (streamingParticipantIndex) => {
+      store.getState().reconcileWithActiveStream(streamingParticipantIndex);
+    },
   });
 
   const sendMessageRef = useRef(chat.sendMessage);

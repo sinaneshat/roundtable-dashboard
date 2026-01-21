@@ -125,6 +125,21 @@ type UseMultiParticipantChatOptions = {
    * This prevents wasteful GET /stream calls on thread creation
    */
   isNewlyCreatedThread?: boolean;
+  /**
+   * ✅ SMART STALE DETECTION: Round number from server prefill state
+   * Used to validate if an auto-resumed stream is from the expected round
+   */
+  resumptionRoundNumber?: number | null;
+  /**
+   * ✅ SMART STALE DETECTION: Next participant to trigger from server prefill state
+   * Used to validate if an auto-resumed stream is for a valid participant
+   */
+  nextParticipantToTrigger?: number | null;
+  /**
+   * ✅ SMART STALE DETECTION: Callback to reconcile store state with active stream
+   * Called when AI SDK auto-resumes a valid stream (correct round and participant)
+   */
+  onReconcileWithActiveStream?: (streamingParticipantIndex: number) => void;
 };
 
 /**
@@ -273,6 +288,10 @@ export function useMultiParticipantChat(
     // Note: isNewlyCreatedThread kept in type for API compatibility but no longer used
     // since AI SDK resume is disabled (custom resumption handles all cases)
     isNewlyCreatedThread: _isNewlyCreatedThread = false,
+    // ✅ SMART STALE DETECTION: Prefilled state for stream validation
+    resumptionRoundNumber = null,
+    nextParticipantToTrigger: nextParticipantToTriggerProp = null,
+    onReconcileWithActiveStream,
   } = options;
 
   // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
@@ -298,6 +317,10 @@ export function useMultiParticipantChat(
     mode, // ✅ FIX: Add mode to refs to prevent transport recreation
     hasEarlyOptimisticMessage, // ✅ RACE CONDITION FIX: Track submission in progress
     onResumedStreamComplete, // ✅ STREAM RESUMPTION: Queue next participant when participants aren't loaded
+    // ✅ SMART STALE DETECTION: Prefilled state for stream validation
+    resumptionRoundNumber,
+    nextParticipantToTriggerProp,
+    onReconcileWithActiveStream,
   });
 
   // Participant error tracking - simple Set-based tracking to prevent duplicate responses
@@ -2707,23 +2730,69 @@ export function useMultiParticipantChat(
       return false; // Normal round transition, not a page refresh
     }
 
-    // ✅ STALE STREAM FIX: When server has prefilled resumption state, STOP the AI SDK's stale stream
+    // ✅ SMART STALE DETECTION: When server has prefilled resumption state, VALIDATE the stream
     // Problem: AI SDK auto-resumes any active stream for this chat ID via `resume: true`.
-    // But this might be a STALE stream from a previous session (wrong round, wrong participant).
-    // Server's prefill state tells us the CORRECT participant to trigger.
+    // This might be a STALE stream (wrong round/participant) OR a VALID server-triggered stream.
     //
-    // Example: Server says r0 nextP=0, but AI SDK resumed a stale r1 p1 stream.
-    // Without stopping, AI SDK continues streaming r1 p1 content, corrupting the conversation.
+    // OLD BEHAVIOR (buggy): Always stop when streamResumptionPrefilled=true
+    // This incorrectly stopped valid P2 streams that server triggered via queue.
     //
-    // Solution: Stop AI SDK's auto-resumed stream and DON'T set streaming state.
-    // Let custom resumption (use-round-resumption) trigger the correct participant.
-    //
-    // ✅ GUARD: Set stoppedStaleStreamRef BEFORE calling stop() so onFinish can skip processing.
-    // When stop() is called, AI SDK's onFinish fires. Without this guard, onFinish would
-    // eventually trigger completeStreaming() which clears waitingToStartStreaming,
-    // preventing the moderator from being triggered.
+    // NEW BEHAVIOR: Check if auto-resumed stream matches expected state
+    // - Same round as prefilled
+    // - Participant index >= expected next (server may have triggered ahead)
+    // If valid, keep streaming and reconcile state. If stale, stop.
     if (streamResumptionPrefilled) {
-      rlog.resume('sdk-resume', `STOPPING stale AI SDK stream - server prefilled correct state`);
+      // Extract participant info from the currently streaming message
+      const streamingMessage = messagesRef.current.find((m) => {
+        if (m.role !== MessageRoles.ASSISTANT)
+          return false;
+        // Look for message with streaming parts (incomplete)
+        const hasStreamingParts = m.parts?.some(
+          p => 'state' in p && p.state === TextPartStates.STREAMING,
+        );
+        return hasStreamingParts;
+      });
+
+      const streamingMeta = streamingMessage?.metadata;
+      const streamingParticipantIdx = streamingMeta && typeof streamingMeta === 'object' && 'participantIndex' in streamingMeta
+        ? (streamingMeta.participantIndex as number)
+        : undefined;
+      const streamingRound = streamingMeta && typeof streamingMeta === 'object' && 'roundNumber' in streamingMeta
+        ? (streamingMeta.roundNumber as number)
+        : undefined;
+
+      // Get expected state from prefilled values via refs
+      const expectedRound = callbackRefs.resumptionRoundNumber.current;
+      const expectedNextP = callbackRefs.nextParticipantToTriggerProp.current;
+
+      // Stream is VALID if:
+      // 1. Same round as prefilled
+      // 2. Participant index >= expected next (server may have triggered ahead)
+      const isValidStream = streamingRound === expectedRound
+        && streamingParticipantIdx !== undefined
+        && streamingParticipantIdx >= (expectedNextP ?? 0);
+
+      if (isValidStream) {
+        rlog.resume('sdk-resume', `KEEPING valid server-triggered stream r${streamingRound} P${streamingParticipantIdx} (expected r${expectedRound} nextP=${expectedNextP})`);
+        // ✅ Reconcile store state to reflect actual streaming state
+        callbackRefs.onReconcileWithActiveStream.current?.(streamingParticipantIdx);
+
+        // Let the stream continue - set streaming flags
+        isStreamingRef.current = true;
+        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- called from useEffectEvent in response to AI SDK status
+        setIsExplicitlyStreaming(true);
+
+        // Populate roundParticipantsRef for proper orchestration
+        if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
+          const enabled = getEnabledParticipants(participantsRef.current);
+          roundParticipantsRef.current = enabled;
+        }
+
+        return true; // Valid stream continues
+      }
+
+      // Stream is STALE - wrong round or earlier participant
+      rlog.resume('sdk-resume', `STOPPING stale stream r${streamingRound} P${streamingParticipantIdx} (expected r${expectedRound} nextP=${expectedNextP})`);
       stoppedStaleStreamRef.current = true; // Signal onFinish to skip processing
       stopAiSdk(); // Stop the stale auto-resumed stream
       return 'blocked'; // Let custom resumption handle triggering the correct participant
