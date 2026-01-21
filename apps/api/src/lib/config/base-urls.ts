@@ -16,6 +16,7 @@
  */
 
 import type { WebAppEnv as WebappEnv } from '@roundtable/shared';
+/* eslint-disable perfectionist/sort-named-imports -- aliased imports cause circular fix conflicts */
 import {
   BASE_URL_CONFIG,
   DEFAULT_WEBAPP_ENV,
@@ -32,7 +33,8 @@ import {
   WEBAPP_ENVS,
   WebAppEnvs,
   WebAppEnvSchema as WebappEnvSchema,
-} from '@roundtable/shared'; // eslint-disable-line perfectionist/sort-named-imports -- aliased imports
+} from '@roundtable/shared';
+/* eslint-enable perfectionist/sort-named-imports */
 import { env as workersEnv } from 'cloudflare:workers';
 import type { Context } from 'hono';
 
