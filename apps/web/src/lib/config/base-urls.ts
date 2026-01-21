@@ -1,8 +1,8 @@
 /**
- * Centralized Base URL Configuration
+ * Centralized Base URL Configuration (Web App)
  *
- * Single source of truth for all URL configuration across the application.
- * Uses VITE_WEBAPP_ENV from environment to determine which environment URLs to use.
+ * Uses shared config from @roundtable/shared as single source of truth.
+ * Adds web-specific environment detection for Vite build-time replacement.
  *
  * PROXY ARCHITECTURE (Unified Origin):
  * ====================================
@@ -20,18 +20,17 @@
  * Server-side (SSR/server functions):
  *   - Uses full backend URL for direct API access
  *   - Bypasses proxy for efficiency
- *
- * Environment detection priority:
- * 1. import.meta.env.VITE_WEBAPP_ENV (Vite build-time replacement)
- * 2. process.env.VITE_WEBAPP_ENV (SSR fallback)
- * 3. NODE_ENV fallback (development = local, production = prod)
- * 4. Client-side hostname detection
- *
- * Usage:
- * - Server functions: Use getBaseUrls() or getAppBaseUrl()/getApiBaseUrl()
- * - Client components: Use getApiBaseUrl() (returns '/api/v1' via proxy)
  */
 
+import {
+  BASE_URL_CONFIG,
+  FALLBACK_URLS,
+  getApiOrigin as sharedGetApiOrigin,
+  getApiUrl as sharedGetApiUrl,
+  getAppUrl as sharedGetAppUrl,
+  getUrlConfig as sharedGetUrlConfig,
+  resolveApiOriginFromHostname, // eslint-disable-line perfectionist/sort-named-imports -- keep with other getters
+} from '@roundtable/shared';
 import type { WebAppEnv as WebappEnv } from '@roundtable/shared/enums';
 import {
   DEFAULT_WEBAPP_ENV,
@@ -46,6 +45,26 @@ export { DEFAULT_WEBAPP_ENV, isWebappEnv, type WebappEnv, WebappEnvSchema };
 // Export the constant object as WEBAPP_ENVS (LOCAL, PREVIEW, PROD properties)
 // and the array as WEBAPP_ENV_VALUES
 export { WEBAPP_ENVS as WEBAPP_ENV_VALUES, WebAppEnvs as WEBAPP_ENVS };
+// Re-export shared config for direct access
+export { BASE_URL_CONFIG, FALLBACK_URLS, resolveApiOriginFromHostname };
+
+/**
+ * Legacy compatibility: BASE_URLS in old format
+ */
+export const BASE_URLS: Record<WebappEnv, { app: string; api: string }> = {
+  [WebAppEnvs.LOCAL]: {
+    app: BASE_URL_CONFIG[WebAppEnvs.LOCAL].app,
+    api: BASE_URL_CONFIG[WebAppEnvs.LOCAL].api,
+  },
+  [WebAppEnvs.PREVIEW]: {
+    app: BASE_URL_CONFIG[WebAppEnvs.PREVIEW].app,
+    api: BASE_URL_CONFIG[WebAppEnvs.PREVIEW].api,
+  },
+  [WebAppEnvs.PROD]: {
+    app: BASE_URL_CONFIG[WebAppEnvs.PROD].app,
+    api: BASE_URL_CONFIG[WebAppEnvs.PROD].api,
+  },
+};
 
 /**
  * Check if we're in a prerender/SSG build context.
@@ -70,29 +89,6 @@ export function isPrerender(): boolean {
 }
 
 /**
- * Static URL configuration for each environment
- *
- * ARCHITECTURE (TanStack Start + Separate API):
- * - Local: Web on 5173 (Vite), API on 8787 (Wrangler)
- * - Preview: Web on web-preview.roundtable.now, API on api-preview.roundtable.now
- * - Prod: Web on roundtable.now, API on api.roundtable.now
- */
-export const BASE_URLS: Record<WebappEnv, { app: string; api: string }> = {
-  [WebAppEnvs.LOCAL]: {
-    app: 'http://localhost:5173',
-    api: 'http://localhost:8787/api/v1',
-  },
-  [WebAppEnvs.PREVIEW]: {
-    app: 'https://web-preview.roundtable.now',
-    api: 'https://api-preview.roundtable.now/api/v1',
-  },
-  [WebAppEnvs.PROD]: {
-    app: 'https://roundtable.now',
-    api: 'https://api.roundtable.now/api/v1',
-  },
-};
-
-/**
  * Detect current environment (async version for server functions)
  *
  * For TanStack Start, we use import.meta.env which is replaced at build time by Vite.
@@ -102,6 +98,7 @@ export const BASE_URLS: Record<WebappEnv, { app: string; api: string }> = {
  * 2. process.env.VITE_WEBAPP_ENV (fallback for SSR)
  * 3. NODE_ENV detection (development = local, production = prod)
  * 4. Runtime detection via hostname (client-side only)
+ * 5. Falls back to PROD for safety
  */
 export async function getWebappEnvAsync(): Promise<WebappEnv> {
   // 1. Check import.meta.env (Vite build-time replacement)
@@ -131,6 +128,8 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
   if (hostname.includes('preview') || hostname.includes('-preview')) {
     return WebAppEnvs.PREVIEW;
   }
+
+  // 5. Fallback to production
   return WebAppEnvs.PROD;
 }
 
@@ -142,6 +141,7 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
  * 2. process.env.VITE_WEBAPP_ENV (SSR fallback)
  * 3. NODE_ENV detection (development = local, production = prod)
  * 4. Runtime detection via hostname (client-side only)
+ * 5. Falls back to PROD for safety
  */
 export function getWebappEnv(): WebappEnv {
   // 1. Check import.meta.env (Vite build-time replacement - works on Cloudflare Workers)
@@ -171,15 +171,18 @@ export function getWebappEnv(): WebappEnv {
   if (hostname.includes('preview') || hostname.includes('-preview')) {
     return WebAppEnvs.PREVIEW;
   }
+
+  // 5. Fallback to production
   return WebAppEnvs.PROD;
 }
 
 /**
  * Get base URLs for current environment
+ * Uses shared config with fallback to production
  */
 export function getBaseUrls() {
   const env = getWebappEnv();
-  return BASE_URLS[env];
+  return sharedGetUrlConfig(env);
 }
 
 /**
@@ -207,18 +210,20 @@ export function getApiBaseUrl(): string {
   // Prerender/SSG: use localhost to avoid DNS failures for external domains
   // Static pages shouldn't make API calls anyway (handled by isStaticRoute check)
   if (isPrerender()) {
-    return BASE_URLS[WebAppEnvs.LOCAL].api;
+    return sharedGetApiUrl(WebAppEnvs.LOCAL);
   }
 
   // Server-side: use full backend URL for direct access
-  return getBaseUrls().api;
+  const env = getWebappEnv();
+  return sharedGetApiUrl(env);
 }
 
 /**
  * Get app base URL for current environment
  */
 export function getAppBaseUrl(): string {
-  return getBaseUrls().app;
+  const env = getWebappEnv();
+  return sharedGetAppUrl(env);
 }
 
 /**
@@ -226,9 +231,32 @@ export function getAppBaseUrl(): string {
  * Used for direct API access like OG images that bypass the proxy
  */
 export function getApiOriginUrl(): string {
-  const apiUrl = getBaseUrls().api;
-  // Remove /api/v1 suffix to get just the origin
-  return apiUrl.replace('/api/v1', '');
+  const env = getWebappEnv();
+  return sharedGetApiOrigin(env);
+}
+
+/**
+ * Get API origin with hostname-based fallback for robust production deployment
+ * Used by proxy route when environment detection may fail
+ */
+export function getApiOriginWithFallback(requestHost?: string): string {
+  try {
+    const env = getWebappEnv();
+    const config = sharedGetUrlConfig(env);
+    if (config?.apiOrigin) {
+      return config.apiOrigin;
+    }
+  } catch {
+    // Environment detection failed
+  }
+
+  // Fallback to hostname-based resolution
+  if (requestHost) {
+    return resolveApiOriginFromHostname(requestHost);
+  }
+
+  // Ultimate fallback to production
+  return FALLBACK_URLS.apiOrigin;
 }
 
 /**
@@ -242,10 +270,10 @@ export function getProductionApiUrl(): string {
 
   if (currentEnv === WebAppEnvs.LOCAL && import.meta.env.MODE === 'production') {
     // Building for production but env is local - use preview API
-    return BASE_URLS[WebAppEnvs.PREVIEW].api;
+    return sharedGetApiUrl(WebAppEnvs.PREVIEW);
   }
 
-  return BASE_URLS[currentEnv].api;
+  return sharedGetApiUrl(currentEnv);
 }
 
 /**
@@ -263,5 +291,5 @@ export async function getApiUrlAsync(): Promise<string> {
 
   // Server-side: use full backend URL
   const currentEnv = await getWebappEnvAsync();
-  return BASE_URLS[currentEnv].api;
+  return sharedGetApiUrl(currentEnv);
 }

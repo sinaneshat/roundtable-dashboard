@@ -340,6 +340,29 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     onReconcileWithActiveStream: (streamingParticipantIndex) => {
       store.getState().reconcileWithActiveStream(streamingParticipantIndex);
     },
+    // ✅ HANDOFF FIX: Notify store when next participant is being triggered
+    // This prevents stale-streaming-cleanup from firing during P0->P1 handoff
+    setNextParticipantToTrigger: (value) => {
+      store.getState().setNextParticipantToTrigger(value);
+    },
+    // ✅ NAVIGATION CLEANUP: Clear pending state on navigation abort
+    // Prevents stale file parts from persisting across thread navigations
+    setPendingFileParts: (value) => {
+      store.getState().setPendingFileParts(value);
+    },
+    setPendingAttachmentIds: (value) => {
+      store.getState().setPendingAttachmentIds(value);
+    },
+    // ✅ HANDOFF FIX: Pass setIsStreaming so hook can update store directly
+    // This ensures cleanup sees isStreaming=true immediately during P0→P1 handoff
+    setIsStreaming: (value) => {
+      store.getState().setIsStreaming(value);
+    },
+    // ✅ HANDOFF FIX: Pass setParticipantHandoffInProgress to clear flag when participant starts
+    // This flag is set in use-streaming-trigger.ts before clearing nextParticipantToTrigger
+    setParticipantHandoffInProgress: (value) => {
+      store.getState().setParticipantHandoffInProgress(value);
+    },
   });
 
   const sendMessageRef = useRef(chat.sendMessage);

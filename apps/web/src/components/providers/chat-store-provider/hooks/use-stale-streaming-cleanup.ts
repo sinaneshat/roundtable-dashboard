@@ -93,12 +93,14 @@ export function useStaleStreamingCleanup({
           // ✅ RACE FIX: Re-check streaming flags right before force cleanup
           // During participant transitions, flags may briefly go false.
           // Also check nextParticipantToTrigger - if set, more streaming is expected.
+          // ✅ HANDOFF FIX: Also check participantHandoffInProgress - set during P0→P1 transition
           const freshState = store.getState();
           if (freshState.isStreaming
             || freshState.isModeratorStreaming
             || freshState.waitingToStartStreaming
-            || freshState.nextParticipantToTrigger !== null) {
-            rlog.sync('stale-cleanup', `r${streamingRoundNumber} skipping force cleanup - streaming activity detected`);
+            || freshState.nextParticipantToTrigger !== null
+            || freshState.participantHandoffInProgress) {
+            rlog.sync('stale-cleanup', `r${streamingRoundNumber} skipping force cleanup - streaming activity detected (handoff=${freshState.participantHandoffInProgress ? 1 : 0})`);
             staleStateStartTimeRef.current = Date.now();
             return;
           }

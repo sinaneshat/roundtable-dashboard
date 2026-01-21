@@ -310,9 +310,11 @@ export function useStreamingTrigger({
 
       freshState.setWaitingToStartStreaming(false);
       freshState.setHasSentPendingMessage(true);
-      // ✅ FIX: Also clear nextParticipantToTrigger to prevent re-trigger after stream ends
-      // Without this, use-round-resumption sees the old nextP value and triggers again
+      // ✅ HANDOFF FIX: Set handoff flag BEFORE clearing nextParticipantToTrigger
+      // This prevents stale-streaming-cleanup from firing during P0→P1 transition
+      // The handoff flag acts as a guard that persists until the next participant actually starts
       if (freshState.nextParticipantToTrigger !== null) {
+        freshState.setParticipantHandoffInProgress(true);
         freshState.setNextParticipantToTrigger(null);
       }
     }

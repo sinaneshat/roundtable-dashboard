@@ -572,6 +572,8 @@ const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
     set({ hasPendingConfigChanges: value }, false, 'flags/setHasPendingConfigChanges'),
   setIsPatchInProgress: (value: boolean) =>
     set({ isPatchInProgress: value }, false, 'flags/setIsPatchInProgress'),
+  setParticipantHandoffInProgress: (value: boolean) =>
+    set({ participantHandoffInProgress: value }, false, 'flags/setParticipantHandoffInProgress'),
 });
 
 const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({
@@ -585,6 +587,8 @@ const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({
   },
   setPendingAttachmentIds: (value: string[] | null) =>
     set({ pendingAttachmentIds: value }, false, 'data/setPendingAttachmentIds'),
+  setPendingFileParts: (value: ExtendedFilePart[] | null) =>
+    set({ pendingFileParts: value }, false, 'data/setPendingFileParts'),
   setExpectedParticipantIds: (value: string[] | null) =>
     set({ expectedParticipantIds: value }, false, 'data/setExpectedParticipantIds'),
   // ✅ PERF: Batch update pending state to prevent multiple re-renders

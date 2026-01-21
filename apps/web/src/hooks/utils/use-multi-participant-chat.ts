@@ -140,6 +140,31 @@ type UseMultiParticipantChatOptions = {
    * Called when AI SDK auto-resumes a valid stream (correct round and participant)
    */
   onReconcileWithActiveStream?: (streamingParticipantIndex: number) => void;
+  /**
+   * ✅ HANDOFF FIX: Callback to notify store when next participant is being triggered
+   * Called BEFORE queueMicrotask to prevent stale-streaming-cleanup from firing during P0->P1 handoff
+   */
+  setNextParticipantToTrigger?: (value: { index: number; participantId: string } | number | null) => void;
+  /**
+   * ✅ NAVIGATION CLEANUP: Callback to clear pending file parts on navigation abort
+   * Prevents stale file parts from persisting across thread navigations
+   */
+  setPendingFileParts?: (value: ExtendedFilePart[] | null) => void;
+  /**
+   * ✅ NAVIGATION CLEANUP: Callback to clear pending attachment IDs on navigation abort
+   * Prevents stale attachment IDs from persisting across thread navigations
+   */
+  setPendingAttachmentIds?: (value: string[] | null) => void;
+  /**
+   * ✅ HANDOFF FIX: Callback to set store.isStreaming directly
+   * Ensures cleanup sees streaming=true immediately without waiting for async state sync
+   */
+  setIsStreaming?: (value: boolean) => void;
+  /**
+   * ✅ HANDOFF FIX: Callback to clear handoff flag when participant actually starts streaming
+   * Called after setIsStreaming(true) to indicate the transition is complete
+   */
+  setParticipantHandoffInProgress?: (value: boolean) => void;
 };
 
 /**
@@ -149,7 +174,7 @@ type UseMultiParticipantChatReturn = {
   /** All messages in the conversation */
   messages: UIMessage[];
   /** Send a new user message and start a round */
-  sendMessage: (content: string) => Promise<void>;
+  sendMessage: (content: string, filePartsOverride?: ExtendedFilePart[]) => Promise<void>;
   /**
    * Start a new round with the existing participants (used for manual round triggering)
    * @param participantsOverride - Optional fresh participants (used by store subscription to avoid stale data)
@@ -292,6 +317,15 @@ export function useMultiParticipantChat(
     resumptionRoundNumber = null,
     nextParticipantToTrigger: nextParticipantToTriggerProp = null,
     onReconcileWithActiveStream,
+    // ✅ HANDOFF FIX: Callback to notify store when next participant is being triggered
+    setNextParticipantToTrigger,
+    // ✅ NAVIGATION CLEANUP: Callbacks to clear pending state on navigation abort
+    setPendingFileParts,
+    setPendingAttachmentIds,
+    // ✅ HANDOFF FIX: Callback to set store.isStreaming directly
+    setIsStreaming,
+    // ✅ HANDOFF FIX: Callback to clear handoff flag when participant starts streaming
+    setParticipantHandoffInProgress,
   } = options;
 
   // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
@@ -321,6 +355,15 @@ export function useMultiParticipantChat(
     resumptionRoundNumber,
     nextParticipantToTriggerProp,
     onReconcileWithActiveStream,
+    // ✅ HANDOFF FIX: Callback to notify store when next participant is being triggered
+    setNextParticipantToTrigger,
+    // ✅ NAVIGATION CLEANUP: Callbacks to clear pending state on navigation abort
+    setPendingFileParts,
+    setPendingAttachmentIds,
+    // ✅ HANDOFF FIX: Set store.isStreaming directly for immediate effect
+    setIsStreaming,
+    // ✅ HANDOFF FIX: Clear handoff flag when participant starts streaming
+    setParticipantHandoffInProgress,
   });
 
   // Participant error tracking - simple Set-based tracking to prevent duplicate responses
@@ -692,7 +735,38 @@ export function useMultiParticipantChat(
     queuedParticipantsThisRoundRef.current.add(nextIndex);
     participantIndexQueue.current.push(nextIndex);
 
-    // DEBUG: Verbose queue tracing disabled
+    // ✅ HANDOFF FIX: Notify store that next participant is being triggered
+    // This prevents stale-streaming-cleanup from firing during P0->P1 handoff
+    // The cleanup at use-stale-streaming-cleanup.ts:100 checks nextParticipantToTrigger !== null
+    // Without this notification, store sees nextParticipantToTrigger=null → cleanup fires at 10s
+    const participantId = roundParticipantsRef.current[nextIndex]?.id ?? '';
+    if (callbackRefs.setNextParticipantToTrigger.current) {
+      callbackRefs.setNextParticipantToTrigger.current({ index: nextIndex, participantId });
+    }
+
+    // ✅ ASYNC GAP FIX: Set isStreamingRef=true SYNCHRONOUSLY to block cleanup during handoff
+    // Problem: setNextParticipantToTrigger() is async - Zustand state update is queued, not immediate.
+    // The cleanup interval at use-stale-streaming-cleanup.ts:96 calls store.getState() which may
+    // see the OLD value of nextParticipantToTrigger (null) if the async update hasn't propagated.
+    // Fix: Also set isStreamingRef.current=true here AND call setIsStreaming(true) directly.
+    // The ref is for internal hook state, the callback updates store.isStreaming IMMEDIATELY
+    // so cleanup's store.getState().isStreaming sees true right away.
+    // This prevents the 10s forced cleanup from firing during P0→P1 handoff.
+    isStreamingRef.current = true;
+
+    // ✅ HANDOFF FIX: Call setIsStreaming(true) DIRECTLY on store
+    // The ref assignment above doesn't sync to store (that sync is one-way: derived → ref)
+    // Calling setIsStreaming ensures store.isStreaming=true IMMEDIATELY so cleanup sees it
+    if (callbackRefs.setIsStreaming.current) {
+      callbackRefs.setIsStreaming.current(true);
+    }
+
+    // ✅ HANDOFF FIX: Clear handoff flag now that participant is actually streaming
+    // This flag was set in use-streaming-trigger.ts before clearing nextParticipantToTrigger
+    // Now that P1 (or next participant) is streaming, the handoff is complete
+    if (callbackRefs.setParticipantHandoffInProgress.current) {
+      callbackRefs.setParticipantHandoffInProgress.current(false);
+    }
 
     // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
     // Same pattern as startRound for consistent error handling
@@ -1737,6 +1811,17 @@ export function useMultiParticipantChat(
       // executing against a corrupted/stale AI SDK Chat instance
       abortMicrotaskRef.current = true;
 
+      // ✅ NAVIGATION CLEANUP: Clear stale pending state to prevent cross-thread file reuse
+      // Without this, pendingFileParts and pendingAttachmentIds persist in store after
+      // navigation abort, and may be incorrectly reused on the next thread or round.
+      // This is especially problematic for overview→thread navigation during submission:
+      // 1. User on overview uploads files, submits
+      // 2. Navigation triggers abort before files are sent
+      // 3. Files persist in store but were never sent
+      // 4. New thread page loads, resumption might incorrectly reuse wrong files
+      callbackRefs.setPendingFileParts.current?.(null);
+      callbackRefs.setPendingAttachmentIds.current?.(null);
+
       // Reset participant tracking refs
       respondedParticipantsRef.current = new Set();
       regenerateRoundNumberRef.current = null;
@@ -1808,6 +1893,7 @@ export function useMultiParticipantChat(
         abortResetTimeoutRef.current = null;
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs.setPendingFileParts/setPendingAttachmentIds accessed via .current (ref pattern)
   }, [threadId, setMessages, setCurrentRound, setCurrentParticipantIndex, setIsExplicitlyStreaming]);
 
   /**
@@ -2625,7 +2711,7 @@ export function useMultiParticipantChat(
    * If enableWebSearch is true, executes pre-search BEFORE participant streaming
    */
   const sendMessage = useCallback(
-    async (content: string) => {
+    async (content: string, filePartsOverride?: ExtendedFilePart[]) => {
       // ✅ CRITICAL FIX: ATOMIC check-and-set to prevent race conditions
       // Same pattern as startRound - must happen FIRST before any other logic
       if (isTriggeringRef.current) {
@@ -2728,10 +2814,10 @@ export function useMultiParticipantChat(
         participantIndexQueue.current.push(0);
       }
 
-      // ✅ ATTACHMENTS: Get file parts from ref for AI SDK message creation
-      // This ensures AI SDK includes file parts in the user message it creates
-      // Without this, file attachments in 2nd+ rounds don't show until refresh
-      const fileParts = callbackRefs.pendingFileParts.current || [];
+      // ✅ ATTACHMENTS: Get file parts - prefer override to bypass ref timing race condition
+      // The ref may not be synced yet if sendMessage is called in the same render cycle
+      // that set pendingFileParts in the store. Override allows caller to pass directly.
+      const fileParts = filePartsOverride ?? callbackRefs.pendingFileParts.current ?? [];
 
       // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
       // Same pattern as startRound for consistent error handling

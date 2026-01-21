@@ -115,9 +115,11 @@ import type {
   SetModelOrder,
   SetNextParticipantToTrigger,
   SetOnComplete,
+  SetParticipantHandoffInProgress,
   SetParticipants,
   SetPendingAttachmentIds,
   SetPendingFeedback,
+  SetPendingFileParts,
   SetPendingMessage,
   SetPreSearches,
   SetRegeneratingRoundNumber,
@@ -345,6 +347,8 @@ export const FlagsStateSchema = z.object({
   hasPendingConfigChanges: z.boolean(),
   /** ✅ PATCH BLOCKING: True while thread PATCH is in progress - prevents streaming race */
   isPatchInProgress: z.boolean(),
+  /** ✅ HANDOFF FIX: True during P0→P1 participant transition to prevent 10s cleanup */
+  participantHandoffInProgress: z.boolean(),
 });
 
 export const FlagsActionsSchema = z.object({
@@ -355,6 +359,7 @@ export const FlagsActionsSchema = z.object({
   setIsWaitingForChangelog: z.custom<SetIsWaitingForChangelog>(),
   setHasPendingConfigChanges: z.custom<SetHasPendingConfigChanges>(),
   setIsPatchInProgress: z.custom<SetIsPatchInProgress>(),
+  setParticipantHandoffInProgress: z.custom<SetParticipantHandoffInProgress>(),
 });
 
 export const FlagsSliceSchema = z.intersection(FlagsStateSchema, FlagsActionsSchema);
@@ -379,6 +384,7 @@ export const DataActionsSchema = z.object({
   setRegeneratingRoundNumber: z.custom<SetRegeneratingRoundNumber>(),
   setPendingMessage: z.custom<SetPendingMessage>(),
   setPendingAttachmentIds: z.custom<SetPendingAttachmentIds>(),
+  setPendingFileParts: z.custom<SetPendingFileParts>(),
   setExpectedParticipantIds: z.custom<SetExpectedParticipantIds>(),
   batchUpdatePendingState: z.custom<(pendingMessage: string | null, expectedParticipantIds: string[] | null) => void>(),
   setStreamingRoundNumber: z.custom<SetStreamingRoundNumber>(),

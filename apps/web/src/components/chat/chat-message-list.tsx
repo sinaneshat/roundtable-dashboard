@@ -534,6 +534,12 @@ export const ChatMessageList = memo(
           if (roundNum !== undefined && roundNum !== null) {
             const existingIdx = userRoundToIdx.get(roundNum);
             if (existingIdx !== undefined) {
+              // ✅ FIX: Also prefer messages WITH file parts over text-only duplicates
+              // This handles AI SDK creating duplicate user messages with random IDs
+              const existingMsg = result[existingIdx];
+              const existingHasFiles = existingMsg?.parts?.some(p => p.type === 'file');
+              const currentHasFiles = message.parts?.some(p => p.type === 'file');
+
               // Prefer deterministic IDs over optimistic IDs
               const isDeterministicId = message.id.includes('_r') && message.id.includes('_user');
               const isOptimistic = message.id.startsWith('optimistic-');
@@ -547,7 +553,14 @@ export const ChatMessageList = memo(
                 seenMessageIds.add(message.id);
                 continue;
               }
-              // Skip this duplicate
+              // ✅ FIX: If current has files but existing doesn't, replace
+              // This ensures file attachments are preserved even with random IDs
+              if (currentHasFiles && !existingHasFiles) {
+                result[existingIdx] = message;
+                seenMessageIds.add(message.id);
+                continue;
+              }
+              // Skip this duplicate (existing has files or neither has files)
               continue;
             }
             userRoundToIdx.set(roundNum, result.length); // Track index before push
@@ -776,7 +789,15 @@ export const ChatMessageList = memo(
         const isCurrentStreamingRound = messageRoundNumber === _streamingRoundNumber;
         const messageIsModerator = isModeratorMessage(message);
 
-        if (isStreaming && isCurrentStreamingRound && !allStreamingRoundParticipantsHaveContent && !messageIsModerator) {
+        // ✅ FIX: Don't skip messages that already have visible content
+        // During P0→P1 handoff, P0's completed message should stay visible
+        // Only skip empty placeholder messages, not completed participant responses
+        const messageHasContent = message.parts?.some(p =>
+          (p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0)
+          || p.type === 'reasoning',
+        ) ?? false;
+
+        if (isStreaming && isCurrentStreamingRound && !allStreamingRoundParticipantsHaveContent && !messageIsModerator && !messageHasContent) {
           continue;
         }
 

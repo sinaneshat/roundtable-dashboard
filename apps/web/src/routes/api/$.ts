@@ -10,48 +10,14 @@
  * - Preview: Frontend proxies to api-preview.roundtable.now
  * - Production: Frontend proxies to api.roundtable.now
  *
+ * Uses shared base-urls config as single source of truth with hostname-based fallback.
+ *
  * Note: /api/og/* routes are handled separately by specific route files.
  */
 
 import { createFileRoute } from '@tanstack/react-router';
 
-import { BASE_URLS, getWebappEnv } from '@/lib/config/base-urls';
-
-/**
- * Get the backend API server URL (without /api path - we forward the full path)
- * Uses request hostname as fallback for robust production deployment
- */
-function getBackendOrigin(requestHost?: string): string {
-  try {
-    const env = getWebappEnv();
-    const envConfig = BASE_URLS[env];
-
-    if (envConfig?.api) {
-      // Remove /api/v1 suffix to get just the origin
-      return envConfig.api.replace('/api/v1', '');
-    }
-  } catch {
-    // Environment detection failed, use hostname-based fallback
-  }
-
-  // Fallback: derive API URL from request hostname
-  // roundtable.now -> api.roundtable.now
-  // web-preview.roundtable.now -> api-preview.roundtable.now
-  if (requestHost) {
-    if (requestHost === 'roundtable.now') {
-      return 'https://api.roundtable.now';
-    }
-    if (requestHost.includes('preview')) {
-      return 'https://api-preview.roundtable.now';
-    }
-    if (requestHost === 'localhost' || requestHost.startsWith('localhost:')) {
-      return 'http://localhost:8787';
-    }
-  }
-
-  // Ultimate fallback for production
-  return 'https://api.roundtable.now';
-}
+import { getApiOriginWithFallback } from '@/lib/config/base-urls';
 
 /**
  * Forward request to backend and return response
@@ -61,7 +27,9 @@ async function proxyRequest(request: Request, path: string): Promise<Response> {
   const requestUrl = new URL(request.url);
   const requestHost = requestUrl.host;
 
-  const backendOrigin = getBackendOrigin(requestHost);
+  // Get backend origin using shared config with hostname-based fallback
+  const backendOrigin = getApiOriginWithFallback(requestHost);
+
   // Preserve query string from original request
   const queryString = requestUrl.search; // Includes the '?' if present
   const targetUrl = `${backendOrigin}/api/${path}${queryString}`;
@@ -72,7 +40,7 @@ async function proxyRequest(request: Request, path: string): Promise<Response> {
 
   // Forward the request to the backend
   // Note: duplex is required for streaming request bodies but not in TypeScript's RequestInit type yet
-  const proxyRequest = new Request(targetUrl, {
+  const proxyRequestInit = new Request(targetUrl, {
     method: request.method,
     headers,
     body: request.body,
@@ -81,7 +49,7 @@ async function proxyRequest(request: Request, path: string): Promise<Response> {
   } as RequestInit & { duplex?: 'half' });
 
   try {
-    const response = await fetch(proxyRequest);
+    const response = await fetch(proxyRequestInit);
 
     // Clone response headers
     const responseHeaders = new Headers(response.headers);
@@ -96,7 +64,7 @@ async function proxyRequest(request: Request, path: string): Promise<Response> {
       headers: responseHeaders,
     });
   } catch (error) {
-    console.error('[API Proxy] Error forwarding request:', error);
+    // Return 502 Bad Gateway if backend is unavailable
     return new Response(
       JSON.stringify({ error: 'Backend unavailable', message: String(error) }),
       {
