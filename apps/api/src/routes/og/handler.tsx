@@ -25,7 +25,7 @@ import {
   getModelIconBase64Sync,
   getOGFontsSync,
 } from '@/lib/ui/og-assets.generated';
-import { getModeColor, OG_COLORS, OG_HEIGHT, OG_WIDTH } from '@/lib/ui/og-colors';
+import { getModeColor, OG_COLORS, OG_HEIGHT, OG_WIDTH, truncateTitle } from '@/lib/ui/og-colors';
 import {
   createCachedImageResponse,
   generateOgCacheKey,
@@ -194,7 +194,7 @@ async function generateOgImage(params: {
                 )
               : null}
 
-            {/* Title */}
+            {/* Title - constrained to usable width (1200 - 120px padding) */}
             <span
               style={{
                 fontSize: 56,
@@ -203,9 +203,12 @@ async function generateOgImage(params: {
                 lineHeight: 1.2,
                 marginBottom: 32,
                 letterSpacing: '-0.03em',
+                maxWidth: OG_WIDTH - 120,
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
               }}
             >
-              {title.length > 80 ? `${title.slice(0, 80)}...` : title}
+              {truncateTitle(title)}
             </span>
 
             {/* Model icons row with glass effect */}

@@ -969,12 +969,11 @@ export function ModelSelectionModal({
                               )
                             : enableDrag && !isFiltering
                               ? (
-                                  <ScrollArea className="h-full">
+                                  <ScrollArea className="h-full" layoutScroll>
                                     <Reorder.Group
                                       axis="y"
                                       values={sortedFilteredModels}
                                       onReorder={handleReorder}
-                                      layoutScroll
                                       className="flex flex-col gap-2 pr-3 pb-4"
                                     >
                                       {sortedFilteredModels.map(orderedModel => (

@@ -182,14 +182,14 @@ export function ShareDialog({
                     <Input
                       readOnly
                       value={shareUrl}
-                      className="h-10 w-full pr-10 font-mono text-sm bg-muted/30 border-border/50 focus-visible:border-border"
+                      className="h-11 w-full pr-11 font-mono text-sm bg-muted/30 border-border/50 focus-visible:border-border"
                       onClick={e => e.currentTarget.select()}
                     />
                     <button
                       type="button"
                       onClick={() => handleCopy(shareUrl, 'link')}
                       className={cn(
-                        'absolute right-0 top-0 flex min-h-11 min-w-11 items-center justify-center rounded-r-md text-muted-foreground transition-all hover:text-foreground',
+                        'absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-r-md text-muted-foreground transition-all hover:text-foreground',
                         copySuccess === 'link' && 'text-emerald-500 hover:text-emerald-500',
                       )}
                       aria-label={copySuccess === 'link' ? t('chat.shareDialog.copied') : t('chat.shareDialog.copyLink')}
@@ -202,7 +202,7 @@ export function ShareDialog({
                   <Button
                     variant="outline"
                     size="icon"
-                    className="min-h-11 min-w-11 shrink-0 border-border/50 hover:bg-muted/50"
+                    className="h-11 w-11 shrink-0 border-border/50 hover:bg-muted/50"
                     onClick={() => window.open(shareUrl, '_blank')}
                     aria-label={t('chat.shareDialog.openInNewTab')}
                   >

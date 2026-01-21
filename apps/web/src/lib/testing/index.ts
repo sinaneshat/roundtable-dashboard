@@ -41,6 +41,9 @@ export * from './helpers';
 export * from './metadata-helpers';
 export { render, renderHook } from './render';
 
+// Resumption Testing Utilities (round resumption flow testing)
+export * from './resumption-test-helpers';
+
 // Stripe Test Mocks (Stripe API types)
 export * from './stripe-test-mocks';
 

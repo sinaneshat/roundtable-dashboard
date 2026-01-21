@@ -172,9 +172,19 @@ function ChatThreadRoute() {
 
   // Use loaderData as primary source (available on SSR)
   // useQuery provides client-side updates/refetches
+  // ✅ SKELETON FLASH FIX: When loaderData has threadData (from SSR or prefetch cache),
+  // use it as initialData and extend staleTime to prevent immediate refetch
+  const hasLoaderData = Boolean(loaderData?.threadData);
   const { data: queryData, isError, error, isFetching } = useQuery({
     ...threadBySlugQueryOptions(slug ?? ''),
     enabled: Boolean(slug),
+    // ✅ FIX: Use loader data as initial data to prevent flash
+    initialData: hasLoaderData
+      ? { success: true as const, data: loaderData.threadData }
+      : undefined,
+    // ✅ FIX: Extend staleTime when data came from loader to prevent immediate refetch
+    // 10s grace period for fresh data - thread detail will be refetched on subsequent navigations
+    staleTime: hasLoaderData ? 10_000 : 0,
   });
 
   // Prefer loader data (SSR), fall back to query data (client updates)

@@ -14,7 +14,7 @@ import { useLayoutEffect, useRef } from 'react';
 
 import { useChatStoreApi } from '@/components/providers/chat-store-provider/context';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/services/api';
+import type { ChatParticipant, ChatThread, StoredPreSearch, ThreadStreamResumptionState } from '@/services/api';
 
 export type SyncHydrateOptions = {
   mode: ScreenMode;
@@ -23,6 +23,8 @@ export type SyncHydrateOptions = {
   initialMessages?: UIMessage[];
   chatMode?: ChatMode | null;
   streamResumptionState?: ThreadStreamResumptionState | null;
+  /** Pre-search data hydrated from server for resumption */
+  initialPreSearches?: StoredPreSearch[];
 };
 
 /**
@@ -43,6 +45,7 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     participants = [],
     initialMessages = [],
     streamResumptionState,
+    initialPreSearches,
   } = options;
 
   const storeApi = useChatStoreApi();
@@ -116,8 +119,15 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     // Initialize thread with SSR data
     state.initializeThread(thread, participants, initialMessages);
 
+    // ✅ CRITICAL FIX: Set pre-searches into store for resumption
+    // Without this, streaming trigger finds no pre-search for current round
+    if (initialPreSearches?.length) {
+      state.setPreSearches(initialPreSearches);
+      rlog.init('sync-hydrate', `set ${initialPreSearches.length} pre-searches into store`);
+    }
+
     hasHydrated.current = true;
-  }, [storeApi, mode, thread, threadId, participants, initialMessages, streamResumptionState]);
+  }, [storeApi, mode, thread, threadId, participants, initialMessages, streamResumptionState, initialPreSearches]);
 
   // Reset hydration flag when thread changes
   useLayoutEffect(() => {

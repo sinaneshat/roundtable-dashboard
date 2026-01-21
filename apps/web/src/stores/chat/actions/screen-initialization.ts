@@ -10,7 +10,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore, useChatStoreApi } from '@/components/providers/chat-store-provider/context';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant, ChatThread, ThreadStreamResumptionState } from '@/services/api';
+import type { ChatParticipant, ChatThread, StoredPreSearch, ThreadStreamResumptionState } from '@/services/api';
 
 import { useIncompleteRoundResumption } from './incomplete-round-resumption';
 import { getPreSearchOrchestrator } from './pre-search-orchestrator';
@@ -27,7 +27,7 @@ export type UseScreenInitializationOptions = {
   /** Stream resumption state from server - will be prefilled BEFORE initializeThread */
   streamResumptionState?: ThreadStreamResumptionState | null;
   /** Pre-search data hydrated from server - when provided, V1 orchestrator is disabled */
-  initialPreSearches?: unknown[];
+  initialPreSearches?: StoredPreSearch[];
 };
 
 export function useScreenInitialization(options: UseScreenInitializationOptions) {
@@ -48,6 +48,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     setThread: s.setThread,
     setParticipants: s.setParticipants,
     setMessages: s.setMessages,
+    setPreSearches: s.setPreSearches,
   })));
 
   const storeApi = useChatStoreApi();
@@ -149,12 +150,20 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     if (isReady && !alreadyInitialized && !isFormActionsSubmission) {
       initializedThreadIdRef.current = threadId;
       actions.initializeThread(thread, participants, initialMessages);
+
+      // ✅ CRITICAL FIX: Set pre-searches into store when hydrated from server
+      // Previously only used for conditional logic but never stored
+      // Without this, streaming trigger finds no pre-search for current round
+      if (initialPreSearches?.length) {
+        actions.setPreSearches(initialPreSearches);
+        rlog.init('presearch-hydrate', `set ${initialPreSearches.length} pre-searches into store`);
+      }
     }
 
     if (threadId !== initializedThreadIdRef.current && initializedThreadIdRef.current !== null) {
       initializedThreadIdRef.current = null;
     }
-  }, [thread, participants, initialMessages, actions, streamingStateSet, streamResumptionState, storeApi]);
+  }, [thread, participants, initialMessages, actions, streamingStateSet, streamResumptionState, storeApi, initialPreSearches]);
 
   // ✅ SSR CONSISTENCY: Stale data handling moved to server-side in page.tsx
   // verifyAndFetchFreshMessages() retries DB reads before SSR completes

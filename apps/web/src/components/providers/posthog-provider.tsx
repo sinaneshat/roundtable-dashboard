@@ -14,7 +14,7 @@ type PostHogProviderProps = {
 
 // Lazy load the PostHog React provider
 const PHProvider = lazy(() =>
-  import('posthog-js/react').then(mod => ({ default: mod.PostHogProvider })),
+  import('posthog-js/react').then((mod) => ({ default: mod.PostHogProvider })),
 );
 
 /**
@@ -51,6 +51,14 @@ export default function PostHogProvider({
     // Lazy load PostHog to reduce initial bundle size
     import('posthog-js').then((mod) => {
       const posthog = mod.default;
+
+      // Expose to window for PostHog toolbar support
+      // Must be set before init() so toolbar can find it
+      if (typeof window !== 'undefined') {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        (window as any).posthog = posthog;
+      }
+
       posthog.init(apiKey, {
         // Use direct PostHog URL for TanStack Start on Cloudflare
         api_host: apiHost,

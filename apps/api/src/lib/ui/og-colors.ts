@@ -137,3 +137,34 @@ export function truncateText(text: string, maxLength: number): string {
   }
   return `${text.slice(0, maxLength)}...`;
 }
+
+/**
+ * Max characters for OG title - calculated for 1080px usable width (1200px - 120px padding)
+ * At 56px font, ~30-35 chars per line. 55 chars allows ~2 comfortable lines.
+ */
+export const OG_TITLE_MAX_CHARS = 55;
+
+/**
+ * Truncate title for OG images with word-boundary awareness
+ * - Avoids cutting words in the middle
+ * - Uses proper ellipsis character
+ * - Falls back to hard truncate for single very long words
+ * - Default 55 chars fits ~2 lines at 56px font in 1200x630 OG image
+ */
+export function truncateTitle(title: string, maxLength: number = OG_TITLE_MAX_CHARS): string {
+  const trimmed = title.trim();
+  if (trimmed.length <= maxLength) {
+    return trimmed;
+  }
+
+  // Find last space before maxLength
+  const truncated = trimmed.slice(0, maxLength);
+  const lastSpace = truncated.lastIndexOf(' ');
+
+  // If no space found or space is too early, hard truncate
+  if (lastSpace === -1 || lastSpace < maxLength * 0.5) {
+    return `${truncated.trimEnd()}…`;
+  }
+
+  return `${truncated.slice(0, lastSpace).trimEnd()}…`;
+}

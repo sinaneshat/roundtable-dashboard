@@ -2,7 +2,8 @@
  * Title Polling Hook - Provider-level polling for AI-generated titles
  *
  * Polls check-slug API every 2s after thread creation until isAiGeneratedTitle is true.
- * Unlike flow-controller.ts, polling persists across overview↔thread navigation.
+ * CRITICAL: Polling persists across navigation - uses ref to track pending thread,
+ * NOT store's createdThreadId which gets cleared on navigation.
  *
  * When AI title is ready:
  * 1. Gets old title from sidebar cache
@@ -27,48 +28,50 @@ type UseTitlePollingOptions = {
 };
 
 export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOptions) {
-  const { createdThreadId, thread } = useStore(store, useShallow(s => ({
+  const { createdThreadId } = useStore(store, useShallow(s => ({
     createdThreadId: s.createdThreadId,
-    thread: s.thread,
   })));
+
+  // CRITICAL: Track pending title thread ID in ref - persists across navigation
+  // Store's createdThreadId gets cleared on navigation, but we need to keep polling
+  const pendingTitleThreadIdRef = useRef<string | null>(null);
 
   // Track if we've already handled the AI title for this thread
   const handledTitleRef = useRef<string | null>(null);
 
-  // Determine if we should poll:
-  // - Have a createdThreadId (new thread was just created)
-  // - Thread doesn't have AI-generated title yet
-  // - Haven't already handled this thread's title
-  const shouldPoll = Boolean(createdThreadId)
-    && !thread?.isAiGeneratedTitle
-    && handledTitleRef.current !== createdThreadId;
-
-  const slugStatusQuery = useThreadSlugStatusQuery(createdThreadId, shouldPoll);
-
-  // Reset handled ref when a new thread is created
+  // Capture new thread creation in persistent ref BEFORE store clears it
   useEffect(() => {
-    if (createdThreadId && handledTitleRef.current !== createdThreadId) {
-      // Don't reset if it's the same thread - this would cause duplicate handling
-      if (!thread?.isAiGeneratedTitle) {
-        // Only clear if we haven't already processed this thread's title
-        handledTitleRef.current = null;
-      }
+    if (createdThreadId && createdThreadId !== handledTitleRef.current) {
+      pendingTitleThreadIdRef.current = createdThreadId;
     }
-  }, [createdThreadId, thread?.isAiGeneratedTitle]);
+  }, [createdThreadId]);
+
+  // Use the persistent ref for polling - NOT the store's createdThreadId
+  const pendingThreadId = pendingTitleThreadIdRef.current;
+
+  // Determine if we should poll:
+  // - Have a pending thread ID (captured before navigation cleared it)
+  // - Haven't already handled this thread's title
+  const shouldPoll = Boolean(pendingThreadId)
+    && handledTitleRef.current !== pendingThreadId;
+
+  const slugStatusQuery = useThreadSlugStatusQuery(pendingThreadId, shouldPoll);
 
   // Handle AI title ready
   useEffect(() => {
     const slugData = validateSlugStatusResponse(slugStatusQuery.data);
 
-    if (!slugData?.isAiGeneratedTitle || !createdThreadId) {
+    if (!slugData?.isAiGeneratedTitle || !pendingThreadId) {
       return;
     }
 
     // Prevent duplicate handling
-    if (handledTitleRef.current === createdThreadId) {
+    if (handledTitleRef.current === pendingThreadId) {
       return;
     }
-    handledTitleRef.current = createdThreadId;
+    handledTitleRef.current = pendingThreadId;
+    // Clear pending ref now that we've handled it
+    pendingTitleThreadIdRef.current = null;
 
     const queryClient = queryClientRef.current;
     if (!queryClient)
@@ -94,7 +97,7 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
       for (const page of parsed.pages) {
         if (!page.success || !page.data?.items)
           continue;
-        const thread = page.data.items.find(t => t.id === createdThreadId);
+        const thread = page.data.items.find(t => t.id === pendingThreadId);
         if (thread) {
           oldTitle = thread.title ?? 'New conversation';
           break;
@@ -103,10 +106,10 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
     }
 
     // Start the typewriter animation
-    state.startTitleAnimation(createdThreadId, oldTitle, slugData.title);
+    state.startTitleAnimation(pendingThreadId, oldTitle, slugData.title);
 
-    // Update thread in store
-    if (currentThread) {
+    // Update thread in store ONLY if user is still viewing this thread
+    if (currentThread?.id === pendingThreadId) {
       state.setThread({
         ...currentThread,
         isAiGeneratedTitle: true,
@@ -115,7 +118,7 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
       });
     }
 
-    // Optimistically update sidebar cache with new title
+    // Optimistically update sidebar cache with new title (always - regardless of current view)
     queryClient.setQueriesData(
       {
         queryKey: queryKeys.threads.all,
@@ -135,7 +138,7 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
             }
 
             const updatedItems = page.data.items.map((thread) => {
-              if (thread.id !== createdThreadId)
+              if (thread.id !== pendingThreadId)
                 return thread;
 
               return {
@@ -168,5 +171,5 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
     return () => {
       clearTimeout(invalidationTimeout);
     };
-  }, [slugStatusQuery.data, createdThreadId, queryClientRef, store]);
+  }, [slugStatusQuery.data, pendingThreadId, queryClientRef, store]);
 }

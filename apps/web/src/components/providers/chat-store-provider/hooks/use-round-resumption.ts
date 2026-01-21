@@ -311,22 +311,32 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
         // Check if AI SDK is now ready
         if (!chat.isReady) {
-          // ✅ HYDRATION FIX: Call continueFromParticipant to trigger hydration FIRST
-          // The AI SDK has 0 messages but latestMessages has messages from the store.
-          // continueFromParticipant will hydrate the AI SDK, then return early.
-          // We then poll until hydration completes and isReady becomes true.
-          rlog.resume('round-resum', `initial: AI SDK not ready (msgs=${chat.messages?.length ?? 0}) - calling cfp to hydrate`);
-          const enabledForHydration = getEnabledParticipants(latestParticipants);
-          const nextIdx = typeof latestNextParticipant === 'number' ? latestNextParticipant : latestNextParticipant.index;
-          // ✅ FIX: Use queueMicrotask to avoid flushSync during render phase
-          // continueFromParticipant uses flushSync internally, which can't be called during React render
-          queueMicrotask(() => {
-            chat.continueFromParticipant(
-              { index: nextIdx, participantId: enabledForHydration[nextIdx]?.id ?? '' },
-              enabledForHydration,
-              latestMessages,
-            );
-          });
+          // ✅ PRE-SEARCH RACE FIX: Check pre-search status BEFORE any hydration call
+          // Without this, continueFromParticipant may start streaming when:
+          // 1. messagesOverride is provided (which it is - latestMessages)
+          // 2. AI SDK status becomes 'ready' during hydration
+          // This bypasses all guards in continueFromParticipant and causes avail=0 bug
+          const latestRound = getCurrentRoundNumber(latestMessages);
+          const latestWebSearch = latestState.enableWebSearch;
+          const latestPreSearch = latestPreSearches.find(ps => ps.roundNumber === latestRound);
+          if (shouldWaitForPreSearch(latestWebSearch, latestPreSearch)) {
+            rlog.resume('round-resum', `initial: pre-search not complete r${latestRound} - deferring hydration`);
+            // Don't call continueFromParticipant yet - let pollUntilReady handle it
+          } else {
+            // ✅ HYDRATION FIX: Call continueFromParticipant to trigger hydration
+            // Only safe to call when pre-search is complete
+            rlog.resume('round-resum', `initial: AI SDK not ready (msgs=${chat.messages?.length ?? 0}) - calling cfp to hydrate`);
+            const enabledForHydration = getEnabledParticipants(latestParticipants);
+            const nextIdx = typeof latestNextParticipant === 'number' ? latestNextParticipant : latestNextParticipant.index;
+            // ✅ FIX: Use queueMicrotask to avoid flushSync during render phase
+            queueMicrotask(() => {
+              chat.continueFromParticipant(
+                { index: nextIdx, participantId: enabledForHydration[nextIdx]?.id ?? '' },
+                enabledForHydration,
+                latestMessages,
+              );
+            });
+          }
 
           // Still not ready - schedule recursive retry with direct execution
           // ✅ FIX: Don't rely on toggle pattern (fails with React 18 batching)
@@ -363,14 +373,20 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
             }
 
             // ✅ HYDRATION FIX: If AI SDK not ready, call continueFromParticipant anyway
-            // The hydration logic inside continueFromParticipant will:
-            // 1. See AI SDK has 0 messages but pollMessages has messages
-            // 2. Hydrate the AI SDK with setMessages(pollMessages)
-            // 3. Return early (isTriggeringRef.current = false)
-            // 4. On next poll, isReady will be true and streaming can start
+            // BUT ONLY if pre-search is complete - otherwise defer to next poll
             if (!chat.isReady) {
+              // ✅ PRE-SEARCH RACE FIX: Check pre-search status before hydration call
+              const pollCurrentRound = getCurrentRoundNumber(pollMessages);
+              const pollWebSearch = pollState.enableWebSearch;
+              const pollPreSearch = pollPreSearches.find(ps => ps.roundNumber === pollCurrentRound);
+              if (shouldWaitForPreSearch(pollWebSearch, pollPreSearch)) {
+                rlog.resume('round-resum', `poll: pre-search not complete r${pollCurrentRound} - deferring hydration`);
+                retryTimeoutRef.current = setTimeout(pollUntilReady, 100);
+                return;
+              }
+
               rlog.resume('round-resum', `poll: AI SDK not ready (msgs=${chat.messages?.length ?? 0}) - calling cfp to hydrate`);
-              // Call continueFromParticipant to trigger hydration
+              // Call continueFromParticipant to trigger hydration (pre-search is complete)
               const pollEnabledForHydration = getEnabledParticipants(pollParticipants);
               const pollNextIdx = typeof pollNextParticipant === 'number' ? pollNextParticipant : pollNextParticipant.index;
               chat.continueFromParticipant(
