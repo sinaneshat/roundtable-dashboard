@@ -1,0 +1,19 @@
+{
+  "name": "@roundtable/vitest-config",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    "./base": "./base.ts",
+    "./react": "./react.ts",
+    "./node": "./node.ts"
+  },
+  "files": [
+    "base.ts",
+    "node.ts",
+    "react.ts"
+  ],
+  "peerDependencies": {
+    "vitest": "^4.0.0"
+  }
+}

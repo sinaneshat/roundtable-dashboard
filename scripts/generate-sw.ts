@@ -56,11 +56,13 @@ const PRECACHE_ASSETS = [
 ];
 
 // Install event - cache core assets
+// NOTE: Do NOT call skipWaiting() here - let user control when to update
+// This prevents unexpected page refreshes during active sessions
 self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(STATIC_CACHE)
       .then((cache) => cache.addAll(PRECACHE_ASSETS))
-      .then(() => self.skipWaiting()) // Activate immediately
+    // No skipWaiting() - wait for user to trigger update or page navigation
   );
 });
 

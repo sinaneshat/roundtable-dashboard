@@ -1,0 +1,74 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "roundtable-web",
+  "account_id": "499b6c3c38f75f7f7dc7d3127954b921",
+  "compatibility_date": "2026-01-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "upload_source_maps": true,
+  "main": "@tanstack/react-start/server-entry",
+  "observability": {
+    "enabled": true
+  },
+  "dev": {
+    "port": 5173
+  },
+  "vars": {
+    "VITE_APP_NAME": "Roundtable",
+    "VITE_APP_URL": "http://localhost:5173",
+    "VITE_WEBAPP_ENV": "local",
+    "VITE_MAINTENANCE": "false",
+    "VITE_TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w4",
+    "VITE_STRIPE_PUBLISHABLE_KEY": "pk_test_51SPXN852vWNZ3v8wCfrjOoFGG1RFsCq8LC7vJcVJGOEpjJOjmNU4eofpw7ulsSh6LET81iBtYomVYaoHrf8RyPqE00mdMsc6Oy",
+    "VITE_POSTHOG_API_KEY": "phc_j7kkGT8YavyO3VHZMqubY5LXkTk5Y6LqocZn09B9f5O",
+    "VITE_POSTHOG_HOST": "https://us.i.posthog.com"
+  },
+  "env": {
+    "preview": {
+      "name": "roundtable-web-preview",
+      "upload_source_maps": true,
+      "observability": {
+        "enabled": true,
+        "head_sampling_rate": 0.1
+      },
+      "routes": [
+        {
+          "pattern": "web-preview.roundtable.now",
+          "custom_domain": true
+        }
+      ],
+      "vars": {
+        "VITE_APP_NAME": "Roundtable",
+        "VITE_APP_URL": "https://web-preview.roundtable.now",
+        "VITE_WEBAPP_ENV": "preview",
+        "VITE_MAINTENANCE": "false",
+        "VITE_TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w5",
+        "VITE_STRIPE_PUBLISHABLE_KEY": "pk_test_51SPXN852vWNZ3v8wCfrjOoFGG1RFsCq8LC7vJcVJGOEpjJOjmNU4eofpw7ulsSh6LET81iBtYomVYaoHrf8RyPqE00mdMsc6Oy",
+        "VITE_POSTHOG_API_KEY": "phc_j7kkGT8YavyO3VHZMqubY5LXkTk5Y6LqocZn09B9f5O",
+        "VITE_POSTHOG_HOST": "https://us.i.posthog.com"
+      }
+    },
+    "production": {
+      "name": "roundtable-web",
+      "upload_source_maps": false,
+      "observability": {
+        "enabled": true
+      },
+      "routes": [
+        {
+          "pattern": "roundtable.now",
+          "custom_domain": true
+        }
+      ],
+      "vars": {
+        "VITE_APP_NAME": "Roundtable",
+        "VITE_APP_URL": "https://roundtable.now",
+        "VITE_WEBAPP_ENV": "prod",
+        "VITE_MAINTENANCE": "false",
+        "VITE_TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w6",
+        "VITE_STRIPE_PUBLISHABLE_KEY": "pk_live_51SPXN852vWNZ3v8w0JKMpuzcvZHMyvFLy0SRfadVpFXtIhfYwty1hNfmxSlyTFRfbTbpcOOKuPepnUUayr0Owy9v006fE9vdeS",
+        "VITE_POSTHOG_API_KEY": "phc_j7kkGT8YavyO3VHZMqubY5LXkTk5Y6LqocZn09B9f5O",
+        "VITE_POSTHOG_HOST": "https://us.i.posthog.com"
+      }
+    }
+  }
+}

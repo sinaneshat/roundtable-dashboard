@@ -48,8 +48,8 @@ is_lintable_file() {
 
     # Skip certain patterns
     case "$file_path" in
-        */node_modules/*|*/.next/*|*/dist/*|*/build/*|*/.claude/*|*/migrations/*) return 1 ;;
-        *.d.ts|*next-env.d.ts|*cloudflare-env.d.ts) return 1 ;;
+        */node_modules/*|*/dist/*|*/build/*|*/.claude/*|*/migrations/*) return 1 ;;
+        *.d.ts|*cloudflare-env.d.ts) return 1 ;;
     esac
 
     return 0

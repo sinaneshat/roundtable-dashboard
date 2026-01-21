@@ -1,5 +1,4 @@
 import antfu from '@antfu/eslint-config';
-import nextPlugin from '@next/eslint-plugin-next';
 import pluginQuery from '@tanstack/eslint-plugin-query';
 import drizzlePlugin from 'eslint-plugin-drizzle';
 import jsxA11y from 'eslint-plugin-jsx-a11y';
@@ -13,13 +12,19 @@ export default antfu(
     },
     ignores: [
       'migrations/**/*',
-      'next-env.d.ts',
-      'src/components/ui/*',
-      'src/db/migrations/meta/*',
-      'cloudflare-env.d.ts',
+      'apps/web/src/components/ui/*',
+      'apps/api/src/db/migrations/meta/*',
+      '**/cloudflare-env.d.ts',
       '**/*.md',
       '.claude/**/*',
+      '.turbo/**/*',
       'scripts/**/*',
+      '**/scripts/**/*',
+      '**/routeTree.gen.ts',
+      '**/dist/**/*',
+      '**/dist-test/**/*',
+      '**/.output/**/*',
+      '**/public/*.js',
     ],
     isInEditor: false,
     lessOpinionated: false,
@@ -35,15 +40,6 @@ export default antfu(
 
   jsxA11y.flatConfigs.recommended,
   ...pluginQuery.configs['flat/recommended'],
-  {
-    plugins: {
-      '@next/next': nextPlugin,
-    },
-    rules: {
-      ...nextPlugin.configs.recommended.rules,
-      ...nextPlugin.configs['core-web-vitals'].rules,
-    },
-  },
   {
     plugins: {
       'simple-import-sort': simpleImportSort,
@@ -97,14 +93,6 @@ export default antfu(
     },
   },
   {
-    // Next.js Metadata API files (opengraph-image, twitter-image, etc.) require named exports
-    // These are not React component files - they generate static images
-    files: ['**/opengraph-image.tsx', '**/twitter-image.tsx', '**/icon.tsx', '**/apple-icon.tsx'],
-    rules: {
-      'react-refresh/only-export-components': 'off',
-    },
-  },
-  {
     rules: {
       'perfectionist/sort-imports': 'off',
       'import/order': 'off', // Avoid conflicts with `simple-import-sort` plugin
@@ -123,6 +111,14 @@ export default antfu(
       }],
       'ts/no-explicit-any': 'error',
       'ts/explicit-function-return-type': 'off',
+      'ts/no-non-null-assertion': 'error',
+      'ts/ban-ts-comment': ['error', {
+        'ts-expect-error': 'allow-with-description',
+        'ts-ignore': true,
+        'ts-nocheck': true,
+        'minimumDescriptionLength': 10,
+      }],
+      'ts/prefer-ts-expect-error': 'error',
       'no-console': ['error', { allow: ['error'] }],
 
       // // Prevent re-exports and enforce better export patterns
@@ -136,8 +132,7 @@ export default antfu(
   },
   {
     // Module augmentation files require interface for declaration merging (TypeScript requirement)
-    // Official pattern: https://next-intl.dev/docs/workflows/typescript
-    files: ['**/global.ts', '**/*-context.d.ts'],
+    files: ['**/*-context.d.ts'],
     rules: {
       'ts/consistent-type-definitions': 'off',
     },

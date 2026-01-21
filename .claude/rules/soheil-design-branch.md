@@ -30,7 +30,7 @@ When on `soheil-design` branch, you MUST REFUSE and immediately stop if asked to
 
 #### Configuration Changes (BLOCKED)
 - `wrangler.jsonc` modifications
-- `next.config.ts` changes (unless purely visual/build output)
+- `app.config.ts` changes (unless purely visual/build output)
 - Environment variable changes
 - `tsconfig.json` modifications
 - `drizzle.config.ts` changes

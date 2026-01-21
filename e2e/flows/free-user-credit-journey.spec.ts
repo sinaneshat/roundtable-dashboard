@@ -220,15 +220,18 @@ test.describe('Free User Credit Journey', () => {
     expect(afterBalance.data.available).toBe(afterBalance.data.balance - afterBalance.data.reserved);
 
     // Verify thread exists
-    const threadData = await getThreadData(page, threadId!);
-    expect(threadData).not.toBeNull();
-    expect(threadData.success).toBe(true);
+    if (threadId) {
+      const threadData = await getThreadData(page, threadId);
+      expect(threadData).not.toBeNull();
+      expect(threadData?.success).toBe(true);
+    }
   });
 
   test('step 3: send message with web search enabled', async ({ page }) => {
     // Navigate to the thread created in previous test
     if (!threadId) {
       test.skip();
+      return;
     }
 
     await page.goto(`/chat/${threadId}`);
@@ -277,6 +280,7 @@ test.describe('Free User Credit Journey', () => {
   test('step 4: verify multiple participants respond and deduct credits', async ({ page }) => {
     if (!threadId) {
       test.skip();
+      return;
     }
 
     await page.goto(`/chat/${threadId}`);
@@ -284,7 +288,7 @@ test.describe('Free User Credit Journey', () => {
 
     // Get current message count
     const messagesBefore = await getThreadMessages(page, threadId);
-    const messageCountBefore = messagesBefore.data?.length || 0;
+    const messageCountBefore = messagesBefore?.data?.length || 0;
 
     // Get balance before
     const beforeBalance = await getUserCreditBalance(page);
@@ -306,7 +310,7 @@ test.describe('Free User Credit Journey', () => {
 
     // Get messages after
     const messagesAfter = await getThreadMessages(page, threadId);
-    const messageCountAfter = messagesAfter.data?.length || 0;
+    const messageCountAfter = messagesAfter?.data?.length || 0;
 
     // Verify new messages were added
     expect(messageCountAfter).toBeGreaterThan(messageCountBefore);
@@ -323,6 +327,7 @@ test.describe('Free User Credit Journey', () => {
   test('step 5: verify round 0 completion zeroes credits for free user', async ({ page }) => {
     if (!threadId) {
       test.skip();
+      return;
     }
 
     // Get current credit state
@@ -335,7 +340,7 @@ test.describe('Free User Credit Journey', () => {
     const messages = await getThreadMessages(page, threadId);
 
     // Count unique participants that have responded in round 0
-    const round0AssistantMessages = messages.data?.filter(
+    const round0AssistantMessages = messages?.data?.filter(
       (msg: ThreadMessage) => msg.role === 'assistant' && msg.roundNumber === 0,
     ) || [];
 
@@ -360,6 +365,7 @@ test.describe('Free User Credit Journey', () => {
   test('step 6: verify subsequent chat attempts are blocked', async ({ page }) => {
     if (!threadId) {
       test.skip();
+      return;
     }
 
     await page.goto(`/chat/${threadId}`);
@@ -400,6 +406,7 @@ test.describe('Free User Credit Journey', () => {
   test('step 7: verify thread is still visible but cannot continue', async ({ page }) => {
     if (!threadId) {
       test.skip();
+      return;
     }
 
     await page.goto(`/chat/${threadId}`);
@@ -408,13 +415,13 @@ test.describe('Free User Credit Journey', () => {
     // Thread should still be accessible
     const threadData = await getThreadData(page, threadId);
     expect(threadData).not.toBeNull();
-    expect(threadData.success).toBe(true);
+    expect(threadData?.success).toBe(true);
 
     // Messages should be visible
     const messages = await getThreadMessages(page, threadId);
-    expect(messages.success).toBe(true);
-    expect(messages.data).toBeDefined();
-    expect(messages.data.length).toBeGreaterThan(0);
+    expect(messages?.success).toBe(true);
+    expect(messages?.data).toBeDefined();
+    expect(messages?.data?.length).toBeGreaterThan(0);
 
     // User should see message history on page
     const messageElements = page.locator('[data-message-role]');
@@ -461,6 +468,7 @@ test.describe('Free User Credit Journey', () => {
   test('step 9: verify error messages guide to upgrade', async ({ page }) => {
     if (!threadId) {
       test.skip();
+      return;
     }
 
     await page.goto(`/chat/${threadId}`);
@@ -531,7 +539,7 @@ test.describe('Free User Edge Cases', () => {
     const threadsResponse = await page.request.get('/api/v1/chat/threads');
     expect(threadsResponse.ok()).toBe(true);
     const threadsData = await threadsResponse.json();
-    const initialThreadCount = threadsData.data?.length || 0;
+    const initialThreadCount = threadsData?.data?.length || 0;
 
     // If user already has a thread, skip this test
     if (initialThreadCount >= 1) {
@@ -553,7 +561,7 @@ test.describe('Free User Edge Cases', () => {
     // Get new thread count
     const afterResponse = await page.request.get('/api/v1/chat/threads');
     const afterData = await afterResponse.json();
-    const finalThreadCount = afterData.data?.length || 0;
+    const finalThreadCount = afterData?.data?.length || 0;
 
     // Should have exactly one thread
     expect(finalThreadCount).toBe(1);
@@ -563,7 +571,7 @@ test.describe('Free User Edge Cases', () => {
     // Get thread count
     const threadsResponse = await page.request.get('/api/v1/chat/threads');
     const threadsData = await threadsResponse.json();
-    const threadCount = threadsData.data?.length || 0;
+    const threadCount = threadsData?.data?.length || 0;
 
     if (threadCount === 0) {
       test.skip();
@@ -576,7 +584,7 @@ test.describe('Free User Edge Cases', () => {
     // Thread limit should still be enforced server-side
     const afterRefresh = await page.request.get('/api/v1/chat/threads');
     const afterData = await afterRefresh.json();
-    const afterCount = afterData.data?.length || 0;
+    const afterCount = afterData?.data?.length || 0;
 
     // Thread count should not change
     expect(afterCount).toBe(threadCount);
@@ -596,7 +604,7 @@ test.describe('Free User Edge Cases', () => {
     const response2 = await page2.request.get('/api/v1/credits/balance');
     expect(response2.ok()).toBe(true);
     const data2 = await response2.json();
-    const balance2 = data2.data.balance;
+    const balance2 = data2?.data?.balance;
 
     // Both tabs should see same balance (server is source of truth)
     expect(balance2).toBe(balance1);
@@ -873,7 +881,7 @@ test.describe('Credit Exhaustion Behavior', () => {
       const threadsData = await threadsResponse.json();
 
       // Free user might have 1 thread
-      if (threadsData.data && threadsData.data.length > 0) {
+      if (threadsData?.data && threadsData.data.length > 0) {
         const thread = threadsData.data[0];
 
         // Navigate to thread
@@ -932,8 +940,9 @@ test.describe('Credit Refresh & Reset Periods', () => {
       expect(creditBalance.data.plan.nextRefillAt).not.toBeNull();
 
       // Refill date should be in the future
-      if (creditBalance.data.plan.nextRefillAt) {
-        const refillDate = new Date(creditBalance.data.plan.nextRefillAt);
+      const nextRefillAt = creditBalance?.data?.plan?.nextRefillAt;
+      if (nextRefillAt) {
+        const refillDate = new Date(nextRefillAt);
         const now = new Date();
         expect(refillDate.getTime()).toBeGreaterThanOrEqual(now.getTime());
       }
@@ -946,7 +955,9 @@ test.describe('Credit Refresh & Reset Periods', () => {
 
     const creditBalance = await getUserCreditBalance(page);
 
-    if (creditBalance.data.plan.type === 'paid' && creditBalance.data.plan.nextRefillAt) {
+    const planType = creditBalance?.data?.plan?.type;
+    const nextRefillAt = creditBalance?.data?.plan?.nextRefillAt;
+    if (planType === 'paid' && nextRefillAt) {
       // UI might display refill information
       const refillDisplay = page.locator('text=/refill|renew|next month/i').first();
       const hasRefillInfo = await refillDisplay.isVisible({ timeout: 5000 }).catch(() => false);
@@ -957,7 +968,7 @@ test.describe('Credit Refresh & Reset Periods', () => {
       }
 
       // Verify refill date is reasonable (within next 31 days)
-      const refillDate = new Date(creditBalance.data.plan.nextRefillAt);
+      const refillDate = new Date(nextRefillAt);
       const now = new Date();
       const daysDiff = (refillDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24);
       expect(daysDiff).toBeLessThanOrEqual(31);

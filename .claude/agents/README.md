@@ -18,9 +18,9 @@ This directory contains specialized Claude Code agents optimized for the SaaS da
 - Service layer implementation patterns
 - Health check and monitoring endpoints
 
-**frontend-ui-expert.md** - Next.js + shadcn/ui + TanStack Query
+**frontend-ui-expert.md** - TanStack Start + shadcn/ui + TanStack Query
 - Component creation following design system patterns
-- TanStack Query hook implementation for data fetching
+- TanStack Query implementation for data fetching (direct usage, no abstraction layer)
 - Dashboard UI components and user flows (English-only with translation keys, dark theme)
 - Responsive design and accessibility
 

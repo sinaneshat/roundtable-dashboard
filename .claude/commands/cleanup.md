@@ -135,7 +135,7 @@ export const OldName = NewName; // "for backwards compatibility"
 
 **ALLOWED - Legitimate patterns:**
 ```typescript
-// ✅ ALLOWED - Next.js route handlers (required by framework)
+// ✅ ALLOWED - Hono route handlers (required by framework)
 export const GET = handler;
 export const POST = handler;
 
@@ -172,9 +172,9 @@ Compare each file to its siblings and fix:
 - Missing error handling present in siblings
 - Different import styles
 
-## React 19 + Next.js 15 Patterns
+## React 19 + TanStack Start Patterns
 
-**MANDATORY**: Follow React 19 and Next.js 15 best practices. Reference official docs via Context7 MCP (`/reactjs/react.dev`, `/vercel/next.js`) when uncertain.
+**MANDATORY**: Follow React 19 and TanStack Start best practices. Reference official docs via Context7 MCP (`/reactjs/react.dev`, `/tanstack/router`) when uncertain.
 
 ### Callback-Over-Effect Rule (CRITICAL)
 
@@ -374,9 +374,9 @@ function Provider({ children }) {
 }
 ```
 
-### Form Actions (React 19 + Next.js 15)
+### Form Actions (React 19 + TanStack Start)
 
-**PREFERRED**: Use useActionState over useEffect for form handling.
+**PREFERRED**: Use TanStack Start server functions with useActionState for form handling.
 
 ```typescript
 // ❌ ANTI-PATTERN: useEffect for form submission state
@@ -391,7 +391,7 @@ async function handleSubmit(e) {
   if (result.error) setError(result.error);
 }
 
-// ✅ CORRECT: useActionState (React 19)
+// ✅ CORRECT: TanStack Start server function with useActionState (React 19)
 const [error, submitAction, isPending] = useActionState(
   async (prevState, formData) => {
     const result = await updateName(formData.get('name'));
@@ -411,32 +411,38 @@ return (
 );
 ```
 
-### Async Server Components (Next.js 15)
+### TanStack Start Server Functions & Route Loaders
 
 ```typescript
-// ✅ CORRECT: Async server component
-async function UserProfile({ userId }: { userId: string }) {
-  const user = await fetchUser(userId);
-  return <ProfileCard user={user} />;
-}
+// ✅ CORRECT: Route loader for SSR data fetching
+import { createFileRoute } from '@tanstack/react-router'
 
-// ✅ CORRECT: Parallel data fetching
-async function Dashboard() {
-  const [user, posts, notifications] = await Promise.all([
-    fetchUser(),
-    fetchPosts(),
-    fetchNotifications(),
-  ]);
+export const Route = createFileRoute('/users/$userId')({
+  loader: async ({ params }) => {
+    const user = await fetchUser(params.userId);
+    return { user };
+  },
+})
 
-  return <DashboardView user={user} posts={posts} notifications={notifications} />;
-}
+// ✅ CORRECT: Parallel data fetching in loader
+export const Route = createFileRoute('/dashboard')({
+  loader: async () => {
+    const [user, posts, notifications] = await Promise.all([
+      fetchUser(),
+      fetchPosts(),
+      fetchNotifications(),
+    ]);
+    return { user, posts, notifications };
+  },
+})
 
-// ✅ CORRECT: params are async in Next.js 15
-async function Page({ params }: { params: Promise<{ id: string }> }) {
-  const { id } = await params;
-  const data = await fetchData(id);
-  return <Content data={data} />;
-}
+// ✅ CORRECT: Server function for mutations
+import { createServerFn } from '@tanstack/start'
+
+const updateUser = createServerFn('POST', async (data: FormData) => {
+  const result = await updateUserData(data);
+  return result;
+});
 ```
 
 ### React 19 Cleanup Checklist
@@ -458,13 +464,13 @@ When auditing components for React 19 compliance:
 
 ### Endpoint Anti-Patterns to Fix
 
-**1. Next.js Routes That Should Be Hono (CRITICAL)**
-Scan `src/app/api/` for routes that should be in Hono:
-- ❌ Business logic in Next.js routes (move to `src/api/routes/`)
+**1. TanStack Start Routes That Should Be Hono (CRITICAL)**
+Scan route files for business logic that should be in Hono:
+- ❌ Business logic in route loaders beyond simple data fetching (move to `src/api/routes/`)
 - ❌ Database operations outside Hono middleware chain
-- ✅ ALLOWED: `/api/auth/[...auth]/` (Better Auth requirement)
-- ✅ ALLOWED: `/api/v1/[[...route]]/` (Hono proxy)
-- ✅ ALLOWED: `/api/og/` (OG image generation)
+- ✅ ALLOWED: Route loaders calling Hono API endpoints
+- ✅ ALLOWED: Server functions for simple mutations
+- ✅ ALLOWED: Better Auth integration routes
 
 **2. Duplicate/Overlapping Endpoints**
 Find endpoints that do the same thing:
@@ -584,12 +590,13 @@ grep -rn "Context.Provider value={{" {TARGET_PATH}
 
 ### Context7 MCP Reference
 
-For official React 19 and Next.js 15 documentation, use Context7:
+For official React 19 and TanStack Start documentation, use Context7:
 
 ```
 Library IDs:
 - React 19: /reactjs/react.dev or /websites/react_dev_reference
-- Next.js 15: /vercel/next.js (use v15.1.8 or latest)
+- TanStack Start: /tanstack/start
+- TanStack Router: /tanstack/router
 
 Topics to query:
 - "useEffect cleanup best practices"
@@ -597,4 +604,6 @@ Topics to query:
 - "useActionState form handling"
 - "useMemo useCallback optimization"
 - "you might not need an effect"
+- "route loaders SSR data fetching"
+- "createServerFn mutations"
 ```
