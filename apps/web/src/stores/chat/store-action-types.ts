@@ -238,6 +238,7 @@ export type SetIsPatchInProgress = (value: boolean) => void;
 export type SetRegeneratingRoundNumber = (value: number | null) => void;
 export type SetPendingMessage = (value: string | null) => void;
 export type SetPendingAttachmentIds = (value: string[] | null) => void;
+export type SetPendingFileParts = (value: ExtendedFilePart[] | null) => void;
 export type SetExpectedParticipantIds = (value: string[] | null) => void;
 export type SetStreamingRoundNumber = (value: number | null) => void;
 export type SetCurrentRoundNumber = (value: number | null) => void;

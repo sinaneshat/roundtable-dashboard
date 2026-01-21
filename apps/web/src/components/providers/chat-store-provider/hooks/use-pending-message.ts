@@ -242,7 +242,15 @@ export function usePendingMessage({
       }
 
       try {
-        const result = sendMessageRef.current?.(pendingMessage);
+        // ✅ BUG FIX: Read FRESH pendingFileParts from store INSIDE queueMicrotask
+        // Previous bug: Captured pendingFileParts from useShallow before queueMicrotask.
+        // Race condition: setPendingFileParts → setPendingMessage → React batches updates
+        // → usePendingMessage effect runs with STALE pendingFileParts from prev render
+        // → queueMicrotask captures stale value → sendMessage(msg, undefined) → files=0
+        // Fix: Read store.getState() INSIDE queueMicrotask to get the latest value
+        // that was set by setPendingFileParts in the same tick.
+        const freshFileParts = store.getState().pendingFileParts ?? undefined;
+        const result = sendMessageRef.current?.(pendingMessage, freshFileParts);
 
         // ✅ FIX: Clear pendingMessage immediately after successful send
         // This prevents phantom re-sends when isStreaming changes later

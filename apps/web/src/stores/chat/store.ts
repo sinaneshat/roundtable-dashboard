@@ -585,6 +585,8 @@ const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({
   },
   setPendingAttachmentIds: (value: string[] | null) =>
     set({ pendingAttachmentIds: value }, false, 'data/setPendingAttachmentIds'),
+  setPendingFileParts: (value: ExtendedFilePart[] | null) =>
+    set({ pendingFileParts: value }, false, 'data/setPendingFileParts'),
   setExpectedParticipantIds: (value: string[] | null) =>
     set({ expectedParticipantIds: value }, false, 'data/setExpectedParticipantIds'),
   // ✅ PERF: Batch update pending state to prevent multiple re-renders

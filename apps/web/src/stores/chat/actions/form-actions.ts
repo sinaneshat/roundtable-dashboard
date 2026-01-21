@@ -286,14 +286,24 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
     rlog.submit('changes-detected', `r${nextRoundNumber} hasAny=${hasAnyChanges} participants=${hasParticipantChanges} mode=${modeChanged}(${currentModeId}→${freshSelectedMode}) webSearch=${webSearchChanged}(${currentWebSearch}→${freshEnableWebSearch}) pending=${freshHasPendingConfigChanges} files=${attachmentIds?.length || 0}`);
 
+    // ✅ BUG FIX: Filter out attachments without uploadId to prevent broken file previews
+    // uploadId is required for backend fallback when previewUrl is empty (e.g., PDFs)
     const fileParts: ExtendedFilePart[] = attachmentInfos && attachmentInfos.length > 0
-      ? attachmentInfos.map(att => ({
-          type: MessagePartTypes.FILE,
-          url: att.previewUrl || '',
-          filename: att.filename,
-          mediaType: att.mimeType,
-          uploadId: att.uploadId,
-        }))
+      ? attachmentInfos
+          .filter((att) => {
+            if (!att.uploadId) {
+              rlog.submit('file-part-error', `Missing uploadId for ${att.filename} - skipping`);
+              return false;
+            }
+            return true;
+          })
+          .map(att => ({
+            type: MessagePartTypes.FILE,
+            url: att.previewUrl || '',
+            filename: att.filename,
+            mediaType: att.mimeType,
+            uploadId: att.uploadId,
+          }))
       : [];
 
     const optimisticMessage = createOptimisticUserMessage({
@@ -325,6 +335,12 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         userQuery: trimmed,
       }));
     }
+
+    // CRITICAL: Set pending file parts for the hook to access via refs
+    // This MUST be set before setWaitingToStartStreaming so the streaming hook can read the file parts
+    actions.setPendingFileParts(fileParts.length > 0 ? fileParts : null);
+    actions.setPendingMessage(trimmed);
+    actions.setPendingAttachmentIds(attachmentIds?.length ? attachmentIds : null);
 
     // CRITICAL: Set isPatchInProgress BEFORE setWaitingToStartStreaming to prevent race condition
     // The streaming trigger effect checks isPatchInProgress - must be true before effect runs
