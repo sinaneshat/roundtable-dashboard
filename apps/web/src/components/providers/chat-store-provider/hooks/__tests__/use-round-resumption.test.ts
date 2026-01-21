@@ -14,7 +14,7 @@ import {
   createMockAssistantMessage,
   createMockChatHook,
   createMockChatStore,
-  createMockParticipants,
+  createMockResumptionParticipants as createMockParticipants,
   createMockResumptionPreSearch,
   createMockUserMessage,
 } from '@/lib/testing/resumption-test-helpers';
@@ -68,21 +68,6 @@ function createMockStore(initialState?: Partial<MockChatStoreState>): StoreApi<M
   }));
 }
 
-function createLegacyMockChatHook(overrides?: {
-  isReady?: boolean;
-  continueFromParticipant?: ReturnType<typeof vi.fn>;
-}) {
-  return {
-    isReady: overrides?.isReady ?? false,
-    continueFromParticipant: overrides?.continueFromParticipant ?? vi.fn(),
-    startRound: vi.fn(),
-    messages: [],
-    setMessages: vi.fn(),
-    isTriggeringRef: { current: false },
-    isStreamingRef: { current: false },
-  };
-}
-
 function createMockParticipant(index: number) {
   return {
     id: `participant-${index}`,
@@ -90,14 +75,6 @@ function createMockParticipant(index: number) {
     modelId: `model-${index}`,
     role: `Role ${index}`,
     priority: index,
-  };
-}
-
-function createLegacyMockUserMessage(roundNumber: number) {
-  return {
-    id: `msg-user-r${roundNumber}`,
-    role: MessageRoles.USER as const,
-    metadata: { roundNumber },
   };
 }
 

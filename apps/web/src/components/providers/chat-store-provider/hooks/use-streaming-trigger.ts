@@ -423,7 +423,9 @@ export function useStreamingTrigger({
       const s = store.getState();
 
       // Only check if we think we're waiting to start streaming
-      if (!s.waitingToStartStreaming) return;
+      if (!s.waitingToStartStreaming) {
+        return;
+      }
 
       // Check if resumption state is valid for current thread
       const validResumption = s.streamResumptionPrefilled

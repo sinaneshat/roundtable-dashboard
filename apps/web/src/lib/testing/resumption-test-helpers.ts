@@ -181,7 +181,7 @@ export function createMockResumptionParticipant(
   };
 }
 
-export function createMockParticipants(count: number, threadId = 'thread-123') {
+export function createMockResumptionParticipants(count: number, threadId = 'thread-123') {
   return Array.from({ length: count }, (_, i) =>
     createMockResumptionParticipant(i, { threadId }));
 }

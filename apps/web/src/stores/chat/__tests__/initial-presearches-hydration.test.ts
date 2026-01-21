@@ -334,7 +334,7 @@ describe('initialPreSearches Hydration', () => {
 
       // Timeout check logic (from shouldPreSearchTimeout util)
       const STALE_THRESHOLD_MS = 2 * 60 * 1000; // 2 minutes
-      const createdAtTime = new Date(preSearch!.createdAt).getTime();
+      const createdAtTime = new Date(preSearch?.createdAt ?? 0).getTime();
       const isStale = Date.now() - createdAtTime > STALE_THRESHOLD_MS;
       expect(isStale).toBe(true);
     });
