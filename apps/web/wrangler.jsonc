@@ -26,6 +26,7 @@
   "env": {
     "preview": {
       "name": "roundtable-web-preview",
+      "workers_dev": false,
       "upload_source_maps": true,
       "placement": { "mode": "smart" },
       "observability": {
@@ -52,6 +53,7 @@
     },
     "production": {
       "name": "roundtable-web-prod",
+      "workers_dev": false,
       "upload_source_maps": false,
       "placement": { "mode": "smart" },
       "observability": {
