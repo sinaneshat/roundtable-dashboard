@@ -2951,6 +2951,34 @@ export function useMultiParticipantChat(
       const expectedRound = callbackRefs.resumptionRoundNumber.current;
       const expectedNextP = callbackRefs.nextParticipantToTriggerProp.current;
 
+      // ✅ FIX V3: Don't stop streams that don't have metadata yet
+      // AI SDK may resume a stream before metadata is populated (happens in onFinish)
+      // If both round and participant are undefined, we can't determine if it's stale
+      // Let the stream continue and re-evaluate when metadata becomes available
+      if (streamingRound === undefined && streamingParticipantIdx === undefined) {
+        rlog.resume('sdk-resume', `DEFERRING stream validation - metadata not yet populated (expected r${expectedRound} nextP=${expectedNextP})`);
+
+        // Let the stream continue - set streaming flags
+        isStreamingRef.current = true;
+        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- called from useEffectEvent in response to AI SDK status
+        setIsExplicitlyStreaming(true);
+
+        // Populate roundParticipantsRef for proper orchestration
+        if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
+          const enabled = getEnabledParticipants(participantsRef.current);
+          roundParticipantsRef.current = enabled;
+        }
+
+        // ✅ Reconcile with expected participant since we don't know actual yet
+        // This ensures participants are visible during streaming recovery
+        if (expectedNextP != null) {
+          callbackRefs.onReconcileWithActiveStream.current?.(expectedNextP);
+        }
+
+        return true; // Let stream continue, metadata will be validated in onFinish
+      }
+
+      // ✅ FIX V3: When metadata IS present, validate properly
       // Stream is VALID if:
       // 1. Same round as prefilled
       // 2. Participant index >= expected next (server may have triggered ahead)
@@ -2977,7 +3005,8 @@ export function useMultiParticipantChat(
         return true; // Valid stream continues
       }
 
-      // Stream is STALE - wrong round or earlier participant
+      // ✅ FIX V3: Stream has metadata but doesn't match expected - it's STALE
+      // This handles the case where AI SDK resumes P1's stream but server expects P0
       rlog.resume('sdk-resume', `STOPPING stale stream r${streamingRound} P${streamingParticipantIdx} (expected r${expectedRound} nextP=${expectedNextP})`);
       stoppedStaleStreamRef.current = true; // Signal onFinish to skip processing
       stopAiSdk(); // Stop the stale auto-resumed stream
