@@ -1326,6 +1326,16 @@ export function useMultiParticipantChat(
           || (!isExplicitErrorFinish && textParts.length > 0)
           || isStillStreaming; // ← Parts still streaming = content generation in progress
 
+        // ✅ FIX: Detect empty completion (stream ended with no content, no finishReason, no tokens)
+        // This happens when a model returns immediately with no output (rate-limited, failed to start, etc.)
+        // Without marking as error, the message stays in a "gray zone" preventing moderator trigger
+        const isEmptyCompletion = !hasTextInParts
+          && !hasSuccessfulFinish
+          && !backendMarkedSuccess
+          && !hasOutputTokens
+          && !isStillStreaming
+          && (finishReason === FinishReasons.UNKNOWN || finishReason === undefined);
+
         // ✅ STRICT TYPING: mergeParticipantMetadata now requires roundNumber parameter
         // Returns complete AssistantMessageMetadata with ALL required fields
         // ✅ FIX: Use finalParticipantIndex from message ID, not currentIndex from ref
@@ -1334,7 +1344,12 @@ export function useMultiParticipantChat(
           participant,
           finalParticipantIndex,
           finalRoundNumber, // REQUIRED: Pass round number explicitly
-          { hasGeneratedText: Boolean(hasGeneratedText) }, // REQUIRED: Tell it we have content to avoid false empty_response errors
+          {
+            hasGeneratedText: Boolean(hasGeneratedText),
+            // ✅ FIX: Mark empty completions as errors so isMessageComplete() returns true
+            forceError: isEmptyCompletion,
+            errorCode: isEmptyCompletion ? 'empty_completion' : undefined,
+          },
         );
 
         // Use flushSync to force React to commit metadata update synchronously

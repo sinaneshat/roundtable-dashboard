@@ -35,7 +35,7 @@ export function MainContentSkeleton({ className, ...props }: ComponentProps<'div
 
               {/* Input container: w-full mt-14 - functional during hydration */}
               <div className="w-full mt-14">
-                <ChatInputMinimal showToolbar />
+                <ChatInputMinimal showToolbar autoMode />
               </div>
             </div>
           </div>

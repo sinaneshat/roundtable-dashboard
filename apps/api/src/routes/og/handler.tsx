@@ -123,7 +123,7 @@ async function generateOgImage(params: {
               display: 'flex',
               flexDirection: 'row',
               alignItems: 'center',
-              marginBottom: 40,
+              marginBottom: 32,
               gap: 16,
             }}
           >
@@ -158,7 +158,8 @@ async function generateOgImage(params: {
               display: 'flex',
               flexDirection: 'column',
               flex: 1,
-              justifyContent: 'center',
+              justifyContent: 'flex-start',
+              paddingTop: 20,
             }}
           >
             {/* Mode badge */}
@@ -169,7 +170,7 @@ async function generateOgImage(params: {
                       display: 'flex',
                       flexDirection: 'row',
                       alignItems: 'center',
-                      marginBottom: 24,
+                      marginBottom: 16,
                       gap: 12,
                     }}
                   >
@@ -194,22 +195,29 @@ async function generateOgImage(params: {
                 )
               : null}
 
-            {/* Title - constrained to usable width (1200 - 120px padding) */}
-            <span
+            {/* Title - constrained to usable width with line clamping */}
+            <div
               style={{
-                fontSize: 56,
-                fontWeight: 700,
-                color: OG_COLORS.textPrimary,
-                lineHeight: 1.2,
-                marginBottom: 32,
-                letterSpacing: '-0.03em',
+                display: 'flex',
+                marginBottom: 24,
                 maxWidth: OG_WIDTH - 120,
-                overflow: 'hidden',
-                textOverflow: 'ellipsis',
               }}
             >
-              {truncateTitle(title)}
-            </span>
+              <span
+                style={{
+                  fontSize: 52,
+                  fontWeight: 700,
+                  color: OG_COLORS.textPrimary,
+                  lineHeight: 1.3,
+                  letterSpacing: '-0.02em',
+                  overflow: 'hidden',
+                  textOverflow: 'ellipsis',
+                  lineClamp: 2,
+                }}
+              >
+                {truncateTitle(title)}
+              </span>
+            </div>
 
             {/* Model icons row with glass effect */}
             {modelIcons.length > 0
@@ -218,8 +226,10 @@ async function generateOgImage(params: {
                     style={{
                       display: 'flex',
                       flexDirection: 'row',
-                      gap: 16,
-                      marginBottom: 32,
+                      gap: 12,
+                      marginBottom: 24,
+                      maxWidth: OG_WIDTH - 120,
+                      overflow: 'hidden',
                     }}
                   >
                     {modelIcons.map(({ icon, modelId }) => (
@@ -250,11 +260,11 @@ async function generateOgImage(params: {
               : null}
 
             {/* Stats */}
-            <div style={{ display: 'flex', flexDirection: 'row', gap: 48, marginTop: 24 }}>
+            <div style={{ display: 'flex', flexDirection: 'row', gap: 40, marginTop: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <span
                   style={{
-                    fontSize: 48,
+                    fontSize: 42,
                     fontWeight: 700,
                     color: modeColor,
                     lineHeight: 1,
@@ -264,7 +274,7 @@ async function generateOgImage(params: {
                 </span>
                 <span
                   style={{
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: 500,
                     color: OG_COLORS.textSecondary,
                     marginTop: 8,
@@ -276,7 +286,7 @@ async function generateOgImage(params: {
               <div style={{ display: 'flex', flexDirection: 'column' }}>
                 <span
                   style={{
-                    fontSize: 48,
+                    fontSize: 42,
                     fontWeight: 700,
                     color: OG_COLORS.textPrimary,
                     lineHeight: 1,
@@ -286,7 +296,7 @@ async function generateOgImage(params: {
                 </span>
                 <span
                   style={{
-                    fontSize: 18,
+                    fontSize: 16,
                     fontWeight: 500,
                     color: OG_COLORS.textSecondary,
                     marginTop: 8,
@@ -304,8 +314,8 @@ async function generateOgImage(params: {
               display: 'flex',
               flexDirection: 'row',
               alignItems: 'center',
-              marginTop: 40,
-              paddingTop: 32,
+              marginTop: 32,
+              paddingTop: 24,
               borderTop: `2px solid ${OG_COLORS.glassBorder}`,
             }}
           >

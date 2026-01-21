@@ -545,12 +545,12 @@ export function mergeParticipantMetadata(
   participant: ParticipantContext,
   currentIndex: number,
   roundNumber: number,
-  options?: { hasGeneratedText?: boolean },
+  options?: { hasGeneratedText?: boolean; forceError?: boolean; errorCode?: string },
 ): DbAssistantMessageMetadata {
   const validatedMetadata = getAssistantMetadata(message.metadata);
 
-  const hasBackendErrorFlag = validatedMetadata?.hasError === true;
-  const hasBackendNoErrorFlag = validatedMetadata?.hasError === false;
+  const hasBackendErrorFlag = validatedMetadata?.hasError === true || options?.forceError === true;
+  const hasBackendNoErrorFlag = validatedMetadata?.hasError === false && !options?.forceError;
   const skipPartsCheck = options?.hasGeneratedText === true;
 
   const textParts = message.parts?.filter(
@@ -585,11 +585,12 @@ export function mergeParticipantMetadata(
   const finishReasonResult = FinishReasonSchema.safeParse(finishReasonRaw);
   const safeFinishReason: FinishReason = finishReasonResult.success ? finishReasonResult.data : UNKNOWN_FALLBACK;
 
-  const errorTypeRaw = typeof validatedMetadata?.errorType === 'string'
-    ? validatedMetadata.errorType
-    : !hasAnyContent && hasError
-        ? 'empty_response'
-        : UNKNOWN_FALLBACK;
+  const errorTypeRaw = options?.errorCode
+    ?? (typeof validatedMetadata?.errorType === 'string'
+      ? validatedMetadata.errorType
+      : !hasAnyContent && hasError
+          ? 'empty_response'
+          : UNKNOWN_FALLBACK);
   const errorTypeResult = ErrorTypeSchema.safeParse(errorTypeRaw);
   const safeErrorType: ErrorType = errorTypeResult.success ? errorTypeResult.data : UNKNOWN_FALLBACK;
 

@@ -11,6 +11,8 @@ type ChatInputMinimalProps = {
   minHeight?: number;
   maxHeight?: number;
   showToolbar?: boolean;
+  /** Auto mode hides model/mode/web search controls - only shows attachment button */
+  autoMode?: boolean;
 } & Omit<ComponentProps<'div'>, 'placeholder'>;
 
 /**
@@ -30,6 +32,7 @@ export function ChatInputMinimal({
   minHeight = 72,
   maxHeight = 200,
   showToolbar = true,
+  autoMode = true,
   className,
   ...props
 }: ChatInputMinimalProps) {
@@ -82,11 +85,36 @@ export function ChatInputMinimal({
             {showToolbar && (
               <div>
                 <div className="px-3 sm:px-4 py-2 sm:py-3 flex items-center gap-2 sm:gap-3">
-                  <div className="flex-1 flex items-center gap-1 sm:gap-2 min-w-0">
-                    <Skeleton className="size-6 rounded" />
-                    <Skeleton className="size-6 rounded" />
+                  {/* Desktop toolbar skeleton - matches ChatInputToolbarMenu desktop layout */}
+                  <div className="hidden md:flex flex-1 items-center gap-2 min-w-0">
+                    {!autoMode && (
+                      <>
+                        {/* Models button skeleton */}
+                        <Skeleton className="h-9 w-20 rounded-2xl" />
+                        {/* Mode button skeleton */}
+                        <Skeleton className="h-9 w-16 rounded-2xl" />
+                      </>
+                    )}
+                    {/* Attachment button - always visible */}
+                    <Skeleton className="size-11 rounded-xl" />
+                    {!autoMode && (
+                      /* Web search button skeleton */
+                      <Skeleton className="size-11 rounded-xl" />
+                    )}
                   </div>
+
+                  {/* Mobile toolbar skeleton - matches ChatInputToolbarMenu mobile layout */}
+                  <div className="flex md:hidden flex-1 items-center gap-1.5 min-w-0">
+                    {/* Drawer trigger skeleton */}
+                    <Skeleton className="size-11 rounded-xl" />
+                    {!autoMode && (
+                      /* Inline model selector skeleton */
+                      <Skeleton className="h-9 w-14 rounded-full" />
+                    )}
+                  </div>
+
                   <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+                    {/* Send button skeleton */}
                     <Skeleton className="size-11 rounded-full" />
                   </div>
                 </div>

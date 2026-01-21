@@ -6,11 +6,14 @@ import { cn } from '@/lib/ui/cn';
 type ChatInputSkeletonProps = {
   showToolbar?: boolean;
   showHeader?: boolean;
+  /** Auto mode hides model/mode/web search controls - only shows attachment button */
+  autoMode?: boolean;
 } & ComponentProps<'div'>;
 
 export function ChatInputSkeleton({
   showToolbar = true,
   showHeader = false,
+  autoMode = true,
   className,
   ...props
 }: ChatInputSkeletonProps) {
@@ -28,11 +31,23 @@ export function ChatInputSkeleton({
           <Skeleton className="h-12 w-full rounded-xl" />
           {showToolbar && (
             <div className="flex items-center justify-between mt-3">
-              <div className="flex items-center gap-2">
-                <Skeleton className="size-6 rounded" />
-                <Skeleton className="size-6 rounded" />
+              {/* Desktop toolbar skeleton */}
+              <div className="hidden md:flex items-center gap-2">
+                {!autoMode && (
+                  <>
+                    <Skeleton className="h-9 w-20 rounded-2xl" />
+                    <Skeleton className="h-9 w-16 rounded-2xl" />
+                  </>
+                )}
+                <Skeleton className="size-11 rounded-xl" />
+                {!autoMode && <Skeleton className="size-11 rounded-xl" />}
               </div>
-              <Skeleton className="size-8 rounded-full" />
+              {/* Mobile toolbar skeleton */}
+              <div className="flex md:hidden items-center gap-1.5">
+                <Skeleton className="size-11 rounded-xl" />
+                {!autoMode && <Skeleton className="h-9 w-14 rounded-full" />}
+              </div>
+              <Skeleton className="size-11 rounded-full" />
             </div>
           )}
         </div>

@@ -140,9 +140,9 @@ export function truncateText(text: string, maxLength: number): string {
 
 /**
  * Max characters for OG title - calculated for 1080px usable width (1200px - 120px padding)
- * At 56px font, ~30-35 chars per line. 55 chars allows ~2 comfortable lines.
+ * At 52px font, ~30 chars per line. 50 chars more conservative for 2 lines with lineClamp.
  */
-export const OG_TITLE_MAX_CHARS = 55;
+export const OG_TITLE_MAX_CHARS = 50;
 
 /**
  * Truncate title for OG images with word-boundary awareness
