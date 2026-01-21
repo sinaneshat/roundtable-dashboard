@@ -1,12 +1,13 @@
 /**
  * PageView Tracker Component
  *
- * Enhances PostHog automatic pageview tracking with additional context.
- * While `capture_pageview: 'history_change'` handles basic tracking,
- * this component adds:
- * - User properties on each pageview
+ * Handles manual pageview tracking since PostHog's automatic pageview
+ * capture is disabled for performance (capture_pageview: false).
+ *
+ * Tracks:
+ * - Subsequent pageviews (initial captured in PostHogProvider loaded callback)
  * - Page-specific context (thread ID, project ID, etc.)
- * - Custom pageview properties based on route
+ * - User properties on each pageview
  *
  * Location: /src/components/providers/pageview-tracker.tsx
  */
@@ -79,6 +80,8 @@ function extractPageContext(pathname: string, searchParams: Record<string, unkno
  * PageView Tracker Component
  *
  * Place this inside PostHogProvider to track enhanced pageviews.
+ * Initial pageview is captured in PostHogProvider's loaded callback.
+ * This component handles subsequent navigation pageviews.
  */
 export function PageViewTracker() {
   const posthog = usePostHog();
@@ -86,6 +89,7 @@ export function PageViewTracker() {
   const searchParams = useSearch({ strict: false }) as Record<string, unknown> | null;
   const { data: session } = useSession();
   const lastTrackedPath = useRef<string>('');
+  const isFirstRender = useRef(true);
 
   useEffect(() => {
     if (!posthog)
@@ -97,6 +101,9 @@ export function PageViewTracker() {
     if (lastTrackedPath.current === currentPath)
       return;
 
+    // Skip first render - initial pageview captured in PostHogProvider loaded callback
+    const shouldCapture = !isFirstRender.current;
+    isFirstRender.current = false;
     lastTrackedPath.current = currentPath;
 
     // Extract page context
@@ -111,10 +118,7 @@ export function PageViewTracker() {
       context.authenticated = false;
     }
 
-    // Register super properties for ALL subsequent events (including automatic $pageview)
-    // Note: PostHog already captures pageviews via capture_pageview: 'history_change'
-    // We use register() to enrich those events instead of creating duplicate captures
-    // @see https://posthog.com/docs/product-analytics/capture-events#super-properties
+    // Register super properties for ALL subsequent events
     posthog.register({
       current_section: context.section || 'unknown',
       current_page: pathname,
@@ -123,6 +127,14 @@ export function PageViewTracker() {
       ...(context.hasProject !== undefined && { has_project: context.hasProject }),
       ...(context.authenticated !== undefined && { is_authenticated: context.authenticated }),
     });
+
+    // Manually capture pageview for subsequent navigations
+    if (shouldCapture) {
+      posthog.capture('$pageview', {
+        $current_url: window.location.href,
+        ...context,
+      });
+    }
   }, [posthog, pathname, searchParams, session]);
 
   return null;
