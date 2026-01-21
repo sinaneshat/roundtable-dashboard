@@ -273,14 +273,14 @@ export const layouts = {
 };
 
 // Asset URLs - Always use production URL for email client compatibility
-// Logo is at /public/logo.png in web app, served at root URL
+// Logo is at /public/static/logo.png in web app, served at /static/logo.png
 export const assets = {
-  logo: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
-  logoBlack: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
-  logoRound: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
-  logoRoundWhite: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
-  logoRoundBlack: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
+  logo: `${EMAIL_ASSETS_BASE_URL}/static/logo.png`,
+  logoBlack: `${EMAIL_ASSETS_BASE_URL}/static/logo.png`,
+  logoRound: `${EMAIL_ASSETS_BASE_URL}/static/logo.png`,
+  logoRoundWhite: `${EMAIL_ASSETS_BASE_URL}/static/logo.png`,
+  logoRoundBlack: `${EMAIL_ASSETS_BASE_URL}/static/logo.png`,
   // Use logo as fallback for missing avatar/placeholder assets
-  fallbackAvatar: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
-  placeholder: `${EMAIL_ASSETS_BASE_URL}/logo.png`,
+  fallbackAvatar: `${EMAIL_ASSETS_BASE_URL}/static/logo.png`,
+  placeholder: `${EMAIL_ASSETS_BASE_URL}/static/logo.png`,
 };
