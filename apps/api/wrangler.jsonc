@@ -162,7 +162,7 @@
       "vars": {
         "WEBAPP_ENV": "preview",
         "APP_NAME": "Roundtable API",
-        "TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w5",
+        "TURNSTILE_SITE_KEY": "0x4AAAAAACN3_OeMcDjErTqV",
         "R2_PUBLIC_URL": "https://api-preview.roundtable.now/uploads",
         "AWS_SES_REGION": "eu-north-1",
         "FROM_EMAIL": "noreply@roundtable.now",
@@ -224,7 +224,7 @@
       "vars": {
         "WEBAPP_ENV": "prod",
         "APP_NAME": "Roundtable API",
-        "TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w6",
+        "TURNSTILE_SITE_KEY": "0x4AAAAAACN3_OeMcDjErTqV",
         "R2_PUBLIC_URL": "https://api.roundtable.now/uploads",
         "AWS_SES_REGION": "eu-north-1",
         "FROM_EMAIL": "noreply@roundtable.now",
