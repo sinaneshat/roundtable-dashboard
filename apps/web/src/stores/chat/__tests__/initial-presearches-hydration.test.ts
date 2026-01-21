@@ -16,7 +16,7 @@ import {
   buildAfterPreSearchScenario,
   buildSSRHydratedScenario,
   createMockChatStore,
-  createMockParticipants,
+  createMockResumptionParticipants as createMockParticipants,
   createMockResumptionPreSearch,
   createMockUserMessage,
 } from '@/lib/testing/resumption-test-helpers';
