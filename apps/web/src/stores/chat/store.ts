@@ -850,6 +850,12 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
       currentResumptionPhase: phase,
     }, false, 'streamResumption/setCurrentResumptionPhase'),
 
+  // ✅ SCOPE VERSIONING: Set thread scope for resumption validation
+  setResumptionScope: threadId =>
+    set({
+      resumptionScopeThreadId: threadId,
+    }, false, 'resumption/setScope'),
+
   prefillStreamResumptionState: (threadId, serverState) => {
     rlog.phase('prefill', `t=${threadId.slice(-8)} phase=${serverState.currentPhase} r${serverState.roundNumber} done=${serverState.roundComplete ? 1 : 0} nextP=${serverState.participants?.nextParticipantToTrigger ?? '-'}`);
 
@@ -1075,10 +1081,16 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
   resetForThreadNavigation: () => {
     const state = get();
-    // ✅ NAVIGATION CLEANUP: Stop any active streaming BEFORE clearing messages
-    // This prevents in-flight callbacks from firing after navigation
+
+    // 1. ABORT: Stop all active operations
     state.chatStop?.();
+
+    // 2. CLEAR: Reset AI SDK messages synchronously
     state.chatSetMessages?.([]);
+
+    // 3. INCREMENT: Bump scope version to invalidate ALL in-flight operations
+    // This prevents stale effects from executing after navigation
+    const newScopeVersion = (state.resumptionScopeVersion ?? 0) + 1;
 
     set({
       ...THREAD_NAVIGATION_RESET_STATE,
@@ -1090,6 +1102,9 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       pendingAnimations: new Set<number>(),
       animationResolvers: new Map(),
       preSearchActivityTimes: new Map<number, number>(),
+      // ✅ SCOPE VERSIONING: Clear scope thread and increment version
+      resumptionScopeThreadId: null,
+      resumptionScopeVersion: newScopeVersion,
     }, false, 'operations/resetForThreadNavigation');
   },
 

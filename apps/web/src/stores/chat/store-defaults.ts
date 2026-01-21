@@ -241,6 +241,10 @@ export const STREAM_RESUMPTION_DEFAULTS = {
   moderatorResumption: null,
   /** Current round number for resumption */
   resumptionRoundNumber: null,
+  /** ✅ SCOPE VERSIONING: Thread ID for current resumption scope */
+  resumptionScopeThreadId: null as string | null,
+  /** ✅ SCOPE VERSIONING: Version counter - increments on each navigation to invalidate stale effects */
+  resumptionScopeVersion: 0,
 } satisfies StreamResumptionSliceState;
 
 // ============================================================================

@@ -94,6 +94,8 @@ export function useIncompleteRoundResumption(
     // ✅ CHANGELOG BLOCKING FIX: Add changelog flags for blocking during config changes
     isWaitingForChangelog,
     configChangeRoundNumber,
+    // ✅ SCOPE VERSIONING: Track version for stale effect detection
+    resumptionScopeVersion,
   } = useChatStore(useShallow(s => ({
     messages: s.messages,
     participants: s.participants,
@@ -115,6 +117,8 @@ export function useIncompleteRoundResumption(
     // ✅ CHANGELOG BLOCKING FIX: Add changelog flags for blocking during config changes
     isWaitingForChangelog: s.isWaitingForChangelog,
     configChangeRoundNumber: s.configChangeRoundNumber,
+    // ✅ SCOPE VERSIONING: Track version for stale effect detection
+    resumptionScopeVersion: s.resumptionScopeVersion,
   })));
 
   // Actions - batched with useShallow for stable reference
@@ -174,6 +178,8 @@ export function useIncompleteRoundResumption(
   // propagates, the effect may re-run with updated respondedParticipantIndices.
   // This ref is set SYNCHRONOUSLY before any state updates to block subsequent triggers.
   const roundTriggerInProgressRef = useRef<string | null>(null);
+  // ✅ SCOPE VERSIONING: Track scope version to invalidate stale effects on navigation
+  const scopeVersionRef = useRef(resumptionScopeVersion);
 
   // Calculate incomplete round state (moved up for use in pending round recovery)
   const enabledParticipants = getEnabledParticipants(participants);
@@ -897,6 +903,16 @@ export function useIncompleteRoundResumption(
 
   // Effect to trigger resumption
   useEffect(() => {
+    // ✅ SCOPE VERSIONING: Check if navigation occurred - invalidate stale effects
+    // When scope version changes, this effect is operating on stale thread data
+    if (scopeVersionRef.current !== resumptionScopeVersion) {
+      scopeVersionRef.current = resumptionScopeVersion;
+      // Reset resumption tracking for new scope
+      resumptionAttemptedRef.current = null;
+      roundTriggerInProgressRef.current = null;
+      return;
+    }
+
     // Skip if not enabled or already streaming
     if (!enabled || isStreaming || waitingToStartStreaming) {
       return;
@@ -1126,6 +1142,8 @@ export function useIncompleteRoundResumption(
     // ✅ CHANGELOG BLOCKING FIX: Include changelog flags so effect re-runs when cleared
     configChangeRoundNumber,
     isWaitingForChangelog,
+    // ✅ SCOPE VERSIONING: Include scope version for stale effect detection
+    resumptionScopeVersion,
     actions,
     // ✅ FIX: Include store for imperative access to current phase
     store,

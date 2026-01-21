@@ -14,7 +14,7 @@ type PostHogProviderProps = {
 
 // Lazy load the PostHog React provider
 const PHProvider = lazy(() =>
-  import('posthog-js/react').then((mod) => ({ default: mod.PostHogProvider })),
+  import('posthog-js/react').then(mod => ({ default: mod.PostHogProvider })),
 );
 
 /**

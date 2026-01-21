@@ -19,18 +19,12 @@ export const Route = createFileRoute('/_protected')({
   staleTime: 5 * 60 * 1000, // 5 minutes - layout data rarely needs refresh
 
   // ✅ AUTH CHECK: Uses session from root context (SSR or client)
-  // Root beforeLoad now fetches session on server too via cookies
-  // Redirects to sign-in if not authenticated (client-side only)
+  // Root beforeLoad fetches session on server via cookies
+  // Redirects to sign-in if not authenticated (works on both server and client)
   beforeLoad: async ({ location, context }) => {
     const { session } = context;
 
-    // No session - handle based on environment
     if (!session) {
-      // Server: can't throw redirect, return null (component renders minimal shell)
-      if (typeof window === 'undefined') {
-        return { session: null };
-      }
-      // Client: redirect to sign-in
       throw redirect({
         to: '/auth/sign-in',
         search: { redirect: location.href },

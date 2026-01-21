@@ -945,9 +945,6 @@ export default function ChatOverviewScreen() {
 
   const showChatView = !showInitialUI && (currentThread || createdThreadId);
 
-  // Disable motion animations on SSR to prevent opacity:0 initial state
-  const isServer = typeof window === 'undefined';
-
   return (
     <>
       <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
@@ -956,22 +953,9 @@ export default function ChatOverviewScreen() {
             <>
               <div className="flex-1 relative">
                 <div className="container max-w-4xl mx-auto px-5 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-4">
-                  <motion.div
-                    key="initial-ui"
-                    initial={isServer ? false : { opacity: 0 }}
-                    animate={{ opacity: 1 }}
-                    exit={{ opacity: 0, y: -20 }}
-                    transition={{ duration: 0.4, ease: 'easeOut' }}
-                    className="w-full"
-                  >
+                  <div className="w-full">
                     <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
-                      <motion.div
-                        className="relative h-20 w-20 sm:h-24 sm:w-24"
-                        initial={isServer ? false : { opacity: 0 }}
-                        animate={{ opacity: 1 }}
-                        exit={{ scale: 0.5, opacity: 0, y: -50 }}
-                        transition={{ delay: 0.1, duration: 0.5, ease: 'easeOut' }}
-                      >
+                      <div className="relative h-20 w-20 sm:h-24 sm:w-24">
                         <LogoGlow />
                         <motion.div
                           className="relative w-full h-full"
@@ -1002,48 +986,24 @@ export default function ChatOverviewScreen() {
                             priority
                           />
                         </motion.div>
-                      </motion.div>
-
-                      <div className="flex flex-col items-center gap-1.5">
-                        <motion.h1
-                          className="text-3xl sm:text-4xl font-semibold text-foreground px-4 leading-tight"
-                          initial={isServer ? false : { opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -30 }}
-                          transition={{ delay: 0.25, duration: 0.4, ease: 'easeOut' }}
-                        >
-                          {BRAND.name}
-                        </motion.h1>
-
-                        <motion.p
-                          className="text-sm sm:text-base text-muted-foreground max-w-2xl px-4 leading-relaxed"
-                          initial={isServer ? false : { opacity: 0, y: 10 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0, y: -30 }}
-                          transition={{ delay: 0.35, duration: 0.4, ease: 'easeOut' }}
-                        >
-                          {BRAND.tagline}
-                        </motion.p>
                       </div>
 
-                      <motion.div
-                        className="w-full mt-6 sm:mt-8"
-                        initial={isServer ? false : { opacity: 0, y: 10 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0, scale: 0.95 }}
-                        transition={{ delay: 0.45, duration: 0.4, ease: 'easeOut' }}
-                      >
+                      <div className="flex flex-col items-center gap-1.5">
+                        <h1 className="text-3xl sm:text-4xl font-semibold text-foreground px-4 leading-tight">
+                          {BRAND.name}
+                        </h1>
+
+                        <p className="text-sm sm:text-base text-muted-foreground max-w-2xl px-4 leading-relaxed">
+                          {BRAND.tagline}
+                        </p>
+                      </div>
+
+                      <div className="w-full mt-6 sm:mt-8">
                         <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} disabled={isOperationBlocked} />
-                      </motion.div>
+                      </div>
 
                       {!isMobile && (
-                        <motion.div
-                          className="w-full mt-14"
-                          initial={isServer ? false : { opacity: 0, y: 15 }}
-                          animate={{ opacity: 1, y: 0 }}
-                          exit={{ opacity: 0 }}
-                          transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
-                        >
+                        <div className="w-full mt-14">
                           <ChatInputContainer
                             participants={selectedParticipants}
                             inputValue={inputValue}
@@ -1059,38 +1019,31 @@ export default function ChatOverviewScreen() {
                             />
                             <ChatInput {...sharedChatInputProps} className="border-0 shadow-none rounded-none" hideInternalAlerts />
                           </ChatInputContainer>
-                        </motion.div>
+                        </div>
                       )}
                     </div>
-                  </motion.div>
+                  </div>
                 </div>
               </div>
 
               {isMobile && (
                 <div className="sticky bottom-0 z-30 bg-gradient-to-t from-background via-background to-transparent pt-4">
                   <div className="container max-w-4xl mx-auto px-5 pb-4">
-                    <motion.div
-                      initial={isServer ? false : { opacity: 0, y: 15 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0 }}
-                      transition={{ delay: 0.55, duration: 0.4, ease: 'easeOut' }}
+                    <ChatInputContainer
+                      participants={selectedParticipants}
+                      inputValue={inputValue}
+                      isModelsLoading={isModelsLoading}
+                      autoMode={autoMode}
                     >
-                      <ChatInputContainer
-                        participants={selectedParticipants}
-                        inputValue={inputValue}
-                        isModelsLoading={isModelsLoading}
+                      <ChatInputHeader
                         autoMode={autoMode}
-                      >
-                        <ChatInputHeader
-                          autoMode={autoMode}
-                          onAutoModeChange={setAutoMode}
-                          isAnalyzing={isAnalyzingPrompt}
-                          disabled={isToggleDisabled && !isAnalyzingPrompt}
-                          className="border-0 rounded-none"
-                        />
-                        <ChatInput {...sharedChatInputProps} className="border-0 shadow-none rounded-none" hideInternalAlerts />
-                      </ChatInputContainer>
-                    </motion.div>
+                        onAutoModeChange={setAutoMode}
+                        isAnalyzing={isAnalyzingPrompt}
+                        disabled={isToggleDisabled && !isAnalyzingPrompt}
+                        className="border-0 rounded-none"
+                      />
+                      <ChatInput {...sharedChatInputProps} className="border-0 shadow-none rounded-none" hideInternalAlerts />
+                    </ChatInputContainer>
                   </div>
                 </div>
               )}

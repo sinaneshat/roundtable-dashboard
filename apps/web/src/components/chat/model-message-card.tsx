@@ -20,6 +20,7 @@ import { useChatStoreOptional } from '@/components/providers';
 import { Badge } from '@/components/ui/badge';
 import { StreamingMessageContent } from '@/components/ui/motion';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import { useIsMounted } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import { isDataPart } from '@/lib/schemas/data-part-schema';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
@@ -95,6 +96,7 @@ export const ModelMessageCard = memo(({
   skipTransitions = false,
 }: ModelMessageCardProps) => {
   const t = useTranslations();
+  const isMounted = useIsMounted();
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
 
   // Use optional store hook - returns undefined on public pages without ChatStoreProvider
@@ -226,7 +228,7 @@ export const ModelMessageCard = memo(({
                 style={{ gridArea: '1/1' }}
                 className={cn(
                   'py-2 text-muted-foreground text-base',
-                  !skipTransitions && 'transition-opacity duration-200 ease-out',
+                  !skipTransitions && isMounted && 'transition-opacity duration-200 ease-out',
                   showShimmer ? 'opacity-100' : 'opacity-0 pointer-events-none',
                 )}
               >
@@ -246,7 +248,7 @@ export const ModelMessageCard = memo(({
                 style={{ gridArea: '1/1' }}
                 className={cn(
                   'min-w-0',
-                  !skipTransitions && 'transition-opacity duration-200 ease-out',
+                  !skipTransitions && isMounted && 'transition-opacity duration-200 ease-out',
                   renderableParts.length > 0 ? 'opacity-100' : 'opacity-0 pointer-events-none',
                 )}
               >

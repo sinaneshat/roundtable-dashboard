@@ -18,7 +18,6 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from '@/components/ui/tooltip';
-import { useIsMounted, useMediaQuery } from '@/hooks/utils';
 import { getChatModeById } from '@/lib/config/chat-modes';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
 import { useTranslations } from '@/lib/i18n';
@@ -77,8 +76,6 @@ export const ChatInputToolbarMenu = memo(({
   autoMode = false,
 }: ChatInputToolbarMenuProps) => {
   const t = useTranslations();
-  const isMounted = useIsMounted();
-  const isDesktop = useMediaQuery('(min-width: 768px)');
 
   const currentMode = getChatModeById(selectedMode);
   const ModeIcon = currentMode?.icon;
@@ -89,13 +86,11 @@ export const ChatInputToolbarMenu = memo(({
     onAttachmentClick?.();
   }, [onAttachmentClick]);
 
-  // SSR and pre-mount: Render mobile structure (Drawer is the default)
-  // This ensures hydration matches because we can't know viewport on server
-  // After mount, switch to desktop layout if appropriate
-  if (isMounted && isDesktop) {
-    return (
+  return (
+    <>
+      {/* Desktop layout - hidden on mobile via CSS */}
       <TooltipProvider delayDuration={800}>
-        <div className="flex items-center gap-2">
+        <div className="hidden md:flex items-center gap-2">
           {!autoMode && (
             <>
               <Tooltip>
@@ -211,73 +206,228 @@ export const ChatInputToolbarMenu = memo(({
           )}
         </div>
       </TooltipProvider>
-    );
-  }
 
-  return (
-    <div className="flex items-center gap-1.5">
-      <Drawer>
-        <DrawerTrigger asChild>
-          <Button
-            type="button"
-            variant={ComponentVariants.GLASS}
-            size={ComponentSizes.ICON}
-            disabled={disabled}
-            className="min-h-11 min-w-11"
-            aria-label={t('moreOptions')}
-          >
-            <Icons.moreHorizontal className="size-4" />
-          </Button>
-        </DrawerTrigger>
-        <DrawerContent glass>
-          <DrawerHeader className="pb-4">
-            <DrawerTitle className="text-base font-semibold text-foreground">
-              {t('chat.toolbar.options')}
-            </DrawerTitle>
-          </DrawerHeader>
+      {/* Mobile layout - hidden on desktop via CSS */}
+      <div className="flex md:hidden items-center gap-1.5">
+        <Drawer>
+          <DrawerTrigger asChild>
+            <Button
+              type="button"
+              variant={ComponentVariants.GLASS}
+              size={ComponentSizes.ICON}
+              disabled={disabled}
+              className="min-h-11 min-w-11"
+              aria-label={t('moreOptions')}
+            >
+              <Icons.moreHorizontal className="size-4" />
+            </Button>
+          </DrawerTrigger>
+          <DrawerContent glass>
+            <DrawerHeader className="pb-4">
+              <DrawerTitle className="text-base font-semibold text-foreground">
+                {t('chat.toolbar.options')}
+              </DrawerTitle>
+            </DrawerHeader>
 
-          <div className="px-5 pb-5 space-y-3">
-            {!autoMode && (
-              <>
+            <div className="px-5 pb-5 space-y-3">
+              {!autoMode && (
+                <>
+                  <button
+                    type="button"
+                    onClick={onOpenModelModal}
+                    className={cn(
+                      'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      hasNoModelsSelected
+                        ? 'bg-destructive/10 border border-destructive/30 hover:bg-destructive/15'
+                        : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
+                    )}
+                  >
+                    <div className={cn(
+                      'flex items-center justify-center size-10 rounded-full',
+                      hasNoModelsSelected ? 'bg-destructive/20' : 'bg-cyan-500/10',
+                    )}
+                    >
+                      {hasNoModelsSelected
+                        ? <Icons.alertCircle className="size-5 text-destructive" />
+                        : <Icons.sparkles className="size-5 text-cyan-400" />}
+                    </div>
+                    <div className="flex flex-col flex-1 min-w-0 text-left">
+                      <span className={cn(
+                        'text-sm font-medium',
+                        hasNoModelsSelected ? 'text-destructive' : 'text-foreground',
+                      )}
+                      >
+                        {t('chat.models.aiModels')}
+                      </span>
+                      <span className={cn(
+                        'text-xs truncate',
+                        hasNoModelsSelected ? 'text-destructive/70' : 'text-muted-foreground',
+                      )}
+                      >
+                        {hasNoModelsSelected
+                          ? t('chat.models.minimumRequired.description', { count: MIN_PARTICIPANTS_REQUIRED })
+                          : `${selectedParticipants.length} ${t('chat.toolbar.selected')}`}
+                      </span>
+                    </div>
+                    {!hasNoModelsSelected && (
+                      <AvatarGroup
+                        participants={selectedParticipants}
+                        allModels={allModels}
+                        size={AvatarSizes.SM}
+                        maxVisible={3}
+                        showCount={false}
+                        showOverflow
+                      />
+                    )}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={onOpenModeModal}
+                    className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/[0.07] active:bg-black/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                  >
+                    <div className="flex items-center justify-center size-10 rounded-full bg-purple-500/10">
+                      {ModeIcon && <ModeIcon className="size-5 text-purple-400" />}
+                    </div>
+                    <div className="flex flex-col flex-1 text-left">
+                      <span className="text-sm font-medium text-foreground">
+                        {t('chat.modes.mode')}
+                      </span>
+                      <span className="text-xs text-muted-foreground">
+                        {currentMode?.label}
+                      </span>
+                    </div>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onWebSearchToggle?.(!enableWebSearch)}
+                    className={cn(
+                      'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
+                      'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                      enableWebSearch
+                        ? 'bg-blue-500/20 hover:bg-blue-500/25 active:bg-blue-500/30'
+                        : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
+                    )}
+                  >
+                    <div className={cn(
+                      'flex items-center justify-center size-10 rounded-full transition-colors',
+                      enableWebSearch ? 'bg-blue-500/20' : 'bg-blue-500/10',
+                    )}
+                    >
+                      <Icons.globe className={cn(
+                        'size-5 transition-colors',
+                        enableWebSearch ? 'text-blue-300' : 'text-blue-400',
+                      )}
+                      />
+                    </div>
+                    <span className={cn(
+                      'text-sm font-medium flex-1 text-left transition-colors',
+                      enableWebSearch ? 'text-blue-100' : 'text-foreground',
+                    )}
+                    >
+                      {t('chat.webSearch.toggle')}
+                    </span>
+                    {enableWebSearch && (
+                      <div className="size-2 rounded-full bg-blue-400" />
+                    )}
+                  </button>
+                </>
+              )}
+
+              {onAttachmentClick && (
                 <button
                   type="button"
-                  onClick={onOpenModelModal}
+                  onClick={handleAttachClick}
+                  disabled={!enableAttachments}
                   className={cn(
                     'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    hasNoModelsSelected
-                      ? 'bg-destructive/10 border border-destructive/30 hover:bg-destructive/15'
+                    !enableAttachments && 'opacity-50 cursor-not-allowed',
+                    attachmentCount > 0
+                      ? 'bg-amber-500/20 hover:bg-amber-500/25 active:bg-amber-500/30'
+                      : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
+                  )}
+                >
+                  <div className={cn(
+                    'flex items-center justify-center size-10 rounded-full transition-colors',
+                    attachmentCount > 0 ? 'bg-amber-500/20' : 'bg-amber-500/10',
+                  )}
+                  >
+                    <Icons.paperclip className={cn(
+                      'size-5 transition-colors',
+                      attachmentCount > 0 ? 'text-amber-300' : 'text-amber-400',
+                    )}
+                    />
+                  </div>
+                  <span className={cn(
+                    'text-sm font-medium flex-1 text-left transition-colors',
+                    attachmentCount > 0 ? 'text-amber-100' : 'text-foreground',
+                  )}
+                  >
+                    {t('chat.input.attachFiles')}
+                  </span>
+                </button>
+              )}
+
+              {onToggleSpeech && (
+                <button
+                  type="button"
+                  onClick={onToggleSpeech}
+                  disabled={!isSpeechSupported}
+                  className={cn(
+                    'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
+                    !isSpeechSupported && 'opacity-50 cursor-not-allowed',
+                    isListening
+                      ? 'bg-red-500/20 hover:bg-red-500/25 active:bg-red-500/30'
                       : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
                   )}
                 >
                   <div className={cn(
                     'flex items-center justify-center size-10 rounded-full',
-                    hasNoModelsSelected ? 'bg-destructive/20' : 'bg-cyan-500/10',
+                    isListening ? 'bg-red-500/20' : 'bg-green-500/10',
                   )}
                   >
-                    {hasNoModelsSelected
-                      ? <Icons.alertCircle className="size-5 text-destructive" />
-                      : <Icons.sparkles className="size-5 text-cyan-400" />}
+                    {isListening
+                      ? <Icons.stopCircle className="size-5 text-red-400" />
+                      : <Icons.mic className="size-5 text-green-400" />}
                   </div>
-                  <div className="flex flex-col flex-1 min-w-0 text-left">
-                    <span className={cn(
-                      'text-sm font-medium',
-                      hasNoModelsSelected ? 'text-destructive' : 'text-foreground',
-                    )}
-                    >
-                      {t('chat.models.aiModels')}
-                    </span>
-                    <span className={cn(
-                      'text-xs truncate',
-                      hasNoModelsSelected ? 'text-destructive/70' : 'text-muted-foreground',
-                    )}
-                    >
-                      {hasNoModelsSelected
-                        ? t('chat.models.minimumRequired.description', { count: MIN_PARTICIPANTS_REQUIRED })
-                        : `${selectedParticipants.length} ${t('chat.toolbar.selected')}`}
-                    </span>
-                  </div>
-                  {!hasNoModelsSelected && (
+                  <span className={cn(
+                    'text-sm font-medium flex-1 text-left transition-colors',
+                    isListening ? 'text-red-100' : 'text-foreground',
+                  )}
+                  >
+                    {isListening ? t('chat.input.stopRecording') : t('chat.input.voiceInput')}
+                  </span>
+                  {isListening && (
+                    <div className="size-2 rounded-full bg-red-500 animate-pulse" />
+                  )}
+                </button>
+              )}
+            </div>
+          </DrawerContent>
+        </Drawer>
+
+        {/* Inline model selector - tap to open modal (hidden in auto mode) */}
+        {!autoMode && (
+          <Button
+            type="button"
+            variant={ComponentVariants.GLASS}
+            size={ComponentSizes.SM}
+            disabled={disabled}
+            onClick={onOpenModelModal}
+            className={cn(
+              'h-9 rounded-full px-2 gap-1',
+              hasNoModelsSelected && !isModelsLoading && 'border-destructive/50 bg-destructive/10',
+            )}
+          >
+            {isModelsLoading
+              ? <Icons.loader className="size-4 animate-spin text-muted-foreground" />
+              : hasNoModelsSelected
+                ? <Icons.alertCircle className="size-4 text-destructive" />
+                : (
                     <AvatarGroup
                       participants={selectedParticipants}
                       allModels={allModels}
@@ -287,168 +437,10 @@ export const ChatInputToolbarMenu = memo(({
                       showOverflow
                     />
                   )}
-                </button>
-
-                <button
-                  type="button"
-                  onClick={onOpenModeModal}
-                  className="w-full flex items-center gap-4 p-4 rounded-2xl bg-white/5 hover:bg-white/[0.07] active:bg-black/20 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-                >
-                  <div className="flex items-center justify-center size-10 rounded-full bg-purple-500/10">
-                    {ModeIcon && <ModeIcon className="size-5 text-purple-400" />}
-                  </div>
-                  <div className="flex flex-col flex-1 text-left">
-                    <span className="text-sm font-medium text-foreground">
-                      {t('chat.modes.mode')}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {currentMode?.label}
-                    </span>
-                  </div>
-                </button>
-
-                <button
-                  type="button"
-                  onClick={() => onWebSearchToggle?.(!enableWebSearch)}
-                  className={cn(
-                    'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                    enableWebSearch
-                      ? 'bg-blue-500/20 hover:bg-blue-500/25 active:bg-blue-500/30'
-                      : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
-                  )}
-                >
-                  <div className={cn(
-                    'flex items-center justify-center size-10 rounded-full transition-colors',
-                    enableWebSearch ? 'bg-blue-500/20' : 'bg-blue-500/10',
-                  )}
-                  >
-                    <Icons.globe className={cn(
-                      'size-5 transition-colors',
-                      enableWebSearch ? 'text-blue-300' : 'text-blue-400',
-                    )}
-                    />
-                  </div>
-                  <span className={cn(
-                    'text-sm font-medium flex-1 text-left transition-colors',
-                    enableWebSearch ? 'text-blue-100' : 'text-foreground',
-                  )}
-                  >
-                    {t('chat.webSearch.toggle')}
-                  </span>
-                  {enableWebSearch && (
-                    <div className="size-2 rounded-full bg-blue-400" />
-                  )}
-                </button>
-              </>
-            )}
-
-            {onAttachmentClick && (
-              <button
-                type="button"
-                onClick={handleAttachClick}
-                disabled={!enableAttachments}
-                className={cn(
-                  'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  !enableAttachments && 'opacity-50 cursor-not-allowed',
-                  attachmentCount > 0
-                    ? 'bg-amber-500/20 hover:bg-amber-500/25 active:bg-amber-500/30'
-                    : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
-                )}
-              >
-                <div className={cn(
-                  'flex items-center justify-center size-10 rounded-full transition-colors',
-                  attachmentCount > 0 ? 'bg-amber-500/20' : 'bg-amber-500/10',
-                )}
-                >
-                  <Icons.paperclip className={cn(
-                    'size-5 transition-colors',
-                    attachmentCount > 0 ? 'text-amber-300' : 'text-amber-400',
-                  )}
-                  />
-                </div>
-                <span className={cn(
-                  'text-sm font-medium flex-1 text-left transition-colors',
-                  attachmentCount > 0 ? 'text-amber-100' : 'text-foreground',
-                )}
-                >
-                  {t('chat.input.attachFiles')}
-                </span>
-              </button>
-            )}
-
-            {onToggleSpeech && (
-              <button
-                type="button"
-                onClick={onToggleSpeech}
-                disabled={!isSpeechSupported}
-                className={cn(
-                  'w-full flex items-center gap-4 p-4 rounded-2xl transition-colors',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                  !isSpeechSupported && 'opacity-50 cursor-not-allowed',
-                  isListening
-                    ? 'bg-red-500/20 hover:bg-red-500/25 active:bg-red-500/30'
-                    : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
-                )}
-              >
-                <div className={cn(
-                  'flex items-center justify-center size-10 rounded-full',
-                  isListening ? 'bg-red-500/20' : 'bg-green-500/10',
-                )}
-                >
-                  {isListening
-                    ? <Icons.stopCircle className="size-5 text-red-400" />
-                    : <Icons.mic className="size-5 text-green-400" />}
-                </div>
-                <span className={cn(
-                  'text-sm font-medium flex-1 text-left transition-colors',
-                  isListening ? 'text-red-100' : 'text-foreground',
-                )}
-                >
-                  {isListening ? t('chat.input.stopRecording') : t('chat.input.voiceInput')}
-                </span>
-                {isListening && (
-                  <div className="size-2 rounded-full bg-red-500 animate-pulse" />
-                )}
-              </button>
-            )}
-          </div>
-        </DrawerContent>
-      </Drawer>
-
-      {/* Inline model selector - tap to open modal (hidden in auto mode) */}
-      {!autoMode && (
-        <Button
-          type="button"
-          variant={ComponentVariants.GLASS}
-          size={ComponentSizes.SM}
-          disabled={disabled}
-          onClick={onOpenModelModal}
-          className={cn(
-            'h-9 rounded-full px-2 gap-1',
-            hasNoModelsSelected && !isModelsLoading && 'border-destructive/50 bg-destructive/10',
-          )}
-        >
-          {isModelsLoading
-            ? <Icons.loader className="size-4 animate-spin text-muted-foreground" />
-            : hasNoModelsSelected
-              ? <Icons.alertCircle className="size-4 text-destructive" />
-              : (
-                  <AvatarGroup
-                    participants={selectedParticipants}
-                    allModels={allModels}
-                    size={AvatarSizes.SM}
-                    maxVisible={3}
-                    showCount={false}
-                    showOverflow
-                  />
-                )}
-        </Button>
-      )}
-
-      {/* Removed: Inline web search and attachment buttons on mobile - accessible via menu drawer */}
-    </div>
+          </Button>
+        )}
+      </div>
+    </>
   );
 });
 

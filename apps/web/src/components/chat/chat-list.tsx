@@ -21,7 +21,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { useToggleFavoriteMutation, useUpdateThreadMutation } from '@/hooks/mutations';
-import { useCurrentPathname } from '@/hooks/utils';
+import { useCurrentPathname, useIsMounted } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import type { ChatSidebarItem } from '@/services/api';
 
@@ -146,8 +146,9 @@ export function ChatList({
   const [hasAnimated, setHasAnimated] = useState(false);
   // Disable stagger animations on SSR - StaggerItem uses opacity:0 initial state
   // which makes items invisible until client-side animation runs
-  const isServer = typeof window === 'undefined';
-  const shouldAnimate = !isServer && !disableAnimations && !hasAnimated;
+  // useIsMounted returns false on server AND client initial render, true after hydration
+  const isMounted = useIsMounted();
+  const shouldAnimate = isMounted && !disableAnimations && !hasAnimated;
 
   // Auto-close sidebar on mobile when navigating to a thread
   const prevPathnameRef = useRef(pathname);

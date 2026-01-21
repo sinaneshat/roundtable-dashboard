@@ -6,6 +6,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { AvatarGroup } from '@/components/chat/avatar-group';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useModelsQuery, useUsageStatsQuery } from '@/hooks/queries';
+import { useIsMounted } from '@/hooks/utils/use-is-mounted';
 import { getChatModeLabel, getExampleParticipantCount } from '@/lib/config';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { cn } from '@/lib/ui/cn';
@@ -206,6 +207,9 @@ export function ChatQuickStart({
   className,
   disabled = false,
 }: ChatQuickStartProps) {
+  // SSR-safe: false on server, true on client after hydration
+  const isMounted = useIsMounted();
+
   // ✅ HYDRATION FIX: Initialize with null, set on client via useEffect
   // Previously used useState initializers with new Date() which caused hydration
   // mismatch when server and client were in different timezones or time rolled over
@@ -371,7 +375,7 @@ export function ChatQuickStart({
           return (
             <motion.button
               key={suggestion.title}
-              initial={{ opacity: 0, y: 10 }}
+              initial={isMounted ? { opacity: 0, y: 10 } : false}
               animate={{ opacity: disabled ? 0.5 : 1, y: 0 }}
               whileHover={disabled
                 ? undefined

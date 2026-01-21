@@ -270,7 +270,9 @@ export function useMultiParticipantChat(
     hasEarlyOptimisticMessage = false,
     streamResumptionPrefilled = false,
     onResumedStreamComplete,
-    isNewlyCreatedThread = false,
+    // Note: isNewlyCreatedThread kept in type for API compatibility but no longer used
+    // since AI SDK resume is disabled (custom resumption handles all cases)
+    isNewlyCreatedThread: _isNewlyCreatedThread = false,
   } = options;
 
   // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
@@ -881,8 +883,13 @@ export function useMultiParticipantChat(
     // that occur when AI SDK tries to resume on new threads without an ID.
     // When useChatId is undefined (new thread), resume is disabled to prevent corruption.
     // When useChatId is valid (existing thread), resume enables automatic reconnection.
-    // ✅ PERF FIX: Disable resume for newly created threads - nothing to resume, avoids wasteful GET /stream
-    resume: !!useChatId && !isNewlyCreatedThread,
+    // ✅ FIX: Disable AI SDK auto-resume entirely - custom resumption handles all cases
+    // Problem: AI SDK's resume:true sets status='streaming' on mount, which conflicts with
+    // our custom resumption (useIncompleteRoundResumption). Both systems fight for control:
+    // - AI SDK auto-resumes ANY active stream (possibly wrong participant, wrong round)
+    // - Custom resumption exits early seeing "sdk status not ready" or already streaming
+    // Solution: Let custom resumption handle ALL resumption scenarios
+    resume: false,
     // ✅ NEVER pass messages - let AI SDK be uncontrolled
     // Initial hydration happens via setMessages effect below
 
@@ -1673,6 +1680,10 @@ export function useMultiParticipantChat(
       currentRoundRef.current = 0;
       roundParticipantsRef.current = [];
       currentIndexRef.current = 0;
+
+      // ✅ STALE REF FIX: Clear messagesRef to prevent thread A's messages bleeding into thread B
+      // Without this, resumption logic may use stale messages from the previous thread
+      messagesRef.current = [];
 
       // Reset queue and triggering refs
       participantIndexQueue.current = [];

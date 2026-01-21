@@ -11,7 +11,6 @@ import {
   buildCacheMismatchScenario,
   buildDuringModeratorScenario,
   createCompleteRoundMessages,
-  createIncompleteRoundMessages,
   createMockAssistantMessage,
   createMockChatHook,
   createMockChatStore,
@@ -1342,5 +1341,254 @@ describe('complete Round Flow Integration', () => {
       return meta?.participantIndex === 0;
     });
     expect(p0Exists).toBe(true);
+  });
+
+  describe('pre-search hydration from SSR', () => {
+    it('finds hydrated preSearch and proceeds with streaming when COMPLETE', () => {
+      const continueFromParticipant = vi.fn();
+      const store = createMockChatStore({
+        screenMode: ScreenModes.THREAD,
+        waitingToStartStreaming: true,
+        isStreaming: false,
+        nextParticipantToTrigger: 0,
+        participants: createMockParticipants(2),
+        messages: [createMockUserMessage(0)],
+        thread: { id: 'thread-123', enableWebSearch: true },
+        enableWebSearch: true,
+        preSearches: [createMockResumptionPreSearch(0, MessageStatuses.COMPLETE)],
+        isPatchInProgress: false,
+        configChangeRoundNumber: null,
+        isWaitingForChangelog: false,
+      });
+
+      const chat = createMockChatHook({
+        isReady: true,
+        continueFromParticipant,
+      });
+
+      const state = store.getState();
+      const currentRound = 0;
+      const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === currentRound);
+
+      // The bug: this was undefined before the fix, causing early exit
+      expect(preSearchForRound).toBeDefined();
+      expect(preSearchForRound?.status).toBe(MessageStatuses.COMPLETE);
+
+      // COMPLETE pre-search should NOT block
+      const isPreSearchBlocking
+        = preSearchForRound?.status === MessageStatuses.STREAMING
+          || preSearchForRound?.status === MessageStatuses.PENDING;
+      expect(isPreSearchBlocking).toBe(false);
+
+      // Should proceed to streaming
+      if (
+        state.nextParticipantToTrigger !== null
+        && state.waitingToStartStreaming
+        && !state.isStreaming
+        && chat.isReady
+        && !isPreSearchBlocking
+      ) {
+        chat.continueFromParticipant(state.nextParticipantToTrigger, state.participants);
+      }
+
+      expect(continueFromParticipant).toHaveBeenCalled();
+    });
+
+    it('does NOT exit with "no preSearch for r0" when hydrated', () => {
+      const store = createMockChatStore({
+        screenMode: ScreenModes.THREAD,
+        waitingToStartStreaming: true,
+        isStreaming: false,
+        participants: createMockParticipants(2),
+        messages: [createMockUserMessage(0)],
+        thread: { id: 'thread-123', enableWebSearch: true },
+        enableWebSearch: true,
+        preSearches: [createMockResumptionPreSearch(0, MessageStatuses.COMPLETE)],
+      });
+
+      const state = store.getState();
+      const currentRound = 0;
+      const webSearchEnabled = state.enableWebSearch;
+      const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === currentRound);
+
+      // The critical assertion: preSearch MUST be found when hydrated
+      expect(webSearchEnabled).toBe(true);
+      expect(preSearchForRound).toBeDefined();
+
+      // This would have caused early exit before the fix
+      const wouldExitEarly = webSearchEnabled && !preSearchForRound;
+      expect(wouldExitEarly).toBe(false);
+    });
+
+    it('waits when pre-search status is STREAMING', () => {
+      const continueFromParticipant = vi.fn();
+      const store = createMockChatStore({
+        screenMode: ScreenModes.THREAD,
+        waitingToStartStreaming: true,
+        isStreaming: false,
+        nextParticipantToTrigger: 0,
+        participants: createMockParticipants(2),
+        messages: [createMockUserMessage(0)],
+        thread: { id: 'thread-123', enableWebSearch: true },
+        enableWebSearch: true,
+        preSearches: [createMockResumptionPreSearch(0, MessageStatuses.STREAMING)],
+      });
+
+      const chat = createMockChatHook({
+        isReady: true,
+        continueFromParticipant,
+      });
+
+      const state = store.getState();
+      const currentRound = 0;
+      const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === currentRound);
+
+      expect(preSearchForRound?.status).toBe(MessageStatuses.STREAMING);
+
+      // STREAMING pre-search SHOULD block
+      const isPreSearchBlocking
+        = preSearchForRound?.status === MessageStatuses.STREAMING
+          || preSearchForRound?.status === MessageStatuses.PENDING;
+      expect(isPreSearchBlocking).toBe(true);
+
+      // Should NOT proceed while blocking
+      if (
+        state.nextParticipantToTrigger !== null
+        && state.waitingToStartStreaming
+        && !state.isStreaming
+        && chat.isReady
+        && !isPreSearchBlocking
+      ) {
+        chat.continueFromParticipant(state.nextParticipantToTrigger, state.participants);
+      }
+
+      expect(continueFromParticipant).not.toHaveBeenCalled();
+    });
+
+    it('proceeds immediately when pre-search is COMPLETE', () => {
+      const continueFromParticipant = vi.fn();
+      const store = createMockChatStore({
+        screenMode: ScreenModes.THREAD,
+        waitingToStartStreaming: true,
+        isStreaming: false,
+        nextParticipantToTrigger: 0,
+        participants: createMockParticipants(2),
+        messages: [createMockUserMessage(0)],
+        thread: { id: 'thread-123', enableWebSearch: true },
+        enableWebSearch: true,
+        preSearches: [createMockResumptionPreSearch(0, MessageStatuses.COMPLETE)],
+      });
+
+      const chat = createMockChatHook({
+        isReady: true,
+        continueFromParticipant,
+      });
+
+      const state = store.getState();
+      const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === 0);
+
+      const isPreSearchBlocking
+        = preSearchForRound?.status === MessageStatuses.STREAMING
+          || preSearchForRound?.status === MessageStatuses.PENDING;
+      expect(isPreSearchBlocking).toBe(false);
+
+      if (
+        state.nextParticipantToTrigger !== null
+        && state.waitingToStartStreaming
+        && !state.isStreaming
+        && chat.isReady
+        && !isPreSearchBlocking
+      ) {
+        chat.continueFromParticipant(state.nextParticipantToTrigger, state.participants);
+      }
+
+      expect(continueFromParticipant).toHaveBeenCalledTimes(1);
+    });
+
+    it('handles PENDING status correctly (should wait)', () => {
+      const continueFromParticipant = vi.fn();
+      const store = createMockChatStore({
+        screenMode: ScreenModes.THREAD,
+        waitingToStartStreaming: true,
+        isStreaming: false,
+        nextParticipantToTrigger: 0,
+        participants: createMockParticipants(2),
+        messages: [createMockUserMessage(0)],
+        thread: { id: 'thread-123', enableWebSearch: true },
+        enableWebSearch: true,
+        preSearches: [createMockResumptionPreSearch(0, MessageStatuses.PENDING)],
+      });
+
+      const chat = createMockChatHook({
+        isReady: true,
+        continueFromParticipant,
+      });
+
+      const state = store.getState();
+      const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === 0);
+
+      expect(preSearchForRound?.status).toBe(MessageStatuses.PENDING);
+
+      // PENDING should block just like STREAMING
+      const isPreSearchBlocking
+        = preSearchForRound?.status === MessageStatuses.STREAMING
+          || preSearchForRound?.status === MessageStatuses.PENDING;
+      expect(isPreSearchBlocking).toBe(true);
+
+      if (
+        state.nextParticipantToTrigger !== null
+        && state.waitingToStartStreaming
+        && !state.isStreaming
+        && chat.isReady
+        && !isPreSearchBlocking
+      ) {
+        chat.continueFromParticipant(state.nextParticipantToTrigger, state.participants);
+      }
+
+      expect(continueFromParticipant).not.toHaveBeenCalled();
+    });
+
+    it('handles FAILED pre-search by proceeding (no block)', () => {
+      const continueFromParticipant = vi.fn();
+      const store = createMockChatStore({
+        screenMode: ScreenModes.THREAD,
+        waitingToStartStreaming: true,
+        isStreaming: false,
+        nextParticipantToTrigger: 0,
+        participants: createMockParticipants(2),
+        messages: [createMockUserMessage(0)],
+        thread: { id: 'thread-123', enableWebSearch: true },
+        enableWebSearch: true,
+        preSearches: [createMockResumptionPreSearch(0, MessageStatuses.FAILED)],
+      });
+
+      const chat = createMockChatHook({
+        isReady: true,
+        continueFromParticipant,
+      });
+
+      const state = store.getState();
+      const preSearchForRound = state.preSearches.find(ps => ps.roundNumber === 0);
+
+      expect(preSearchForRound?.status).toBe(MessageStatuses.FAILED);
+
+      // FAILED should NOT block
+      const isPreSearchBlocking
+        = preSearchForRound?.status === MessageStatuses.STREAMING
+          || preSearchForRound?.status === MessageStatuses.PENDING;
+      expect(isPreSearchBlocking).toBe(false);
+
+      if (
+        state.nextParticipantToTrigger !== null
+        && state.waitingToStartStreaming
+        && !state.isStreaming
+        && chat.isReady
+        && !isPreSearchBlocking
+      ) {
+        chat.continueFromParticipant(state.nextParticipantToTrigger, state.participants);
+      }
+
+      expect(continueFromParticipant).toHaveBeenCalledTimes(1);
+    });
   });
 });

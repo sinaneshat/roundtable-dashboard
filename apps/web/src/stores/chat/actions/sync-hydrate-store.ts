@@ -104,6 +104,12 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     // Set screen mode first
     state.setScreenMode(mode);
 
+    // ✅ SCOPE VERSIONING: Set resumption scope BEFORE prefilling resumption state
+    // This establishes the thread context for resumption effects to validate against
+    if (threadId) {
+      state.setResumptionScope(threadId);
+    }
+
     // Prefill stream resumption state if present (BEFORE initializeThread)
     if (threadId && streamResumptionState) {
       const skipPrefillDueToFormSubmission = state.isPatchInProgress
@@ -111,7 +117,10 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
         || state.isWaitingForChangelog
         || state.pendingMessage !== null;
 
-      if (!skipPrefillDueToFormSubmission) {
+      // ✅ SCOPE VALIDATION: Verify thread context is still current before prefilling
+      // This prevents stale prefill data from being applied after navigation
+      const currentScope = storeApi.getState().resumptionScopeThreadId;
+      if (!skipPrefillDueToFormSubmission && currentScope === threadId) {
         state.prefillStreamResumptionState(threadId, streamResumptionState);
       }
     }

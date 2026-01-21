@@ -17,6 +17,7 @@ import {
   useCreditEstimation,
   useDragDrop,
   useFreeTrialState,
+  useHydrationInputCapture,
   useSpeechRecognition,
 } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
@@ -92,6 +93,12 @@ export const ChatInput = memo(({
   const isStreaming = status !== AiSdkStatuses.READY;
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
   const { isFreeUser, hasUsedTrial } = useFreeTrialState();
+
+  // Capture any text typed during SSR/hydration before React takes over
+  const handleCapture = useCallback((capturedValue: string) => {
+    onChange(capturedValue);
+  }, [onChange]);
+  useHydrationInputCapture(textareaRef, handleCapture, value);
 
   // Real-time credit estimation based on selected models and their pricing tiers
   const creditEstimate = useCreditEstimation({

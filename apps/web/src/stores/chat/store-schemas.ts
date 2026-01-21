@@ -121,6 +121,7 @@ import type {
   SetPreSearches,
   SetRegeneratingRoundNumber,
   SetScreenMode,
+  SetResumptionScope,
   SetSelectedMode,
   SetSelectedParticipants,
   SetSendMessage,
@@ -524,6 +525,10 @@ export const StreamResumptionSliceStateSchema = z.object({
   preSearchResumption: PreSearchResumptionStateSchema.nullable(),
   moderatorResumption: ModeratorResumptionStateSchema.nullable(),
   resumptionRoundNumber: z.number().nullable(),
+  /** ✅ SCOPE VERSIONING: Thread ID for current resumption scope */
+  resumptionScopeThreadId: z.string().nullable(),
+  /** ✅ SCOPE VERSIONING: Version counter - increments on each navigation to invalidate stale effects */
+  resumptionScopeVersion: z.number(),
 });
 
 /**
@@ -558,6 +563,8 @@ export const StreamResumptionActionsSchema = z.object({
   transitionToParticipantsPhase: z.custom<() => void>(),
   transitionToModeratorPhase: z.custom<(roundNumber?: number) => void>(),
   setCurrentResumptionPhase: z.custom<(phase: RoundPhase) => void>(),
+  /** ✅ SCOPE VERSIONING: Set thread scope for resumption validation */
+  setResumptionScope: z.custom<SetResumptionScope>(),
 });
 
 export const StreamResumptionSliceSchema = z.intersection(StreamResumptionSliceStateSchema, StreamResumptionActionsSchema);

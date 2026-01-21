@@ -1,8 +1,8 @@
 import type { ComponentProps } from 'react';
 
+import { ChatInputMinimal } from '@/components/chat/chat-input-minimal';
 import { cn } from '@/lib/ui/cn';
 
-import { ChatInputSkeleton } from './chat-input-skeleton';
 import { LogoAreaSkeleton } from './logo-area-skeleton';
 import { QuickStartSkeleton } from './quick-start-skeleton';
 
@@ -12,7 +12,8 @@ import { QuickStartSkeleton } from './quick-start-skeleton';
  * Matches ChatOverviewScreen initial UI layout EXACTLY for seamless transition.
  * Container max-w-4xl matches actual content for consistent width.
  *
- * Uses shared skeleton components for maximum reusability and single source of truth.
+ * Uses ChatInputMinimal for functional textarea during hydration -
+ * text typed here will be captured by ChatInput's useHydrationInputCapture.
  */
 export function MainContentSkeleton({ className, ...props }: ComponentProps<'div'>) {
   return (
@@ -32,9 +33,9 @@ export function MainContentSkeleton({ className, ...props }: ComponentProps<'div
                 </div>
               </div>
 
-              {/* Input container: w-full mt-14 - uses shared ChatInputSkeleton */}
+              {/* Input container: w-full mt-14 - functional during hydration */}
               <div className="w-full mt-14">
-                <ChatInputSkeleton showHeader showToolbar />
+                <ChatInputMinimal showToolbar />
               </div>
             </div>
           </div>

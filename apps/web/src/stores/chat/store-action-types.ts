@@ -420,6 +420,12 @@ export type PrefillStreamResumptionState = (
   serverState: ThreadStreamResumptionState,
 ) => void;
 
+/**
+ * Set the resumption scope thread ID for validating stale effects
+ * Called when navigating to a thread to establish the current scope
+ */
+export type SetResumptionScope = (threadId: string) => void;
+
 // ============================================================================
 // ANIMATION ACTIONS (Animation completion tracking)
 // ============================================================================

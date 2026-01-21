@@ -1,11 +1,9 @@
 import { UIBillingIntervals } from '@roundtable/shared';
-import { motion } from 'motion/react';
 
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { PricingCard } from '@/components/ui/pricing-card';
-import { useIsMounted } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import { isSubscriptionActive } from '@/lib/utils';
 import type { Price, Product } from '@/services/api/billing/products';
@@ -51,7 +49,6 @@ export function PricingContent({
   showSubscriptionBanner = false,
 }: PricingContentProps) {
   const t = useTranslations();
-  const isMounted = useIsMounted();
 
   const activeSubscription = subscriptions.find(isSubscriptionActive);
 
@@ -106,39 +103,33 @@ export function PricingContent({
   return (
     <div className="mx-auto px-3 sm:px-4 md:px-6">
       <div className="space-y-8">
-        {showSubscriptionBanner && activeSubscription && isMounted && (
-          <motion.div
-            initial={{ opacity: 0, y: -10 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.3 }}
-          >
-            <Card className="bg-primary/5 border-primary/20">
-              <CardContent className="flex items-center gap-3 py-3">
-                <Icons.creditCard className="h-5 w-5 text-primary shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="font-medium text-sm">{t('billing.currentPlan')}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {activeSubscription.currentPeriodEnd
-                      && `${t('billing.renewsOn')} ${new Date(activeSubscription.currentPeriodEnd).toLocaleDateString()}`}
-                  </p>
+        {showSubscriptionBanner && activeSubscription && (
+          <Card className="bg-primary/5 border-primary/20">
+            <CardContent className="flex items-center gap-3 py-3">
+              <Icons.creditCard className="h-5 w-5 text-primary shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="font-medium text-sm">{t('billing.currentPlan')}</p>
+                <p className="text-xs text-muted-foreground">
+                  {activeSubscription.currentPeriodEnd
+                    && `${t('billing.renewsOn')} ${new Date(activeSubscription.currentPeriodEnd).toLocaleDateString()}`}
+                </p>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                <div className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium uppercase">
+                  {activeSubscription.status}
                 </div>
-                <div className="flex items-center gap-2 shrink-0">
-                  <div className="px-3 py-1 rounded-full bg-primary/10 text-primary text-xs font-medium uppercase">
-                    {activeSubscription.status}
-                  </div>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={onManageBilling}
-                    className="gap-2"
-                  >
-                    {t('billing.manageBilling')}
-                    <Icons.externalLink className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          </motion.div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onManageBilling}
+                  className="gap-2"
+                >
+                  {t('billing.manageBilling')}
+                  <Icons.externalLink className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         <ProductGrid
@@ -173,7 +164,6 @@ function ProductGrid({
   showSubscriptionBanner,
 }: ProductGridProps) {
   const t = useTranslations();
-  const isMounted = useIsMounted();
 
   if (products.length === 0) {
     return (
@@ -198,46 +188,31 @@ function ProductGrid({
           const subscription: Subscription | undefined = getSubscriptionForPrice(price.id);
           const hasSubscription = hasActiveSubscription(price.id);
 
-          const cardContent = (
-            <PricingCard
-              name={product.name}
-              description={product.description}
-              price={{
-                amount: price.unitAmount,
-                currency: price.currency,
-                interval: UIBillingIntervals.MONTH,
-                trialDays: price.trialPeriodDays,
-              }}
-              features={product.features}
-              isCurrentPlan={!showSubscriptionBanner && hasSubscription}
-              isMostPopular={true}
-              isProcessingSubscribe={processingPriceId === price.id}
-              isProcessingCancel={subscription ? cancelingSubscriptionId === subscription.id : false}
-              isProcessingManageBilling={hasSubscription ? isManagingBilling : false}
-              hasOtherSubscription={hasAnyActiveSubscription && !hasSubscription}
-              onSubscribe={() => onSubscribe(price.id)}
-              onCancel={subscription ? () => onCancel(subscription.id) : undefined}
-              onManageBilling={hasSubscription ? onManageBilling : undefined}
-              delay={index * 0.1}
-            />
+          return (
+            <div key={product.id}>
+              <PricingCard
+                name={product.name}
+                description={product.description}
+                price={{
+                  amount: price.unitAmount,
+                  currency: price.currency,
+                  interval: UIBillingIntervals.MONTH,
+                  trialDays: price.trialPeriodDays,
+                }}
+                features={product.features}
+                isCurrentPlan={!showSubscriptionBanner && hasSubscription}
+                isMostPopular={true}
+                isProcessingSubscribe={processingPriceId === price.id}
+                isProcessingCancel={subscription ? cancelingSubscriptionId === subscription.id : false}
+                isProcessingManageBilling={hasSubscription ? isManagingBilling : false}
+                hasOtherSubscription={hasAnyActiveSubscription && !hasSubscription}
+                onSubscribe={() => onSubscribe(price.id)}
+                onCancel={subscription ? () => onCancel(subscription.id) : undefined}
+                onManageBilling={hasSubscription ? onManageBilling : undefined}
+                delay={index * 0.1}
+              />
+            </div>
           );
-
-          return isMounted
-            ? (
-                <motion.div
-                  key={product.id}
-                  initial={{ opacity: 0, scale: 0.95 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  transition={{ duration: 0.3, delay: index * 0.1 }}
-                >
-                  {cardContent}
-                </motion.div>
-              )
-            : (
-                <div key={product.id}>
-                  {cardContent}
-                </div>
-              );
         })}
       </div>
     </div>

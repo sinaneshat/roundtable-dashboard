@@ -410,4 +410,38 @@ export function useStreamingTrigger({
     const interval = setInterval(checkStuckPreSearches, 5000);
     return () => clearInterval(interval);
   }, [store]);
+
+  // ✅ STUCK STATE RECOVERY: Detect and recover from stuck resumption states
+  // When navigation occurs mid-resumption, state can become stuck:
+  // - waitingToStartStreaming: true (from previous thread)
+  // - streamResumptionPrefilled: false or mismatched thread
+  // - AI SDK not streaming
+  // - Store not streaming
+  // This interval detects this stuck state and clears it to allow new resumption
+  useEffect(() => {
+    const interval = setInterval(() => {
+      const s = store.getState();
+
+      // Only check if we think we're waiting to start streaming
+      if (!s.waitingToStartStreaming) return;
+
+      // Check if resumption state is valid for current thread
+      const validResumption = s.streamResumptionPrefilled
+        && s.prefilledForThreadId === s.thread?.id;
+
+      // Check if AI SDK is actively streaming (use ref for synchronous check)
+      const aiSdkActive = chat.isStreamingRef.current;
+
+      // If no valid resumption AND AI SDK not active AND store not streaming
+      // This is a stuck state - reset it
+      if (!validResumption && !aiSdkActive && !s.isStreaming) {
+        rlog.trigger('stuck-recovery', `clearing stuck state: prefilled=${s.streamResumptionPrefilled ? 1 : 0} prefilledThread=${s.prefilledForThreadId?.slice(-8) ?? '-'} currentThread=${s.thread?.id?.slice(-8) ?? '-'}`);
+        s.setWaitingToStartStreaming(false);
+        s.setNextParticipantToTrigger(null);
+        s.clearStreamResumption();
+      }
+    }, 3000);
+
+    return () => clearInterval(interval);
+  }, [store, chat.isStreamingRef]);
 }

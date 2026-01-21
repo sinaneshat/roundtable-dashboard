@@ -116,6 +116,8 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     // Form state is the source of truth for current round web search decision
     // Thread's enableWebSearch is just a default/preference synced on load
     storeEnableWebSearch,
+    // ✅ SCOPE VERSIONING: Track version for stale effect detection
+    resumptionScopeVersion,
   } = useStore(store, useShallow(s => ({
     waitingToStart: s.waitingToStartStreaming,
     chatIsStreaming: s.isStreaming,
@@ -133,6 +135,8 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     isPatchInProgress: s.isPatchInProgress,
     // ✅ BUG FIX: Form state for web search toggle (user's current intent)
     storeEnableWebSearch: s.enableWebSearch,
+    // ✅ SCOPE VERSIONING: Track version for stale effect detection
+    resumptionScopeVersion: s.resumptionScopeVersion,
   })));
 
   // ✅ RACE CONDITION FIX: Extract isReady explicitly for precise dependency tracking
@@ -143,6 +147,8 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
   const resumptionTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // ✅ RACE CONDITION FIX: Track if resumption has been triggered to prevent double-triggers
   const resumptionTriggeredRef = useRef<string | null>(null);
+  // ✅ SCOPE VERSIONING: Track scope version to invalidate stale effects on navigation
+  const scopeVersionRef = useRef(resumptionScopeVersion);
 
   // Clean up dangling nextParticipantToTrigger state
   // ✅ STALE SELECTOR FIX: Read fresh state instead of using potentially stale selectors
@@ -190,6 +196,15 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
   // Main resumption effect
   useEffect(() => {
+    // ✅ SCOPE VERSIONING: Check if navigation occurred - invalidate stale effects
+    // When scope version changes, this effect is operating on stale thread data
+    if (scopeVersionRef.current !== resumptionScopeVersion) {
+      scopeVersionRef.current = resumptionScopeVersion;
+      // Reset resumption tracking for new scope
+      resumptionTriggeredRef.current = null;
+      return;
+    }
+
     // Clear any pending retry when effect re-runs
     if (retryTimeoutRef.current) {
       clearTimeout(retryTimeoutRef.current);
@@ -559,7 +574,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         retryTimeoutRef.current = null;
       }
     };
-  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, configChangeRoundNumber, isWaitingForChangelog, isPatchInProgress, storeEnableWebSearch, chat, store]);
+  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, configChangeRoundNumber, isWaitingForChangelog, isPatchInProgress, storeEnableWebSearch, resumptionScopeVersion, chat, store]);
 
   // Safety timeout for thread screen resumption
   // ✅ STALE SELECTOR FIX: Read fresh state instead of using potentially stale selectors

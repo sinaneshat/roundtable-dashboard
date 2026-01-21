@@ -183,8 +183,7 @@ export function createMockResumptionParticipant(
 
 export function createMockParticipants(count: number, threadId = 'thread-123') {
   return Array.from({ length: count }, (_, i) =>
-    createMockResumptionParticipant(i, { threadId }),
-  );
+    createMockResumptionParticipant(i, { threadId }));
 }
 
 // ============================================================================
@@ -443,4 +442,44 @@ export function buildDuringModeratorScenario() {
     thread: { id: 'thread-123', enableWebSearch: false },
     enableWebSearch: false,
   });
+}
+
+// ============================================================================
+// SSR Hydration Scenario Builders
+// ============================================================================
+
+/**
+ * Build store state for SSR hydrated scenario where preSearches come from server.
+ * This simulates the state AFTER useSyncHydrateStore or useScreenInitialization
+ * has called setPreSearches with initialPreSearches from the loader.
+ */
+export function buildSSRHydratedScenario(
+  preSearchStatus: typeof MessageStatuses[keyof typeof MessageStatuses],
+) {
+  const roundNumber = 0;
+  return createMockChatStore({
+    screenMode: ScreenModes.THREAD,
+    waitingToStartStreaming: true,
+    isStreaming: false,
+    isPatchInProgress: false,
+    configChangeRoundNumber: null,
+    isWaitingForChangelog: false,
+    enableWebSearch: true,
+    participants: createMockParticipants(2),
+    messages: [createMockUserMessage(roundNumber)],
+    thread: { id: 'thread-123', enableWebSearch: true },
+    preSearches: [createMockResumptionPreSearch(roundNumber, preSearchStatus)],
+  });
+}
+
+/**
+ * Verify pre-search is hydrated in store for given round number.
+ * Returns the pre-search if found, undefined otherwise.
+ */
+export function assertPreSearchHydrated(
+  store: StoreApi<MockChatStoreState>,
+  roundNumber: number,
+): StoredPreSearch | undefined {
+  const state = store.getState();
+  return state.preSearches.find(ps => ps.roundNumber === roundNumber);
 }
