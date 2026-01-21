@@ -161,6 +161,8 @@ import {
   getCreditBalanceRoute,
   getCreditTransactionsRoute,
 } from './routes/credits/route';
+// PostHog proxy (analytics ad-blocker bypass)
+import { ingestProxyHandler } from './routes/ingest';
 // MCP (Model Context Protocol) routes - Consolidated JSON-RPC + REST endpoints
 import {
   callToolHandler,
@@ -832,6 +834,10 @@ rootApp.get('/debug/cookie-test', (c) => {
     requestCookies: c.req.header('cookie') || 'none',
   });
 });
+
+// PostHog reverse proxy - bypasses ad blockers by routing through our domain
+// No auth required, handles /ingest/* and /ingest/static/*
+rootApp.all('/ingest/*', ingestProxyHandler);
 
 // Better Auth handler with inline CORS
 rootApp.all('/api/auth/*', async (c) => {

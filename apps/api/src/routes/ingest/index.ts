@@ -1,0 +1,1 @@
+export { ingestProxyHandler } from './handler';

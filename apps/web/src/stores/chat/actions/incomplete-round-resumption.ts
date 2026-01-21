@@ -6,7 +6,7 @@
 
 import type { RoundPhase } from '@roundtable/shared';
 import { FinishReasons, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, TextPartStates } from '@roundtable/shared';
-import { use, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
+import { startTransition, use, useCallback, useEffect, useLayoutEffect, useReducer, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { ChatStoreContext, useChatStore } from '@/components/providers/chat-store-provider';
@@ -1123,7 +1123,12 @@ export function useIncompleteRoundResumption(
     // Set up store state for resumption
     actions.setStreamingRoundNumber(currentRoundNumber);
     actions.setNextParticipantToTrigger(effectiveNextParticipant);
-    actions.setCurrentParticipantIndex(effectiveNextParticipant);
+    // ✅ V5 FIX: Use startTransition to prevent cascading re-renders
+    // Participant index changes cause ChatMessageList to recalculate hideActions for all messages
+    // Without transition, this triggers visible flickering during P0→P1 handoff
+    startTransition(() => {
+      actions.setCurrentParticipantIndex(effectiveNextParticipant);
+    });
 
     // Set waiting flag so provider knows to start streaming
     actions.setWaitingToStartStreaming(true);

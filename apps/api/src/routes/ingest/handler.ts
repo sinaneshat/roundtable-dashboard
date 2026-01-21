@@ -1,0 +1,73 @@
+/**
+ * PostHog Reverse Proxy Handler
+ *
+ * Proxies PostHog analytics requests through API to bypass ad blockers.
+ * Routes:
+ * - /ingest/static/* → us-assets.i.posthog.com/static/*
+ * - /ingest/* → us.i.posthog.com/*
+ */
+
+import type { Context } from 'hono';
+
+import type { ApiEnv } from '@/types';
+
+const POSTHOG_HOST = 'us.i.posthog.com';
+const POSTHOG_ASSETS_HOST = 'us-assets.i.posthog.com';
+
+/**
+ * Proxy handler for PostHog ingest requests
+ * Handles both static assets and API requests
+ */
+export async function ingestProxyHandler(c: Context<ApiEnv>): Promise<Response> {
+  const path = c.req.path;
+  const isStatic = path.startsWith('/ingest/static/');
+
+  const targetHost = isStatic ? POSTHOG_ASSETS_HOST : POSTHOG_HOST;
+
+  // Strip /ingest prefix, keep rest of path
+  const targetPath = path.replace(/^\/ingest/, '');
+  const url = new URL(c.req.url);
+  const targetUrl = `https://${targetHost}${targetPath}${url.search}`;
+
+  // Forward headers, set Host to PostHog domain
+  const headers = new Headers();
+  for (const [key, value] of c.req.raw.headers.entries()) {
+    // Skip headers that shouldn't be forwarded
+    if (['host', 'cookie', 'cf-connecting-ip', 'cf-ray', 'cf-visitor', 'x-forwarded-for'].includes(key.toLowerCase())) {
+      continue;
+    }
+    headers.set(key, value);
+  }
+  headers.set('Host', targetHost);
+
+  try {
+    const response = await fetch(targetUrl, {
+      method: c.req.method,
+      headers,
+      body: c.req.method !== 'GET' && c.req.method !== 'HEAD'
+        ? c.req.raw.body
+        : undefined,
+    });
+
+    // Copy response headers, add CORS
+    const responseHeaders = new Headers();
+    for (const [key, value] of response.headers.entries()) {
+      // Skip hop-by-hop headers
+      if (['transfer-encoding', 'connection', 'keep-alive'].includes(key.toLowerCase())) {
+        continue;
+      }
+      responseHeaders.set(key, value);
+    }
+    responseHeaders.set('Access-Control-Allow-Origin', '*');
+    responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+    responseHeaders.set('Access-Control-Allow-Headers', 'Content-Type');
+
+    return new Response(response.body, {
+      status: response.status,
+      headers: responseHeaders,
+    });
+  } catch (error) {
+    console.error('PostHog proxy error:', error);
+    return c.json({ error: 'Proxy request failed' }, 502);
+  }
+}

@@ -20,9 +20,8 @@ type ImportMetaEnv = {
   // Stripe
   readonly VITE_STRIPE_PUBLISHABLE_KEY: string;
 
-  // PostHog
+  // PostHog (uses reverse proxy through API - no host needed)
   readonly VITE_POSTHOG_API_KEY: string;
-  readonly VITE_POSTHOG_HOST: string;
 };
 
 type ImportMeta = {

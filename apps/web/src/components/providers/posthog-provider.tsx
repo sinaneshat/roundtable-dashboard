@@ -2,13 +2,14 @@ import posthog from 'posthog-js';
 import { PostHogProvider as PHProvider } from 'posthog-js/react';
 import type { ReactNode } from 'react';
 
+import { getApiOriginUrl } from '@/lib/config/base-urls';
+
 import { PageViewTracker } from './pageview-tracker';
 import { PostHogIdentifyUser } from './posthog-identify-user';
 
 type PostHogProviderProps = {
   children: ReactNode;
   apiKey?: string;
-  apiHost?: string;
   environment?: string;
 };
 
@@ -18,8 +19,12 @@ let posthogInitialized = false;
 /**
  * Initialize PostHog synchronously at module level.
  * This ensures window.posthog is available immediately for toolbar support.
+ *
+ * Uses reverse proxy through API to bypass ad blockers:
+ * - api_host: routes through our API at /ingest/*
+ * - ui_host: direct PostHog for toolbar/debug features
  */
-function initPostHog(apiKey: string, apiHost: string, environment: string) {
+function initPostHog(apiKey: string, environment: string) {
   // Skip on server
   if (typeof window === 'undefined')
     return null;
@@ -29,11 +34,14 @@ function initPostHog(apiKey: string, apiHost: string, environment: string) {
     return posthog;
 
   // Skip in local environment or if missing config
-  if (environment === 'local' || !apiKey || !apiHost)
+  if (environment === 'local' || !apiKey)
     return null;
 
+  // Use reverse proxy through API to bypass ad blockers
+  const apiHost = `${getApiOriginUrl()}/ingest`;
+
   posthog.init(apiKey, {
-    // Use direct PostHog URL for TanStack Start on Cloudflare
+    // Route through our API reverse proxy to bypass ad blockers
     api_host: apiHost,
     ui_host: 'https://us.posthog.com',
 
@@ -87,18 +95,17 @@ function initPostHog(apiKey: string, apiHost: string, environment: string) {
  *
  * @see https://posthog.com/docs/libraries/react
  *
- * NOTE: Environment variables are passed as props from the root layout.
+ * Uses reverse proxy through API to bypass ad blockers.
  * PostHog is initialized synchronously on first client render to ensure
  * window.posthog is available for toolbar support.
  */
 export default function PostHogProvider({
   children,
   apiKey,
-  apiHost,
   environment,
 }: PostHogProviderProps) {
   // Initialize synchronously on first client render
-  const client = initPostHog(apiKey ?? '', apiHost ?? '', environment ?? 'local');
+  const client = initPostHog(apiKey ?? '', environment ?? 'local');
 
   // Skip provider if no client (local env, missing config, or SSR)
   if (!client) {

@@ -33,7 +33,6 @@ type AppProvidersProps = {
     VITE_WEBAPP_ENV?: string;
     VITE_MAINTENANCE?: string;
     VITE_POSTHOG_API_KEY?: string;
-    VITE_POSTHOG_HOST?: string;
   };
   initialPreferences?: ModelPreferencesState | null;
 };
@@ -56,7 +55,6 @@ export function AppProviders({
     <ServiceWorkerProvider>
       <PostHogProvider
         apiKey={env.VITE_POSTHOG_API_KEY}
-        apiHost={env.VITE_POSTHOG_HOST}
         environment={env.VITE_WEBAPP_ENV}
       >
         <PreferencesStoreProvider initialState={initialPreferences}>
