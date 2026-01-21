@@ -157,9 +157,14 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
 
     const timeoutId = setTimeout(() => {
       const latestState = store.getState();
+      // ✅ RACE FIX: Only clear if truly idle (streamingRoundNumber === null)
+      // During participant transitions, isStreaming briefly goes false but
+      // streamingRoundNumber stays set until completeStreaming() is called.
+      // This prevents clearing nextParticipantToTrigger during the gap.
       if (latestState.nextParticipantToTrigger !== null
         && !latestState.waitingToStartStreaming
         && !latestState.isStreaming
+        && latestState.streamingRoundNumber === null
       ) {
         rlog.resume('round-resum', 'cleanup: clearing dangling nextParticipantToTrigger');
         latestState.setNextParticipantToTrigger(null);

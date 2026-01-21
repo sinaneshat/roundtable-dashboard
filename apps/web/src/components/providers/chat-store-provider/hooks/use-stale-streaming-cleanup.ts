@@ -90,6 +90,19 @@ export function useStaleStreamingCleanup({
       if (staleStartTime !== null) {
         const staleDuration = Date.now() - staleStartTime;
         if (staleDuration >= FORCE_CLEANUP_TIMEOUT_MS) {
+          // ✅ RACE FIX: Re-check streaming flags right before force cleanup
+          // During participant transitions, flags may briefly go false.
+          // Also check nextParticipantToTrigger - if set, more streaming is expected.
+          const freshState = store.getState();
+          if (freshState.isStreaming
+            || freshState.isModeratorStreaming
+            || freshState.waitingToStartStreaming
+            || freshState.nextParticipantToTrigger !== null) {
+            rlog.sync('stale-cleanup', `r${streamingRoundNumber} skipping force cleanup - streaming activity detected`);
+            staleStateStartTimeRef.current = Date.now();
+            return;
+          }
+
           rlog.sync('stale-force-cleanup', `r${streamingRoundNumber} forcing cleanup after ${staleDuration}ms - round not complete but streaming stuck`);
           cleanupAttemptedRef.current = streamingRoundNumber;
           staleStateStartTimeRef.current = null;
