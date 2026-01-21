@@ -117,9 +117,11 @@ export function isMessageComplete(message: UIMessage): boolean {
     hasFallbackErrorFlag = message.metadata.hasError === true;
   }
 
-  // Check for text content
+  // Check for text content (including reasoning - V7 FIX for reasoning models like Gemini)
   const hasTextContent = message.parts?.some(
-    p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
+    p => (p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING)
+      && 'text' in p
+      && p.text,
   );
 
   // Check for VALID finishReason (not 'unknown')
@@ -227,8 +229,11 @@ export function getParticipantCompletionStatus(
       hasFallbackFinishReason = isNonEmptyString(rawFinishReason);
     }
 
+    // V7 FIX: Include REASONING parts for reasoning models (e.g., Gemini 3 Flash Preview)
     const hasTextContent = participantMessage.parts?.some(
-      p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
+      p => (p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING)
+        && 'text' in p
+        && p.text,
     );
 
     // Check for VALID finishReason (not 'unknown')

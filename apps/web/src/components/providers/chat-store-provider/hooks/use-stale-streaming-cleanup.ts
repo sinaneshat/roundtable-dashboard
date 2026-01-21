@@ -3,8 +3,9 @@ import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
 import { rlog } from '@/lib/utils/dev-logger';
+import type { ChatParticipant } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
-import { isRoundComplete } from '@/stores/chat';
+import { getParticipantCompletionStatus, isRoundComplete } from '@/stores/chat';
 
 type UseStaleStreamingCleanupParams = {
   store: ChatStoreApi;
@@ -101,6 +102,20 @@ export function useStaleStreamingCleanup({
             || freshState.nextParticipantToTrigger !== null
             || freshState.participantHandoffInProgress) {
             rlog.sync('stale-cleanup', `r${streamingRoundNumber} skipping force cleanup - streaming activity detected (handoff=${freshState.participantHandoffInProgress ? 1 : 0})`);
+            staleStateStartTimeRef.current = Date.now();
+            return;
+          }
+
+          // ✅ V7 FIX: Check if participants are actually complete before force cleanup
+          // This prevents cleanup during the gap between P0 finishing and P1 starting
+          const participantStatus = getParticipantCompletionStatus(
+            freshState.messages,
+            freshState.participants as ChatParticipant[],
+            streamingRoundNumber,
+          );
+
+          if (!participantStatus.allComplete) {
+            rlog.sync('stale-cleanup', `r${streamingRoundNumber} skipping force cleanup - participants incomplete (${participantStatus.completedCount}/${participantStatus.expectedCount})`);
             staleStateStartTimeRef.current = Date.now();
             return;
           }
