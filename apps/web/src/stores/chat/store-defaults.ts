@@ -40,7 +40,7 @@ import type {
  * Type for streaming state reset - all streaming-related flags
  * Extracted from STREAMING_STATE_RESET satisfies clause
  */
-type StreamingStateResetType = Pick<ThreadState & UIState & DataState, 'isStreaming' | 'currentParticipantIndex'> & Pick<DataState, 'streamingRoundNumber' | 'currentRoundNumber'> & Pick<UIState, 'waitingToStartStreaming'>;
+type StreamingStateResetType = Pick<ThreadState & UIState & DataState, 'isStreaming' | 'currentParticipantIndex'> & Pick<DataState, 'streamingRoundNumber' | 'currentRoundNumber'> & Pick<UIState, 'waitingToStartStreaming'> & Pick<FlagsState, 'participantHandoffInProgress'>;
 
 /**
  * Type for pending message state reset - all pending message-related flags
@@ -165,6 +165,8 @@ export const FLAGS_DEFAULTS = {
   hasPendingConfigChanges: false,
   /** ✅ PATCH BLOCKING: Prevents streaming from starting during PATCH */
   isPatchInProgress: false,
+  /** ✅ HANDOFF FIX: True during P0→P1 participant transition to prevent 10s cleanup */
+  participantHandoffInProgress: false,
 } satisfies FlagsState;
 
 // ============================================================================
@@ -293,6 +295,8 @@ export const STREAMING_STATE_RESET = {
   currentRoundNumber: null,
   waitingToStartStreaming: false,
   currentParticipantIndex: 0,
+  /** ✅ HANDOFF FIX: Clear handoff flag when streaming completes */
+  participantHandoffInProgress: false,
 } satisfies StreamingStateResetType;
 
 /**
@@ -398,6 +402,7 @@ export const COMPLETE_RESET_STATE = {
   isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
   hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
   isPatchInProgress: FLAGS_DEFAULTS.isPatchInProgress,
+  participantHandoffInProgress: FLAGS_DEFAULTS.participantHandoffInProgress,
   // Data state
   regeneratingRoundNumber: DATA_DEFAULTS.regeneratingRoundNumber,
   pendingMessage: DATA_DEFAULTS.pendingMessage,
@@ -462,6 +467,7 @@ export const THREAD_RESET_STATE = {
   isWaitingForChangelog: FLAGS_DEFAULTS.isWaitingForChangelog,
   hasPendingConfigChanges: FLAGS_DEFAULTS.hasPendingConfigChanges,
   isPatchInProgress: FLAGS_DEFAULTS.isPatchInProgress,
+  participantHandoffInProgress: FLAGS_DEFAULTS.participantHandoffInProgress,
   // Data state
   regeneratingRoundNumber: DATA_DEFAULTS.regeneratingRoundNumber,
   pendingMessage: DATA_DEFAULTS.pendingMessage,

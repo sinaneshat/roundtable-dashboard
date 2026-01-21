@@ -358,6 +358,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     setIsStreaming: (value) => {
       store.getState().setIsStreaming(value);
     },
+    // ✅ HANDOFF FIX: Pass setParticipantHandoffInProgress to clear flag when participant starts
+    // This flag is set in use-streaming-trigger.ts before clearing nextParticipantToTrigger
+    setParticipantHandoffInProgress: (value) => {
+      store.getState().setParticipantHandoffInProgress(value);
+    },
   });
 
   const sendMessageRef = useRef(chat.sendMessage);

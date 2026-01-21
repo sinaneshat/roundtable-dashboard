@@ -572,6 +572,8 @@ const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
     set({ hasPendingConfigChanges: value }, false, 'flags/setHasPendingConfigChanges'),
   setIsPatchInProgress: (value: boolean) =>
     set({ isPatchInProgress: value }, false, 'flags/setIsPatchInProgress'),
+  setParticipantHandoffInProgress: (value: boolean) =>
+    set({ participantHandoffInProgress: value }, false, 'flags/setParticipantHandoffInProgress'),
 });
 
 const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({

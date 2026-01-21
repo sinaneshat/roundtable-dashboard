@@ -230,6 +230,8 @@ export type SetIsWaitingForChangelog = (value: boolean) => void;
 export type SetHasPendingConfigChanges = (value: boolean) => void;
 /** ✅ PATCH BLOCKING: Set while PATCH is in progress to prevent streaming race condition */
 export type SetIsPatchInProgress = (value: boolean) => void;
+/** ✅ HANDOFF FIX: Set during P0→P1 participant transition to prevent 10s cleanup */
+export type SetParticipantHandoffInProgress = (value: boolean) => void;
 
 // ============================================================================
 // DATA ACTIONS (Transient state)

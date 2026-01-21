@@ -160,6 +160,11 @@ type UseMultiParticipantChatOptions = {
    * Ensures cleanup sees streaming=true immediately without waiting for async state sync
    */
   setIsStreaming?: (value: boolean) => void;
+  /**
+   * ✅ HANDOFF FIX: Callback to clear handoff flag when participant actually starts streaming
+   * Called after setIsStreaming(true) to indicate the transition is complete
+   */
+  setParticipantHandoffInProgress?: (value: boolean) => void;
 };
 
 /**
@@ -319,6 +324,8 @@ export function useMultiParticipantChat(
     setPendingAttachmentIds,
     // ✅ HANDOFF FIX: Callback to set store.isStreaming directly
     setIsStreaming,
+    // ✅ HANDOFF FIX: Callback to clear handoff flag when participant starts streaming
+    setParticipantHandoffInProgress,
   } = options;
 
   // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
@@ -355,6 +362,8 @@ export function useMultiParticipantChat(
     setPendingAttachmentIds,
     // ✅ HANDOFF FIX: Set store.isStreaming directly for immediate effect
     setIsStreaming,
+    // ✅ HANDOFF FIX: Clear handoff flag when participant starts streaming
+    setParticipantHandoffInProgress,
   });
 
   // Participant error tracking - simple Set-based tracking to prevent duplicate responses
@@ -750,6 +759,13 @@ export function useMultiParticipantChat(
     // Calling setIsStreaming ensures store.isStreaming=true IMMEDIATELY so cleanup sees it
     if (callbackRefs.setIsStreaming.current) {
       callbackRefs.setIsStreaming.current(true);
+    }
+
+    // ✅ HANDOFF FIX: Clear handoff flag now that participant is actually streaming
+    // This flag was set in use-streaming-trigger.ts before clearing nextParticipantToTrigger
+    // Now that P1 (or next participant) is streaming, the handoff is complete
+    if (callbackRefs.setParticipantHandoffInProgress.current) {
+      callbackRefs.setParticipantHandoffInProgress.current(false);
     }
 
     // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
