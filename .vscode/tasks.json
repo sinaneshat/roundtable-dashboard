@@ -4,7 +4,7 @@
     {
       "label": "Startup: 0 - Branch Gate",
       "type": "shell",
-      "command": "BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ \"$BRANCH\" != \"soheil-design\" ]; then echo \"Not on soheil-design branch (current: $BRANCH) - all startup tasks disabled\"; exit 1; fi && echo 'On soheil-design branch - proceeding with startup' && rm -f /tmp/roundtable-merged.flag",
+      "command": "BRANCH=$(git rev-parse --abbrev-ref HEAD 2>/dev/null); if [ \"$BRANCH\" != \"soheil-design\" ]; then echo \"Not on soheil-design branch (current: $BRANCH) - all startup tasks disabled\"; exit 1; fi && echo 'On soheil-design branch - proceeding with startup'",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -24,7 +24,7 @@
     {
       "label": "Startup: 1 - Sync Preview Branch",
       "type": "shell",
-      "command": "echo 'Step 1/5: Checking preview branch...' && git fetch origin preview 2>/dev/null && PREVIEW_COMMITS=$(git log soheil-design..origin/preview --oneline 2>/dev/null | head -20) && if [ -z \"$PREVIEW_COMMITS\" ]; then echo 'soheil-design is up to date with preview - no merge needed'; else echo 'Preview has new commits:' && echo \"$PREVIEW_COMMITS\" && git merge origin/preview --no-edit 2>&1; if [ $? -eq 0 ]; then echo 'Merged preview into soheil-design' && touch /tmp/roundtable-merged.flag; else echo 'WARNING: MERGE CONFLICT! Resolve manually.' && exit 1; fi; fi",
+      "command": "echo 'Step 1/5: Checking preview branch...' && git fetch origin preview 2>/dev/null && PREVIEW_COMMITS=$(git log soheil-design..origin/preview --oneline 2>/dev/null | head -20) && if [ -z \"$PREVIEW_COMMITS\" ]; then echo 'soheil-design is up to date with preview'; else echo 'Preview has new commits:' && echo \"$PREVIEW_COMMITS\" && git merge origin/preview --no-edit 2>&1; if [ $? -ne 0 ]; then echo 'WARNING: MERGE CONFLICT! Resolve manually.' && exit 1; fi && echo 'Merged preview into soheil-design'; fi",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -43,7 +43,7 @@
     {
       "label": "Startup: 2 - Clean and Kill Processes",
       "type": "shell",
-      "command": "echo 'Step 2/5: Killing processes and cleaning cache...' && lsof -ti:3000 | xargs kill -9 2>/dev/null || true && lsof -ti:8787 | xargs kill -9 2>/dev/null || true && pnpm clean && rm -rf .next .swc .turbo out && echo 'Cache cleaned and processes killed'",
+      "command": "echo 'Step 2/5: Killing processes and cleaning cache...' && lsof -ti:5173 | xargs kill -9 2>/dev/null || true && lsof -ti:8787 | xargs kill -9 2>/dev/null || true && pnpm clean && rm -rf .turbo && echo 'Cache cleaned and processes killed'",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -60,9 +60,9 @@
       }
     },
     {
-      "label": "Startup: 3 - Install and Conditional DB Reset",
+      "label": "Startup: 3 - Install and Migrate DB",
       "type": "shell",
-      "command": "echo 'Step 3/5: Installing dependencies...' && pnpm i && if [ -f /tmp/roundtable-merged.flag ]; then echo 'Merge detected - nuking and reseeding local database...' && pnpm local:nuclear-reset && rm -f /tmp/roundtable-merged.flag && echo 'DB reset complete'; else echo 'No merge - skipping DB reset'; fi",
+      "command": "echo 'Step 3/5: Installing dependencies and applying migrations...' && pnpm i && pnpm db:migrate:local && echo 'Dependencies installed and migrations applied'",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -99,11 +99,11 @@
         },
         "background": {
           "activeOnStart": true,
-          "beginsPattern": "Starting dev server",
-          "endsPattern": "Ready|Local:"
+          "beginsPattern": "dev",
+          "endsPattern": "Local:|ready in|VITE"
         }
       },
-      "dependsOn": ["Startup: 3 - Install and Conditional DB Reset"],
+      "dependsOn": ["Startup: 3 - Install and Migrate DB"],
       "runOptions": {
         "runOn": "folderOpen"
       }
@@ -111,7 +111,7 @@
     {
       "label": "Startup: 5 - Claude Agent",
       "type": "shell",
-      "command": "echo 'Step 5/5: Starting Claude agent...' && sleep 3 && claude --dangerously-skip-permissions",
+      "command": "echo 'Step 5/5: Starting Claude agent...' && sleep 5 && claude --dangerously-skip-permissions",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -124,7 +124,7 @@
       },
       "isBackground": true,
       "problemMatcher": [],
-      "dependsOn": ["Startup: 3 - Install and Conditional DB Reset"],
+      "dependsOn": ["Startup: 3 - Install and Migrate DB"],
       "runOptions": {
         "runOn": "folderOpen"
       }

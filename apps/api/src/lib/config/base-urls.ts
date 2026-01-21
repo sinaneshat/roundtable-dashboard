@@ -1,8 +1,8 @@
 /**
  * Centralized Base URL Configuration (API Server)
  *
- * Single source of truth for all URL configuration in the Hono API.
- * Uses WEBAPP_ENV from Cloudflare Workers runtime or process.env.
+ * Uses shared config from @roundtable/shared as single source of truth.
+ * Adds API-specific environment detection for Cloudflare Workers runtime.
  *
  * Priority for environment detection:
  * 1. cloudflare:workers env.WEBAPP_ENV (Cloudflare Workers runtime)
@@ -17,41 +17,55 @@
 
 import type { WebAppEnv as WebappEnv } from '@roundtable/shared';
 import {
+  BASE_URL_CONFIG,
   DEFAULT_WEBAPP_ENV,
+  FALLBACK_URLS,
+  getAllowedOrigins as sharedGetAllowedOrigins,
+  getApiOrigin as sharedGetApiOrigin,
+  getApiUrl as sharedGetApiUrl,
+  getAppUrl as sharedGetAppUrl,
+  getCookieConfig as sharedGetCookieConfig,
+  getUrlConfig as sharedGetUrlConfig,
   isWebAppEnv as isWebappEnv,
+  LOCALHOST_ORIGINS,
   NodeEnvs,
   WEBAPP_ENVS,
   WebAppEnvs,
   WebAppEnvSchema as WebappEnvSchema,
-} from '@roundtable/shared';
+} from '@roundtable/shared'; // eslint-disable-line perfectionist/sort-named-imports -- aliased imports
 import { env as workersEnv } from 'cloudflare:workers';
 import type { Context } from 'hono';
 
 import type { ApiEnv } from '@/types';
 
 // Re-export for backward compatibility
-export { DEFAULT_WEBAPP_ENV, isWebappEnv, WEBAPP_ENVS, type WebappEnv, WebAppEnvs, WebappEnvSchema };
+export {
+  BASE_URL_CONFIG,
+  DEFAULT_WEBAPP_ENV,
+  FALLBACK_URLS,
+  isWebappEnv,
+  LOCALHOST_ORIGINS,
+  WEBAPP_ENVS,
+  type WebappEnv,
+  WebAppEnvs,
+  WebappEnvSchema,
+};
 
 /**
- * Static URL configuration for each environment
- *
- * ARCHITECTURE (TanStack Start + Separate API):
- * - Local: Web on 5173 (Vite), API on 8787 (Wrangler)
- * - Preview: Web on web-preview.roundtable.now, API on api-preview.roundtable.now
- * - Prod: Web on roundtable.now, API on api.roundtable.now
+ * Legacy compatibility: BASE_URLS in old format
  */
 export const BASE_URLS: Record<WebappEnv, { app: string; api: string }> = {
   [WebAppEnvs.LOCAL]: {
-    app: 'http://localhost:5173',
-    api: 'http://localhost:8787/api/v1',
+    app: BASE_URL_CONFIG[WebAppEnvs.LOCAL].app,
+    api: BASE_URL_CONFIG[WebAppEnvs.LOCAL].api,
   },
   [WebAppEnvs.PREVIEW]: {
-    app: 'https://web-preview.roundtable.now',
-    api: 'https://api-preview.roundtable.now/api/v1',
+    app: BASE_URL_CONFIG[WebAppEnvs.PREVIEW].app,
+    api: BASE_URL_CONFIG[WebAppEnvs.PREVIEW].api,
   },
   [WebAppEnvs.PROD]: {
-    app: 'https://roundtable.now',
-    api: 'https://api.roundtable.now/api/v1',
+    app: BASE_URL_CONFIG[WebAppEnvs.PROD].app,
+    api: BASE_URL_CONFIG[WebAppEnvs.PROD].api,
   },
 };
 
@@ -74,7 +88,12 @@ export function getWebappEnvFromContext(c: Context<ApiEnv>): WebappEnv {
 
   // 3. Fall back to NODE_ENV detection
   const nodeEnv = c.env?.NODE_ENV || process.env.NODE_ENV;
-  return nodeEnv === 'development' ? WebAppEnvs.LOCAL : WebAppEnvs.PROD;
+  if (nodeEnv === 'development') {
+    return WebAppEnvs.LOCAL;
+  }
+
+  // 4. Default to production for safety
+  return WebAppEnvs.PROD;
 }
 
 /**
@@ -88,40 +107,20 @@ export function isDevelopmentFromContext(c: Context<ApiEnv>): boolean {
 
 /**
  * Get allowed origins for CORS/CSRF based on environment (for Hono middleware)
- *
- * TanStack Start architecture: Web on 5173, API on 8787
+ * Uses shared config as single source of truth
  */
 export function getAllowedOriginsFromContext(c: Context<ApiEnv>): string[] {
   const env = getWebappEnvFromContext(c);
   const isDev = isDevelopmentFromContext(c);
-  const origins: string[] = [];
+  return sharedGetAllowedOrigins(env, isDev);
+}
 
-  // Add localhost in development (Vite ports 5173-5179)
-  if (isDev) {
-    origins.push(
-      'http://localhost:5173',
-      'http://localhost:5174',
-      'http://localhost:5175',
-      'http://localhost:5176',
-      'http://localhost:5177',
-      'http://127.0.0.1:5173',
-      'http://127.0.0.1:5174',
-      'http://127.0.0.1:5175',
-      'http://127.0.0.1:5176',
-      'http://127.0.0.1:5177',
-    );
-  }
-
-  // Add environment-specific URL
-  const envUrls = BASE_URLS[env];
-  if (envUrls) {
-    const envUrl = envUrls.app;
-    if (!envUrl.includes('localhost') && !envUrl.includes('127.0.0.1')) {
-      origins.push(envUrl);
-    }
-  }
-
-  return origins;
+/**
+ * Get cookie configuration from context
+ */
+export function getCookieConfigFromContext(c: Context<ApiEnv>): { domain: string | undefined; secure: boolean } {
+  const env = getWebappEnvFromContext(c);
+  return sharedGetCookieConfig(env);
 }
 
 /**
@@ -131,13 +130,14 @@ export function getAllowedOriginsFromContext(c: Context<ApiEnv>): string[] {
  * 1. cloudflare:workers env.WEBAPP_ENV (Cloudflare Workers runtime)
  * 2. process.env.WEBAPP_ENV (local dev/.env files)
  * 3. NODE_ENV detection (development = local, production = prod)
+ * 4. Default to production for safety
  */
 export async function getWebappEnvAsync(): Promise<WebappEnv> {
   // 1. Try Cloudflare Workers runtime env
   try {
-    const { env: workersEnv } = await import('cloudflare:workers');
-    if (workersEnv.WEBAPP_ENV && isWebappEnv(workersEnv.WEBAPP_ENV)) {
-      return workersEnv.WEBAPP_ENV;
+    const { env: workersEnvAsync } = await import('cloudflare:workers');
+    if (workersEnvAsync.WEBAPP_ENV && isWebappEnv(workersEnvAsync.WEBAPP_ENV)) {
+      return workersEnvAsync.WEBAPP_ENV;
     }
   } catch {
     // cloudflare:workers not available (local dev without wrangler)
@@ -150,9 +150,12 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
   }
 
   // 3. Fall back to NODE_ENV detection
-  return process.env.NODE_ENV === NodeEnvs.DEVELOPMENT
-    ? WebAppEnvs.LOCAL
-    : WebAppEnvs.PROD;
+  if (process.env.NODE_ENV === NodeEnvs.DEVELOPMENT) {
+    return WebAppEnvs.LOCAL;
+  }
+
+  // 4. Default to production for safety
+  return WebAppEnvs.PROD;
 }
 
 /**
@@ -165,6 +168,7 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
  * 1. cloudflare:workers env.WEBAPP_ENV (Cloudflare Workers runtime)
  * 2. process.env.WEBAPP_ENV (local dev/.env files)
  * 3. NODE_ENV detection (development = local, production = prod)
+ * 4. Default to production for safety
  */
 export function getWebappEnv(): WebappEnv {
   // 1. Try Cloudflare Workers env (production/preview)
@@ -184,28 +188,29 @@ export function getWebappEnv(): WebappEnv {
   }
 
   // 3. Fall back to NODE_ENV detection
-  return process.env.NODE_ENV === NodeEnvs.DEVELOPMENT
-    ? WebAppEnvs.LOCAL
-    : WebAppEnvs.PROD;
+  if (process.env.NODE_ENV === NodeEnvs.DEVELOPMENT) {
+    return WebAppEnvs.LOCAL;
+  }
+
+  // 4. Default to production for safety
+  return WebAppEnvs.PROD;
 }
 
 /**
  * Get base URLs for current environment
+ * Uses shared config with fallback to production
  */
 export function getBaseUrls() {
   const env = getWebappEnv();
-  return BASE_URLS[env];
+  return sharedGetUrlConfig(env);
 }
 
 /**
  * Get API base URL for current environment
  */
 export function getApiBaseUrl(): string {
-  const urls = getBaseUrls();
-  if (!urls) {
-    throw new Error('BASE_URLS not configured for current environment');
-  }
-  return urls.api;
+  const env = getWebappEnv();
+  return sharedGetApiUrl(env);
 }
 
 /**
@@ -214,29 +219,16 @@ export function getApiBaseUrl(): string {
  * (e.g., Better Auth which mounts at /api/auth, not /api/v1/auth)
  */
 export function getApiServerOrigin(): string {
-  const urls = getBaseUrls();
-  if (!urls) {
-    throw new Error('BASE_URLS not configured for current environment');
-  }
-  const apiUrl = urls.api;
-  try {
-    const url = new URL(apiUrl);
-    return url.origin;
-  } catch {
-    // Fallback: strip /api/v1 suffix
-    return apiUrl.replace(/\/api\/v1$/, '');
-  }
+  const env = getWebappEnv();
+  return sharedGetApiOrigin(env);
 }
 
 /**
  * Get app base URL for current environment
  */
 export function getAppBaseUrl(): string {
-  const urls = getBaseUrls();
-  if (!urls) {
-    throw new Error('BASE_URLS not configured for current environment');
-  }
-  return urls.app;
+  const env = getWebappEnv();
+  return sharedGetAppUrl(env);
 }
 
 /**
@@ -250,18 +242,10 @@ export function getProductionApiUrl(): string {
 
   if (currentEnv === WebAppEnvs.LOCAL && process.env.NODE_ENV === NodeEnvs.PRODUCTION) {
     // Building for production but env is local - use preview API
-    const previewUrls = BASE_URLS[WebAppEnvs.PREVIEW];
-    if (!previewUrls) {
-      throw new Error('Preview BASE_URLS not configured');
-    }
-    return previewUrls.api;
+    return sharedGetApiUrl(WebAppEnvs.PREVIEW);
   }
 
-  const urls = BASE_URLS[currentEnv];
-  if (!urls) {
-    throw new Error(`BASE_URLS not configured for environment: ${currentEnv}`);
-  }
-  return urls.api;
+  return sharedGetApiUrl(currentEnv);
 }
 
 /**
@@ -270,9 +254,5 @@ export function getProductionApiUrl(): string {
  */
 export async function getApiUrlAsync(): Promise<string> {
   const currentEnv = await getWebappEnvAsync();
-  const urls = BASE_URLS[currentEnv];
-  if (!urls) {
-    throw new Error(`BASE_URLS not configured for environment: ${currentEnv}`);
-  }
-  return urls.api;
+  return sharedGetApiUrl(currentEnv);
 }
