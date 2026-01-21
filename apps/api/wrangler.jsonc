@@ -176,7 +176,7 @@
       }
     },
     "production": {
-      "name": "roundtable-api-production",
+      "name": "roundtable-api-prod",
       "upload_source_maps": false,
       "placement": { "mode": "smart" },
       "observability": { "enabled": true, "head_sampling_rate": 0.1 },
@@ -216,7 +216,7 @@
       "ai": { "binding": "AI", "remote": true },
       "durable_objects": {
         "bindings": [
-          { "name": "UPLOAD_CLEANUP_SCHEDULER", "class_name": "UploadCleanupScheduler", "script_name": "roundtable-api-production" }
+          { "name": "UPLOAD_CLEANUP_SCHEDULER", "class_name": "UploadCleanupScheduler", "script_name": "roundtable-api-prod" }
         ]
       },
       "vars": {

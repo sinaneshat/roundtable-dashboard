@@ -30,15 +30,18 @@ vi.mock('@/hooks/queries', () => ({
 vi.mock('@/hooks/utils', () => ({
   useIsMounted: () => true,
   useAutoResizeTextarea: () => ({ handleInput: () => {} }),
-  useCreditEstimation: () => ({ canAfford: true, estimatedCredits: 0 }),
-  useDragDrop: () => ({ isDragActive: false, dragBindings: {} }),
+  useCreditEstimation: () => ({ canAfford: true, estimatedCredits: 0, isLoading: false }),
+  useDragDrop: () => ({ isDragging: false, dragHandlers: {} }),
   useFreeTrialState: () => ({ isFreeUser: false, hasUsedTrial: false }),
+  useHydrationInputCapture: () => {},
   useSpeechRecognition: () => ({
-    isRecording: false,
-    startRecording: () => {},
-    stopRecording: () => {},
-    audioLevel: 0,
-    error: null,
+    isListening: false,
+    isSupported: false,
+    toggle: () => {},
+    reset: () => {},
+    audioLevels: [],
+    finalTranscript: '',
+    interimTranscript: '',
   }),
 }));
 
