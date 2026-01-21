@@ -52,17 +52,18 @@ export default function PostHogProvider({
     import('posthog-js').then((mod) => {
       const posthog = mod.default;
 
-      // Expose to window for PostHog toolbar support
-      // Must be set before init() so toolbar can find it
-      if (typeof window !== 'undefined') {
-        // eslint-disable-next-line ts/no-explicit-any
-        (window as any).posthog = posthog;
-      }
-
       posthog.init(apiKey, {
         // Use direct PostHog URL for TanStack Start on Cloudflare
         api_host: apiHost,
         ui_host: 'https://us.posthog.com',
+
+        // Expose to window AFTER init completes for toolbar support
+        loaded: (ph) => {
+          if (typeof window !== 'undefined') {
+            // eslint-disable-next-line ts/no-explicit-any
+            (window as any).posthog = ph;
+          }
+        },
 
         // Pageview Tracking
         capture_pageview: 'history_change',
@@ -93,8 +94,8 @@ export default function PostHogProvider({
         // Scroll Tracking - TanStack Start uses #root by default
         scroll_root_selector: '#root',
 
-        // Debug Mode - disabled in all environments to prevent console noise
-        debug: false,
+        // Debug Mode - enabled in non-prod for troubleshooting
+        debug: environment !== 'prod',
       });
       setPosthogClient(posthog);
     });

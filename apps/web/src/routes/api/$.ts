@@ -19,23 +19,51 @@ import { BASE_URLS, getWebappEnv } from '@/lib/config/base-urls';
 
 /**
  * Get the backend API server URL (without /api path - we forward the full path)
+ * Uses request hostname as fallback for robust production deployment
  */
-function getBackendOrigin(): string {
-  const env = getWebappEnv();
-  const apiUrl = BASE_URLS[env].api;
+function getBackendOrigin(requestHost?: string): string {
+  try {
+    const env = getWebappEnv();
+    const envConfig = BASE_URLS[env];
 
-  // Remove /api/v1 suffix to get just the origin
-  return apiUrl.replace('/api/v1', '');
+    if (envConfig?.api) {
+      // Remove /api/v1 suffix to get just the origin
+      return envConfig.api.replace('/api/v1', '');
+    }
+  } catch {
+    // Environment detection failed, use hostname-based fallback
+  }
+
+  // Fallback: derive API URL from request hostname
+  // roundtable.now -> api.roundtable.now
+  // web-preview.roundtable.now -> api-preview.roundtable.now
+  if (requestHost) {
+    if (requestHost === 'roundtable.now') {
+      return 'https://api.roundtable.now';
+    }
+    if (requestHost.includes('preview')) {
+      return 'https://api-preview.roundtable.now';
+    }
+    if (requestHost === 'localhost' || requestHost.startsWith('localhost:')) {
+      return 'http://localhost:8787';
+    }
+  }
+
+  // Ultimate fallback for production
+  return 'https://api.roundtable.now';
 }
 
 /**
  * Forward request to backend and return response
  */
 async function proxyRequest(request: Request, path: string): Promise<Response> {
-  const backendOrigin = getBackendOrigin();
+  // Extract host from request for fallback detection
+  const requestUrl = new URL(request.url);
+  const requestHost = requestUrl.host;
+
+  const backendOrigin = getBackendOrigin(requestHost);
   // Preserve query string from original request
-  const url = new URL(request.url);
-  const queryString = url.search; // Includes the '?' if present
+  const queryString = requestUrl.search; // Includes the '?' if present
   const targetUrl = `${backendOrigin}/api/${path}${queryString}`;
 
   // Clone headers, removing host (will be set by fetch)

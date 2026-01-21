@@ -18,6 +18,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getCachedSession, setCachedSession } from '@/lib/auth/session-cache';
 import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { TurnstileProvider } from '@/lib/turnstile';
 import type { RouterContext } from '@/router';
 import { getSession } from '@/server/auth';
 
@@ -132,7 +133,9 @@ function RootDocument({ children }: { children: ReactNode }) {
         <HeadContent />
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
-        {children}
+        <TurnstileProvider>
+          {children}
+        </TurnstileProvider>
         <StructuredData type="WebApplication" />
         <Scripts />
       </body>
