@@ -96,6 +96,8 @@ export function useIncompleteRoundResumption(
     configChangeRoundNumber,
     // ✅ SCOPE VERSIONING: Track version for stale effect detection
     resumptionScopeVersion,
+    // ✅ RACE CONDITION FIX: Track which thread prefill state was set for
+    prefilledForThreadId,
   } = useChatStore(useShallow(s => ({
     messages: s.messages,
     participants: s.participants,
@@ -119,6 +121,8 @@ export function useIncompleteRoundResumption(
     configChangeRoundNumber: s.configChangeRoundNumber,
     // ✅ SCOPE VERSIONING: Track version for stale effect detection
     resumptionScopeVersion: s.resumptionScopeVersion,
+    // ✅ RACE CONDITION FIX: Track which thread prefill state was set for
+    prefilledForThreadId: s.prefilledForThreadId,
   })));
 
   // Actions - batched with useShallow for stable reference
@@ -913,6 +917,17 @@ export function useIncompleteRoundResumption(
       return;
     }
 
+    // ✅ RACE CONDITION FIX: Validate prefill thread ID before consuming
+    // If prefill state exists but is for a different thread, skip it
+    // This prevents consuming stale prefill state after rapid navigation between threads
+    if (streamResumptionPrefilled && prefilledForThreadId) {
+      const currentThreadId = thread?.id;
+      if (currentThreadId && prefilledForThreadId !== currentThreadId) {
+        rlog.resume('skip-prefill', `Prefill for ${prefilledForThreadId.slice(-8)} != current ${currentThreadId.slice(-8)}`);
+        return;
+      }
+    }
+
     // Skip if not enabled or already streaming
     if (!enabled || isStreaming || waitingToStartStreaming) {
       return;
@@ -1144,6 +1159,8 @@ export function useIncompleteRoundResumption(
     isWaitingForChangelog,
     // ✅ SCOPE VERSIONING: Include scope version for stale effect detection
     resumptionScopeVersion,
+    // ✅ RACE CONDITION FIX: Include prefill thread ID for cross-thread validation
+    prefilledForThreadId,
     actions,
     // ✅ FIX: Include store for imperative access to current phase
     store,

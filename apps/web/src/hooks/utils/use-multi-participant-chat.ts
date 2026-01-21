@@ -394,11 +394,25 @@ export function useMultiParticipantChat(
   // and preventing the moderator from being triggered.
   const stoppedStaleStreamRef = useRef<boolean>(false);
 
+  // ✅ RACE CONDITION FIX: Abort flag for pending microtasks during navigation
+  // When user navigates between threads, pending queueMicrotask callbacks may execute
+  // with stale AI SDK Chat instances, causing "Cannot read properties of undefined (reading 'state')"
+  // This ref is set to true on navigation and reset after cleanup, allowing microtasks to abort safely
+  const abortMicrotaskRef = useRef<boolean>(false);
+  // Track the abort reset timeout for cleanup
+  const abortResetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
   // ✅ CRITICAL FIX: Track expected user message ID for backend lookup
   // AI SDK's sendMessage creates messages with its own nanoid-style IDs, but user messages
   // are pre-persisted via PATCH/POST with backend ULIDs. This ref allows us to pass the
   // correct ID to the streaming endpoint so backend can find the pre-persisted message.
   const expectedUserMessageIdRef = useRef<string | null>(null);
+
+  // ✅ RACE CONDITION FIX V2: Track AI SDK status in ref for microtask checks
+  // Microtasks capture closure values at schedule time, so checking `status` directly
+  // may use a stale value. This ref is synced in useLayoutEffect and reads current status.
+  // Initialized to 'ready' but immediately synced after useChat hook returns.
+  const statusRef = useRef<string>(AiSdkStatuses.READY);
 
   // Refs to hold values needed for triggering (to avoid closure issues in callbacks)
   const messagesRef = useRef<UIMessage[]>([]);
@@ -1639,7 +1653,9 @@ export function useMultiParticipantChat(
     messagesRef.current = messages;
     aiSendMessageRef.current = aiSendMessage;
     participantsRef.current = participants;
-  }, [messages, aiSendMessage, participants]);
+    // ✅ RACE CONDITION FIX V2: Sync status to ref for microtask checks
+    statusRef.current = status;
+  }, [messages, aiSendMessage, participants, status]);
 
   /**
    * ✅ UNMOUNT CLEANUP: Set isMountedRef to false when component unmounts
@@ -1702,13 +1718,25 @@ export function useMultiParticipantChat(
     const currentId = threadId;
 
     const wasValidThread = prevId && prevId.trim() !== '';
-    const isNowEmpty = !currentId || currentId.trim() === '';
-    const isNowDifferentThread = wasValidThread && currentId && currentId.trim() !== '' && prevId !== currentId;
+    const isNowValidThread = currentId && currentId.trim() !== '';
+    const isNowEmpty = !isNowValidThread;
+    const isNowDifferentThread = wasValidThread && isNowValidThread && prevId !== currentId;
+    // ✅ RACE CONDITION FIX V2: Also reset when entering thread from overview
+    // If user was on overview (empty threadId) and navigates to a thread,
+    // we need to reset refs to clear any stale state (e.g., isTriggeringRef=true from previous thread)
+    const isEnteringFromOverview = !wasValidThread && isNowValidThread;
 
     // Reset all refs when:
     // 1. Transitioning from valid thread to empty (overview)
     // 2. Transitioning between different threads
-    if ((wasValidThread && isNowEmpty) || isNowDifferentThread) {
+    // 3. Transitioning from overview to a valid thread (entering from overview)
+    if ((wasValidThread && isNowEmpty) || isNowDifferentThread || isEnteringFromOverview) {
+      // ✅ RACE CONDITION FIX: Signal pending microtasks to abort FIRST
+      // Any queueMicrotask callbacks from startRound/continueFromParticipant that are
+      // pending execution will check this flag and abort gracefully instead of
+      // executing against a corrupted/stale AI SDK Chat instance
+      abortMicrotaskRef.current = true;
+
       // Reset participant tracking refs
       respondedParticipantsRef.current = new Set();
       regenerateRoundNumberRef.current = null;
@@ -1757,9 +1785,29 @@ export function useMultiParticipantChat(
       setCurrentParticipantIndex(0);
       // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
       setIsExplicitlyStreaming(false);
+
+      // ✅ RACE CONDITION FIX: Reset abort flag after cleanup completes
+      // Use setTimeout to ensure this runs AFTER any pending microtasks have had a chance to check the flag
+      // This prevents the flag from being reset before microtasks can observe it
+      // Clear any existing timeout before setting a new one
+      if (abortResetTimeoutRef.current) {
+        clearTimeout(abortResetTimeoutRef.current);
+      }
+      abortResetTimeoutRef.current = setTimeout(() => {
+        abortMicrotaskRef.current = false;
+        abortResetTimeoutRef.current = null;
+      }, 0);
     }
 
     prevThreadIdRef.current = currentId;
+
+    // Cleanup timeout on unmount
+    return () => {
+      if (abortResetTimeoutRef.current) {
+        clearTimeout(abortResetTimeoutRef.current);
+        abortResetTimeoutRef.current = null;
+      }
+    };
   }, [threadId, setMessages, setCurrentRound, setCurrentParticipantIndex, setIsExplicitlyStreaming]);
 
   /**
@@ -1967,13 +2015,82 @@ export function useMultiParticipantChat(
     //
     // ✅ CRITICAL: isTriggeringRef stays TRUE until async work completes
     // This prevents other functions (continueFromParticipant, etc.) from calling aiSendMessage concurrently
+    //
+    // ✅ RACE CONDITION FIX: Capture threadId at schedule time for validation in microtask
+    // Navigation can change threadId between schedule and execution, corrupting AI SDK state
+    const scheduledThreadId = effectiveThreadId;
     queueMicrotask(async () => {
       try {
+        // ✅ RACE CONDITION FIX V2: Check if component unmounted during microtask delay
+        // AI SDK's internal state may be cleared on unmount, causing "Cannot read properties of undefined"
+        if (!isMountedRef.current) {
+          rlog.resume('abort-guard', `startRound ABORTED: component unmounted`);
+          isTriggeringRef.current = false;
+          isStreamingRef.current = false;
+          return;
+        }
+
+        // ✅ RACE CONDITION GUARD: Verify thread hasn't changed since scheduling
+        // If navigation occurred, the AI SDK Chat instance may be invalid or for different thread
+        const currentThreadId = callbackRefs.threadId.current;
+        if (currentThreadId !== scheduledThreadId) {
+          rlog.resume('abort-guard', `startRound ABORTED: thread changed ${scheduledThreadId?.slice(-8) ?? '-'} → ${currentThreadId?.slice(-8) ?? '-'}`);
+          isTriggeringRef.current = false;
+          isStreamingRef.current = false;
+          // ✅ RACE CONDITION FIX V2: Also reset React state in abort guards
+          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
+          flushSync(() => {
+            setIsExplicitlyStreaming(false);
+          });
+          return;
+        }
+
+        // ✅ ABORT GUARD: Check if navigation cleanup signaled abort
+        if (abortMicrotaskRef.current) {
+          rlog.resume('abort-guard', `startRound ABORTED: navigation abort signaled`);
+          isTriggeringRef.current = false;
+          isStreamingRef.current = false;
+          // ✅ RACE CONDITION FIX V2: Also reset React state in abort guards
+          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
+          flushSync(() => {
+            setIsExplicitlyStreaming(false);
+          });
+          return;
+        }
+
+        // ✅ AI SDK HEALTH GUARD: Verify AI SDK is in a valid state
+        // ✅ RACE CONDITION FIX V2: Use statusRef.current instead of closure-captured status
+        // The closure captures status at callback creation time, which may be stale by execution
+        if (statusRef.current !== AiSdkStatuses.READY) {
+          rlog.resume('abort-guard', `startRound ABORTED: AI SDK status=${statusRef.current} (not ready)`);
+          isTriggeringRef.current = false;
+          isStreamingRef.current = false;
+          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
+          flushSync(() => {
+            setIsExplicitlyStreaming(false);
+          });
+          return;
+        }
+
+        // ✅ RACE CONDITION FIX V2: Use aiSendMessageRef.current instead of closure value
+        // Closure captures aiSendMessage at callback creation, which may point to stale Chat instance
+        const sendFn = aiSendMessageRef.current;
+        if (!sendFn) {
+          rlog.resume('abort-guard', `startRound ABORTED: aiSendMessage ref is null`);
+          isTriggeringRef.current = false;
+          isStreamingRef.current = false;
+          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
+          flushSync(() => {
+            setIsExplicitlyStreaming(false);
+          });
+          return;
+        }
+
         // ✅ DEBUG: Track when aiSendMessage is called
         rlog.stream('start', `startRound r${roundNumber} userText="${userText.slice(0, 20)}..." files=${fileParts.length} msgId=${lastUserMessage.id.slice(-8)}`);
         // Trigger streaming with the existing user message
         // Use isParticipantTrigger:true to indicate this is triggering the first participant
-        await aiSendMessage({
+        await sendFn({
           text: userText,
           // ✅ CRITICAL FIX: Include file parts so AI SDK sends them to the model
           // Without this, Round 0 attachments are never seen by the participant
@@ -2400,12 +2517,81 @@ export function useMultiParticipantChat(
     // Same pattern as startRound for consistent error handling
     //
     // ✅ CRITICAL: isTriggeringRef stays TRUE until async work completes
+    //
+    // ✅ RACE CONDITION FIX: Capture threadId at schedule time for validation in microtask
+    // Navigation can change threadId between schedule and execution, corrupting AI SDK state
+    const scheduledThreadId = effectiveThreadId;
     queueMicrotask(async () => {
       try {
+        // ✅ RACE CONDITION FIX V2: Check if component unmounted during microtask delay
+        // AI SDK's internal state may be cleared on unmount, causing "Cannot read properties of undefined"
+        if (!isMountedRef.current) {
+          rlog.resume('cfp-abort', `P${fromIndexToUse} ABORTED: component unmounted`);
+          isTriggeringRef.current = false;
+          isStreamingRef.current = false;
+          return;
+        }
+
+        // ✅ RACE CONDITION GUARD: Verify thread hasn't changed since scheduling
+        // If navigation occurred, the AI SDK Chat instance may be invalid or for different thread
+        const currentThreadId = callbackRefs.threadId.current;
+        if (currentThreadId !== scheduledThreadId) {
+          rlog.resume('cfp-abort', `P${fromIndexToUse} ABORTED: thread changed ${scheduledThreadId?.slice(-8) ?? '-'} → ${currentThreadId?.slice(-8) ?? '-'}`);
+          isTriggeringRef.current = false;
+          isStreamingRef.current = false;
+          // ✅ RACE CONDITION FIX V2: Also reset React state in abort guards
+          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
+          flushSync(() => {
+            setIsExplicitlyStreaming(false);
+          });
+          return;
+        }
+
+        // ✅ ABORT GUARD: Check if navigation cleanup signaled abort
+        if (abortMicrotaskRef.current) {
+          rlog.resume('cfp-abort', `P${fromIndexToUse} ABORTED: navigation abort signaled`);
+          isTriggeringRef.current = false;
+          isStreamingRef.current = false;
+          // ✅ RACE CONDITION FIX V2: Also reset React state in abort guards
+          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
+          flushSync(() => {
+            setIsExplicitlyStreaming(false);
+          });
+          return;
+        }
+
+        // ✅ AI SDK HEALTH GUARD: Verify AI SDK is in a valid state
+        // ✅ RACE CONDITION FIX V2: Use statusRef.current instead of closure-captured status
+        // The closure captures status at callback creation time, which may be stale by execution
+        if (statusRef.current !== AiSdkStatuses.READY) {
+          rlog.resume('cfp-abort', `P${fromIndexToUse} ABORTED: AI SDK status=${statusRef.current} (not ready)`);
+          isTriggeringRef.current = false;
+          isStreamingRef.current = false;
+          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
+          flushSync(() => {
+            setIsExplicitlyStreaming(false);
+          });
+          return;
+        }
+
+        // ✅ RACE CONDITION FIX V2: Use aiSendMessageRef.current instead of closure value
+        // Closure captures aiSendMessage at callback creation, which may point to stale Chat instance
+        const sendFn = aiSendMessageRef.current;
+        if (!sendFn) {
+          rlog.resume('cfp-abort', `P${fromIndexToUse} ABORTED: aiSendMessage ref is null`);
+          isTriggeringRef.current = false;
+          isStreamingRef.current = false;
+          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
+          flushSync(() => {
+            setIsExplicitlyStreaming(false);
+          });
+          return;
+        }
+
         // ✅ DEBUG: Track when aiSendMessage is called from continueFromParticipant
         rlog.stream('resume', `continue r${roundNumber} fromIdx=${fromIndexToUse} userText="${userText.slice(0, 20)}..." msgId=${lastUserMessage.id.slice(-8)}`);
         // Trigger streaming for the specified participant
-        await aiSendMessage({
+        await sendFn({
           text: userText,
           metadata: {
             role: UIMessageRoles.USER,

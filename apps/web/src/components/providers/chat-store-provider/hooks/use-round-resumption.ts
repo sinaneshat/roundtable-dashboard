@@ -118,6 +118,11 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     storeEnableWebSearch,
     // ✅ SCOPE VERSIONING: Track version for stale effect detection
     resumptionScopeVersion,
+    // ✅ RACE CONDITION FIX: Track which thread prefill state was set for
+    // Prevents consuming stale prefill state after rapid navigation
+    prefilledForThreadId,
+    // ✅ RACE CONDITION FIX: Track if prefill was done
+    streamResumptionPrefilled,
   } = useStore(store, useShallow(s => ({
     waitingToStart: s.waitingToStartStreaming,
     chatIsStreaming: s.isStreaming,
@@ -137,6 +142,10 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
     storeEnableWebSearch: s.enableWebSearch,
     // ✅ SCOPE VERSIONING: Track version for stale effect detection
     resumptionScopeVersion: s.resumptionScopeVersion,
+    // ✅ RACE CONDITION FIX: Track which thread prefill state was set for
+    prefilledForThreadId: s.prefilledForThreadId,
+    // ✅ RACE CONDITION FIX: Track if prefill was done
+    streamResumptionPrefilled: s.streamResumptionPrefilled,
   })));
 
   // ✅ RACE CONDITION FIX: Extract isReady explicitly for precise dependency tracking
@@ -203,6 +212,18 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
       // Reset resumption tracking for new scope
       resumptionTriggeredRef.current = null;
       return;
+    }
+
+    // ✅ RACE CONDITION FIX: Validate prefill thread ID before consuming
+    // If prefill state exists but is for a different thread, skip it
+    // This prevents consuming stale prefill state after rapid navigation between threads
+    if (streamResumptionPrefilled && prefilledForThreadId) {
+      const freshState = store.getState();
+      const currentThreadId = freshState.thread?.id;
+      if (currentThreadId && prefilledForThreadId !== currentThreadId) {
+        rlog.resume('skip-prefill', `Prefill for ${prefilledForThreadId.slice(-8)} != current ${currentThreadId.slice(-8)}`);
+        return;
+      }
     }
 
     // Clear any pending retry when effect re-runs
@@ -574,7 +595,7 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         retryTimeoutRef.current = null;
       }
     };
-  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, configChangeRoundNumber, isWaitingForChangelog, isPatchInProgress, storeEnableWebSearch, resumptionScopeVersion, chat, store]);
+  }, [nextParticipantToTrigger, waitingToStart, chatIsStreaming, chatIsReady, storeParticipants, storeMessages, storePreSearches, storeThread, storeScreenMode, configChangeRoundNumber, isWaitingForChangelog, isPatchInProgress, storeEnableWebSearch, resumptionScopeVersion, streamResumptionPrefilled, prefilledForThreadId, chat, store]);
 
   // Safety timeout for thread screen resumption
   // ✅ STALE SELECTOR FIX: Read fresh state instead of using potentially stale selectors
