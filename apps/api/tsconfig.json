@@ -1,0 +1,17 @@
+{
+  "extends": "@roundtable/typescript-config/cloudflare-worker.json",
+  "compilerOptions": {
+    "composite": true,
+    "baseUrl": ".",
+    "rootDir": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    },
+    "declaration": true,
+    "declarationMap": true,
+    "noEmit": false,
+    "outDir": "dist"
+  },
+  "include": ["src/**/*", "worker.ts", "*.d.ts"],
+  "exclude": ["node_modules", "dist", "**/__tests__/**", "**/*.test.ts", "**/*.test.tsx"]
+}

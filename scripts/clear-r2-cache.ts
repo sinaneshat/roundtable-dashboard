@@ -1,8 +1,8 @@
 /**
- * Clear R2 buckets for OpenNext cache and uploads
+ * Clear R2 buckets for cache and uploads
  *
  * Clears both:
- * - Next.js incremental cache bucket (roundtable-dashboard-r2-cache-{env})
+ * - Application cache bucket (roundtable-dashboard-r2-cache-{env})
  * - Uploads bucket (roundtable-dashboard-r2-uploads-{env})
  *
  * Usage:
@@ -12,7 +12,7 @@
  *   CLOUDFLARE_API_TOKEN - Required. Create at https://dash.cloudflare.com/profile/api-tokens
  *
  * Options:
- *   --cache-only    Only clear the Next.js cache bucket
+ *   --cache-only    Only clear the cache bucket
  *   --uploads-only  Only clear the uploads bucket
  *   --skip-if-no-token  Don't error if token is missing (for optional cleanup)
  */

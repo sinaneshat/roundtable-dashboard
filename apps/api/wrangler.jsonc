@@ -1,0 +1,240 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "main": "worker.ts",
+  "name": "roundtable-api",
+  "account_id": "499b6c3c38f75f7f7dc7d3127954b921",
+  "compatibility_date": "2026-01-20",
+  "compatibility_flags": ["nodejs_compat"],
+  "minify": true,
+  "upload_source_maps": false, // source maps add 40MB+ to upload, disabled
+  "rules": [
+    {
+      "type": "CompiledWasm",
+      "globs": ["**/*.wasm"],
+      "fallthrough": true
+    }
+  ],
+  "dev": {
+    "port": 8787
+  },
+  "observability": {
+    "enabled": true,
+    "head_sampling_rate": 1
+  },
+  "placement": {
+    "mode": "smart"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "roundtable-dashboard-db-local",
+      "database_id": "12ce87b8-9d6d-4c54-a9d4-7c59ceb3ef8e",
+      "migrations_dir": "./src/db/migrations",
+      "preview_database_id": "12ce87b8-9d6d-4c54-a9d4-7c59ceb3ef8e"
+    }
+  ],
+  "kv_namespaces": [
+    {
+      "binding": "KV",
+      "id": "0ab8201d8a9d43b7ab8e4236026e4811",
+      "preview_id": "0ab8201d8a9d43b7ab8e4236026e4811"
+    }
+  ],
+  "r2_buckets": [
+    {
+      "binding": "UPLOADS_R2_BUCKET",
+      "bucket_name": "roundtable-dashboard-r2-uploads-local",
+      "preview_bucket_name": "roundtable-dashboard-r2-uploads-local"
+    }
+  ],
+  "browser": {
+    "binding": "BROWSER"
+  },
+  "ai": {
+    "binding": "AI",
+    "remote": true
+  },
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "UPLOAD_CLEANUP_SCHEDULER",
+        "class_name": "UploadCleanupScheduler",
+        "script_name": "roundtable-api"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["UploadCleanupScheduler"]
+    }
+  ],
+  "queues": {
+    "producers": [
+      {
+        "queue": "title-generation-queue-local",
+        "binding": "TITLE_GENERATION_QUEUE"
+      },
+      {
+        "queue": "round-orchestration-queue-local",
+        "binding": "ROUND_ORCHESTRATION_QUEUE"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "title-generation-queue-local",
+        "max_batch_size": 10,
+        "max_batch_timeout": 5,
+        "max_retries": 3,
+        "retry_delay": 60
+      },
+      {
+        "queue": "round-orchestration-queue-local",
+        "max_batch_size": 1,
+        "max_batch_timeout": 1,
+        "max_retries": 5,
+        "retry_delay": 60
+      }
+    ]
+  },
+  "vars": {
+    "WEBAPP_ENV": "local",
+    "APP_NAME": "Roundtable API",
+    "TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w4",
+    "R2_PUBLIC_URL": "http://localhost:8787/uploads",
+    "AWS_SES_REGION": "eu-north-1",
+    "FROM_EMAIL": "noreply@roundtable.now",
+    "SES_REPLY_TO_EMAIL": "support@roundtable.now",
+    "SES_VERIFIED_EMAIL": "noreply@roundtable.now",
+    "STRIPE_CUSTOMER_PORTAL_CONFIG_ID": "bpc_1STOnK52vWNZ3v8wteUMwNCy",
+    "STRIPE_PUBLISHABLE_KEY": "pk_test_51SPXN852vWNZ3v8wCfrjOoFGG1RFsCq8LC7vJcVJGOEpjJOjmNU4eofpw7ulsSh6LET81iBtYomVYaoHrf8RyPqE00mdMsc6Oy",
+    "AUTH_GOOGLE_ID": "815574816934-2chacenekb6gnis24lksiit84eddt3af.apps.googleusercontent.com",
+    "BETTER_AUTH_URL": "http://localhost:8787",
+    "POSTHOG_HOST": "https://us.i.posthog.com",
+    "NODE_ENV": "development"
+  },
+  "env": {
+    "preview": {
+      "name": "roundtable-api-preview",
+      "upload_source_maps": false,
+      "placement": { "mode": "smart" },
+      "observability": { "enabled": true, "head_sampling_rate": 0.1 },
+      "limits": { "cpu_ms": 300000 },
+      "routes": [
+        {
+          "pattern": "api-preview.roundtable.now",
+          "custom_domain": true
+        }
+      ],
+      "queues": {
+        "producers": [
+          { "queue": "title-generation-queue-preview", "binding": "TITLE_GENERATION_QUEUE" },
+          { "queue": "round-orchestration-queue-preview", "binding": "ROUND_ORCHESTRATION_QUEUE" }
+        ],
+        "consumers": [
+          { "queue": "title-generation-queue-preview", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 3, "retry_delay": 60 },
+          { "queue": "round-orchestration-queue-preview", "max_batch_size": 1, "max_batch_timeout": 1, "max_retries": 5, "retry_delay": 60 }
+        ]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "roundtable-dashboard-db-preview",
+          "database_id": "ce0a7c86-7ac5-46c8-bf25-3df0a2345f9c",
+          "migrations_dir": "./src/db/migrations",
+          "preview_database_id": "ce0a7c86-7ac5-46c8-bf25-3df0a2345f9c"
+        }
+      ],
+      "kv_namespaces": [
+        { "binding": "KV", "id": "146b84bc30474873a73161b779c19b81", "preview_id": "146b84bc30474873a73161b779c19b81" }
+      ],
+      "r2_buckets": [
+        { "binding": "UPLOADS_R2_BUCKET", "bucket_name": "roundtable-dashboard-r2-uploads-preview-weur", "preview_bucket_name": "roundtable-dashboard-r2-uploads-preview-weur" }
+      ],
+      "browser": { "binding": "BROWSER" },
+      "ai": { "binding": "AI", "remote": true },
+      "durable_objects": {
+        "bindings": [
+          { "name": "UPLOAD_CLEANUP_SCHEDULER", "class_name": "UploadCleanupScheduler", "script_name": "roundtable-api-preview" }
+        ]
+      },
+      "vars": {
+        "WEBAPP_ENV": "preview",
+        "APP_NAME": "Roundtable API",
+        "TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w5",
+        "R2_PUBLIC_URL": "https://api-preview.roundtable.now/uploads",
+        "AWS_SES_REGION": "eu-north-1",
+        "FROM_EMAIL": "noreply@roundtable.now",
+        "SES_REPLY_TO_EMAIL": "support@roundtable.now",
+        "SES_VERIFIED_EMAIL": "noreply@roundtable.now",
+        "STRIPE_CUSTOMER_PORTAL_CONFIG_ID": "bpc_1STOnK52vWNZ3v8wteUMwNCy",
+        "STRIPE_PUBLISHABLE_KEY": "pk_test_51SPXN852vWNZ3v8wCfrjOoFGG1RFsCq8LC7vJcVJGOEpjJOjmNU4eofpw7ulsSh6LET81iBtYomVYaoHrf8RyPqE00mdMsc6Oy",
+        "AUTH_GOOGLE_ID": "815574816934-2chacenekb6gnis24lksiit84eddt3af.apps.googleusercontent.com",
+        "BETTER_AUTH_URL": "https://api-preview.roundtable.now",
+        "POSTHOG_HOST": "https://us.i.posthog.com",
+        "NODE_ENV": "production"
+      }
+    },
+    "production": {
+      "name": "roundtable-api-prod",
+      "upload_source_maps": false,
+      "placement": { "mode": "smart" },
+      "observability": { "enabled": true, "head_sampling_rate": 0.1 },
+      "limits": { "cpu_ms": 300000 },
+      "routes": [
+        {
+          "pattern": "api.roundtable.now",
+          "custom_domain": true
+        }
+      ],
+      "queues": {
+        "producers": [
+          { "queue": "title-generation-queue-prod", "binding": "TITLE_GENERATION_QUEUE" },
+          { "queue": "round-orchestration-queue-prod", "binding": "ROUND_ORCHESTRATION_QUEUE" }
+        ],
+        "consumers": [
+          { "queue": "title-generation-queue-prod", "max_batch_size": 10, "max_batch_timeout": 5, "max_retries": 3, "retry_delay": 60 },
+          { "queue": "round-orchestration-queue-prod", "max_batch_size": 1, "max_batch_timeout": 1, "max_retries": 5, "retry_delay": 60 }
+        ]
+      },
+      "d1_databases": [
+        {
+          "binding": "DB",
+          "database_name": "roundtable-dashboard-db-prod",
+          "database_id": "74073b18-b9ef-4801-8176-4159905047d1",
+          "migrations_dir": "./src/db/migrations",
+          "preview_database_id": "74073b18-b9ef-4801-8176-4159905047d1"
+        }
+      ],
+      "kv_namespaces": [
+        { "binding": "KV", "id": "8c335928a67d4d5db3de6e52f685296f", "preview_id": "8c335928a67d4d5db3de6e52f685296f" }
+      ],
+      "r2_buckets": [
+        { "binding": "UPLOADS_R2_BUCKET", "bucket_name": "roundtable-dashboard-r2-uploads-prod-weur", "preview_bucket_name": "roundtable-dashboard-r2-uploads-prod-weur" }
+      ],
+      "browser": { "binding": "BROWSER" },
+      "ai": { "binding": "AI", "remote": true },
+      "durable_objects": {
+        "bindings": [
+          { "name": "UPLOAD_CLEANUP_SCHEDULER", "class_name": "UploadCleanupScheduler", "script_name": "roundtable-api-prod" }
+        ]
+      },
+      "vars": {
+        "WEBAPP_ENV": "prod",
+        "APP_NAME": "Roundtable API",
+        "TURNSTILE_SITE_KEY": "0x4AAAAAAAnF8lAkO8_hM6w6",
+        "R2_PUBLIC_URL": "https://api.roundtable.now/uploads",
+        "AWS_SES_REGION": "eu-north-1",
+        "FROM_EMAIL": "noreply@roundtable.now",
+        "SES_REPLY_TO_EMAIL": "support@roundtable.now",
+        "SES_VERIFIED_EMAIL": "noreply@roundtable.now",
+        "STRIPE_CUSTOMER_PORTAL_CONFIG_ID": "bpc_1STOnK52vWNZ3v8wteUMwNCy",
+        "STRIPE_PUBLISHABLE_KEY": "pk_live_51SPXN852vWNZ3v8w0JKMpuzcvZHMyvFLy0SRfadVpFXtIhfYwty1hNfmxSlyTFRfbTbpcOOKuPepnUUayr0Owy9v006fE9vdeS",
+        "AUTH_GOOGLE_ID": "815574816934-2chacenekb6gnis24lksiit84eddt3af.apps.googleusercontent.com",
+        "BETTER_AUTH_URL": "https://api.roundtable.now",
+        "POSTHOG_HOST": "https://us.i.posthog.com",
+        "NODE_ENV": "production"
+      }
+    }
+  }
+}

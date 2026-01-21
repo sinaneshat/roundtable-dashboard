@@ -7,14 +7,14 @@ argument-hint: [file-or-pattern]
 
 Target: $ARGUMENTS (or `src/stores/` if not specified)
 
-## Ground Rules (Official Zustand v5 + Next.js)
+## Ground Rules (Official Zustand v5 + TanStack Start)
 
 These rules are extracted from official Zustand documentation via Context7 MCP `/pmndrs/zustand`.
 **ZERO DEVIATIONS ALLOWED** - Follow patterns exactly as documented.
 
 ---
 
-## 🚨 CRITICAL: Next.js SSR Rules
+## 🚨 CRITICAL: TanStack Start SSR Rules
 
 ### Rule 1: NO Global Stores
 ```typescript
@@ -28,7 +28,7 @@ export function createChatStore() {
 }
 ```
 
-**WHY**: Next.js server handles multiple requests simultaneously. Global stores share state across requests causing data leakage.
+**WHY**: TanStack Start SSR handles multiple requests simultaneously. Global stores share state across requests causing data leakage.
 
 ### Rule 2: Vanilla Store + Context Provider
 ```typescript

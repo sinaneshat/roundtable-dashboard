@@ -17,9 +17,9 @@ This directory contains Claude Code hooks that automate code quality and provide
 **Supported Extensions**: `.ts`, `.tsx`, `.js`, `.jsx`
 
 **Blocked Patterns**:
-- `/node_modules/`, `/.next/`, `/dist/`, `/build/`
+- `/node_modules/`, `/dist/`, `/build/`
 - `/.claude/`, `/migrations/`
-- `.d.ts`, `next-env.d.ts`, `cloudflare-env.d.ts`
+- `.d.ts`, `cloudflare-env.d.ts`
 
 ### 2. Task Completion Notifications (`notify-completion.sh`)
 

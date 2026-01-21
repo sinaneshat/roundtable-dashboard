@@ -1,0 +1,75 @@
+/**
+ * Checkout Mutation Hooks
+ *
+ * TanStack Mutation hooks for Stripe checkout operations
+ */
+
+import { useMutation, useQueryClient } from '@tanstack/react-query';
+
+import { billingInvalidationHelpers, queryKeys } from '@/lib/data/query-keys';
+import { createCheckoutSessionService, getSubscriptionsService, syncAfterCheckoutService } from '@/services/api';
+
+/**
+ * Hook to create Stripe checkout session
+ * Protected endpoint - requires authentication
+ *
+ * After successful checkout session creation, invalidates subscription queries
+ */
+export function useCreateCheckoutSessionMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: createCheckoutSessionService,
+    onSuccess: () => {
+      // Invalidate subscriptions to prepare for post-checkout data
+      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
+
+      // Invalidate usage queries since new subscription will have different quota limits
+      queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
+    },
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to sync Stripe data after checkout
+ * Protected endpoint - requires authentication
+ *
+ * Theo's "Stay Sane with Stripe" pattern:
+ * Eagerly syncs subscription data from Stripe API immediately after checkout
+ * to prevent race conditions with webhooks
+ *
+ * Invalidates and refetches all billing-related queries on success
+ */
+export function useSyncAfterCheckoutMutation() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: syncAfterCheckoutService,
+    onSuccess: async () => {
+      // Invalidate product queries
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.products.all,
+        refetchType: 'all',
+      });
+
+      // Refresh subscriptions with cache bypass (critical for success page)
+      try {
+        const freshSubscriptionsData = await getSubscriptionsService({ bypassCache: true });
+        queryClient.setQueryData(queryKeys.subscriptions.current(), freshSubscriptionsData);
+      } catch (error) {
+        console.error('[Checkout] Failed to refresh subscriptions after checkout:', error);
+        billingInvalidationHelpers.invalidateSubscriptions(queryClient);
+      }
+
+      // Use shared helper for usage and models refresh (bypasses HTTP cache)
+      await Promise.all([
+        billingInvalidationHelpers.refreshUsageStats(queryClient),
+        billingInvalidationHelpers.refreshModels(queryClient),
+      ]);
+    },
+    retry: false,
+    throwOnError: false,
+  });
+}

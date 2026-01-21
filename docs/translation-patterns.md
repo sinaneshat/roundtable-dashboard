@@ -47,7 +47,7 @@ Even though we only support English, we **maintain the dynamic translation key s
 
 **✅ ALWAYS use translation keys:**
 ```tsx
-import { useTranslations } from 'next-intl';
+import { useTranslations } from '@/lib/compat';
 
 export function MyComponent() {
   const t = useTranslations('namespace');

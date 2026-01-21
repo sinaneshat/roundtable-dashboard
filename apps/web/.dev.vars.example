@@ -1,0 +1,34 @@
+# Web App Secrets for Local Wrangler Development
+# Copy this file to .dev.vars and add your actual secret values
+#
+# These secrets are loaded by wrangler during local development.
+# For deployed environments, use `wrangler secret put <NAME>` instead.
+#
+# SECURITY: Never commit .dev.vars - it contains real secrets!
+
+# ============================================================================
+# AUTHENTICATION SECRETS
+# ============================================================================
+
+# Better Auth Session Encryption
+# Minimum 32 characters, used to encrypt session cookies
+# MUST match the API's BETTER_AUTH_SECRET for session compatibility
+BETTER_AUTH_SECRET=your-better-auth-secret-min-32-characters-here
+
+# Google OAuth Client Secret
+# Get from: https://console.cloud.google.com/apis/credentials
+AUTH_GOOGLE_SECRET=your-google-oauth-client-secret
+
+# ============================================================================
+# AWS SES EMAIL SERVICE (for magic link emails)
+# ============================================================================
+
+# AWS IAM credentials with SES permissions
+# Create dedicated IAM user with only SES:SendEmail permission
+AWS_SES_ACCESS_KEY_ID=your-aws-access-key-id
+AWS_SES_SECRET_ACCESS_KEY=your-aws-secret-access-key
+
+# SES Region and Email Configuration
+AWS_SES_REGION=eu-north-1
+FROM_EMAIL=noreply@roundtable.now
+SES_REPLY_TO_EMAIL=support@roundtable.now

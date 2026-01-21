@@ -1,42 +1,78 @@
 /**
  * Knip Configuration - TypeScript for type safety
- * Following official best practices from knip documentation
+ * TanStack Start + Hono Turborepo Monorepo
  */
 
 const config = {
   // JSON Schema for IDE support
   $schema: 'https://unpkg.com/knip@5/schema.json',
 
-  // Entry files - be specific and minimize wildcards per knip best practices
+  // Monorepo workspace configuration
+  workspaces: {
+    // API package (Hono + Cloudflare Workers)
+    'apps/api': {
+      entry: [
+        'src/index.ts',
+        'src/worker.ts',
+        'drizzle.config.ts',
+      ],
+      project: [
+        'src/**/*.{ts,tsx}',
+        '*.{ts,tsx,js,mjs}',
+      ],
+      ignore: [
+        'src/db/migrations/**',
+        'dist/**',
+      ],
+    },
+
+    // Web package (TanStack Start)
+    'apps/web': {
+      entry: [
+        'src/router.tsx',
+        'src/routes/**/*.tsx',
+        'src/client.tsx',
+        'vite.config.ts',
+        'tailwind.config.ts',
+      ],
+      project: [
+        'src/**/*.{ts,tsx}',
+        '*.{ts,tsx,js,mjs}',
+      ],
+      ignore: [
+        '.output/**',
+        'dist/**',
+      ],
+    },
+
+    // Shared package
+    'packages/shared': {
+      entry: [
+        'src/index.ts',
+      ],
+      project: [
+        'src/**/*.{ts,tsx}',
+      ],
+    },
+  },
+
+  // Root-level configuration
   entry: [
-    'src/api/index.ts',
-    'src/app/**/page.tsx',
-    'src/app/**/layout.tsx',
-    'src/app/**/loading.tsx',
-    'src/app/**/error.tsx',
-    'src/app/**/not-found.tsx',
-    'src/middleware.ts',
-    'next.config.mjs',
-    'tailwind.config.ts',
-    'drizzle.config.ts',
+    'scripts/**/*.{ts,js}',
   ],
 
-  // Project files - include all source and configuration files
   project: [
-    'src/**/*.{ts,tsx}',
     'scripts/**/*.{ts,js}',
     '*.{ts,tsx,js,mjs}',
-    'drizzle/**/*.sql',
   ],
 
   // Ignore generated and external files
   ignore: [
-    'src/db/migrations/**',
+    '**/node_modules/**',
+    '**/dist/**',
+    '**/.output/**',
+    '**/src/db/migrations/**',
     '**/*.generated.{ts,tsx}',
-    'dist/**',
-    'build/**',
-    '.next/**',
-    'node_modules/**',
   ],
 
   // Ignore dependencies that are used indirectly
@@ -53,13 +89,12 @@ const config = {
   ignoreBinaries: [
     'docker',
     'docker-compose',
-    'vercel',
-    'next',
+    'wrangler',
   ],
 
   // Plugin configurations for supported tools
   eslint: {
-    config: ['.eslintrc.json', 'eslint.config.js'],
+    config: ['eslint.config.js', '.eslintrc.json'],
   },
 
   prettier: {
@@ -68,10 +103,6 @@ const config = {
 
   typescript: {
     config: ['tsconfig.json', 'tsconfig.*.json'],
-  },
-
-  next: {
-    config: ['next.config.mjs'],
   },
 };
 

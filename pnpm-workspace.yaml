@@ -1,0 +1,19 @@
+shellEmulator: true
+
+trustPolicy: no-downgrade
+
+packages:
+  - 'apps/*'
+  - 'packages/*'
+ignoredBuiltDependencies:
+  - puppeteer
+  - workerd
+onlyBuiltDependencies:
+  - '@tailwindcss/oxide'
+  - better-sqlite3
+  - core-js
+  - esbuild
+  - sharp
+  - unrs-resolver
+  - workerd
+  - yarn

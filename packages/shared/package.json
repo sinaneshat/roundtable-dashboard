@@ -1,0 +1,43 @@
+{
+  "name": "@roundtable/shared",
+  "type": "module",
+  "version": "1.0.0",
+  "private": true,
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./src/index.ts"
+    },
+    "./enums": {
+      "types": "./dist/enums/index.d.ts",
+      "import": "./src/enums/index.ts"
+    },
+    "./types": {
+      "types": "./dist/types/index.d.ts",
+      "import": "./src/types/index.ts"
+    },
+    "./validation": {
+      "types": "./dist/validation/index.d.ts",
+      "import": "./src/validation/index.ts"
+    },
+    "./constants": {
+      "types": "./dist/constants/index.d.ts",
+      "import": "./src/constants/index.ts"
+    }
+  },
+  "main": "./src/index.ts",
+  "types": "./dist/index.d.ts",
+  "scripts": {
+    "build": "tsc --declaration --emitDeclarationOnly --outDir dist",
+    "check-types": "tsc --noEmit",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
+  "dependencies": {
+    "zod": "^4.3.5"
+  },
+  "devDependencies": {
+    "@roundtable/typescript-config": "workspace:*",
+    "typescript": "5.9.3"
+  }
+}

@@ -1,0 +1,11 @@
+# Cloudflare Pages Redirects
+# See: https://developers.cloudflare.com/pages/configuration/redirects/
+
+# NOTE: WWW to non-WWW redirects must be configured in Cloudflare Dashboard
+# using Page Rules or Bulk Redirects (absolute URLs not supported here)
+
+# Favicon redirect - browsers request /favicon.ico automatically
+/favicon.ico /icons/icon-96x96.png 200
+
+# Legacy favicon path support
+/favicon.png /icons/icon-96x96.png 200

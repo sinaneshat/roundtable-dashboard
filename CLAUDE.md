@@ -47,7 +47,7 @@ pnpm db:migrate:prod        # Apply migrations to production
 pnpm db:studio:local        # Open Drizzle Studio
 pnpm db:full-reset:local    # Full reset: wipe all state (D1, R2, KV), migrate, seed
 pnpm local:wipe-state       # Clear all Wrangler state (D1, R2, KV, tmp)
-pnpm local:nuclear-reset    # Nuclear: clear Next.js cache + all Wrangler state + migrate + seed
+pnpm local:nuclear-reset    # Nuclear: clear build cache + all Wrangler state + migrate + seed
 
 # Cloudflare Deployment
 pnpm cf-typegen            # Generate CloudflareEnv types
@@ -70,35 +70,37 @@ pnpm i18n:check-unused     # Find unused translation keys
 ## Project Structure
 
 ```
-src/
-├── app/                    # Next.js App Router
-│   ├── (app)/chat/   # Protected chat
-│   ├── auth/              # Authentication pages
-│   └── api/               # Next.js API routes (proxy)
-├── api/                   # Hono API implementation
-│   ├── routes/            # Domain-specific routes
-│   │   └── auth/          # Better Auth integration
-│   ├── services/          # Business logic
-│   └── middleware/        # Auth, CORS, rate limiting
-├── components/            # React components
-│   ├── ui/                # shadcn/ui base components
-│   └── auth/              # Authentication UI
-├── db/                    # Database layer
-│   ├── tables/            # Drizzle schema definitions
-│   │   └── auth.ts        # Users, sessions, accounts, verification
-│   ├── validation/        # Schema validation
-│   └── migrations/        # SQL migration files
-├── hooks/                 # React Query data fetching
-├── lib/                   # Utility libraries
-├── i18n/                  # Internationalization (English-only, dynamic keys)
-│   └── locales/           # en/common.json translation keys
-├── __tests__/             # Test files
-│   └── README.md          # Testing documentation
-└── lib/
-    └── testing/           # Testing utilities
-        ├── index.ts       # Barrel export
-        ├── render.tsx     # Custom render with providers
-        └── helpers.ts     # Test helpers and utilities
+apps/
+├── web/                   # TanStack Start frontend (Cloudflare Pages)
+│   ├── src/
+│   │   ├── routes/        # TanStack Router file-based routes
+│   │   │   ├── __root.tsx # Root layout
+│   │   │   ├── index.tsx  # Home route
+│   │   │   ├── _protected.tsx # Protected layout route
+│   │   │   └── auth/      # Auth routes
+│   │   ├── components/    # React components
+│   │   │   ├── ui/        # shadcn/ui base components
+│   │   │   └── auth/      # Authentication UI
+│   │   ├── hooks/         # React Query data fetching
+│   │   ├── stores/        # Zustand state management
+│   │   ├── lib/           # Utility libraries
+│   │   ├── server/        # Server functions (createServerFn)
+│   │   └── router.tsx     # Router configuration
+│   ├── vite.config.ts     # Vite + TanStack Start config
+│   └── wrangler.jsonc     # Cloudflare Pages config
+│
+├── api/                   # Hono API (Cloudflare Workers)
+│   ├── src/
+│   │   ├── routes/        # Domain-specific API routes
+│   │   │   └── auth/      # Better Auth integration
+│   │   ├── services/      # Business logic
+│   │   ├── middleware/    # Auth, CORS, rate limiting
+│   │   └── db/            # Database layer (Drizzle + D1)
+│   │       ├── tables/    # Schema definitions
+│   │       └── migrations/# SQL migration files
+│   └── wrangler.jsonc     # Cloudflare Workers config
+│
+└── packages/shared/       # Shared types and utilities
 ```
 
 ## Core Architecture Patterns
@@ -131,10 +133,13 @@ src/
 - Comprehensive error handling through middleware chain
 - OpenAPI documentation auto-generated at `/api/v1/scalar`
 
-### Frontend Layer (Next.js 15 + shadcn/ui + TanStack Query)
-**Component Structure**: `src/components/{domain}/{component}.tsx`
-- Reuse existing shadcn/ui components from `src/components/ui/`
-- TanStack Query hooks in `src/hooks/` for server state
+### Frontend Layer (TanStack Start + shadcn/ui + TanStack Query)
+**Component Structure**: `apps/web/src/components/{domain}/{component}.tsx`
+- TanStack Router file-based routing in `apps/web/src/routes/`
+- Route loaders for SSR data fetching (replaces getServerSideProps)
+- Server functions via `createServerFn()` for mutations
+- Reuse existing shadcn/ui components from `apps/web/src/components/ui/`
+- TanStack Query hooks in `apps/web/src/hooks/` for client-side data
 - All user text through `useTranslations()` - NO hardcoded strings (English-only)
 - Dark theme only (no theme switching)
 
@@ -142,7 +147,7 @@ src/
 **🚨 MANDATORY**: Use `/store-fix` command for ALL store-related work.
 **Reference**: Context7 MCP `/pmndrs/zustand` for official patterns - fetch latest docs before implementation.
 
-**Ground Rules** (from official Zustand + Next.js docs):
+**Ground Rules** (from official Zustand SSR docs):
 1. **NO Global Stores**: Factory function (`createChatStore()`) + Context, NOT module-level `create()`
 2. **Vanilla Store**: Use `createStore()` from `zustand/vanilla` for SSR isolation
 3. **Context + useRef**: Provider uses `useRef` to create store once per instance
@@ -186,10 +191,10 @@ src/stores/{domain}/
 
 ### Testing Layer (Vitest + React Testing Library)
 **Test Infrastructure** (`vitest.config.ts`, `vitest.setup.ts`):
-- Vitest v4 configured with Vite for Next.js support
+- Vitest v4 configured with Vite
 - JSDOM environment for DOM testing
 - Global mocks: `matchMedia`, `IntersectionObserver`, `ResizeObserver`
-- Testing utilities in `src/lib/testing/` following project architecture
+- Testing utilities in `apps/web/src/lib/testing/` following project architecture
 
 **Testing Patterns**:
 - Use `render` from `@/lib/testing` for consistent provider setup
@@ -199,12 +204,12 @@ src/stores/{domain}/
 - Focus on what users see and do
 
 **Test Organization**:
-- `src/__tests__/` - General test files
-- `src/components/{domain}/__tests__/` - Component tests
-- `src/stores/{domain}/__tests__/` - Store tests
-- `src/lib/testing/` - Shared test utilities (render, helpers, etc.)
+- `apps/web/src/__tests__/` - General test files
+- `apps/web/src/components/{domain}/__tests__/` - Component tests
+- `apps/web/src/stores/{domain}/__tests__/` - Store tests
+- `apps/web/src/lib/testing/` - Shared test utilities (render, helpers, etc.)
 
-**Documentation**: See `docs/TESTING_SETUP.md` and `src/__tests__/README.md`
+**Documentation**: See `docs/TESTING_SETUP.md` and `apps/web/src/__tests__/README.md`
 
 ## Email System
 
@@ -223,37 +228,35 @@ src/stores/{domain}/
 
 ## Environment Configuration
 
-**Critical Variables**:
+**Critical Variables** (in `.dev.vars` for API, `wrangler.jsonc` vars for web):
 ```bash
 # Application Environment
 NODE_ENV=development
-NEXT_PUBLIC_WEBAPP_ENV=local|preview|prod  # Environment detection
-NEXT_PUBLIC_APP_URL=http://localhost:3000
+VITE_WEBAPP_ENV=local|preview|prod  # Environment detection (web)
+VITE_API_URL=http://localhost:8787/api/v1  # API URL (web)
 
-# Authentication - Session encryption
+# Authentication - Session encryption (API)
 BETTER_AUTH_SECRET=your-better-auth-secret-32-chars-minimum
-BETTER_AUTH_URL=http://localhost:3000
+BETTER_AUTH_URL=http://localhost:8787
 
-# Google OAuth - Get from Google Cloud Console
+# Google OAuth - Get from Google Cloud Console (API)
 AUTH_GOOGLE_ID=your-google-client-id.apps.googleusercontent.com
 AUTH_GOOGLE_SECRET=your-google-client-secret
 
-# AWS SES Email - Get from AWS Console
+# AWS SES Email - Get from AWS Console (API)
 AWS_SES_ACCESS_KEY_ID=your-aws-ses-access-key-id
 AWS_SES_SECRET_ACCESS_KEY=your-aws-ses-secret-access-key
-NEXT_PUBLIC_AWS_SES_REGION=your-aws-region
-NEXT_PUBLIC_FROM_EMAIL=noreply@your-domain.com
-NEXT_PUBLIC_SES_REPLY_TO_EMAIL=support@your-domain.com
-NEXT_PUBLIC_SES_VERIFIED_EMAIL=noreply@your-domain.com
+AWS_SES_REGION=your-aws-region
+FROM_EMAIL=noreply@your-domain.com
 
-# Database: Uses Cloudflare D1 bindings (env.DB) in production, ./local.db for local development
+# Database: Uses Cloudflare D1 bindings (env.DB) in production
 ```
 
-**Cloudflare Bindings** (wrangler.jsonc):
+**Cloudflare Bindings** (apps/api/wrangler.jsonc):
 - **DB**: D1 database with separate local/preview/prod instances
-- **KV**: Key-value storage for caching
+- **KV**: Key-value storage for caching and rate limiting
 - **UPLOADS_R2_BUCKET**: File upload storage
-- **NEXT_INC_CACHE_R2_BUCKET**: Next.js incremental cache
+- **Queues**: Async job processing (title-generation, round-orchestration)
 
 ## Document Context References
 
@@ -296,17 +299,19 @@ NEXT_PUBLIC_SES_VERIFIED_EMAIL=noreply@your-domain.com
   - **NO OTHER FRONTEND DOCUMENTATION SUPERSEDES THIS DOCUMENT**
   - **ALL FRONTEND AGENTS MUST REFERENCE THIS DOCUMENT FIRST**
 
-- **Component Patterns**: `/src/components/` - Established UI component architecture
-  - `/src/components/ui/` - shadcn/ui base components (Button, Card, Dialog, etc.)
-  - `/src/components/auth/` - Authentication flow components
+- **Route Patterns**: `/apps/web/src/routes/` - TanStack Router file-based routing
+  - `/__root.tsx` - Root layout with providers
+  - `/_protected.tsx` - Protected layout route with auth check
+  - `/auth/` - Authentication routes (sign-in, callback)
 
-- **Page Layouts**: `/src/app/` - Next.js App Router structure
-  - `/src/app/(app)/chat/` - Protected chat pages and layouts
-  - `/src/app/auth/` - Authentication pages (login, register, callback)
+- **Component Patterns**: `/apps/web/src/components/` - Established UI component architecture
+  - `/apps/web/src/components/ui/` - shadcn/ui base components (Button, Card, Dialog, etc.)
+  - `/apps/web/src/components/auth/` - Authentication flow components
 
-- **Data Fetching**: `/src/hooks/` - TanStack Query patterns for server state
-- **Utility Functions**: `/src/lib/` - Shared utilities, validation, formatting
-- **Styling Patterns**: `/src/components/ui/` - Design system implementation
+- **Data Fetching**: `/apps/web/src/hooks/` - TanStack Query patterns for server state
+- **Server Functions**: `/apps/web/src/server/` - createServerFn() for SSR mutations
+- **Utility Functions**: `/apps/web/src/lib/` - Shared utilities, validation, formatting
+- **Styling Patterns**: `/apps/web/src/components/ui/` - Design system implementation
 
 ### Internationalization Context (`i18n-translation-manager`)
 **Primary Context Documents**:
@@ -319,16 +324,16 @@ NEXT_PUBLIC_SES_VERIFIED_EMAIL=noreply@your-domain.com
 ### Testing Context (`test-expert`)
 **Primary Context Documents**:
 - **Testing Documentation**: `/docs/TESTING_SETUP.md` - Comprehensive testing setup guide
-  - `/src/__tests__/README.md` - Testing patterns and examples
+  - `/apps/web/src/__tests__/README.md` - Testing patterns and examples
 - **Configuration Files**:
-  - `/vitest.config.ts` - Vitest v4 configuration with Next.js integration
+  - `/vitest.config.ts` - Vitest v4 configuration
   - `/vitest.setup.ts` - Global test setup and mocks
-- **Testing Utilities**: `/src/lib/testing/` - Testing library following project architecture
+- **Testing Utilities**: `/apps/web/src/lib/testing/` - Testing library following project architecture
   - `index.ts` - Barrel export for all testing utilities
   - `render.tsx` - Custom render utilities with providers
   - `helpers.ts` - Mock factories, async utilities, localStorage mocks
-- **Component Tests**: `/src/components/{domain}/__tests__/` - Domain-specific component tests
-- **Store Tests**: `/src/stores/{domain}/__tests__/` - State management tests
+- **Component Tests**: `/apps/web/src/components/{domain}/__tests__/` - Domain-specific component tests
+- **Store Tests**: `/apps/web/src/stores/{domain}/__tests__/` - State management tests
 - **Testing Patterns**:
   - Use `render` from `@/lib/testing` for provider setup
   - Prefer semantic queries (`getByRole`, `getByLabelText`)
@@ -444,14 +449,14 @@ Each agent has domain-specific expertise:
 - API endpoint creation following established patterns (`/src/api/routes/` structure)
 - Service layer patterns (`/src/api/services/` if services exist for domain)
 
-**frontend-ui-expert.md**: Next.js + shadcn/ui + TanStack Query specialist
+**frontend-ui-expert.md**: TanStack Start + shadcn/ui + TanStack Query specialist
 - **🚨 MANDATORY FIRST ACTION**: Read `/docs/frontend-patterns.md` - THE ONLY authoritative frontend guide
 - **NO FRONTEND WORK WITHOUT READING THIS DOCUMENT FIRST**
-- **Must consult**: `/src/components/ui/` patterns, `/src/containers/` layouts and screens, `/src/hooks/` utilities
-- Component creation following design system (`/src/components/ui/` base components)
-- Container patterns (`/src/containers/layouts/` and `/src/containers/screens/`)
-- Email templates (`/src/emails/templates/` and `/src/emails/components/`)
-- Direct TanStack Query usage until hook abstraction layer is built
+- **Must consult**: `/apps/web/src/routes/` patterns, `/apps/web/src/components/ui/` patterns, `/apps/web/src/hooks/` utilities
+- Route loaders for SSR data fetching, server functions for mutations
+- Component creation following design system (`/apps/web/src/components/ui/` base components)
+- Container patterns (`/apps/web/src/containers/layouts/` and `/apps/web/src/containers/screens/`)
+- Direct TanStack Query usage for client-side data, loaders for SSR
 - Responsive UI with accessibility standards
 
 **i18n-translation-manager.md**: Translation key management specialist (English-only)
@@ -735,7 +740,7 @@ research-analyst findings → backend-pattern-expert implementation → frontend
 - Run `pnpm lint && pnpm check-types` for code quality
 - Execute `pnpm i18n:full-check` for translation key completeness
 - Test database migrations with `pnpm db:migrate:local`
-- Verify API documentation at `http://localhost:3000/api/v1/scalar`
+- Verify API documentation at `http://localhost:8787/api/v1/scalar`
 
 **Security Considerations**:
 - All routes protected with CSRF middleware

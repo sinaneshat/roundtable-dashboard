@@ -35,7 +35,7 @@ Your research methodology:
 - **External API Documentation**: Third-party integrations, data flows
 - **Data Compliance**: Regulatory requirements and security best practices
 - **Cloudflare Workers Patterns**: Edge deployment, D1 database optimization
-- **Next.js 15 + React 19**: Latest patterns and performance optimizations
+- **TanStack Start + React 19**: Latest patterns and performance optimizations
 - **Industry Standards**: SaaS platform patterns and security best practices
 - **UI/UX Best Practices**: Dark theme patterns, English-only interface design
 

@@ -1,0 +1,60 @@
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { useTranslations } from '@/lib/i18n';
+
+type PlanStat = {
+  label: string;
+  value: number | string;
+};
+
+type PlanOverviewCardProps = {
+  tierName: string;
+  description?: string;
+  status?: string;
+  stats: PlanStat[];
+  activeUntil?: string;
+};
+
+export function PlanOverviewCard({
+  tierName,
+  description,
+  status,
+  stats,
+  activeUntil,
+}: PlanOverviewCardProps) {
+  const t = useTranslations();
+
+  return (
+    <Card className="w-full">
+      <CardHeader className="pb-4">
+        <div className="flex items-center justify-between gap-2">
+          <CardTitle className="text-base">{tierName}</CardTitle>
+          {status && (
+            <span className="text-xs font-medium text-green-600 capitalize shrink-0">
+              {status}
+            </span>
+          )}
+        </div>
+        {description && (
+          <CardDescription className="text-xs">{description}</CardDescription>
+        )}
+      </CardHeader>
+      <CardContent className="pt-0 space-y-4">
+        <div className="grid grid-cols-3 gap-4">
+          {stats.map(stat => (
+            <div key={stat.label} className="space-y-1">
+              <p className="text-lg font-semibold tabular-nums">{stat.value}</p>
+              <p className="text-xs text-muted-foreground">{stat.label}</p>
+            </div>
+          ))}
+        </div>
+        {activeUntil && (
+          <p className="text-xs text-muted-foreground pt-2 border-t">
+            {t('billing.success.planLimits.activeUntilLabel')}
+            {' '}
+            {activeUntil}
+          </p>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

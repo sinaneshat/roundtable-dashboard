@@ -1,0 +1,16 @@
+/**
+ * UI Utilities Barrel Export
+ *
+ * **SINGLE SOURCE OF TRUTH**: All UI/styling utilities from @/lib/ui
+ *
+ * @module lib/ui
+ */
+
+export * from './browser-timing';
+export * from './cloudflare-images';
+export { cn } from './cn';
+export * from './color-extraction';
+export * from './fonts';
+export * from './glassmorphism';
+// NOTE: og-assets.generated.ts NOT exported here - 460KB of Base64 assets, server-only
+// Import directly in OG image routes: import { getOGFontsSync } from '@/lib/ui/og-assets.generated'
