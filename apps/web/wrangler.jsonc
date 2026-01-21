@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "roundtable-web",
+  "name": "roundtable-web-prod",
   "account_id": "499b6c3c38f75f7f7dc7d3127954b921",
   "compatibility_date": "2026-01-20",
   "compatibility_flags": ["nodejs_compat"],
@@ -48,7 +48,6 @@
       }
     },
     "production": {
-      "name": "roundtable-web-prod",
       "upload_source_maps": false,
       "observability": {
         "enabled": true

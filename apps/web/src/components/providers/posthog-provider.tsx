@@ -55,7 +55,7 @@ export default function PostHogProvider({
       // Expose to window for PostHog toolbar support
       // Must be set before init() so toolbar can find it
       if (typeof window !== 'undefined') {
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        // eslint-disable-next-line ts/no-explicit-any
         (window as any).posthog = posthog;
       }
 
