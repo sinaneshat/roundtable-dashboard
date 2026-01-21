@@ -105,7 +105,9 @@ export function useNavigationCleanup({
         const currentSlug = currentState.thread?.slug;
         const isNavigatingToSameThread = targetSlug && currentSlug && targetSlug === currentSlug;
 
-        if (!isNavigatingToSameThread) {
+        // ✅ V8 FIX: Also skip reset during active streaming
+        // This prevents flash when overview→thread after sending message
+        if (!isNavigatingToSameThread && !currentState.isStreaming) {
           currentState.resetForThreadNavigation();
         }
       }

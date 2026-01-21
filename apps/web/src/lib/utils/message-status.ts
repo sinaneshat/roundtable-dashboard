@@ -102,9 +102,9 @@ export function getMessageParts(message: UIMessage): MessagePartsAnalysis {
       && (p.type === MessagePartTypes.SOURCE_URL || p.type === MessagePartTypes.SOURCE_DOCUMENT),
   );
 
-  // Derived state flags
+  // Derived state flags - ✅ V8 FIX: Include REASONING type for models like Gemini Flash
   const hasTextContent = message.parts.some(
-    p => p.type === MessagePartTypes.TEXT
+    p => (p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING)
       && 'text' in p
       && typeof p.text === 'string'
       && p.text.trim().length > 0,

@@ -229,7 +229,8 @@ function AssistantGroupCard({
             const isAccessible = demoMode || (model?.is_accessible_to_user ?? true);
 
             const safeParts = message.parts || [];
-            const hasTextContent = safeParts.some(p => p && p.type === MessagePartTypes.TEXT && p.text?.trim().length > 0);
+            // ✅ V8 FIX: Include REASONING type for models like Gemini Flash
+            const hasTextContent = safeParts.some(p => p && (p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING) && p.text?.trim().length > 0);
             const hasToolCalls = safeParts.some(p => p && p.type === MessagePartTypes.TOOL_CALL);
             const hasAnyContent = hasTextContent || hasToolCalls;
 

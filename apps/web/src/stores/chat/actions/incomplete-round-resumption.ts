@@ -1100,8 +1100,9 @@ export function useIncompleteRoundResumption(
 
     if (existingMessage) {
       const existingMetadata = getAssistantMetadata(existingMessage.metadata);
+      // ✅ V8 FIX: Include REASONING type for models like Gemini Flash
       const hasContent = existingMessage.parts?.some(
-        p => p.type === MessagePartTypes.TEXT && typeof p.text === 'string' && p.text.trim().length > 0,
+        p => (p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING) && typeof p.text === 'string' && p.text.trim().length > 0,
       ) || false;
       const isComplete = hasContent && existingMetadata?.finishReason !== FinishReasons.UNKNOWN;
 

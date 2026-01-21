@@ -323,8 +323,9 @@ export function useFlowStateMachine(
       ) ?? false;
 
       if (!hasStreamingParts) {
+        // ✅ V8 FIX: Include REASONING type for models like Gemini Flash
         const hasTextContent = m.parts?.some(
-          p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
+          p => (p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING) && 'text' in p && p.text,
         );
 
         if (hasTextContent) {
