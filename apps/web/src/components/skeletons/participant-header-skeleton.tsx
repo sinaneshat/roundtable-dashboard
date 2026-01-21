@@ -30,7 +30,7 @@ export function ParticipantHeaderSkeleton({
       <Skeleton className="size-8 rounded-full" />
       <div className="flex items-center gap-2 flex-wrap flex-1 min-w-0">
         <Skeleton className="h-5 w-32" />
-        {showRole && <Skeleton className="h-5 w-20 rounded-full" />}
+        {showRole && <Skeleton className="h-6 w-20 rounded-full" />}
         {showStatus && <Skeleton className="ml-1 size-1.5 rounded-full" />}
       </div>
     </div>

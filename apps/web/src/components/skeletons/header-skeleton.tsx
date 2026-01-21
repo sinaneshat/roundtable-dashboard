@@ -28,7 +28,7 @@ export function HeaderSkeleton({
         <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
           {/* Mobile sidebar trigger - only visible on mobile */}
           {showTrigger && (
-            <Skeleton className="size-10 rounded-lg md:hidden shrink-0" />
+            <Skeleton className="size-11 rounded-lg md:hidden shrink-0" />
           )}
 
           {variant === 'simple' && (

@@ -9,6 +9,8 @@
 
 import { useCallback, useRef } from 'react';
 
+const MAX_TRACKED_ITEMS = 500;
+
 type UseTimelineAnimationsOptions = {
   /** Whether to enable animations at all */
   enabled?: boolean;
@@ -64,6 +66,12 @@ export function useTimelineAnimations({
 
   const markAnimated = useCallback((itemKey: string): void => {
     animatedItemsRef.current.add(itemKey);
+    if (animatedItemsRef.current.size > MAX_TRACKED_ITEMS) {
+      const first = animatedItemsRef.current.values().next().value;
+      if (first !== undefined) {
+        animatedItemsRef.current.delete(first);
+      }
+    }
   }, []);
 
   const hasAnimated = useCallback((itemKey: string): boolean => {

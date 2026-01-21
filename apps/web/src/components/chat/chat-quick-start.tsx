@@ -4,7 +4,7 @@ import { motion } from 'motion/react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { AvatarGroup } from '@/components/chat/avatar-group';
-import { Skeleton } from '@/components/ui/skeleton';
+import { QuickStartSkeleton } from '@/components/skeletons';
 import { useModelsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useIsMounted } from '@/hooks/utils/use-is-mounted';
 import { getChatModeLabel, getExampleParticipantCount } from '@/lib/config';
@@ -172,35 +172,7 @@ type ChatQuickStartProps = {
   /** Disable all suggestion buttons (e.g., during submission) */
   disabled?: boolean;
 };
-export function QuickStartSkeleton({ className }: { className?: string }) {
-  return (
-    <div className={cn('w-full relative z-20', className)}>
-      <div className="flex flex-col">
-        {[0, 1, 2].map(index => (
-          <div
-            key={index}
-            className={cn(
-              'w-full px-4 py-3',
-              index !== 2 && 'border-b border-border/50',
-            )}
-          >
-            <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-3">
-              <Skeleton className="h-5 w-3/4" />
-              <div className="flex items-center gap-2.5 shrink-0">
-                <Skeleton className="h-6 w-16 rounded-2xl" />
-                <div className="flex -space-x-2">
-                  {[0, 1, 2].map(i => (
-                    <Skeleton key={i} className="size-6 rounded-full" />
-                  ))}
-                </div>
-              </div>
-            </div>
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
+export { QuickStartSkeleton };
 
 export function ChatQuickStart({
   onSuggestionClick,

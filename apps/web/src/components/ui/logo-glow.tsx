@@ -1,5 +1,4 @@
-import { motion } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { motion, useReducedMotion } from 'motion/react';
 
 import { cn } from '@/lib/ui/cn';
 
@@ -11,17 +10,7 @@ type LogoGlowProps = {
 };
 
 export function LogoGlow({ className }: LogoGlowProps) {
-  const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
-
-  useEffect(() => {
-    const mediaQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
-    setPrefersReducedMotion(mediaQuery.matches);
-
-    const handler = (e: MediaQueryListEvent) => setPrefersReducedMotion(e.matches);
-    mediaQuery.addEventListener('change', handler);
-    return () => mediaQuery.removeEventListener('change', handler);
-  }, []);
-
+  const prefersReducedMotion = useReducedMotion();
   const shouldAnimate = !prefersReducedMotion;
   const colorCycle = [...GLOW_COLORS, DEFAULT_GLOW_COLOR];
 

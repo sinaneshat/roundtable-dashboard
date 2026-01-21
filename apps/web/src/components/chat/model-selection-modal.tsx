@@ -38,7 +38,7 @@ import {
   useUpdateUserPresetMutation,
 } from '@/hooks/mutations';
 import { useUsageStatsQuery, useUserPresetsQuery } from '@/hooks/queries';
-import { useBoolean } from '@/hooks/utils';
+import { useBoolean, useDragEdgeScroll } from '@/hooks/utils';
 import { canAccessPreset, createRoleSystemPrompt, MODEL_PRESETS } from '@/lib/config';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
@@ -116,6 +116,7 @@ export function ModelSelectionModal({
   const t = useTranslations();
   const [searchQuery, setSearchQuery] = useState('');
   const searchInputRef = useRef<HTMLInputElement>(null);
+  const scrollViewportRef = useRef<HTMLDivElement>(null);
 
   const [activeTab, setActiveTab] = useState(DEFAULT_MODEL_SELECTION_TAB);
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
@@ -171,6 +172,17 @@ export function ModelSelectionModal({
   const isSearching = searchQuery.trim().length > 0;
   const isTagFiltering = selectedTags.size > 0;
   const isFiltering = isSearching || isTagFiltering;
+
+  const {
+    onDrag: onEdgeDrag,
+    onDragStart: onEdgeDragStart,
+    onDragEnd: onEdgeDragEnd,
+  } = useDragEdgeScroll({
+    scrollContainerRef: scrollViewportRef,
+    edgeThreshold: 60,
+    maxScrollSpeed: 3,
+    enabled: enableDrag && !isFiltering,
+  });
 
   const filteredModels = useMemo(() => {
     let filtered = orderedModels;
@@ -969,7 +981,7 @@ export function ModelSelectionModal({
                               )
                             : enableDrag && !isFiltering
                               ? (
-                                  <ScrollArea className="h-full" layoutScroll>
+                                  <ScrollArea className="h-full" layoutScroll viewportRef={scrollViewportRef}>
                                     <Reorder.Group
                                       axis="y"
                                       values={sortedFilteredModels}
@@ -989,6 +1001,9 @@ export function ModelSelectionModal({
                                           isVisionIncompatible={visionIncompatibleModelIds?.has(orderedModel.model.id)}
                                           isFileIncompatible={fileIncompatibleModelIds?.has(orderedModel.model.id)}
                                           pendingRole={pendingRoles[orderedModel.model.id]}
+                                          onDragMove={onEdgeDrag}
+                                          onDragStartCustom={onEdgeDragStart}
+                                          onDragEndCustom={onEdgeDragEnd}
                                         />
                                       ))}
                                     </Reorder.Group>

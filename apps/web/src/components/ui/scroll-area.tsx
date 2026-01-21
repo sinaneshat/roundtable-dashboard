@@ -8,9 +8,11 @@ import { cn } from '@/lib/ui/cn';
 type ScrollAreaProps = ComponentProps<'div'> & {
   orientation?: 'vertical' | 'horizontal' | 'both';
   layoutScroll?: boolean;
+  /** Ref to access the scrollable viewport element directly */
+  viewportRef?: React.RefObject<HTMLDivElement | null>;
 };
 
-function ScrollArea({ ref, className, children, orientation = 'vertical', layoutScroll = false, ...props }: ScrollAreaProps & { ref?: React.RefObject<ElementRef<'div'> | null> }) {
+function ScrollArea({ ref, className, children, orientation = 'vertical', layoutScroll = false, viewportRef, ...props }: ScrollAreaProps & { ref?: React.RefObject<ElementRef<'div'> | null> }) {
   const viewportClasses = cn(
     'size-full rounded-[inherit]',
     // Overflow handling based on orientation
@@ -37,6 +39,7 @@ function ScrollArea({ ref, className, children, orientation = 'vertical', layout
       {layoutScroll
         ? (
             <motion.div
+              ref={viewportRef}
               data-slot="scroll-area-viewport"
               layoutScroll
               className={viewportClasses}
@@ -46,6 +49,7 @@ function ScrollArea({ ref, className, children, orientation = 'vertical', layout
           )
         : (
             <div
+              ref={viewportRef}
               data-slot="scroll-area-viewport"
               className={viewportClasses}
             >

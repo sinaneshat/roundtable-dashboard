@@ -1,5 +1,6 @@
 import { getShortRoleName } from '@roundtable/shared';
 import { Link } from '@tanstack/react-router';
+import type { PanInfo } from 'motion/react';
 import { Reorder, useDragControls } from 'motion/react';
 import { useState } from 'react';
 
@@ -93,6 +94,12 @@ export type ModelItemProps = {
   isVisionIncompatible?: boolean;
   isFileIncompatible?: boolean;
   pendingRole?: PendingRoleConfig;
+  /** Custom drag move handler for edge scroll */
+  onDragMove?: (event: PointerEvent, info: PanInfo) => void;
+  /** Custom drag start handler for edge scroll */
+  onDragStartCustom?: () => void;
+  /** Custom drag end handler for edge scroll */
+  onDragEndCustom?: () => void;
 };
 
 export function ModelItem({
@@ -106,6 +113,9 @@ export function ModelItem({
   isVisionIncompatible = false,
   isFileIncompatible = false,
   pendingRole,
+  onDragMove,
+  onDragStartCustom,
+  onDragEndCustom,
 }: ModelItemProps) {
   const t = useTranslations();
   const dragControls = useDragControls();
@@ -231,8 +241,15 @@ export function ModelItem({
           !isDisabled && !isDragging && 'hover:bg-white/[0.07]',
           isDragging && 'bg-black/20 backdrop-blur-xl shadow-[0px_8px_24px_rgba(0,0,0,0.4)] cursor-grabbing',
         )}
-        onDragStart={() => setIsDragging(true)}
-        onDragEnd={() => setIsDragging(false)}
+        onDrag={onDragMove}
+        onDragStart={() => {
+          setIsDragging(true);
+          onDragStartCustom?.();
+        }}
+        onDragEnd={() => {
+          setIsDragging(false);
+          onDragEndCustom?.();
+        }}
         transition={{ duration: 0.15 }}
         onClick={isDisabled ? undefined : onToggle}
       >

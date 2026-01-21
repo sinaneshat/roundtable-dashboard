@@ -883,13 +883,12 @@ export function useMultiParticipantChat(
     // that occur when AI SDK tries to resume on new threads without an ID.
     // When useChatId is undefined (new thread), resume is disabled to prevent corruption.
     // When useChatId is valid (existing thread), resume enables automatic reconnection.
-    // ✅ FIX: Disable AI SDK auto-resume entirely - custom resumption handles all cases
-    // Problem: AI SDK's resume:true sets status='streaming' on mount, which conflicts with
-    // our custom resumption (useIncompleteRoundResumption). Both systems fight for control:
-    // - AI SDK auto-resumes ANY active stream (possibly wrong participant, wrong round)
-    // - Custom resumption exits early seeing "sdk status not ready" or already streaming
-    // Solution: Let custom resumption handle ALL resumption scenarios
-    resume: false,
+    // ✅ SERVER-DRIVEN RESUMPTION: Re-enable AI SDK resume for existing threads
+    // Server now handles round continuation via queue-based orchestration:
+    // - onFinish queues next participant/moderator via ROUND_ORCHESTRATION_QUEUE
+    // - GET /stream auto-triggers recovery via queueRoundCompletionCheck
+    // - Client just observes streams, server drives the round forward
+    resume: !!useChatId,
     // ✅ NEVER pass messages - let AI SDK be uncontrolled
     // Initial hydration happens via setMessages effect below
 

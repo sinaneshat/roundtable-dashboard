@@ -26,7 +26,7 @@ export function MessageCardSkeleton({
     return (
       <div className={cn('mb-4 flex justify-end', className)} {...props}>
         <div className="max-w-[80%]">
-          <div className="flex items-center gap-3 py-2 mb-2 flex-row-reverse">
+          <div className="flex items-center gap-3 mb-5 flex-row-reverse">
             <Skeleton className="size-8 rounded-full" />
             <Skeleton className="h-5 w-24" />
           </div>
@@ -42,7 +42,7 @@ export function MessageCardSkeleton({
   return (
     <div className={cn('mb-4 flex justify-start', className)} {...props}>
       <div className="max-w-[85%]">
-        <div className="flex items-center gap-3 py-2 mb-2">
+        <div className="flex items-center gap-3 mb-5">
           <Skeleton className="size-8 rounded-full" />
           <div className="flex items-center gap-2">
             <Skeleton className="h-5 w-32" />

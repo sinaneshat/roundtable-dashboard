@@ -22,6 +22,8 @@ export type { UseDebouncedValueReturn } from './use-debounced-value';
 export { useDebouncedValue } from './use-debounced-value';
 export type { UseDragDropReturn } from './use-drag-drop';
 export { useDragDrop } from './use-drag-drop';
+export type { UseDragEdgeScrollOptions, UseDragEdgeScrollReturn } from './use-drag-edge-scroll';
+export { useDragEdgeScroll } from './use-drag-edge-scroll';
 export type { UseElapsedTimeReturn } from './use-elapsed-time';
 export { useElapsedTime } from './use-elapsed-time';
 export type { FilePreview, UseFilePreviewOptions, UseFilePreviewReturn } from './use-file-preview';
