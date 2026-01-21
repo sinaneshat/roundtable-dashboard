@@ -139,16 +139,20 @@ export const getRoundStatusHandler: RouteHandler<typeof getRoundStatusRoute, Api
       }
     }
 
-    // Determine nextParticipantIndex
-    const incompleteParticipants = await getIncompleteParticipants(
-      threadId,
-      roundNumber,
-      totalParticipants,
-      c.env,
-      db,
-    );
-    const firstIncomplete = incompleteParticipants[0];
-    const nextParticipantIndex = firstIncomplete !== undefined ? firstIncomplete : null;
+    // Determine nextParticipantIndex - only compute if presearch is complete or not needed
+    let nextParticipantIndex: number | null = null;
+
+    if (!needsPreSearch) {
+      const incompleteParticipants = await getIncompleteParticipants(
+        threadId,
+        roundNumber,
+        totalParticipants,
+        c.env,
+        db,
+      );
+      const firstIncomplete = incompleteParticipants[0];
+      nextParticipantIndex = firstIncomplete !== undefined ? firstIncomplete : null;
+    }
 
     // Determine needsModerator
     // totalParticipants >= 2 && completedParticipants >= total && !hasModeratorMessage

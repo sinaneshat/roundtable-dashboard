@@ -96,13 +96,18 @@ export function useNavigationCleanup({
     }
 
     // Reset when navigating from overview to a DIFFERENT thread
+    // ✅ FIX: Don't reset during new thread creation (preserves waitingToStartStreaming)
     if (isFromOverviewToThread && (currentState.thread || currentState.messages.length > 0)) {
-      const targetSlug = pathname?.replace('/chat/', '');
-      const currentSlug = currentState.thread?.slug;
-      const isNavigatingToSameThread = targetSlug && currentSlug && targetSlug === currentSlug;
+      const isNewThreadCreation = currentState.createdThreadId !== null;
 
-      if (!isNavigatingToSameThread) {
-        currentState.resetForThreadNavigation();
+      if (!isNewThreadCreation) {
+        const targetSlug = pathname?.replace('/chat/', '');
+        const currentSlug = currentState.thread?.slug;
+        const isNavigatingToSameThread = targetSlug && currentSlug && targetSlug === currentSlug;
+
+        if (!isNavigatingToSameThread) {
+          currentState.resetForThreadNavigation();
+        }
       }
     }
 
