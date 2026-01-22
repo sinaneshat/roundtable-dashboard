@@ -59,7 +59,6 @@ import {
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
 
-import { htmlToMarkdown } from './content-extractor.service';
 import {
   cacheImageDescription,
   cacheSearchResult,
@@ -73,6 +72,7 @@ type PuppeteerRequestHandler = {
   abort: () => void;
   continue: () => void;
 };
+
 export async function streamSearchQuery(
   userMessage: string,
   env: ApiEnv['Bindings'],
@@ -273,7 +273,7 @@ type PageOperationConfig = z.infer<typeof _PageOperationConfigSchema>;
 
 const _ExtractedContentSchema = z.object({
   content: z.string(),
-  rawHTML: z.string(),
+  markdown: z.string(),
   metadata: z.object({
     title: z.string(),
     author: z.string().optional(),
@@ -391,6 +391,116 @@ function createContentExtractor(): ContentExtractorFn {
         .trim();
     };
 
+    /**
+     * Convert DOM element to markdown - runs in browser context (no external deps)
+     * Handles: headers, links, bold, italic, code, lists, paragraphs, images
+     */
+    const elementToMarkdown = (element: Element): string => {
+      const processNode = (node: Node): string => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          return node.textContent?.replace(/\s+/g, ' ') || '';
+        }
+
+        if (node.nodeType !== Node.ELEMENT_NODE) {
+          return '';
+        }
+
+        const el = node as Element;
+        const tag = el.tagName.toLowerCase();
+        const children = Array.from(el.childNodes).map(processNode).join('');
+
+        switch (tag) {
+          // Headers
+          case 'h1': return `\n\n# ${children.trim()}\n\n`;
+          case 'h2': return `\n\n## ${children.trim()}\n\n`;
+          case 'h3': return `\n\n### ${children.trim()}\n\n`;
+          case 'h4': return `\n\n#### ${children.trim()}\n\n`;
+          case 'h5': return `\n\n##### ${children.trim()}\n\n`;
+          case 'h6': return `\n\n###### ${children.trim()}\n\n`;
+
+          // Text formatting
+          case 'strong':
+          case 'b': return `**${children}**`;
+          case 'em':
+          case 'i': return `*${children}*`;
+          case 'code': return `\`${children}\``;
+          case 'pre': {
+            const codeEl = el.querySelector('code');
+            const lang = codeEl?.className?.match(/language-(\w+)/)?.[1] || '';
+            const code = codeEl?.textContent || el.textContent || '';
+            return `\n\n\`\`\`${lang}\n${code.trim()}\n\`\`\`\n\n`;
+          }
+
+          // Links
+          case 'a': {
+            const href = el.getAttribute('href') || '';
+            if (!href || href.startsWith('javascript:'))
+              return children;
+            return `[${children}](${href})`;
+          }
+
+          // Images
+          case 'img': {
+            const src = el.getAttribute('src') || '';
+            const alt = el.getAttribute('alt') || '';
+            if (!src || src.startsWith('data:'))
+              return '';
+            return `![${alt}](${src})`;
+          }
+
+          // Lists
+          case 'ul':
+          case 'ol': return `\n${children}\n`;
+          case 'li': return `- ${children.trim()}\n`;
+
+          // Block elements
+          case 'p': return `\n\n${children.trim()}\n\n`;
+          case 'br': return '\n';
+          case 'hr': return '\n\n---\n\n';
+          case 'blockquote': return `\n\n> ${children.trim().replace(/\n/g, '\n> ')}\n\n`;
+
+          // Table handling (basic)
+          case 'table': return `\n\n${children}\n\n`;
+          case 'thead':
+          case 'tbody': return children;
+          case 'tr': return `|${children}\n`;
+          case 'th':
+          case 'td': return ` ${children.trim()} |`;
+
+          // Structural elements - just return children
+          case 'div':
+          case 'section':
+          case 'article':
+          case 'main':
+          case 'span':
+          case 'figure':
+          case 'figcaption':
+            return children;
+
+          // Skip unwanted elements
+          case 'script':
+          case 'style':
+          case 'nav':
+          case 'iframe':
+          case 'noscript':
+          case 'svg':
+            return '';
+
+          default:
+            return children;
+        }
+      };
+
+      const raw = processNode(element);
+      // Clean up excessive whitespace
+      return raw
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n +/g, '\n')
+        .replace(/ +\n/g, '\n')
+        .trim();
+    };
+
     // Remove unwanted elements
     const unwantedSelectors = [
       'script',
@@ -451,10 +561,10 @@ function createContentExtractor(): ContentExtractorFn {
       mainContent = document.body.textContent || '';
     }
 
-    // Extract raw HTML for markdown conversion
-    let rawHTML = '';
+    // Convert to markdown in browser context (no external deps needed in Workers)
+    let markdown = '';
     if (extractFormat === 'markdown' && mainElement) {
-      rawHTML = mainElement.innerHTML || '';
+      markdown = elementToMarkdown(mainElement);
     }
 
     // Extract images
@@ -519,7 +629,7 @@ function createContentExtractor(): ContentExtractorFn {
 
     return {
       content: cleanedContent.substring(0, 15000),
-      rawHTML: rawHTML.substring(0, 20000),
+      markdown: markdown.substring(0, 20000),
       metadata: {
         title: cleanText(title),
         author: author ? cleanText(author) : undefined,
@@ -835,10 +945,10 @@ async function extractPageContent(
     );
     await browserResult.browser.close();
 
-    // Convert raw HTML to markdown if format is 'markdown'
+    // Use markdown from browser context (already converted, no external deps needed)
     let rawContent: string | undefined;
-    if (format === 'markdown' && extracted.rawHTML) {
-      rawContent = htmlToMarkdown(extracted.rawHTML);
+    if (format === 'markdown' && extracted.markdown) {
+      rawContent = extracted.markdown;
     } else if (format === 'text') {
       rawContent = extracted.content;
     }

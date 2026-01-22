@@ -128,7 +128,7 @@ Cloudflare Queues are only available in deployed Workers environments.
 In local development, the service automatically falls back to `waitUntil()`:
 
 ```
-Local (pnpm dev):
+Local (bun run dev):
   Thread Created → queueTitleGeneration()
                 → isTitleQueueAvailable() = false
                 → generateTitleWithWaitUntil() ✅
@@ -163,10 +163,10 @@ export function isTitleQueueAvailable(env: CloudflareEnv): boolean {
 View title generation logs:
 ```bash
 # Preview
-pnpm wrangler tail roundtable-dashboard-preview
+bun run wrangler tail roundtable-dashboard-preview
 
 # Production
-pnpm wrangler tail roundtable-dashboard-production
+bun run wrangler tail roundtable-dashboard-production
 ```
 
 Look for log entries:
@@ -305,7 +305,7 @@ try {
 ### Step 6: Generate TypeScript Types
 
 ```bash
-pnpm cf-typegen
+bun run cf-typegen
 ```
 
 Regenerates `cloudflare-env.d.ts` with queue bindings.
@@ -426,7 +426,7 @@ Queue already configured in `wrangler.jsonc` (default environment).
 
 **Start dev server**:
 ```bash
-pnpm dev
+bun run dev
 ```
 
 Queue consumer runs automatically with local worker.
@@ -435,7 +435,7 @@ Queue consumer runs automatically with local worker.
 
 **Deploy to preview**:
 ```bash
-pnpm deploy:preview
+bun run deploy:preview
 ```
 
 Queue configuration in `wrangler.jsonc` env.preview section automatically applied.
@@ -449,7 +449,7 @@ wrangler queues list
 
 **Deploy to production**:
 ```bash
-pnpm deploy:production
+bun run deploy:production
 ```
 
 Queue configuration in `wrangler.jsonc` env.production section automatically applied.
@@ -517,22 +517,22 @@ wrangler queues consumer dlq reprocess title-generation-queue
 
 **Run all tests**:
 ```bash
-pnpm test
+bun run test
 ```
 
 **Run queue tests only**:
 ```bash
-pnpm test src/api/queues/__tests__/
+bun run test src/api/queues/__tests__/
 ```
 
 **Watch mode**:
 ```bash
-pnpm test:watch src/api/queues/__tests__/
+bun run test:watch src/api/queues/__tests__/
 ```
 
 **Coverage**:
 ```bash
-pnpm test:coverage
+bun run test:coverage
 ```
 
 ## Migration Checklist
@@ -544,14 +544,14 @@ When migrating from `waitUntil()` to Queues:
 - [ ] Create queue consumer in `src/workers/`
 - [ ] Update producer code to send messages to queue
 - [ ] Register consumer in `custom-worker.ts`
-- [ ] Run `pnpm cf-typegen` to generate types
+- [ ] Run `bun run cf-typegen` to generate types
 - [ ] Write comprehensive unit tests
-- [ ] Run `pnpm lint && pnpm check-types && pnpm test`
-- [ ] Test locally with `pnpm dev`
-- [ ] Deploy to preview with `pnpm deploy:preview`
+- [ ] Run `bun run lint && bun run check-types && bun run test`
+- [ ] Test locally with `bun run dev`
+- [ ] Deploy to preview with `bun run deploy:preview`
 - [ ] Verify queue creation with `wrangler queues list --env preview`
 - [ ] Test in preview environment
-- [ ] Deploy to production with `pnpm deploy:production`
+- [ ] Deploy to production with `bun run deploy:production`
 - [ ] Monitor queue with `wrangler tail --env production`
 
 ## Monitoring and Observability
@@ -661,7 +661,7 @@ wrangler queues consumer dlq list title-generation-queue
 
 **Regenerate CloudFlare types**:
 ```bash
-pnpm cf-typegen
+bun run cf-typegen
 ```
 
 **Verify binding in cloudflare-env.d.ts**:

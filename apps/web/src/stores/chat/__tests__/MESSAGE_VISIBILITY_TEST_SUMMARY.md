@@ -160,16 +160,16 @@ Every test verifies:
 
 ```bash
 # Run all message visibility tests
-pnpm test message-visibility
+bun run test message-visibility
 
 # Run specific test file
-pnpm test src/stores/chat/__tests__/message-visibility-e2e.test.ts
+bun run test src/stores/chat/__tests__/message-visibility-e2e.test.ts
 
 # Run deduplication tests
-pnpm test src/stores/chat/__tests__/user-message-deduplication.test.ts
+bun run test src/stores/chat/__tests__/user-message-deduplication.test.ts
 
 # Run in watch mode
-pnpm test:watch message-visibility
+bun run test:watch message-visibility
 ```
 
 ## Integration with Existing Tests

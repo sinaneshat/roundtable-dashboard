@@ -1,0 +1,24 @@
+# Bun configuration for the monorepo
+# https://bun.sh/docs/runtime/bunfig
+
+[install]
+# Trusted dependencies for running postinstall scripts (native binaries)
+trustedDependencies = [
+  "@tailwindcss/oxide",
+  "better-sqlite3",
+  "core-js",
+  "esbuild",
+  "protobufjs",
+  "sharp",
+  "unrs-resolver",
+  "workerd",
+]
+
+[install.lockfile]
+# Save lockfile (bun.lockb binary format)
+# Note: Turborepo shows a warning but functions correctly with binary lockfile
+save = true
+
+[run]
+# Shell to use for scripts (bun or system)
+shell = "system"

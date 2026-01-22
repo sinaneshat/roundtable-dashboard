@@ -66,7 +66,7 @@ Playwright E2E test configuration following TanStack Start patterns:
 - **Test Directory**: `./e2e` for all E2E test files
 - **Base URL**: `http://localhost:3000` configured for local dev server
 - **Browser**: Chromium by default (Firefox/WebKit can be enabled)
-- **Web Server**: Auto-starts `pnpm dev` before tests (reuses existing in dev)
+- **Web Server**: Auto-starts `bun run dev` before tests (reuses existing in dev)
 - **Artifacts**: Screenshots/videos on failure, traces on retry
 - **Reporters**: HTML report with GitHub Actions support
 
@@ -107,35 +107,35 @@ Testing utilities organized following project architecture:
 
 ```bash
 # Run all tests once
-pnpm test
+bun run test
 
 # Run tests in watch mode (auto-rerun on file changes)
-pnpm test:watch
+bun run test:watch
 
 # Run tests with coverage report
-pnpm test:coverage
+bun run test:coverage
 
 # Run tests in CI mode (optimized for continuous integration)
-pnpm test:ci
+bun run test:ci
 ```
 
 ### E2E Tests (Playwright)
 
 ```bash
 # Run all E2E tests (starts dev server automatically)
-pnpm test:e2e
+bun run test:e2e
 
 # Run E2E tests with interactive UI
-pnpm test:e2e:ui
+bun run test:e2e:ui
 
 # Run E2E tests in headed mode (visible browser)
-pnpm test:e2e:headed
+bun run test:e2e:headed
 
 # Debug E2E tests with Playwright Inspector
-pnpm test:e2e:debug
+bun run test:e2e:debug
 
 # View last test report
-pnpm test:e2e:report
+bun run test:e2e:report
 ```
 
 ## Writing Tests
@@ -317,7 +317,7 @@ Test users are seeded in `src/db/seed-local.sql` for E2E testing:
 
 **Reset database and seed**:
 ```bash
-pnpm db:full-reset:local
+bun run db:full-reset:local
 ```
 
 ### Project Configuration
@@ -366,19 +366,19 @@ The global setup (`e2e/global-setup.ts`) runs before all tests to:
 
 ```bash
 # Run all E2E tests
-pnpm test:e2e
+bun run test:e2e
 
 # Run specific project
-pnpm test:e2e --project=chromium-no-auth
+bun run test:e2e --project=chromium-no-auth
 
 # Run specific test file
-pnpm test:e2e e2e/flows/chat-overview.spec.ts
+bun run test:e2e e2e/flows/chat-overview.spec.ts
 
 # Debug mode
-pnpm test:e2e:debug
+bun run test:e2e:debug
 
 # View report
-pnpm test:e2e:report
+bun run test:e2e:report
 ```
 
 ### E2E Test Structure
@@ -452,8 +452,8 @@ If you encounter errors with ESM modules:
 
 ### Coverage Not Generated
 
-- Install `@vitest/coverage-v8` package: `pnpm add -D @vitest/coverage-v8`
-- Run `pnpm test:coverage` instead of `pnpm test`
+- Install `@vitest/coverage-v8` package: `bun run add -D @vitest/coverage-v8`
+- Run `bun run test:coverage` instead of `bun run test`
 - Check `coverage` configuration in `vitest.config.ts`
 - Coverage reports are saved to `/coverage` directory
 
@@ -469,21 +469,21 @@ If you encounter errors with ESM modules:
 ```bash
 # Regenerate auth state
 rm -rf .playwright/auth
-pnpm test:e2e
+bun run test:e2e
 ```
 
 **Test users not in database**:
 ```bash
 # Reset and seed database
-pnpm db:full-reset:local
+bun run db:full-reset:local
 ```
 
 **Dev server not starting**:
 ```bash
 # Ensure dev server works
-pnpm dev
+bun run dev
 # Then run tests with existing server
-pnpm test:e2e --project=chromium-no-auth
+bun run test:e2e --project=chromium-no-auth
 ```
 
 **Selector not found**:

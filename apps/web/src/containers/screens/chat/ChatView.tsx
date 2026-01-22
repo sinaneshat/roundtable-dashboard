@@ -651,7 +651,7 @@ export function ChatView({
   // Toggle can work even while models load - only block during active operations
   const isToggleDisabled = isOperationBlocked;
 
-  const showSubmitSpinner = formActions.isSubmitting || waitingToStartStreaming || isAnalyzingPrompt;
+  const showSubmitSpinner = formActions.isSubmitting || (waitingToStartStreaming && !isStreaming) || isAnalyzingPrompt;
 
   const handleAutoModeSubmit = useCallback(async (e: React.FormEvent) => {
     // ✅ FIX: Auto mode analysis should run for BOTH overview (initial) AND thread (mid-conversation)

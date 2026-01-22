@@ -92,11 +92,11 @@ The `.playwright/auth/` directory is gitignored (`.gitignore:14`), so it must be
 Run Playwright to trigger global setup:
 
 ```bash
-pnpm exec playwright test e2e/pro/stream-resumption.spec.ts
+bun run exec playwright test e2e/pro/stream-resumption.spec.ts
 ```
 
 This will:
-1. Start dev server (`pnpm dev`)
+1. Start dev server (`bun run dev`)
 2. Run `e2e/global-setup.ts`
 3. Create `.playwright/auth/pro-user.json`
 4. Execute tests
@@ -114,13 +114,13 @@ Once auth state exists:
 
 ```bash
 # Run all stream resumption tests
-pnpm exec playwright test e2e/pro/stream-resumption.spec.ts
+bun run exec playwright test e2e/pro/stream-resumption.spec.ts
 
 # Run specific test
-pnpm exec playwright test e2e/pro/stream-resumption.spec.ts -g "refresh immediately after submit"
+bun run exec playwright test e2e/pro/stream-resumption.spec.ts -g "refresh immediately after submit"
 
 # Debug mode
-pnpm exec playwright test e2e/pro/stream-resumption.spec.ts --debug
+bun run exec playwright test e2e/pro/stream-resumption.spec.ts --debug
 ```
 
 ## First Test Failure Analysis

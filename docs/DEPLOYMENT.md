@@ -41,14 +41,14 @@ This monorepo deploys two Cloudflare Workers:
 
 In the Cloudflare Dashboard, connect your repository to **4 Workers**.
 
-**Important**: Root directory must be `/` (empty) to run from monorepo root where pnpm workspace and turbo are configured.
+**Important**: Root directory must be `/` (empty) to run from monorepo root where bun run workspace and turbo are configured.
 
 | Worker Name | Root Directory | Build Command | Deploy Command |
 |-------------|----------------|---------------|----------------|
-| `roundtable-api-preview` | `/` | `pnpm install` | `npx turbo run deploy:preview --filter=@roundtable/api` |
-| `roundtable-api-production` | `/` | `pnpm install` | `npx turbo run deploy:production --filter=@roundtable/api` |
-| `roundtable-web-preview` | `/` | `pnpm install` | `npx turbo run deploy:preview --filter=@roundtable/web` |
-| `roundtable-web` | `/` | `pnpm install` | `npx turbo run deploy:production --filter=@roundtable/web` |
+| `roundtable-api-preview` | `/` | `bun run install` | `npx turbo run deploy:preview --filter=@roundtable/api` |
+| `roundtable-api-production` | `/` | `bun run install` | `npx turbo run deploy:production --filter=@roundtable/api` |
+| `roundtable-web-preview` | `/` | `bun run install` | `npx turbo run deploy:preview --filter=@roundtable/web` |
+| `roundtable-web` | `/` | `bun run install` | `npx turbo run deploy:production --filter=@roundtable/web` |
 
 ### Custom Domains
 
@@ -102,11 +102,11 @@ wrangler secret put POSTHOG_HOST --env preview
 
 ```bash
 # Install dependencies
-pnpm install
+bun run install
 
 # Setup local database
-pnpm db:migrate:local
-pnpm db:seed:local
+bun run db:migrate:local
+bun run db:seed:local
 ```
 
 ### Configure Local Secrets
@@ -124,25 +124,25 @@ cp apps/web/.env.example apps/web/.env
 
 ```bash
 # Start both API and Web (turbo parallelizes)
-pnpm dev
+bun run dev
 
 # Or start individually
-pnpm dev:api  # API on http://localhost:8787
-pnpm dev:web  # Web on http://localhost:5173
+bun run dev:api  # API on http://localhost:8787
+bun run dev:web  # Web on http://localhost:5173
 ```
 
 ## Manual Deployment
 
 ```bash
 # Deploy to preview
-pnpm deploy:preview
+bun run deploy:preview
 
 # Deploy to production
-pnpm deploy:production
+bun run deploy:production
 
 # Or deploy specific app
-pnpm api:deploy:preview
-pnpm web:deploy:preview
+bun run api:deploy:preview
+bun run web:deploy:preview
 ```
 
 ## Type Generation
@@ -151,10 +151,10 @@ Cloudflare env types are auto-generated on build:
 
 ```bash
 # Regenerate types manually
-pnpm cf-typegen
+bun run cf-typegen
 
 # Check if types are up-to-date (for CI)
-pnpm cf-typegen:check
+bun run cf-typegen:check
 ```
 
 ## Environment Variables
@@ -184,8 +184,8 @@ pnpm cf-typegen:check
 
 ### Build Fails
 
-1. Ensure types are generated: `pnpm cf-typegen`
-2. Check type errors: `pnpm check-types`
+1. Ensure types are generated: `bun run cf-typegen`
+2. Check type errors: `bun run check-types`
 3. Verify wrangler.jsonc is valid JSON
 
 ### Secrets Not Found
@@ -198,10 +198,10 @@ pnpm cf-typegen:check
 
 ```bash
 # Reset local database
-pnpm db:full-reset:local
+bun run db:full-reset:local
 
 # Run migrations
-pnpm db:migrate:local   # Local
-pnpm db:migrate:preview # Preview
-pnpm db:migrate:prod    # Production
+bun run db:migrate:local   # Local
+bun run db:migrate:preview # Preview
+bun run db:migrate:prod    # Production
 ```

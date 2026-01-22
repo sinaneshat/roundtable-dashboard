@@ -23,8 +23,12 @@ export default defineConfig({
         autoStaticPathsDiscovery: false,
       },
       pages: [
+        // Legal pages - fully static, no dynamic content
         { path: '/legal/terms', prerender: { enabled: true } },
         { path: '/legal/privacy', prerender: { enabled: true } },
+        // Auth pages - static shell prerendered, session check runs client-side
+        { path: '/auth/sign-in', prerender: { enabled: true } },
+        { path: '/auth/error', prerender: { enabled: true } },
       ],
     }),
     react(),

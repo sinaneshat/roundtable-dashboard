@@ -8,8 +8,12 @@ import type { ApiEnv } from '@/types';
 import type { detailedHealthRoute, healthRoute } from './route';
 import type { HealthCheckContext } from './schema';
 
+// Track app-level timing
+let appModuleLoadTime: number | null = null;
+const appStartTime = Date.now();
+
 /**
- * Basic health check handler
+ * Basic health check handler with app-level timing
  * Returns simple health status for monitoring systems
  */
 export const healthHandler: RouteHandler<typeof healthRoute, ApiEnv> = createHandler(
@@ -18,6 +22,24 @@ export const healthHandler: RouteHandler<typeof healthRoute, ApiEnv> = createHan
     operationName: 'healthCheck',
   },
   async (c) => {
+    const handlerStart = Date.now();
+
+    // Track first invocation as module load complete
+    if (appModuleLoadTime === null) {
+      appModuleLoadTime = Date.now() - appStartTime;
+    }
+
+    const timings = {
+      appModuleLoadMs: appModuleLoadTime,
+      handlerExecutionMs: Date.now() - handlerStart,
+      appAgeMs: Date.now() - appStartTime,
+    };
+
+    // Return with timing info in response headers
+    c.header('X-App-Module-Load-Ms', String(timings.appModuleLoadMs));
+    c.header('X-Handler-Execution-Ms', String(timings.handlerExecutionMs));
+    c.header('X-App-Age-Ms', String(timings.appAgeMs));
+
     return Responses.health(c, HealthStatuses.HEALTHY);
   },
 );

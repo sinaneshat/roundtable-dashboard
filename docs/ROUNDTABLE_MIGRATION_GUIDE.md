@@ -406,8 +406,8 @@ Context about the user:
 **Commands**:
 ```bash
 # After creating schema file
-pnpm db:generate        # Generate migration
-pnpm db:migrate:local   # Apply to local database
+bun run db:generate        # Generate migration
+bun run db:migrate:local   # Apply to local database
 ```
 
 #### Service Layer Changes
@@ -823,9 +823,9 @@ Claude 4.1 Sonnet: I agree with GPT-5's focus on mid-sized hospitals, but from a
 **Database**
 - [ ] Create `src/db/tables/system-prompts.ts` with schema
 - [ ] Update `src/db/tables/chat.ts` to add `systemPromptId` to `chatThread`
-- [ ] Run `pnpm db:generate` to create migration
+- [ ] Run `bun run db:generate` to create migration
 - [ ] Review generated SQL migration file
-- [ ] Run `pnpm db:migrate:local` to apply migration
+- [ ] Run `bun run db:migrate:local` to apply migration
 - [ ] Verify default prompt exists in database: `SELECT * FROM system_prompt WHERE is_default = 1;`
 
 **Service Layer**
@@ -930,9 +930,9 @@ Claude 4.1 Sonnet: I agree with GPT-5's focus on mid-sized hospitals, but from a
 - [ ] Verify all models demonstrate role-appropriate perspectives
 
 **Code Quality**
-- [ ] Run `pnpm check-types` - no errors
-- [ ] Run `pnpm lint` - no errors
-- [ ] Run `pnpm lint:fix` for auto-fixable issues
+- [ ] Run `bun run check-types` - no errors
+- [ ] Run `bun run lint` - no errors
+- [ ] Run `bun run lint:fix` for auto-fixable issues
 
 **Performance**
 - [ ] Monitor API response times (should be <5s for 3-model orchestration)

@@ -211,16 +211,16 @@ for (const roundNum of testRounds) {
 
 ```bash
 # Run all parity tests
-pnpm test src/stores/chat/__tests__/round-0-vs-round-1-behavior-parity.test.ts
+bun run test src/stores/chat/__tests__/round-0-vs-round-1-behavior-parity.test.ts
 
 # Run immediate visibility tests
-pnpm test src/stores/chat/__tests__/non-initial-round-immediate-visibility.test.ts
+bun run test src/stores/chat/__tests__/non-initial-round-immediate-visibility.test.ts
 
 # Run message sync tests
-pnpm test src/stores/chat/__tests__/non-initial-round-user-message-sync.test.ts
+bun run test src/stores/chat/__tests__/non-initial-round-user-message-sync.test.ts
 
 # Run all non-initial round tests
-pnpm test src/stores/chat/__tests__/non-initial-round
+bun run test src/stores/chat/__tests__/non-initial-round
 ```
 
 ## What to Check When Adding New Round-Related Features

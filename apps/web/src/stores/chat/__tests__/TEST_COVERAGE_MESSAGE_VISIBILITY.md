@@ -220,16 +220,16 @@ Run all message visibility tests:
 
 ```bash
 # Specific test files
-pnpm test form-actions-message-persistence
-pnpm test non-initial-round-user-message-sync
-pnpm test non-initial-round-immediate-visibility
-pnpm test non-initial-round-submission-flow-playwright
+bun run test form-actions-message-persistence
+bun run test non-initial-round-user-message-sync
+bun run test non-initial-round-immediate-visibility
+bun run test non-initial-round-submission-flow-playwright
 
 # All chat store tests
-pnpm test src/stores/chat/__tests__/
+bun run test src/stores/chat/__tests__/
 
 # Watch mode for development
-pnpm test:watch form-actions-message-persistence
+bun run test:watch form-actions-message-persistence
 ```
 
 ## Coverage Summary

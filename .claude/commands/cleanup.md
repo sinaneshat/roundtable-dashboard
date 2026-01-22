@@ -547,7 +547,7 @@ grep -rn "// \(const\|let\|function\|export\|import\|return\|if\|for\|while\)" {
 Remove all commented-out code - use git history instead
 
 **5. Dead Imports/Exports**
-- Run `pnpm lint` to find unused imports (filter to target path)
+- Run `bun run lint` to find unused imports (filter to target path)
 - Search for exports not imported anywhere in `{TARGET_PATH}`
 
 **6. Console.log Statements**
@@ -560,11 +560,11 @@ grep -rn "console\.\(log\|debug\|info\|warn\|error\)" {TARGET_PATH} --include="*
 
 After user selects path and cleanup options:
 1. Confirm the target path: `{TARGET_PATH}`
-2. Run `pnpm lint` to identify ESLint issues (filter to target path)
-3. Run `pnpm check-types` to identify TypeScript issues (filter to target path)
+2. Run `bun run lint` to identify ESLint issues (filter to target path)
+3. Run `bun run check-types` to identify TypeScript issues (filter to target path)
 4. Search for forbidden patterns in `{TARGET_PATH}` only
 5. Fix issues following established patterns in `/docs/type-inference-patterns.md`
-6. Run `pnpm test` to verify fixes don't break tests
+6. Run `bun run test` to verify fixes don't break tests
 7. Report summary of changes made with file paths
 
 ### React 19 Pattern Search Commands

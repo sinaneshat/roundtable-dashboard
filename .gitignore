@@ -2,7 +2,7 @@
 
 # dependencies
 node_modules/
-.pnpm-store
+.bun/
 
 # Workspace package node_modules
 apps/*/node_modules/

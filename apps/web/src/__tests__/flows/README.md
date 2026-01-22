@@ -200,17 +200,17 @@ Tests verify proper cleanup on failures:
 
 ```bash
 # Run all flow tests
-pnpm test src/__tests__/flows/
+bun run test src/__tests__/flows/
 
 # Run specific test file
-pnpm test src/__tests__/flows/user-message-patch-timing.test.ts
-pnpm test src/__tests__/flows/presearch-placeholder-patch-timing.test.ts
+bun run test src/__tests__/flows/user-message-patch-timing.test.ts
+bun run test src/__tests__/flows/presearch-placeholder-patch-timing.test.ts
 
 # Watch mode
-pnpm test:watch src/__tests__/flows/
+bun run test:watch src/__tests__/flows/
 
 # Coverage
-pnpm test:coverage src/__tests__/flows/
+bun run test:coverage src/__tests__/flows/
 ```
 
 ---

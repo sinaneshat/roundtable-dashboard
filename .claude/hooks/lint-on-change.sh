@@ -84,7 +84,7 @@ run_eslint_fix() {
 
     # Run ESLint with reduced timeout and memory limits
     local lint_output
-    if lint_output=$(timeout "${LINT_TIMEOUT}s" pnpm lint:fix "$rel_path" 2>&1); then
+    if lint_output=$(timeout "${LINT_TIMEOUT}s" bun run lint:fix "$rel_path" 2>&1); then
         echo "✅ ESLint fix applied to $rel_path"
         # Cache successful result
         touch "$cache_file" 2>/dev/null || true
@@ -124,7 +124,7 @@ run_lightweight_ts_check() {
     cd "$project_dir"
 
     # Quick syntax check only (much faster and less memory)
-    if timeout 5s pnpm exec tsc --noEmit --skipLibCheck "$file_path" 2>/dev/null; then
+    if timeout 5s bunx tsc --noEmit --skipLibCheck "$file_path" 2>/dev/null; then
         echo "✅ TypeScript syntax valid for $rel_path"
         return 0
     else

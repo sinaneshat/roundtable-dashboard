@@ -38,6 +38,10 @@ async function getRootApp(): Promise<{ fetch: HonoFetch }> {
 }
 
 // Export the main worker handler with queue support
+// Track worker cold start time
+const workerStartTime = Date.now();
+let workerInitialized = false;
+
 export default {
   /**
    * HTTP request handler.
@@ -48,21 +52,52 @@ export default {
     env: CloudflareEnv,
     ctx: ExecutionContext,
   ): Promise<Response> {
-    // Quick health check without loading the full app
+    const requestStartTime = Date.now();
     const url = new URL(request.url);
+
+    // Quick health check without loading the full app - with timing metrics
     if (url.pathname === '/health' || url.pathname === '/api/v1/health') {
+      const isFirstRequest = !workerInitialized;
+      workerInitialized = true;
+
+      const timings = {
+        workerAgeMs: requestStartTime - workerStartTime,
+        requestProcessingMs: Date.now() - requestStartTime,
+        isColdStart: isFirstRequest,
+      };
+
       return new Response(JSON.stringify({
         status: 'ok',
         timestamp: new Date().toISOString(),
         service: 'roundtable-api',
+        timings,
+        env: env.WEBAPP_ENV || 'unknown',
       }), {
-        headers: { 'Content-Type': 'application/json' },
+        headers: {
+          'Content-Type': 'application/json',
+          'X-Worker-Age-Ms': String(timings.workerAgeMs),
+          'X-Request-Processing-Ms': String(timings.requestProcessingMs),
+          'X-Cold-Start': String(isFirstRequest),
+        },
       });
     }
 
     // Load full app for all other routes
+    const appLoadStart = Date.now();
     const rootApp = await getRootApp();
-    return rootApp.fetch(request, env, ctx);
+    const appLoadMs = Date.now() - appLoadStart;
+
+    // Add timing header to response
+    const response = await rootApp.fetch(request, env, ctx);
+    const newHeaders = new Headers(response.headers);
+    newHeaders.set('X-App-Load-Ms', String(appLoadMs));
+    newHeaders.set('X-Total-Ms', String(Date.now() - requestStartTime));
+
+    return new Response(response.body, {
+      status: response.status,
+      statusText: response.statusText,
+      headers: newHeaders,
+    });
   },
 
   /**

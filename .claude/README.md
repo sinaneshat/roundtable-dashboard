@@ -9,7 +9,7 @@ This directory contains Claude Code hooks that automate code quality and provide
 **Triggers**: After `Write`, `Edit`, or `MultiEdit` tool use on TypeScript/JavaScript files
 
 **Features**:
-- Automatically runs `pnpm lint:fix` on modified files
+- Automatically runs `bun run lint:fix` on modified files
 - Runs TypeScript type checking for `.ts`/`.tsx` files
 - Blocks execution if ESLint errors or TypeScript errors are found
 - Skips non-lintable files and directories (node_modules, .next, etc.)

@@ -45,7 +45,7 @@ Previously, errors were caught silently. Now they're logged to help debug.
 ### Step 1: Start Your Dev Server with Console Output
 
 ```bash
-pnpm dev
+bun run dev
 ```
 
 Keep the terminal visible to see logs.

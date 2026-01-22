@@ -210,12 +210,12 @@ export const Route = createFileRoute('/_protected/chat/')({
 ```bash
 # Frontend (TanStack Start → Cloudflare Pages)
 cd apps/web
-pnpm build                # Vite build
+bun run build                # Vite build
 wrangler deploy           # Deploy to Cloudflare Pages
 
 # Backend (Hono → Cloudflare Workers)
 cd apps/api
-pnpm build                # TypeScript compilation
+bun run build                # TypeScript compilation
 wrangler deploy           # Deploy to Cloudflare Workers
 ```
 

@@ -37,9 +37,11 @@ export function useStreamingTrigger({
   const {
     waitingToStart,
     chatIsStreaming,
+    hasSentPending,
   } = useStore(store, useShallow(s => ({
     waitingToStart: s.waitingToStartStreaming,
     chatIsStreaming: s.isStreaming,
+    hasSentPending: s.hasSentPendingMessage,
   })));
 
   const startRoundCalledForRoundRef = useRef<number | null>(null);
@@ -365,7 +367,7 @@ export function useStreamingTrigger({
         freshState.setParticipantHandoffInProgress(false);
       }
     }
-  }, [waitingToStart, chatIsStreaming, store]);
+  }, [waitingToStart, chatIsStreaming, hasSentPending, store]);
 
   useEffect(() => {
     if (!waitingToStart) {

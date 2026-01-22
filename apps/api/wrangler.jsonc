@@ -17,12 +17,10 @@
   "dev": {
     "port": 8787
   },
+  "workers_dev": false,
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
-  },
-  "placement": {
-    "mode": "smart"
   },
   "d1_databases": [
     {
@@ -117,7 +115,6 @@
       "name": "roundtable-api-preview",
       "workers_dev": false,
       "upload_source_maps": false,
-      "placement": { "mode": "smart" },
       "observability": { "enabled": true, "head_sampling_rate": 0.1 },
       "limits": { "cpu_ms": 300000 },
       "routes": [
@@ -179,7 +176,6 @@
       "name": "roundtable-api-prod",
       "workers_dev": false,
       "upload_source_maps": false,
-      "placement": { "mode": "smart" },
       "observability": { "enabled": true, "head_sampling_rate": 0.1 },
       "limits": { "cpu_ms": 300000 },
       "routes": [
