@@ -135,6 +135,7 @@ export function ChatView({
     isCreatingThread,
     pendingMessage,
     hasInitiallyLoaded,
+    showInitialUI,
     preSearchResumption,
     moderatorResumption,
     selectedMode,
@@ -150,6 +151,8 @@ export function ChatView({
     isAnalyzingPrompt,
     currentResumptionPhase,
     resumptionRoundNumber,
+    changelogItems,
+    addChangelogItems,
   } = useChatStore(
     useShallow(s => ({
       messages: s.messages,
@@ -165,6 +168,7 @@ export function ChatView({
       isCreatingThread: s.isCreatingThread,
       pendingMessage: s.pendingMessage,
       hasInitiallyLoaded: s.hasInitiallyLoaded,
+      showInitialUI: s.showInitialUI,
       preSearchResumption: s.preSearchResumption,
       moderatorResumption: s.moderatorResumption,
       selectedMode: s.selectedMode,
@@ -180,6 +184,8 @@ export function ChatView({
       isAnalyzingPrompt: s.isAnalyzingPrompt,
       currentResumptionPhase: s.currentResumptionPhase,
       resumptionRoundNumber: s.resumptionRoundNumber,
+      changelogItems: s.changelogItems,
+      addChangelogItems: s.addChangelogItems,
     })),
   );
 
@@ -315,11 +321,11 @@ export function ChatView({
     return modelsData.data.user_tier_config;
   }, [modelsData]);
 
+  // ✅ FIX: Use store's changelogItems for persistence across navigation
+  // Store is hydrated on SSR via useSyncHydrateStore, query syncs new items
   const changelog: ApiChangelog[] = useMemo(() => {
-    // ✅ SSR FIX: Use query response if available, otherwise fall back to initialChangelog
-    // This ensures changelog shows on first SSR paint without waiting for client query
-    const queryItems = changelogResponse?.success ? changelogResponse.data?.items : undefined;
-    const items = queryItems ?? initialChangelog ?? [];
+    // Use store data, fall back to initial prop for SSR first paint before hydration
+    const items = changelogItems.length > 0 ? changelogItems : (initialChangelog ?? []);
 
     // Deduplicate by ID
     const seen = new Set<string>();
@@ -329,19 +335,27 @@ export function ChatView({
       seen.add(item.id);
       return true;
     });
-  }, [changelogResponse, initialChangelog]);
+  }, [changelogItems, initialChangelog]);
+
+  // ✅ FIX: Sync query response to store for persistence across navigation
+  useEffect(() => {
+    if (changelogResponse?.success && changelogResponse.data?.items?.length) {
+      addChangelogItems(changelogResponse.data.items);
+    }
+  }, [changelogResponse, addChangelogItems]);
 
   // ✅ RESUMPTION DEBUG: Track changelog data availability and source
   useEffect(() => {
     if (mode === ScreenModes.THREAD && effectiveThreadId) {
       const rounds = [...new Set(changelog.map(c => c.roundNumber))];
+      const storeItems = changelogItems.length;
       const queryItems = changelogResponse?.success ? changelogResponse.data?.items?.length ?? 0 : 0;
       const initialItems = initialChangelog?.length ?? 0;
-      const source = queryItems > 0 ? 'query' : (initialItems > 0 ? 'ssr' : 'none');
-      rlog.resume('changelog-data', `t=${effectiveThreadId.slice(-8)} items=${changelog.length} rounds=[${rounds}] src=${source} (query=${queryItems} ssr=${initialItems})`);
+      const source = storeItems > 0 ? 'store' : (queryItems > 0 ? 'query' : (initialItems > 0 ? 'ssr' : 'none'));
+      rlog.resume('changelog-data', `t=${effectiveThreadId.slice(-8)} items=${changelog.length} rounds=[${rounds}] src=${source} (store=${storeItems} query=${queryItems} ssr=${initialItems})`);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, effectiveThreadId, changelog.length, changelogResponse?.success, initialChangelog?.length]);
+  }, [mode, effectiveThreadId, changelog.length, changelogItems.length, changelogResponse?.success, initialChangelog?.length]);
 
   const orderedModels = useOrderedModels({
     selectedParticipants,
@@ -573,8 +587,11 @@ export function ChatView({
   // ✅ SSR FIX: Data is ready if store is hydrated OR initial data is available from props
   // This allows SSR to render content immediately using initialMessages
   const hasInitialDataFromProps = (initialMessages?.length ?? 0) > 0;
+  // ✅ CREATION FLOW FIX: Detect active creation flow to prevent skeleton flash
+  // When createdThreadId is set and showInitialUI is false, we're mid-creation with valid store data
+  const isInActiveCreationFlow = Boolean(createdThreadId) && !showInitialUI;
   const isStoreReady = mode === ScreenModes.THREAD
-    ? ((hasInitiallyLoaded && messages.length > 0) || hasInitialDataFromProps)
+    ? ((hasInitiallyLoaded && messages.length > 0) || hasInitialDataFromProps || isInActiveCreationFlow)
     : true;
 
   const { scrollToBottom } = useChatScroll({
@@ -829,6 +846,7 @@ export function ChatView({
               completedRoundNumbers={completedRoundNumbers}
               isModeratorStreaming={isModeratorStreaming}
               getIsStreamingFromStore={getIsStreamingFromStore}
+              initialScrollToBottom={mode === ScreenModes.THREAD && !createdThreadId}
             />
           </div>
 

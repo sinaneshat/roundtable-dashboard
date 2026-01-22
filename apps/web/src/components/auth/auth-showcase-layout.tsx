@@ -1,5 +1,7 @@
 'use client';
 
+import { ClientOnly } from '@tanstack/react-router';
+
 import { Logo } from '@/components/logo';
 import { Card } from '@/components/ui/card';
 import { RadialGlow } from '@/components/ui/radial-glow';
@@ -17,15 +19,17 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
   return (
     <main className="relative grid h-svh lg:grid-cols-2 overflow-hidden">
       <div className="absolute inset-0 -z-10 pointer-events-none flex items-center justify-center overflow-hidden">
-        <div className="block sm:hidden">
-          <RadialGlow size={1200} offsetY={0} duration={18} animate />
-        </div>
-        <div className="hidden sm:block lg:hidden">
-          <RadialGlow size={1800} offsetY={0} duration={18} animate />
-        </div>
-        <div className="hidden lg:block">
-          <RadialGlow size={2400} offsetY={0} duration={18} animate />
-        </div>
+        <ClientOnly fallback={null}>
+          <div className="block sm:hidden">
+            <RadialGlow size={1200} offsetY={0} duration={18} animate />
+          </div>
+          <div className="hidden sm:block lg:hidden">
+            <RadialGlow size={1800} offsetY={0} duration={18} animate />
+          </div>
+          <div className="hidden lg:block">
+            <RadialGlow size={2400} offsetY={0} duration={18} animate />
+          </div>
+        </ClientOnly>
       </div>
 
       <div className="relative flex flex-col gap-4 p-6 md:p-10 overflow-y-auto">

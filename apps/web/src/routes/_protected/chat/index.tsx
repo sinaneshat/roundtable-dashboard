@@ -1,18 +1,16 @@
 import { createFileRoute } from '@tanstack/react-router';
 
-import { MainContentSkeleton } from '@/components/skeletons';
 import ChatOverviewScreen from '@/containers/screens/chat/ChatOverviewScreen';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
+import { getServerQuickStartData } from '@/lib/config/quick-start-config';
 
 const pageTitle = 'Chat - Roundtable';
 const pageDescription = 'Start a new AI conversation with multiple models.';
 
 export const Route = createFileRoute('/_protected/chat/')({
-  // ✅ SSR: Direct import - component renders on server
-  // NO dynamic import - React.lazy doesn't work on server, causes skeleton flash
+  // Server-side random selection - no client-side skeleton flash
+  loader: () => getServerQuickStartData(),
   component: ChatOverviewScreen,
-  // pendingComponent shown during route transitions (client-side navigation)
-  pendingComponent: MainContentSkeleton,
   // Protected routes should not be indexed
   head: () => {
     const siteUrl = getAppBaseUrl();

@@ -826,14 +826,15 @@ async function extractPageContent(
 }> {
   const browserResult = await initBrowser(env);
 
-  // Fallback if no browser available - use lightweight extraction with content
+  // Fallback if no browser available - use lightweight HTML extraction
   if (!browserResult) {
+    console.error(`[Search] No browser for ${url}, using lightweight extraction`);
     const lightContent = await extractLightweightContent(url);
     const content = lightContent.content || '';
     const wordCount = content.split(/\s+/).filter(Boolean).length;
     return {
       content,
-      rawContent: content, // Use same content for rawContent in fallback
+      rawContent: content,
       metadata: {
         title: lightContent.title,
         description: lightContent.description,
@@ -879,14 +880,30 @@ async function extractPageContent(
       metadata: extracted.metadata,
       images: extracted.images,
     };
-  } catch {
+  } catch (browserError) {
     // Close browser on error
     try {
       await browserResult.browser.close();
     } catch {}
+
+    console.log(`[Search] Browser extraction failed for ${url}, falling back to lightweight:`, browserError);
+
+    // Fall back to lightweight extraction instead of returning empty
+    const lightContent = await extractLightweightContent(url);
+    const content = lightContent.content || '';
+    const wordCount = content.split(/\s+/).filter(Boolean).length;
+
     return {
-      content: '',
-      metadata: { wordCount: 0, readingTime: 0 },
+      content,
+      rawContent: content,
+      metadata: {
+        title: lightContent.title,
+        description: lightContent.description,
+        imageUrl: lightContent.imageUrl,
+        faviconUrl: lightContent.faviconUrl,
+        wordCount,
+        readingTime: Math.ceil(wordCount / 200),
+      },
     };
   }
 }

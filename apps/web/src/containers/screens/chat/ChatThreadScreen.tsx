@@ -111,6 +111,7 @@ export default function ChatThreadScreen({
     initialMessages: uiMessages,
     streamResumptionState,
     initialPreSearches,
+    initialChangelog,
   });
 
   useThreadHeaderUpdater({ thread, slug, onDeleteClick: isDeleteDialogOpen.onTrue });

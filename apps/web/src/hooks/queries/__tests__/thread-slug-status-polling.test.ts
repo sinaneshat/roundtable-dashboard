@@ -121,8 +121,9 @@ describe('threadSlugStatusQuery polling configuration', () => {
       const hookMatch = sourceCode.match(/export\s+function\s+useThreadSlugStatusQuery[\s\S]*?(?=export\s+function|$)/);
       const hookCode = hookMatch?.[0] ?? '';
 
-      // Verify staleTime is 0 for polling to work correctly
-      expect(hookCode).toMatch(/staleTime:\s*0/);
+      // Verify staleTime uses conditional pattern for polling deduplication
+      // When shouldPoll is true, uses POLLING_INTERVALS.slugStatus; otherwise 0
+      expect(hookCode).toMatch(/staleTime:\s*shouldPoll\s*\?\s*POLLING_INTERVALS\.slugStatus\s*:\s*0/);
     });
   });
 

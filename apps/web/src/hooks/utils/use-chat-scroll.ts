@@ -93,23 +93,39 @@ export function useChatScroll({
   /**
    * Scroll to bottom using native window.scrollTo
    * TanStack Virtual handles the heavy lifting - this is just a simple helper
+   *
+   * For 'instant' behavior: scrolls synchronously (no requestAnimationFrame)
+   * This is critical for SSR hydration - scroll must happen BEFORE paint
    */
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     isProgrammaticScrollRef.current = true;
     isAtBottomRef.current = true;
 
-    requestAnimationFrame(() => {
+    const doScroll = () => {
       const scrollHeight = Math.max(
         document.body.scrollHeight,
         document.documentElement.scrollHeight,
       );
       window.scrollTo({ top: scrollHeight, behavior });
+    };
 
-      // Reset programmatic flag after scroll completes
+    // For 'instant' behavior, scroll synchronously to ensure it happens before paint
+    // This is critical for SSR hydration where useLayoutEffect calls scrollToBottom('instant')
+    if (behavior === 'instant') {
+      doScroll();
+      // Reset flag on next frame
       requestAnimationFrame(() => {
         isProgrammaticScrollRef.current = false;
       });
-    });
+    } else {
+      // For smooth/auto, use requestAnimationFrame for better timing
+      requestAnimationFrame(() => {
+        doScroll();
+        requestAnimationFrame(() => {
+          isProgrammaticScrollRef.current = false;
+        });
+      });
+    }
   }, []);
 
   // ============================================================================

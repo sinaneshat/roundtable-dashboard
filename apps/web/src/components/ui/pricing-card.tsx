@@ -1,4 +1,5 @@
 import type { UIBillingInterval } from '@roundtable/shared';
+import { ClientOnly } from '@tanstack/react-router';
 import { motion } from 'motion/react';
 
 import { Icons } from '@/components/icons';
@@ -230,18 +231,44 @@ export function PricingCard({
               transition={{ delay: delay + 0.5, duration: 0.4 }}
               className="space-y-3 pt-2"
             >
-              {isCurrentPlan && onManageBilling && (
+              <ClientOnly fallback={null}>
+                {isCurrentPlan && onManageBilling && (
+                  <HoverBorderGradient
+                    as="button"
+                    containerClassName={cn(
+                      'w-full rounded-full',
+                      isProcessingManageBilling && 'cursor-not-allowed opacity-50 pointer-events-none',
+                    )}
+                    className="w-full text-center text-sm font-medium transition-all duration-200 bg-background text-foreground"
+                    onClick={onManageBilling}
+                  >
+                    {isProcessingManageBilling
+                      ? (
+                          <span className="flex items-center justify-center gap-2">
+                            <Icons.loader className="h-4 w-4 animate-spin" />
+                            {t('pricing.card.processing')}
+                          </span>
+                        )
+                      : (
+                          t('pricing.card.manageBilling')
+                        )}
+                  </HoverBorderGradient>
+                )}
+
                 <HoverBorderGradient
                   as="button"
                   containerClassName={cn(
                     'w-full rounded-full',
-                    isProcessingManageBilling && 'cursor-not-allowed opacity-50',
+                    (isActionButtonLoading || disabled) && 'cursor-not-allowed opacity-50 pointer-events-none',
                   )}
-                  className="w-full text-center text-sm font-medium transition-all duration-200 bg-background text-foreground"
-                  onClick={onManageBilling}
-                  disabled={isProcessingManageBilling}
+                  className={cn(
+                    'w-full text-center text-sm font-medium transition-all duration-200',
+                    !isCurrentPlan && 'bg-primary text-primary-foreground',
+                    isCurrentPlan && 'bg-destructive/10 text-destructive hover:bg-destructive/20',
+                  )}
+                  onClick={handleAction}
                 >
-                  {isProcessingManageBilling
+                  {isActionButtonLoading
                     ? (
                         <span className="flex items-center justify-center gap-2">
                           <Icons.loader className="h-4 w-4 animate-spin" />
@@ -249,36 +276,10 @@ export function PricingCard({
                         </span>
                       )
                     : (
-                        t('pricing.card.manageBilling')
+                        getButtonText()
                       )}
                 </HoverBorderGradient>
-              )}
-
-              <HoverBorderGradient
-                as="button"
-                containerClassName={cn(
-                  'w-full rounded-full',
-                  (isActionButtonLoading || disabled) && 'cursor-not-allowed opacity-50',
-                )}
-                className={cn(
-                  'w-full text-center text-sm font-medium transition-all duration-200',
-                  !isCurrentPlan && 'bg-primary text-primary-foreground',
-                  isCurrentPlan && 'bg-destructive/10 text-destructive hover:bg-destructive/20',
-                )}
-                onClick={handleAction}
-                disabled={isActionButtonLoading || disabled}
-              >
-                {isActionButtonLoading
-                  ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <Icons.loader className="h-4 w-4 animate-spin" />
-                        {t('pricing.card.processing')}
-                      </span>
-                    )
-                  : (
-                      getButtonText()
-                    )}
-              </HoverBorderGradient>
+              </ClientOnly>
             </motion.div>
           </div>
         </div>

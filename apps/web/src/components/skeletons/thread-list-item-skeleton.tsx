@@ -25,7 +25,7 @@ export function ThreadListItemSkeleton({
 
     return (
       <Skeleton
-        className={cn('h-5 rounded-full', animated && 'animate-pulse', className)}
+        className={cn('h-5 rounded-full', !animated && 'animate-none', className)}
         style={{ width }}
         {...props}
       />
@@ -41,7 +41,7 @@ export function ThreadListItemSkeleton({
       {Array.from({ length: count }, (_, i) => (
         <Skeleton
           key={`thread-skeleton-${i}`}
-          className={cn('h-5 rounded-full', animated && 'animate-pulse')}
+          className={cn('h-5 rounded-full', !animated && 'animate-none')}
           style={{
             width: getSkeletonWidth(i),
             opacity: getSkeletonOpacity(i),

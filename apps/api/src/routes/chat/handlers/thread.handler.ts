@@ -1293,8 +1293,14 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
 
     // ✅ PUBLIC THREAD CACHE: Invalidate when visibility changes
     // Also clears cached OG images from R2
+    // CRITICAL: Must invalidate BOTH current slug AND previousSlug caches
+    // since public pages can be accessed via either URL
     if (body.isPublic !== undefined && thread.slug) {
       await invalidatePublicThreadCache(db, thread.slug, id, c.env.UPLOADS_R2_BUCKET);
+      // Also invalidate previousSlug cache if it exists
+      if (thread.previousSlug) {
+        await invalidatePublicThreadCache(db, thread.previousSlug, id, c.env.UPLOADS_R2_BUCKET);
+      }
     }
 
     // ✅ NEW MESSAGE CREATION: Create user message if provided
@@ -1450,8 +1456,12 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
 
     // ✅ PUBLIC THREAD CACHE: Invalidate if thread was public
     // Also clears cached OG images from R2
+    // CRITICAL: Must invalidate BOTH current slug AND previousSlug caches
     if (thread.isPublic && thread.slug) {
       await invalidatePublicThreadCache(db, thread.slug, id, c.env.UPLOADS_R2_BUCKET);
+      if (thread.previousSlug) {
+        await invalidatePublicThreadCache(db, thread.previousSlug, id, c.env.UPLOADS_R2_BUCKET);
+      }
     }
 
     return Responses.ok(c, {

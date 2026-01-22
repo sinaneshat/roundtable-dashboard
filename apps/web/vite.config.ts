@@ -43,8 +43,14 @@ export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
   },
+  // Fix SSR issues with packages that don't work with dep optimizer
+  ssr: {
+    optimizeDeps: {
+      exclude: ['vaul', 'nuqs'],
+    },
+  },
   // Manual chunk splitting for large vendor libraries
-  // Only splits truly independent libraries to avoid circular deps
+  // Split main bundle to reduce initial load size
   environments: {
     client: {
       build: {
@@ -78,7 +84,44 @@ export default defineConfig({
               if (id.includes('zod'))
                 return 'zod';
 
-              // Let Vite handle React, TanStack, Radix - they have interdependencies
+              // React core - keep together for proper module resolution
+              if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/'))
+                return 'react-vendor';
+
+              // TanStack Query - separate from Router
+              if (id.includes('@tanstack/react-query') || id.includes('@tanstack/query'))
+                return 'react-query';
+
+              // TanStack Router - separate from Query
+              if (id.includes('@tanstack/react-router') || id.includes('@tanstack/router'))
+                return 'react-router';
+
+              // Radix UI - split by component group for better caching
+              // Dialog primitives (dialog, alert-dialog, sheet)
+              if (id.includes('@radix-ui/react-dialog') || id.includes('@radix-ui/react-alert-dialog') || id.includes('vaul'))
+                return 'radix-dialog';
+
+              // Dropdown primitives (dropdown-menu, select, popover, tooltip)
+              if (id.includes('@radix-ui/react-dropdown-menu') || id.includes('@radix-ui/react-select') || id.includes('@radix-ui/react-popover') || id.includes('@radix-ui/react-tooltip'))
+                return 'radix-dropdown';
+
+              // Form primitives (checkbox, radio, switch, label)
+              if (id.includes('@radix-ui/react-checkbox') || id.includes('@radix-ui/react-radio-group') || id.includes('@radix-ui/react-switch') || id.includes('@radix-ui/react-label'))
+                return 'radix-form';
+
+              // Other Radix primitives
+              if (id.includes('@radix-ui/'))
+                return 'radix-misc';
+
+              // React Hook Form ecosystem
+              if (id.includes('react-hook-form') || id.includes('@hookform/resolvers'))
+                return 'react-forms';
+
+              // Other heavy utilities
+              if (id.includes('fuse.js') || id.includes('chroma-js') || id.includes('randomcolor'))
+                return 'utils';
+
+              // Let Vite handle remaining dependencies
               return undefined;
             },
           },

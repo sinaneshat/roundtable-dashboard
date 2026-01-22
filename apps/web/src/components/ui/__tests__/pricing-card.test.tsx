@@ -388,7 +388,9 @@ describe('pricingCard', () => {
       );
 
       const button = screen.getByText('Get Started').closest('button');
-      expect(button).toBeDisabled();
+      // PricingCard uses CSS classes for disabled state, not HTML disabled attribute
+      expect(button).toHaveClass('pointer-events-none');
+      expect(button).toHaveClass('opacity-50');
     });
   });
 
@@ -457,7 +459,9 @@ describe('pricingCard', () => {
       );
 
       const button = screen.getByText('Processing...').closest('button');
-      expect(button).toBeDisabled();
+      // PricingCard uses CSS classes for disabled state, not HTML disabled attribute
+      expect(button).toHaveClass('pointer-events-none');
+      expect(button).toHaveClass('opacity-50');
     });
   });
 

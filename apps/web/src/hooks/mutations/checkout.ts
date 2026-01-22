@@ -48,26 +48,29 @@ export function useSyncAfterCheckoutMutation() {
   return useMutation({
     mutationFn: syncAfterCheckoutService,
     onSuccess: async () => {
-      // Invalidate product queries
-      queryClient.invalidateQueries({
-        queryKey: queryKeys.products.all,
-        refetchType: 'all',
-      });
-
-      // Refresh subscriptions with cache bypass (critical for success page)
+      // Wrap ALL cache operations - failures should NOT prevent success page from showing
+      // The sync API succeeded; cache invalidation issues are non-critical
       try {
-        const freshSubscriptionsData = await getSubscriptionsService({ bypassCache: true });
-        queryClient.setQueryData(queryKeys.subscriptions.current(), freshSubscriptionsData);
-      } catch (error) {
-        console.error('[Checkout] Failed to refresh subscriptions after checkout:', error);
-        billingInvalidationHelpers.invalidateSubscriptions(queryClient);
-      }
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.products.all,
+          refetchType: 'all',
+        });
 
-      // Use shared helper for usage and models refresh (bypasses HTTP cache)
-      await Promise.all([
-        billingInvalidationHelpers.refreshUsageStats(queryClient),
-        billingInvalidationHelpers.refreshModels(queryClient),
-      ]);
+        try {
+          const freshSubscriptionsData = await getSubscriptionsService({ bypassCache: true });
+          queryClient.setQueryData(queryKeys.subscriptions.current(), freshSubscriptionsData);
+        } catch (error) {
+          console.error('[Checkout] Failed to refresh subscriptions after checkout:', error);
+          billingInvalidationHelpers.invalidateSubscriptions(queryClient);
+        }
+
+        await Promise.all([
+          billingInvalidationHelpers.refreshUsageStats(queryClient),
+          billingInvalidationHelpers.refreshModels(queryClient),
+        ]);
+      } catch (error) {
+        console.error('[Checkout] Cache invalidation failed (non-critical):', error);
+      }
     },
     retry: false,
     throwOnError: false,

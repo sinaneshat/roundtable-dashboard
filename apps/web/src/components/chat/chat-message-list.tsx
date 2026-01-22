@@ -977,6 +977,7 @@ export const ChatMessageList = memo(
                             if (part.type === MessagePartTypes.TEXT) {
                               return isReadOnly
                                 ? (
+                                    // SSR: Direct import renders synchronously - no hydration flash
                                     <Markdown
                                       key={`${message.id}-text-${part.text.substring(0, 20)}`}
                                       components={streamdownComponents}

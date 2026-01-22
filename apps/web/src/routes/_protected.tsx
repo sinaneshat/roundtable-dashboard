@@ -69,6 +69,8 @@ export const Route = createFileRoute('/_protected')({
  * SSR: Session fetched on server via cookies, layout renders with real data
  * Client: useSession hook provides reactive updates (sign-out, etc.)
  * Single render path eliminates hydration mismatches
+ *
+ * Note: PreferencesStoreProvider must be synchronous - components depend on it during SSR
  */
 function ProtectedLayout() {
   // Route context has session from beforeLoad (server or client)

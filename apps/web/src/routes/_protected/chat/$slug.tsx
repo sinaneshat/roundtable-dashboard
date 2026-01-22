@@ -18,6 +18,7 @@ import type {
   GetThreadFeedbackResponse,
   GetThreadStreamResumptionStateResponse,
 } from '@/services/api';
+import { useIsInCreationFlow } from '@/stores/chat';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
   // ✅ DISABLE route-level caching to fix preloading race condition
@@ -46,19 +47,31 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
     const cachedThreadData = !isServer ? queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey) : null;
     const hasPrefetchMeta = cachedThreadData?.meta?.requestId === 'prefetch';
 
+    // ✅ FIX: Early return when flow-controller prefetched data - skip all auxiliary fetches
+    // During creation flow, thread data is fresh and no auxiliary data exists yet
+    if (hasPrefetchMeta) {
+      const threadData = cachedThreadData?.success ? cachedThreadData.data : null;
+      return {
+        threadTitle: threadData?.thread?.title ?? null,
+        threadId: threadData?.thread?.id ?? null,
+        threadData,
+        preSearches: undefined,
+        changelog: undefined,
+        feedback: undefined,
+        streamResumption: undefined,
+      };
+    }
+
     // ensureQueryData internally checks staleTime and only fetches if data is stale/missing
     // @see https://tanstack.com/router/latest/docs/framework/react/guide/external-data-loading
     // ✅ FIX: Wrap in try-catch to handle SSR errors gracefully (e.g., 401 unauthorized)
     // On error, return empty data and let component handle via useQuery
-    // ✅ FIX: Skip fetch if flow-controller already populated cache (prevents skeleton flash)
-    if (!hasPrefetchMeta) {
-      try {
-        await queryClient.ensureQueryData(options);
-      } catch (error) {
-        console.error('[ChatThread] Loader error:', error);
-        // Return empty loader data - component will re-fetch via useQuery
-        return { threadTitle: null, threadId: null, preSearches: undefined, changelog: undefined, feedback: undefined, streamResumption: undefined };
-      }
+    try {
+      await queryClient.ensureQueryData(options);
+    } catch (error) {
+      console.error('[ChatThread] Loader error:', error);
+      // Return empty loader data - component will re-fetch via useQuery
+      return { threadTitle: null, threadId: null, preSearches: undefined, changelog: undefined, feedback: undefined, streamResumption: undefined };
     }
 
     // Get thread ID from cached data for auxiliary fetches
@@ -170,6 +183,9 @@ function ChatThreadRoute() {
   const { data: session } = useSession();
   const loaderData = Route.useLoaderData();
 
+  // ✅ FIX: Check if we're in creation flow - data already in store, no need to fetch
+  const isInCreationFlow = useIsInCreationFlow();
+
   // Use loaderData as primary source (available on SSR)
   // useQuery provides client-side updates/refetches
   // ✅ SKELETON FLASH FIX: When loaderData has threadData (from SSR or prefetch cache),
@@ -177,9 +193,10 @@ function ChatThreadRoute() {
   const hasLoaderData = Boolean(loaderData?.threadData);
   const { data: queryData, isError, error, isFetching } = useQuery({
     ...threadBySlugQueryOptions(slug ?? ''),
-    enabled: Boolean(slug),
+    // ✅ FIX: Disable query during creation flow - data already in Zustand store
+    enabled: Boolean(slug) && !isInCreationFlow,
     // ✅ FIX: Use loader data as initial data to prevent flash
-    initialData: hasLoaderData
+    initialData: hasLoaderData && loaderData.threadData
       ? { success: true as const, data: loaderData.threadData }
       : undefined,
     // ✅ FIX: Extend staleTime when data came from loader to prevent immediate refetch
@@ -187,7 +204,8 @@ function ChatThreadRoute() {
     staleTime: hasLoaderData ? 10_000 : 0,
   });
 
-  // Prefer loader data (SSR), fall back to query data (client updates)
+  // Prefer loader data (SSR/prefetch), fall back to query data (client updates)
+  // During creation flow, loader should have prefetch cache data from flow-controller
   const threadResponse = loaderData?.threadData ?? (queryData?.success ? queryData.data : null);
 
   // loaderData for auxiliary data (already prefetched in loader)

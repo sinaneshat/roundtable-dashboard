@@ -87,14 +87,19 @@ export {
   ParticipantSettingsSchema,
 } from './participant-settings';
 
+// Quick start suggestions configuration
+export type { PromptTemplate, QuickStartData } from './quick-start-config';
+export {
+  getPromptsByIndices,
+  getServerQuickStartData,
+  PROMPT_POOL,
+} from './quick-start-config';
+
 // Tier names configuration
 export {
   getTierDisplayName,
   SUBSCRIPTION_TIER_NAMES,
 } from './tier-names';
 
-// Credit configuration (re-exported from shared package)
-export { CREDIT_CONFIG, PLAN_NAMES } from '@roundtable/shared';
-
-// Role prompts configuration (re-exported from shared package)
-export { createRoleSystemPrompt } from '@roundtable/shared';
+// Role prompts and credit configuration (re-exported from shared package)
+export { createRoleSystemPrompt, CREDIT_CONFIG, PLAN_NAMES } from '@roundtable/shared';

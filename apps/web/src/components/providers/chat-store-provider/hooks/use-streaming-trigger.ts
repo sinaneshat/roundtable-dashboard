@@ -437,9 +437,14 @@ export function useStreamingTrigger({
       // Check if AI SDK is actively streaming (use ref for synchronous check)
       const aiSdkActive = chat.isStreamingRef.current;
 
-      // If no valid resumption AND AI SDK not active AND store not streaming
+      // Check if this is a newly created thread (not a resumption)
+      // For new threads: createdThreadId is set, validResumption is false (expected)
+      // We should NOT clear waitingToStartStreaming for new threads
+      const isNewlyCreatedThread = s.createdThreadId === s.thread?.id && s.createdThreadId !== null;
+
+      // If no valid resumption AND AI SDK not active AND store not streaming AND not a newly created thread
       // This is a stuck state - reset it
-      if (!validResumption && !aiSdkActive && !s.isStreaming) {
+      if (!validResumption && !aiSdkActive && !s.isStreaming && !isNewlyCreatedThread) {
         rlog.trigger('stuck-recovery', `clearing stuck state: prefilled=${s.streamResumptionPrefilled ? 1 : 0} prefilledThread=${s.prefilledForThreadId?.slice(-8) ?? '-'} currentThread=${s.thread?.id?.slice(-8) ?? '-'}`);
         s.setWaitingToStartStreaming(false);
         s.setNextParticipantToTrigger(null);

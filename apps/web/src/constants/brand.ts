@@ -54,17 +54,21 @@ export const BRAND = {
   ] as const,
 
   // Holographic sphere logo paths
+  // WebP format (10KB) for modern browsers, PNG fallback (77KB optimized)
   logos: {
-    light: '/static/logo.svg',
-    dark: '/static/logo.svg',
-    iconLight: '/static/logo.svg',
-    iconDark: '/static/logo.svg',
-    round: '/static/logo.svg',
-    roundWhite: '/static/logo.svg',
+    light: '/static/logo.webp',
+    dark: '/static/logo.webp',
+    iconLight: '/static/logo.webp',
+    iconDark: '/static/logo.webp',
+    round: '/static/logo.webp',
+    roundWhite: '/static/logo.webp',
     roundBlack: '/apple-touch-icon.png',
-    animation: '/static/logo.svg',
-    main: '/static/logo.svg',
-    mainBlack: '/static/logo.svg',
+    animation: '/static/logo.webp',
+    main: '/static/logo.webp',
+    mainBlack: '/static/logo.webp',
+    // Fallback options
+    fallbackPng: '/static/logo-optimized.png',
+    originalSvg: '/static/logo.svg',
   } as const,
 
   // Modern tech fonts

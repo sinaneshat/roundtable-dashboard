@@ -1,7 +1,13 @@
-import { ThreadListItemSkeleton } from '@/components/skeletons';
+import { SidebarCollapsibles, SidebarVariants } from '@roundtable/shared';
+
+import { NavUserSkeleton, ThreadListItemSkeleton } from '@/components/skeletons';
 import {
+  Sidebar,
+  SidebarContent,
+  SidebarFooter,
   SidebarGroup,
   SidebarGroupLabel,
+  SidebarHeader,
   SidebarMenu,
   SidebarMenuItem,
   SidebarMenuSkeleton,
@@ -90,5 +96,51 @@ export function ChatSidebarPaginationSkeleton({ count = 20 }: { count?: number }
         ))}
       </SidebarMenu>
     </div>
+  );
+}
+
+/**
+ * FullSidebarSkeleton - Complete sidebar skeleton with proper wrapper
+ *
+ * Matches AppSidebar structure: Sidebar wrapper + header + content + footer.
+ * Used as Suspense fallback to prevent layout shift during lazy loading.
+ */
+export function FullSidebarSkeleton() {
+  return (
+    <Sidebar collapsible={SidebarCollapsibles.ICON} variant={SidebarVariants.FLOATING}>
+      <SidebarHeader>
+        {/* Logo area skeleton - expanded state */}
+        <div className="flex h-9 mb-2 items-center justify-between group-data-[collapsible=icon]:hidden">
+          <div className="flex h-9 items-center rounded-md ps-3 pe-2">
+            <div className="size-6 rounded bg-accent animate-pulse" />
+          </div>
+          <div className="min-h-11 min-w-11 shrink-0" />
+        </div>
+
+        {/* New chat + search button skeletons */}
+        <SidebarMenu className="gap-1">
+          <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
+            <SidebarMenuSkeleton />
+          </SidebarMenuItem>
+          <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
+            <SidebarMenuSkeleton />
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarHeader>
+
+      <SidebarContent className="p-0 w-full min-w-0">
+        <div className="flex flex-col w-full px-0.5">
+          <ChatSidebarSkeleton count={12} />
+        </div>
+      </SidebarContent>
+
+      <SidebarFooter className="gap-2">
+        <SidebarMenu>
+          <SidebarMenuItem>
+            <NavUserSkeleton />
+          </SidebarMenuItem>
+        </SidebarMenu>
+      </SidebarFooter>
+    </Sidebar>
   );
 }

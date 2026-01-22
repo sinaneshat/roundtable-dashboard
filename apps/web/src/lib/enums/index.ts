@@ -19,20 +19,20 @@ export {
   CREDIT_ESTIMATION_STATUSES,
   type CreditEstimationStatus,
   CreditEstimationStatuses,
-  CreditEstimationStatusSchema,
   DEFAULT_CREDIT_ESTIMATION_STATUS,
+  getCreditEstimationStatusSchema,
   isCreditEstimationStatus,
 } from './billing-ui';
 
 // Storage enums
 export {
   DEFAULT_STORAGE_TYPE,
+  getStorageTypeSchema,
   isStorageType,
   STORAGE_TYPE_LABELS,
   STORAGE_TYPES,
   type StorageType,
   StorageTypes,
-  StorageTypeSchema,
 } from './storage';
 
 // UI Styles enums
@@ -42,7 +42,7 @@ export {
   BORDER_RADIUS_PIXEL_MAP,
   type BorderRadiusClass,
   BorderRadiusClasses,
-  BorderRadiusClassSchema,
   DEFAULT_BORDER_RADIUS_CLASS,
+  getBorderRadiusClassSchema,
   isBorderRadiusClass,
 } from './ui-styles';

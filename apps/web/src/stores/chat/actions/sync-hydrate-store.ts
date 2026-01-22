@@ -14,7 +14,7 @@ import { useLayoutEffect, useRef } from 'react';
 
 import { useChatStoreApi } from '@/components/providers/chat-store-provider/context';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant, ChatThread, StoredPreSearch, ThreadStreamResumptionState } from '@/services/api';
+import type { ApiChangelog, ChatParticipant, ChatThread, StoredPreSearch, ThreadStreamResumptionState } from '@/services/api';
 
 export type SyncHydrateOptions = {
   mode: ScreenMode;
@@ -25,6 +25,8 @@ export type SyncHydrateOptions = {
   streamResumptionState?: ThreadStreamResumptionState | null;
   /** Pre-search data hydrated from server for resumption */
   initialPreSearches?: StoredPreSearch[];
+  /** Changelog items hydrated from server for SSR persistence */
+  initialChangelog?: ApiChangelog[];
 };
 
 /**
@@ -46,6 +48,7 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     initialMessages = [],
     streamResumptionState,
     initialPreSearches,
+    initialChangelog,
   } = options;
 
   const storeApi = useChatStoreApi();
@@ -135,8 +138,15 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
       rlog.init('sync-hydrate', `set ${initialPreSearches.length} pre-searches into store`);
     }
 
+    // ✅ FIX: Hydrate changelog into store for persistence across thread navigation
+    // Without this, changelog is lost when navigating away and back to a thread
+    if (initialChangelog?.length) {
+      state.setChangelogItems(initialChangelog);
+      rlog.init('sync-hydrate', `set ${initialChangelog.length} changelog items into store`);
+    }
+
     hasHydrated.current = true;
-  }, [storeApi, mode, thread, threadId, participants, initialMessages, streamResumptionState, initialPreSearches]);
+  }, [storeApi, mode, thread, threadId, participants, initialMessages, streamResumptionState, initialPreSearches, initialChangelog]);
 
   // Reset hydration flag when thread changes
   useLayoutEffect(() => {

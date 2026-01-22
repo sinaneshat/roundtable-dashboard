@@ -1,44 +1,35 @@
 /**
  * Lightweight markdown renderer - replaces Streamdown
  *
- * PERFORMANCE: Uses ReactMarkdown instead of Streamdown to avoid loading:
- * - shiki full bundle (~3MB of language grammars)
- * - mermaid (~451KB)
- * - cytoscape (~441KB)
+ * PERFORMANCE: Lazy-loads ReactMarkdown to avoid loading on initial page load:
+ * - react-markdown (~116KB raw, 36KB gzipped)
+ * - remark/rehype/unified processing chain
+ * - shiki code highlighting (lazy-loaded separately)
+ * - mermaid diagrams (lazy-loaded only when detected)
  *
  * Code highlighting is handled by our custom code-block-highlighter which
  * only loads 16 common languages on demand.
  *
- * Mermaid diagrams are lazy-loaded only when detected.
+ * NO SKELETON: Uses null fallback to prevent flicker during SSR hydration.
+ * Markdown content is pre-rendered on server, so no loading state is needed.
  */
 
-import type { ComponentPropsWithoutRef } from 'react';
-import { lazy, memo, Suspense, useMemo } from 'react';
+import { lazy, memo, Suspense } from 'react';
 import type { Components } from 'react-markdown';
-import ReactMarkdown from 'react-markdown';
-import { z } from 'zod';
-
-import { cn } from '@/lib/ui/cn';
-
-// Lazy-load mermaid renderer only when mermaid blocks are detected
-const LazyMermaid = lazy(() => import('./lazy-mermaid'));
 
 // ============================================================================
-// MERMAID CODE ELEMENT SCHEMA - Zod-based validation
+// LAZY-LOADED MARKDOWN WITH MERMAID SUPPORT
 // ============================================================================
 
 /**
- * Schema for React element with mermaid code block props
- * Used to safely extract mermaid chart content from pre > code structure
+ * Lazy-load the streamdown content module
+ * This defers react-markdown and all markdown processing until needed
  */
-const MermaidCodeElementSchema = z.object({
-  props: z.object({
-    className: z.string().refine(c => c.includes('language-mermaid'), {
-      message: 'Must be a mermaid language code block',
-    }),
-    children: z.string(),
-  }),
-});
+const StreamdownContent = lazy(() => import('./streamdown-content'));
+
+// ============================================================================
+// LAZY STREAMDOWN COMPONENT
+// ============================================================================
 
 type LazyStreamdownProps = {
   children: string;
@@ -47,61 +38,38 @@ type LazyStreamdownProps = {
 };
 
 /**
- * Detect if markdown contains mermaid code blocks
+ * Lazy-loaded markdown renderer with mermaid support
+ *
+ * PERFORMANCE: Defers loading of react-markdown (116KB raw, 36KB gzipped)
+ * until the component is rendered. Automatically wraps in Suspense boundary.
+ *
+ * NO SKELETON: Uses null fallback. SSR pre-renders markdown content, so
+ * no loading state is visible to users. This prevents skeleton flash.
+ *
+ * Use this instead of importing Streamdown directly to avoid
+ * loading markdown processing code on initial page load.
+ *
+ * Mermaid diagrams are lazy-loaded only when detected in content.
+ *
+ * @example
+ * ```tsx
+ * <LazyStreamdown components={streamdownComponents}>
+ *   {markdownContent}
+ * </LazyStreamdown>
+ * ```
  */
-function hasMermaidBlocks(content: string): boolean {
-  return /```mermaid/i.test(content);
-}
-
-/**
- * Extract mermaid chart content from code element using Zod validation
- * Returns null if not a valid mermaid code block
- */
-function extractMermaidChart(children: unknown): string | null {
-  const result = MermaidCodeElementSchema.safeParse(children);
-  if (!result.success)
-    return null;
-  return result.data.props.children;
-}
-
-/**
- * Custom pre component that detects mermaid and renders it lazily
- * Falls back to native <pre> for all other code blocks
- */
-function MermaidAwarePre(props: ComponentPropsWithoutRef<'pre'>) {
-  const { children, ...rest } = props;
-
-  // Use Zod-based validation to safely extract mermaid chart content
-  const mermaidChart = extractMermaidChart(children);
-  if (mermaidChart) {
-    return (
-      <Suspense fallback={<div className="animate-pulse bg-muted/30 border border-border/50 rounded-xl h-32 my-4" />}>
-        <LazyMermaid chart={mermaidChart} />
-      </Suspense>
-    );
-  }
-
-  return <pre {...rest}>{children}</pre>;
-}
-
-function LazyStreamdownComponent({ children, className, components }: LazyStreamdownProps) {
-  // Only add mermaid-aware pre component if content might have mermaid
-  const enhancedComponents = useMemo((): Components => {
-    if (!hasMermaidBlocks(children)) {
-      return components ?? {};
-    }
-    return {
-      ...components,
-      pre: MermaidAwarePre,
-    };
-  }, [children, components]);
-
+function LazyStreamdownComponent({
+  children,
+  className,
+  components,
+}: LazyStreamdownProps) {
+  // NO SKELETON: SSR pre-renders content, null fallback prevents flash
   return (
-    <div className={cn('min-w-0', className)}>
-      <ReactMarkdown components={enhancedComponents}>
+    <Suspense fallback={null}>
+      <StreamdownContent className={className} components={components}>
         {children}
-      </ReactMarkdown>
-    </div>
+      </StreamdownContent>
+    </Suspense>
   );
 }
 
@@ -109,7 +77,7 @@ function LazyStreamdownComponent({ children, className, components }: LazyStream
  * Lightweight markdown renderer
  *
  * Use this instead of importing Streamdown directly to avoid
- * loading ~4MB of shiki languages, mermaid, and cytoscape.
+ * loading markdown processing code (~36KB gzipped) on initial page load.
  *
  * Mermaid diagrams are lazy-loaded only when detected in content.
  */

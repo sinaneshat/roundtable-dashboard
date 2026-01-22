@@ -6,19 +6,14 @@ import { ThreadHeaderProvider } from '@/components/chat/thread-header-context';
 import { SidebarInset, SidebarProvider } from '@/components/ui/sidebar';
 import type { SessionData } from '@/lib/auth';
 
-// ✅ SSR: Direct import - sidebar renders on server with prefetched data
-// Data is prefetched in _protected.tsx loader via ensureInfiniteQueryData(sidebarThreadsQueryOptions)
-// The shared queryOptions ensure SSR/client cache consistency
-
 type ChatLayoutShellProps = {
   children: React.ReactNode;
   session?: SessionData | null;
 };
 
 /**
- * Chat Layout Shell - Pure UI wrapper (no auth, no prefetching)
- * Provides sidebar navigation and header structure.
- * Auth and data fetching handled by route groups.
+ * Chat Layout Shell - Pure UI wrapper for chat routes.
+ * Sidebar and header are eagerly loaded to avoid skeleton flash during hydration.
  */
 export function ChatLayoutShell({ children, session = null }: ChatLayoutShellProps) {
   return (

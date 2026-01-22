@@ -42,7 +42,13 @@ type ReasoningProps = {
   readonly storedDuration?: number;
   readonly className?: string;
   readonly children?: ReactNode;
-} & Omit<ComponentProps<typeof Collapsible>, 'open' | 'onOpenChange' | 'className' | 'children'>;
+  /** Controlled open state - if provided, component becomes controlled */
+  readonly open?: boolean;
+  /** Callback when open state changes - required when using controlled mode */
+  readonly onOpenChange?: (open: boolean) => void;
+  /** Default open state for uncontrolled mode */
+  readonly defaultOpen?: boolean;
+} & Omit<ComponentProps<typeof Collapsible>, 'open' | 'onOpenChange' | 'className' | 'children' | 'defaultOpen'>;
 
 export function Reasoning({
   isStreaming: isStreamingProp = false,
@@ -50,10 +56,16 @@ export function Reasoning({
   storedDuration,
   className,
   children,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
+  defaultOpen = false,
   ...props
 }: ReasoningProps) {
-  const [isOpen, setIsOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(defaultOpen);
   const { elapsedSeconds, finalDuration: calculatedDuration } = useElapsedTime(isStreamingProp);
+
+  const isControlled = controlledOpen !== undefined;
+  const isOpen = isControlled ? controlledOpen : internalOpen;
 
   const state: ReasoningState = useMemo(() => {
     if (storedDuration !== undefined)
@@ -70,8 +82,12 @@ export function Reasoning({
   const finalDuration = storedDuration ?? calculatedDuration;
 
   const handleOpenChange = useCallback((newOpen: boolean) => {
-    setIsOpen(newOpen);
-  }, []);
+    if (isControlled) {
+      controlledOnOpenChange?.(newOpen);
+    } else {
+      setInternalOpen(newOpen);
+    }
+  }, [isControlled, controlledOnOpenChange]);
 
   const contextValue = useMemo(
     () => ({

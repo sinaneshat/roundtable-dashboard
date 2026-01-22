@@ -39,10 +39,17 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
   // Track if we've already handled the AI title for this thread
   const handledTitleRef = useRef<string | null>(null);
 
+  // Track if polling already started to prevent duplicate thread captures in first effect
+  const pollingStartedForRef = useRef<string | null>(null);
+
   // Capture new thread creation in persistent ref BEFORE store clears it
+  // Only set if polling hasn't started yet for this thread (prevents duplicate captures)
   useEffect(() => {
     if (createdThreadId && createdThreadId !== handledTitleRef.current) {
-      pendingTitleThreadIdRef.current = createdThreadId;
+      if (pollingStartedForRef.current !== createdThreadId) {
+        pendingTitleThreadIdRef.current = createdThreadId;
+        pollingStartedForRef.current = createdThreadId;
+      }
     }
   }, [createdThreadId]);
 
@@ -52,6 +59,7 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
   // Determine if we should poll:
   // - Have a pending thread ID (captured before navigation cleared it)
   // - Haven't already handled this thread's title
+  // Polling continues until API returns isAiGeneratedTitle: true (handled by refetchInterval)
   const shouldPoll = Boolean(pendingThreadId)
     && handledTitleRef.current !== pendingThreadId;
 
@@ -141,10 +149,15 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
               if (thread.id !== pendingThreadId)
                 return thread;
 
+              // Preserve old slug as previousSlug so isChatActive() can match the URL
+              // This ensures sidebar selection state is maintained during slug transition
+              const previousSlug = thread.slug !== slugData.slug ? thread.slug : thread.previousSlug;
+
               return {
                 ...thread,
                 title: slugData.title,
                 slug: slugData.slug,
+                previousSlug,
                 isAiGeneratedTitle: true,
               };
             });

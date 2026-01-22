@@ -19,6 +19,7 @@ import { Button } from '@/components/ui/button';
 import { getCachedSession, setCachedSession } from '@/lib/auth/session-cache';
 import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 import { TurnstileProvider } from '@/lib/turnstile';
+import { IdleLazyProvider } from '@/lib/utils/lazy-provider';
 import type { RouterContext } from '@/router';
 import { getSession } from '@/server/auth';
 
@@ -90,6 +91,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         // Theme
         { name: 'theme-color', content: '#000000' },
         { name: 'color-scheme', content: 'dark' },
+        // SEO - Default to index, follow (child routes can override)
+        { name: 'robots', content: 'index, follow' },
         // PWA
         { name: 'application-name', content: siteName },
         { name: 'apple-mobile-web-app-capable', content: 'yes' },
@@ -99,6 +102,15 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         { name: 'mobile-web-app-capable', content: 'yes' },
       ],
       links: [
+        // Critical: Preload fonts to prevent FOUT (Flash of Unstyled Text)
+        // WOFF2 is ~60% smaller than TTF for faster loading
+        // These start loading immediately with HTML, before CSS is parsed
+        { rel: 'preload', href: '/static/fonts/Geist-Regular.woff2', as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' },
+        { rel: 'preload', href: '/static/fonts/Geist-SemiBold.woff2', as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' },
+        // Performance: DNS prefetch and preconnect for external resources
+        { rel: 'dns-prefetch', href: 'https://challenges.cloudflare.com' },
+        { rel: 'dns-prefetch', href: 'https://us.posthog.com' },
+        { rel: 'preconnect', href: 'https://challenges.cloudflare.com', crossOrigin: 'anonymous' },
         // PWA Manifest
         { rel: 'manifest', href: '/manifest.webmanifest' },
         // Favicon - default for all browsers (without sizes for maximum compatibility)
@@ -127,6 +139,10 @@ function RootComponent() {
 }
 
 function RootDocument({ children }: { children: ReactNode }) {
+  // Get environment for provider configuration
+  const environment = typeof window !== 'undefined' ? getWebappEnv() : 'local';
+  const apiKey = typeof window !== 'undefined' ? import.meta.env.VITE_POSTHOG_API_KEY : undefined;
+
   return (
     <html lang="en" className="dark">
       <head>
@@ -134,7 +150,22 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
         <TurnstileProvider>
-          {children}
+          {/* Non-critical analytics and PWA providers - loaded after browser idle */}
+          <IdleLazyProvider<{ children: ReactNode }>
+            loader={() => import('@/components/providers/service-worker-provider').then(m => ({ default: m.ServiceWorkerProvider }))}
+            providerProps={{ children: null }}
+          >
+            <IdleLazyProvider<{ apiKey?: string; environment?: string; children: ReactNode }>
+              loader={() => import('@/components/providers/posthog-provider')}
+              providerProps={{
+                apiKey,
+                environment,
+                children: null,
+              }}
+            >
+              {children}
+            </IdleLazyProvider>
+          </IdleLazyProvider>
         </TurnstileProvider>
         <StructuredData type="WebApplication" />
         <Scripts />

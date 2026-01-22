@@ -14,7 +14,6 @@
  */
 
 import { createMiddleware } from 'hono/factory';
-import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createError } from '@/common/error-handling';
 import type { TurnstileValidationOptions } from '@/services/turnstile';
@@ -83,26 +82,15 @@ export function turnstileMiddleware(options: TurnstileMiddlewareOptions = {}) {
         return;
       }
 
-      throw createError.custom(
-        HttpStatusCodes.FORBIDDEN,
-        'TURNSTILE_TOKEN_MISSING',
-        'Bot protection token is required',
-      );
+      throw createError.unauthorized('Bot protection token is required');
     }
 
     // Validate token
     const result = await validateTurnstileFromContext(c, token, validationOptions);
 
     if (!result.success) {
-      throw createError.custom(
-        HttpStatusCodes.FORBIDDEN,
-        'TURNSTILE_VALIDATION_FAILED',
-        errorMessage,
-      );
+      throw createError.unauthorized(errorMessage);
     }
-
-    // Store validation result in context for downstream handlers
-    c.set('turnstileResult', result);
 
     await next();
   });

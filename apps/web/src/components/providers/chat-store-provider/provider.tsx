@@ -363,6 +363,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     setParticipantHandoffInProgress: (value) => {
       store.getState().setParticipantHandoffInProgress(value);
     },
+    // ✅ RACE CONDITION FIX: Pass acknowledgeStreamFinish to signal onFinish completion
+    // This replaces the 50ms timeout workaround for stream settling
+    acknowledgeStreamFinish: () => {
+      store.getState().acknowledgeStreamFinish();
+    },
   });
 
   const sendMessageRef = useRef(chat.sendMessage);

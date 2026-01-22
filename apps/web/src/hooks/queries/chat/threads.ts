@@ -93,14 +93,25 @@ export function useThreadQuery(threadId: string, enabled?: boolean) {
  * Public endpoint - no authentication required
  *
  * @param slug - Thread slug
- * @param enabled - Optional control over whether to fetch (default: based on slug)
+ * @param options - Query options
+ * @param options.initialData - Initial data from SSR loader
+ * @param options.staleTime - Override stale time in ms
+ * @param options.enabled - Enable/disable the query
  */
-export function usePublicThreadQuery(slug: string, enabled?: boolean) {
+export function usePublicThreadQuery(
+  slug: string,
+  options?: {
+    initialData?: Awaited<ReturnType<typeof getPublicThreadService>>;
+    staleTime?: number;
+    enabled?: boolean;
+  },
+) {
   return useQuery({
     queryKey: queryKeys.threads.public(slug),
     queryFn: () => getPublicThreadService({ param: { slug } }),
-    staleTime: STALE_TIMES.publicThreadDetail, // 1 minute - match server-side prefetch
-    enabled: enabled !== undefined ? enabled : !!slug,
+    staleTime: options?.staleTime ?? STALE_TIMES.publicThreadDetail, // 1 minute - match server-side prefetch
+    enabled: options?.enabled !== undefined ? options.enabled : !!slug,
+    initialData: options?.initialData,
     retry: false,
     throwOnError: false,
   });
@@ -173,7 +184,9 @@ export function useThreadSlugStatusQuery(
       }
       return getThreadSlugStatusService({ param: { id: threadId } });
     },
-    staleTime: 0, // Always fresh - we're polling for updates
+    // ✅ FIX: Add staleTime to prevent immediate duplicate requests during polling
+    // When polling is active, use polling interval as staleTime to dedupe requests
+    staleTime: shouldPoll ? POLLING_INTERVALS.slugStatus : 0,
     // Polling control via refetchInterval (not enabled) to prevent interruption
     // The shouldPoll param checked here instead of enabled prop ensures continuous polling
     refetchInterval: (query) => {

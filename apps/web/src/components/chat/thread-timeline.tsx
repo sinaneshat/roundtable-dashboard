@@ -50,6 +50,11 @@ type ThreadTimelineProps = {
    * can cause measurement issues with virtualization.
    */
   disableVirtualization?: boolean;
+  /**
+   * Start scrolled to the bottom on initial render.
+   * Used for thread pages to show latest messages first on SSR hydration.
+   */
+  initialScrollToBottom?: boolean;
 };
 
 export function ThreadTimeline({
@@ -74,6 +79,7 @@ export function ThreadTimeline({
   demoMode = false,
   getIsStreamingFromStore,
   disableVirtualization = false,
+  initialScrollToBottom = false,
 }: ThreadTimelineProps) {
   const isActivelyStreaming = isStreaming || isModeratorStreaming;
   const mountTimeRef = useRef(Date.now());
@@ -116,6 +122,8 @@ export function ThreadTimeline({
     isDataReady: disableVirtualization ? false : isDataReady,
     isStreaming: isActivelyStreaming,
     getIsStreamingFromStore,
+    // SSR: Start scrolled to bottom for thread pages
+    initialScrollToBottom: !disableVirtualization && initialScrollToBottom,
   });
 
   const animatedItemsRef = useRef<Set<string>>(new Set());

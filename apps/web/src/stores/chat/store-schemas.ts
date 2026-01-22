@@ -27,7 +27,7 @@ import { z } from 'zod';
 import { PendingAttachmentSchema } from '@/hooks/utils';
 import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
 import { ChatParticipantSchema, ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
-import type { ChatThread, StoredPreSearch } from '@/services/api';
+import type { ApiChangelog, ChatThread, StoredPreSearch } from '@/services/api';
 import { ModeratorPayloadSchema } from '@/services/api';
 
 import type {
@@ -262,6 +262,21 @@ export const PreSearchActionsSchema = z.object({
 export const PreSearchSliceSchema = z.intersection(PreSearchStateSchema, PreSearchActionsSchema);
 
 // ============================================================================
+// CHANGELOG SLICE SCHEMAS
+// ============================================================================
+
+export const ChangelogStateSchema = z.object({
+  changelogItems: z.custom<ApiChangelog[]>(),
+});
+
+export const ChangelogActionsSchema = z.object({
+  setChangelogItems: z.custom<(items: ApiChangelog[]) => void>(),
+  addChangelogItems: z.custom<(items: ApiChangelog[]) => void>(),
+});
+
+export const ChangelogSliceSchema = z.intersection(ChangelogStateSchema, ChangelogActionsSchema);
+
+// ============================================================================
 // MODERATOR DATA SCHEMAS (UI-specific types for store)
 // ============================================================================
 
@@ -312,6 +327,13 @@ export const ThreadStateSchema = z.object({
   chatSetMessages: ChatSetMessagesFnSchema.optional(),
   // ✅ NAVIGATION CLEANUP: Stop function to abort in-flight streaming on route change
   chatStop: z.custom<(() => void) | undefined>().optional(),
+  /**
+   * ✅ RACE CONDITION FIX: Explicit completion signal
+   * Set to true by AI SDK's onFinish callback AFTER message state is finalized.
+   * Replaces the 50ms timeout workaround for stream settling.
+   * Reset to false when new streaming starts.
+   */
+  streamFinishAcknowledged: z.boolean(),
 });
 
 export const ThreadActionsSchema = z.object({
@@ -331,6 +353,16 @@ export const ThreadActionsSchema = z.object({
   upsertStreamingMessage: z.custom<UpsertStreamingMessage>(),
   finalizeMessageId: z.custom<FinalizeMessageId>(),
   deduplicateMessages: z.custom<DeduplicateMessages>(),
+  /**
+   * ✅ RACE CONDITION FIX: Acknowledge stream finish from onFinish callback
+   * Called by AI SDK onFinish to signal that message state is finalized.
+   * Replaces timeout-based stream settling detection.
+   */
+  acknowledgeStreamFinish: z.custom<() => void>(),
+  /**
+   * ✅ RACE CONDITION FIX: Reset stream finish acknowledgment when starting new stream
+   */
+  resetStreamFinishAcknowledgment: z.custom<() => void>(),
 });
 
 export const ThreadSliceSchema = z.intersection(ThreadStateSchema, ThreadActionsSchema);
@@ -351,6 +383,19 @@ export const FlagsStateSchema = z.object({
   participantHandoffInProgress: z.boolean(),
 });
 
+/**
+ * ✅ RACE CONDITION FIX: Atomic config change state update
+ * Groups all config-related flags that must be updated together
+ */
+export const ConfigChangeStateSchema = z.object({
+  configChangeRoundNumber: z.number().nullable(),
+  isWaitingForChangelog: z.boolean(),
+  isPatchInProgress: z.boolean(),
+  hasPendingConfigChanges: z.boolean(),
+});
+
+export type ConfigChangeState = z.infer<typeof ConfigChangeStateSchema>;
+
 export const FlagsActionsSchema = z.object({
   setHasInitiallyLoaded: z.custom<SetHasInitiallyLoaded>(),
   setIsRegenerating: z.custom<SetIsRegenerating>(),
@@ -360,6 +405,17 @@ export const FlagsActionsSchema = z.object({
   setHasPendingConfigChanges: z.custom<SetHasPendingConfigChanges>(),
   setIsPatchInProgress: z.custom<SetIsPatchInProgress>(),
   setParticipantHandoffInProgress: z.custom<SetParticipantHandoffInProgress>(),
+  /**
+   * ✅ RACE CONDITION FIX: Atomically update all config change flags
+   * Prevents race condition where flags are updated individually and effects
+   * see inconsistent state (e.g., isPatchInProgress=false but isWaitingForChangelog=true)
+   */
+  atomicUpdateConfigChangeState: z.custom<(update: Partial<ConfigChangeState>) => void>(),
+  /**
+   * ✅ RACE CONDITION FIX: Clear all config change flags atomically
+   * Called when config change flow completes (after changelog fetched)
+   */
+  clearConfigChangeState: z.custom<() => void>(),
 });
 
 export const FlagsSliceSchema = z.intersection(FlagsStateSchema, FlagsActionsSchema);
@@ -378,6 +434,15 @@ export const DataStateSchema = z.object({
   currentRoundNumber: z.number().nullable(),
   /** Round number when config changes were submitted (for incremental changelog fetch) */
   configChangeRoundNumber: z.number().nullable(),
+  /**
+   * ✅ RACE CONDITION FIX: Round epoch counter
+   * Increments each time a new round starts (user submits message).
+   * Effects can compare their captured epoch with current to detect stale operations.
+   * This prevents race conditions like:
+   * - r1 resume logic executing after user submitted r2
+   * - Stale effects triggering wrong participants
+   */
+  roundEpoch: z.number(),
 });
 
 export const DataActionsSchema = z.object({
@@ -390,6 +455,16 @@ export const DataActionsSchema = z.object({
   setStreamingRoundNumber: z.custom<SetStreamingRoundNumber>(),
   setCurrentRoundNumber: z.custom<SetCurrentRoundNumber>(),
   setConfigChangeRoundNumber: z.custom<SetConfigChangeRoundNumber>(),
+  /**
+   * ✅ RACE CONDITION FIX: Atomically start a new round
+   * - Increments roundEpoch
+   * - Sets streamingRoundNumber
+   * - Returns the new epoch for callers to track
+   * This ensures all related state updates happen in one set() call
+   */
+  startNewRound: z.custom<(roundNumber: number) => number>(),
+  /** Get current round epoch for stale detection */
+  getRoundEpoch: z.custom<() => number>(),
 });
 
 export const DataSliceSchema = z.intersection(DataStateSchema, DataActionsSchema);
@@ -677,12 +752,15 @@ export const ChatStoreSchema = z.intersection(
                       z.intersection(
                         z.intersection(
                           z.intersection(
-                            FormSliceSchema,
-                            FeedbackSliceSchema,
+                            z.intersection(
+                              FormSliceSchema,
+                              FeedbackSliceSchema,
+                            ),
+                            UISliceSchema,
                           ),
-                          UISliceSchema,
+                          PreSearchSliceSchema,
                         ),
-                        PreSearchSliceSchema,
+                        ChangelogSliceSchema,
                       ),
                       ThreadSliceSchema,
                     ),
@@ -729,6 +807,10 @@ export type UISlice = z.infer<typeof UISliceSchema>;
 export type PreSearchState = z.infer<typeof PreSearchStateSchema>;
 export type PreSearchActions = z.infer<typeof PreSearchActionsSchema>;
 export type PreSearchSlice = z.infer<typeof PreSearchSliceSchema>;
+
+export type ChangelogState = z.infer<typeof ChangelogStateSchema>;
+export type ChangelogActions = z.infer<typeof ChangelogActionsSchema>;
+export type ChangelogSlice = z.infer<typeof ChangelogSliceSchema>;
 
 export type ThreadState = z.infer<typeof ThreadStateSchema>;
 export type ThreadActions = z.infer<typeof ThreadActionsSchema>;

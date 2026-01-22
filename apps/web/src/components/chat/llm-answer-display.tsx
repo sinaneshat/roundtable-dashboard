@@ -1,4 +1,4 @@
-import ReactMarkdown from 'react-markdown';
+import Markdown from 'react-markdown';
 
 import { Icons } from '@/components/icons';
 import { LazyStreamdown } from '@/components/markdown/lazy-streamdown';
@@ -44,10 +44,9 @@ export function LLMAnswerDisplay({ answer, isStreaming = false, className, sourc
               </div>
             )
           : (
+              // Non-streaming: Direct import renders synchronously - no hydration flash
               <div className="min-w-0 text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0">
-                <ReactMarkdown components={streamdownComponents}>
-                  {answer}
-                </ReactMarkdown>
+                <Markdown components={streamdownComponents}>{answer}</Markdown>
               </div>
             )}
       </div>
