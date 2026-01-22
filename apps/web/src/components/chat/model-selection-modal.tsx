@@ -123,6 +123,13 @@ export function ModelSelectionModal({
   const [selectedModelForRole, setSelectedModelForRole] = useState<string | null>(null);
   const initialSortOrderRef = useRef<string[] | null>(null);
   const initialRoleSortOrderRef = useRef<{ predefined: string[]; custom: string[] } | null>(null);
+  const prevSelectedModelForRoleRef = useRef<string | null>(null);
+
+  // Refs to capture latest values for useEffect cleanup
+  const orderedModelsRef = useRef(orderedModels);
+  const onReorderRef = useRef(onReorder);
+  orderedModelsRef.current = orderedModels;
+  onReorderRef.current = onReorder;
   const [pendingRoles, setPendingRoles] = useState<Record<string, { role: string; customRoleId?: string }>>({});
   const [selectedTags, setSelectedTags] = useState<Set<ModelCapabilityTag>>(() => new Set());
 
@@ -240,38 +247,38 @@ export function ModelSelectionModal({
   }, [orderedModels]);
 
   // Capture initial role sort order when role selection opens
-  useEffect(() => {
-    if (selectedModelForRole) {
-      const modelData = orderedModels.find(om => om.model.id === selectedModelForRole);
-      const currentRole = modelData?.participant?.role;
+  // Must run during render (not in effect) so ref is available for useMemo
+  if (selectedModelForRole && !prevSelectedModelForRoleRef.current) {
+    const modelData = orderedModels.find(om => om.model.id === selectedModelForRole);
+    const currentRole = modelData?.participant?.role;
 
-      const sortRoles = <T extends { name: string }>(roles: T[]): string[] => {
-        return [...roles].sort((a, b) => {
-          const aIsCurrent = currentRole === a.name;
-          const bIsCurrent = currentRole === b.name;
-          if (aIsCurrent && !bIsCurrent)
-            return -1;
-          if (!aIsCurrent && bIsCurrent)
-            return 1;
-          const aInUse = rolesInUse.has(a.name);
-          const bInUse = rolesInUse.has(b.name);
-          if (aInUse && !bInUse)
-            return -1;
-          if (!aInUse && bInUse)
-            return 1;
-          return 0;
-        }).map(r => r.name);
-      };
+    const sortRoles = <T extends { name: string }>(roles: T[]): string[] => {
+      return [...roles].sort((a, b) => {
+        const aIsCurrent = currentRole === a.name;
+        const bIsCurrent = currentRole === b.name;
+        if (aIsCurrent && !bIsCurrent)
+          return -1;
+        if (!aIsCurrent && bIsCurrent)
+          return 1;
+        const aInUse = rolesInUse.has(a.name);
+        const bInUse = rolesInUse.has(b.name);
+        if (aInUse && !bInUse)
+          return -1;
+        if (!aInUse && bInUse)
+          return 1;
+        return 0;
+      }).map(r => r.name);
+    };
 
-      initialRoleSortOrderRef.current = {
-        predefined: sortRoles(PREDEFINED_ROLE_TEMPLATES),
-        custom: sortRoles(customRoles),
-      };
-    } else {
-      initialRoleSortOrderRef.current = null;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only on role selection open
-  }, [selectedModelForRole]);
+    initialRoleSortOrderRef.current = {
+      predefined: sortRoles(PREDEFINED_ROLE_TEMPLATES),
+      custom: sortRoles(customRoles),
+    };
+  }
+  if (!selectedModelForRole) {
+    initialRoleSortOrderRef.current = null;
+  }
+  prevSelectedModelForRoleRef.current = selectedModelForRole;
 
   // Sort predefined roles using initial order captured on open
   const sortedPredefinedRoles = useMemo(() => {
@@ -588,10 +595,20 @@ export function ModelSelectionModal({
     }
   }, [selectedPreset, onPresetSelect]);
 
-  // Capture initial sort order on modal open (selected models first)
+  // On modal open: capture current order (for mid-session stability)
+  // On modal close: sort selected to top and persist via onReorder
   useEffect(() => {
-    if (open) {
-      const sorted = [...orderedModels].sort((a, b) => {
+    if (!open)
+      return;
+
+    // Capture order on open (items should already be sorted from previous close)
+    initialSortOrderRef.current = orderedModelsRef.current.map(om => om.model.id);
+
+    return () => {
+      // Modal closing - sort selected to top and persist
+      const models = orderedModelsRef.current;
+      const reorder = onReorderRef.current;
+      const sorted = [...models].sort((a, b) => {
         const aSelected = a.participant !== null;
         const bSelected = b.participant !== null;
         if (aSelected && !bSelected)
@@ -600,11 +617,9 @@ export function ModelSelectionModal({
           return 1;
         return 0;
       });
-      initialSortOrderRef.current = sorted.map(om => om.model.id);
-    } else {
+      reorder(sorted);
       initialSortOrderRef.current = null;
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only on open change
+    };
   }, [open]);
 
   const handleTabChange = useCallback((tab: ModelSelectionTab) => {

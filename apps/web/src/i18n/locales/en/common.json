@@ -4,6 +4,7 @@
       "description": "Main navigation menu",
       "title": "Navigation"
     },
+    "moreOptions": "More options",
     "openSidebar": "Open sidebar",
     "toggleSidebar": "Toggle Sidebar"
   },
