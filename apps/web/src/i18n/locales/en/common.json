@@ -280,6 +280,7 @@
       "defaultName": "File",
       "dropDescription": "Upload files to include in your message",
       "dropHere": "Drop files here",
+      "removeAttachment": "Remove attachment",
       "errors": {
         "emptyFile": "File is empty",
         "filenameTooLong": "Filename must be 255 characters or less",
@@ -444,6 +445,8 @@
       "presets": {
         "cancel": "Cancel",
         "cannotSave": "Cannot save preset",
+        "customizePreset": "Customize preset",
+        "deletePreset": "Delete preset",
         "done": "Done",
         "failedToDelete": "Failed to delete preset",
         "failedToSave": "Failed to save preset",
@@ -516,6 +519,8 @@
         "show": "Show search plan",
         "title": "Search Plan"
       },
+      "query": "query",
+      "queries": "queries",
       "retry": "Retry",
       "searchDepth": {
         "advanced": "advanced",
@@ -969,6 +974,9 @@
     }
   },
   "setRoleFor": "Set role for",
+  "skeletons": {
+    "loadingBreadcrumb": "Loading breadcrumb"
+  },
   "states": {
     "empty": {
       "default": "No data found",

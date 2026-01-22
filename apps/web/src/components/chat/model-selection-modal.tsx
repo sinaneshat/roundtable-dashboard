@@ -121,6 +121,8 @@ export function ModelSelectionModal({
   const [selectedPresetId, setSelectedPresetId] = useState<string | null>(null);
   const shouldApplyPresetRef = useRef(false);
   const [selectedModelForRole, setSelectedModelForRole] = useState<string | null>(null);
+  const initialSortOrderRef = useRef<string[] | null>(null);
+  const initialRoleSortOrderRef = useRef<{ predefined: string[]; custom: string[] } | null>(null);
   const [pendingRoles, setPendingRoles] = useState<Record<string, { role: string; customRoleId?: string }>>({});
   const [selectedTags, setSelectedTags] = useState<Set<ModelCapabilityTag>>(() => new Set());
 
@@ -237,31 +239,67 @@ export function ModelSelectionModal({
     return inUse;
   }, [orderedModels]);
 
-  // Sort predefined roles - in-use ones first
-  const sortedPredefinedRoles = useMemo(() => {
-    return [...PREDEFINED_ROLE_TEMPLATES].sort((a, b) => {
-      const aInUse = rolesInUse.has(a.name);
-      const bInUse = rolesInUse.has(b.name);
-      if (aInUse && !bInUse)
-        return -1;
-      if (!aInUse && bInUse)
-        return 1;
-      return 0;
-    });
-  }, [rolesInUse]);
+  // Capture initial role sort order when role selection opens
+  useEffect(() => {
+    if (selectedModelForRole) {
+      const modelData = orderedModels.find(om => om.model.id === selectedModelForRole);
+      const currentRole = modelData?.participant?.role;
 
-  // Sort custom roles - in-use ones first
-  const sortedCustomRoles = useMemo(() => {
-    return [...customRoles].sort((a, b) => {
-      const aInUse = rolesInUse.has(a.name);
-      const bInUse = rolesInUse.has(b.name);
-      if (aInUse && !bInUse)
-        return -1;
-      if (!aInUse && bInUse)
-        return 1;
-      return 0;
+      const sortRoles = <T extends { name: string }>(roles: T[]): string[] => {
+        return [...roles].sort((a, b) => {
+          const aIsCurrent = currentRole === a.name;
+          const bIsCurrent = currentRole === b.name;
+          if (aIsCurrent && !bIsCurrent)
+            return -1;
+          if (!aIsCurrent && bIsCurrent)
+            return 1;
+          const aInUse = rolesInUse.has(a.name);
+          const bInUse = rolesInUse.has(b.name);
+          if (aInUse && !bInUse)
+            return -1;
+          if (!aInUse && bInUse)
+            return 1;
+          return 0;
+        }).map(r => r.name);
+      };
+
+      initialRoleSortOrderRef.current = {
+        predefined: sortRoles(PREDEFINED_ROLE_TEMPLATES),
+        custom: sortRoles(customRoles),
+      };
+    } else {
+      initialRoleSortOrderRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only on role selection open
+  }, [selectedModelForRole]);
+
+  // Sort predefined roles using initial order captured on open
+  const sortedPredefinedRoles = useMemo(() => {
+    if (!initialRoleSortOrderRef.current)
+      return PREDEFINED_ROLE_TEMPLATES;
+
+    const orderMap = new Map(initialRoleSortOrderRef.current.predefined.map((name, idx) => [name, idx]));
+    return [...PREDEFINED_ROLE_TEMPLATES].sort((a, b) => {
+      const aOrder = orderMap.get(a.name) ?? Number.MAX_SAFE_INTEGER;
+      const bOrder = orderMap.get(b.name) ?? Number.MAX_SAFE_INTEGER;
+      return aOrder - bOrder;
     });
-  }, [customRoles, rolesInUse]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- triggers recompute when ref updates
+  }, [selectedModelForRole]);
+
+  // Sort custom roles using initial order captured on open
+  const sortedCustomRoles = useMemo(() => {
+    if (!initialRoleSortOrderRef.current)
+      return customRoles;
+
+    const orderMap = new Map(initialRoleSortOrderRef.current.custom.map((name, idx) => [name, idx]));
+    return [...customRoles].sort((a, b) => {
+      const aOrder = orderMap.get(a.name) ?? Number.MAX_SAFE_INTEGER;
+      const bOrder = orderMap.get(b.name) ?? Number.MAX_SAFE_INTEGER;
+      return aOrder - bOrder;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- triggers recompute when ref updates
+  }, [customRoles, selectedModelForRole]);
 
   const handleOpenRoleSelection = useCallback((modelId: string) => {
     setSelectedModelForRole(modelId);
@@ -550,6 +588,25 @@ export function ModelSelectionModal({
     }
   }, [selectedPreset, onPresetSelect]);
 
+  // Capture initial sort order on modal open (selected models first)
+  useEffect(() => {
+    if (open) {
+      const sorted = [...orderedModels].sort((a, b) => {
+        const aSelected = a.participant !== null;
+        const bSelected = b.participant !== null;
+        if (aSelected && !bSelected)
+          return -1;
+        if (!aSelected && bSelected)
+          return 1;
+        return 0;
+      });
+      initialSortOrderRef.current = sorted.map(om => om.model.id);
+    } else {
+      initialSortOrderRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- intentionally only on open change
+  }, [open]);
+
   const handleTabChange = useCallback((tab: ModelSelectionTab) => {
     if (activeTab === ModelSelectionTabs.PRESETS && tab === ModelSelectionTabs.CUSTOM && selectedPresetId) {
       shouldApplyPresetRef.current = true;
@@ -562,15 +619,15 @@ export function ModelSelectionModal({
     if (activeTab !== ModelSelectionTabs.CUSTOM)
       return filteredModels;
 
-    return [...filteredModels].sort((a, b) => {
-      const aSelected = a.participant !== undefined;
-      const bSelected = b.participant !== undefined;
+    // Use initial sort order captured on modal open
+    if (!initialSortOrderRef.current)
+      return filteredModels;
 
-      if (aSelected && !bSelected)
-        return -1;
-      if (!aSelected && bSelected)
-        return 1;
-      return 0;
+    const orderMap = new Map(initialSortOrderRef.current.map((id, idx) => [id, idx]));
+    return [...filteredModels].sort((a, b) => {
+      const aOrder = orderMap.get(a.model.id) ?? Number.MAX_SAFE_INTEGER;
+      const bOrder = orderMap.get(b.model.id) ?? Number.MAX_SAFE_INTEGER;
+      return aOrder - bOrder;
     });
   }, [filteredModels, activeTab]);
 

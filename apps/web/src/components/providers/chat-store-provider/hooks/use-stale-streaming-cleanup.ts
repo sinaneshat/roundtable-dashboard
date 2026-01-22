@@ -3,7 +3,6 @@ import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
 import { getParticipantCompletionStatus, isRoundComplete } from '@/stores/chat';
 
@@ -20,11 +19,19 @@ const CLEANUP_CHECK_INTERVAL_MS = 2000;
  */
 const FORCE_CLEANUP_TIMEOUT_MS = 10000;
 
+/**
+ * Max handoff resets: If participantHandoffInProgress stays true for this many
+ * timer resets (each 10s), force clear it. This prevents infinite loop when
+ * handoff flag is stuck.
+ */
+const MAX_HANDOFF_RESETS = 3;
+
 export function useStaleStreamingCleanup({
   store,
 }: UseStaleStreamingCleanupParams) {
   const cleanupAttemptedRef = useRef<number | null>(null);
   const staleStateStartTimeRef = useRef<number | null>(null);
+  const handoffResetCountRef = useRef(0);
 
   const {
     streamingRoundNumber,
@@ -94,23 +101,40 @@ export function useStaleStreamingCleanup({
           // ✅ RACE FIX: Re-check streaming flags right before force cleanup
           // During participant transitions, flags may briefly go false.
           // Also check nextParticipantToTrigger - if set, more streaming is expected.
-          // ✅ HANDOFF FIX: Also check participantHandoffInProgress - set during P0→P1 transition
           const freshState = store.getState();
           if (freshState.isStreaming
             || freshState.isModeratorStreaming
             || freshState.waitingToStartStreaming
-            || freshState.nextParticipantToTrigger !== null
-            || freshState.participantHandoffInProgress) {
-            rlog.sync('stale-cleanup', `r${streamingRoundNumber} skipping force cleanup - streaming activity detected (handoff=${freshState.participantHandoffInProgress ? 1 : 0})`);
+            || freshState.nextParticipantToTrigger !== null) {
+            rlog.sync('stale-cleanup', `r${streamingRoundNumber} skipping force cleanup - streaming activity detected`);
             staleStateStartTimeRef.current = Date.now();
+            handoffResetCountRef.current = 0;
             return;
+          }
+
+          // ✅ FIX 5: Handoff flag check with max reset counter
+          // If handoff flag stuck for MAX_HANDOFF_RESETS cycles (30s), force clear it
+          if (freshState.participantHandoffInProgress) {
+            handoffResetCountRef.current++;
+            if (handoffResetCountRef.current >= MAX_HANDOFF_RESETS) {
+              rlog.sync('stale-cleanup', `r${streamingRoundNumber} handoff stuck, forcing clear after ${MAX_HANDOFF_RESETS} resets`);
+              freshState.setParticipantHandoffInProgress(false);
+              handoffResetCountRef.current = 0;
+              // Continue to cleanup logic below
+            } else {
+              rlog.sync('stale-cleanup', `r${streamingRoundNumber} skipping - handoff in progress (reset ${handoffResetCountRef.current}/${MAX_HANDOFF_RESETS})`);
+              staleStateStartTimeRef.current = Date.now();
+              return;
+            }
+          } else {
+            handoffResetCountRef.current = 0;
           }
 
           // ✅ V7 FIX: Check if participants are actually complete before force cleanup
           // This prevents cleanup during the gap between P0 finishing and P1 starting
           const participantStatus = getParticipantCompletionStatus(
             freshState.messages,
-            freshState.participants as ChatParticipant[],
+            freshState.participants,
             streamingRoundNumber,
           );
 

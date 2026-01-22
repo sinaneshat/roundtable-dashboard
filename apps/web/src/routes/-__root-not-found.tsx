@@ -2,8 +2,11 @@ import { Link } from '@tanstack/react-router';
 
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { useTranslations } from '@/lib/i18n';
 
 export function NotFoundComponent() {
+  const t = useTranslations();
+
   return (
     <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-background via-muted/20 to-background p-4 sm:p-8">
       <div className="w-full max-w-2xl text-center">
@@ -12,17 +15,16 @@ export function NotFoundComponent() {
             <div className="rounded-full bg-muted/30 p-4 mb-6">
               <Icons.fileQuestion className="size-12 text-muted-foreground" />
             </div>
-            <h1 className="text-3xl sm:text-4xl font-bold mb-3">Page Not Found</h1>
+            <h1 className="text-3xl sm:text-4xl font-bold mb-3">{t('pages.notFound.title')}</h1>
             <p className="text-muted-foreground text-base sm:text-lg mb-8 max-w-md">
-              The page you're looking for doesn't exist or has been moved.
+              {t('pages.notFound.description')}
             </p>
-            {/* ✅ Use TanStack Router Link for type-safe navigation */}
             <Button
               size="lg"
               asChild
               startIcon={<Icons.home className="size-4" />}
             >
-              <Link to="/">Go Home</Link>
+              <Link to="/">{t('pages.notFound.goHome')}</Link>
             </Button>
           </div>
         </div>

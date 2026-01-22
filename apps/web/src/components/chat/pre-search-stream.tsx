@@ -97,14 +97,17 @@ function PreSearchStreamComponent({
   // Sync local state from store when preSearch.searchData changes (updated by use-streaming-trigger.ts)
   useEffect(() => {
     if (preSearch.searchData) {
+      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional prop-to-state sync for streaming UI
       setPartialSearchData(preSearch.searchData);
       if (preSearch.status === MessageStatuses.COMPLETE) {
+        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional prop-to-state sync for streaming UI
         setIsStreamComplete(true);
       }
       // Extract expected query count from searchData if available
       if (preSearch.searchData.queries?.length) {
         const total = preSearch.searchData.queries[0]?.total;
         if (total && total > 0) {
+          // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional prop-to-state sync for streaming UI
           setExpectedQueryCount(total);
         }
       }

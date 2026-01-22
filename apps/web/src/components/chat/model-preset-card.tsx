@@ -6,6 +6,7 @@ import { ModelAvatarWithRole } from '@/components/chat/model-avatar-with-role';
 import { Icons } from '@/components/icons';
 import { canAccessPreset } from '@/lib/config';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import type { Model } from '@/services/api';
 
@@ -34,6 +35,7 @@ export const ModelPresetCard = memo(({
   isUserPreset = false,
   onDelete,
 }: ModelPresetCardProps) => {
+  const t = useTranslations();
   const isLocked = !canAccessPreset(preset, userTier);
 
   const compatibleModelCount = useMemo(() => {
@@ -90,7 +92,7 @@ export const ModelPresetCard = memo(({
                 onCustomize({ preset });
               }}
               className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-white/[0.07] transition-all"
-              aria-label="Customize preset"
+              aria-label={t('chat.models.presets.customizePreset')}
             >
               <Icons.slidersHorizontal className="size-4 text-muted-foreground" />
             </button>
@@ -104,7 +106,7 @@ export const ModelPresetCard = memo(({
                 onDelete();
               }}
               className="p-1 rounded-md opacity-0 group-hover:opacity-100 hover:bg-destructive/20 transition-all"
-              aria-label="Delete preset"
+              aria-label={t('chat.models.presets.deletePreset')}
             >
               <Icons.trash className="size-4 text-destructive" />
             </button>

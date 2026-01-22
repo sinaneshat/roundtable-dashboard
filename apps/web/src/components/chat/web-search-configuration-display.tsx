@@ -58,10 +58,11 @@ export function WebSearchConfigurationDisplay({
   // Build simple summary text
   const summaryParts: string[] = [];
   if (queries && queries.length > 0) {
-    summaryParts.push(`${queries.length} ${queries.length === 1 ? 'query' : 'queries'}`);
+    const queryLabel = queries.length === 1 ? t('chat.preSearch.query') : t('chat.preSearch.queries');
+    summaryParts.push(`${queries.length} ${queryLabel}`);
   }
   if (totalResults && totalResults > 0) {
-    summaryParts.push(`${totalResults} sources`);
+    summaryParts.push(`${totalResults} ${t('chat.preSearch.sources')}`);
   }
   if (totalTime && totalTime > 0) {
     summaryParts.push(`${(totalTime / 1000).toFixed(1)}s`);

@@ -50,6 +50,7 @@ type AttachmentChipProps = {
 };
 
 function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
+  const t = useTranslations();
   const { file, preview, status } = attachment;
   const isImage = file.type.startsWith('image/');
   const isPending = status === UploadStatuses.PENDING;
@@ -150,7 +151,7 @@ function AttachmentChip({ attachment, onRemove }: AttachmentChipProps) {
             'transition-all duration-150',
             'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/50 focus-visible:opacity-100',
           )}
-          aria-label="Remove attachment"
+          aria-label={t('chat.attachments.removeAttachment')}
         >
           <Icons.x className="size-3" />
         </button>

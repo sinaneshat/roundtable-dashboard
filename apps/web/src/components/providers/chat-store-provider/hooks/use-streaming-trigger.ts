@@ -356,6 +356,14 @@ export function useStreamingTrigger({
         // ✅ V8 FIX: Don't clear nextParticipantToTrigger here
         // Let incomplete-round-resumption clear it after triggering P1
       }
+
+      // ✅ FIX 4: Clear handoff flag when next participant is actively streaming
+      // When: handoff=true, isStreaming=true, and nextP already cleared (P1 was triggered)
+      // This prevents handoff flag from persisting indefinitely and blocking cleanup
+      if (freshState.participantHandoffInProgress && freshState.isStreaming && freshState.nextParticipantToTrigger === null) {
+        rlog.trigger('clear-handoff', 'P1 streaming, handoff complete');
+        freshState.setParticipantHandoffInProgress(false);
+      }
     }
   }, [waitingToStart, chatIsStreaming, store]);
 
