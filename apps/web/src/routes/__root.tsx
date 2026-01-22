@@ -144,7 +144,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
-  const { env } = Route.useLoaderData();
+  const loaderData = Route.useLoaderData();
+  const env = loaderData?.env ?? DEFAULT_PUBLIC_ENV;
   return (
     <RootDocument env={env}>
       <Outlet />
