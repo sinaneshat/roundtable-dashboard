@@ -84,14 +84,10 @@ export default defineConfig({
               if (id.includes('zod'))
                 return 'zod';
 
-              // React core + React Query - keep together for proper module resolution
-              // React Query uses createContext from React, so must be in same chunk
-              if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/') || id.includes('@tanstack/react-query') || id.includes('@tanstack/query'))
-                return 'react-vendor';
-
-              // TanStack Router - separate chunk (also depends on React but loaded async)
-              if (id.includes('@tanstack/react-router') || id.includes('@tanstack/router'))
-                return 'react-router';
+              // Let Vite handle React core, React Query, and TanStack Router automatically
+              // Manual chunking these causes "Cannot access before initialization" errors
+              if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/') || id.includes('@tanstack/react-query') || id.includes('@tanstack/query') || id.includes('@tanstack/react-router') || id.includes('@tanstack/router'))
+                return undefined;
 
               // Radix UI - split by component group for better caching
               // Dialog primitives (dialog, alert-dialog, sheet)
