@@ -107,6 +107,27 @@ type RagSearchResultItem = {
 // ============================================================================
 
 /**
+ * Zod schema for extracting file part URL properties (lenient for extraction)
+ * Allows extra fields via passthrough to handle all ModelFilePart/UrlFilePart variants
+ */
+const FilePartWithUrlExtractSchema = z.object({
+  type: z.literal('file'),
+  url: z.string(),
+  mediaType: z.string().optional(),
+  mimeType: z.string().optional(),
+  filename: z.string().optional(),
+}).passthrough();
+
+/**
+ * Zod schema for extracting image part properties (lenient for extraction)
+ */
+const ImagePartExtractSchema = z.object({
+  type: z.literal('image'),
+  image: z.string(),
+  mimeType: z.string(),
+}).passthrough();
+
+/**
  * Convert model file parts (with data/mimeType fields) to UI message parts (with url/mediaType fields)
  *
  * This handles the type conversion between:
@@ -116,8 +137,7 @@ type RagSearchResultItem = {
  * The AI SDK's UIMessage expects parts with { type, url, mediaType, filename }
  * Our backend file parts include extra fields (data, mimeType) for internal processing
  *
- * Type safety note: We use `as unknown as` to safely convert between compatible but not
- * structurally identical types. The runtime shape is correct for the AI SDK.
+ * Uses Zod .safeParse() for type-safe property extraction without any casts.
  *
  * @param fileParts - Array of model file parts from attachment loading
  * @returns Array of UI-compatible file parts suitable for UIMessage.parts
@@ -127,27 +147,26 @@ function convertFilePartsToUIMessageParts<T extends UIMessage>(
 ): Array<T['parts'][number]> {
   return fileParts.map((part): T['parts'][number] => {
     if (part.type === 'file') {
-      if ('url' in part) {
+      const fileParseResult = FilePartWithUrlExtractSchema.safeParse(part);
+      if (fileParseResult.success) {
+        const { url, mediaType, mimeType, filename } = fileParseResult.data;
         const converted = {
           type: 'file' as const,
-          // eslint-disable-next-line ts/no-explicit-any
-          url: (part as any).url as string,
-          // eslint-disable-next-line ts/no-explicit-any
-          mediaType: (part as any).mediaType || (part as any).mimeType as string,
-          // eslint-disable-next-line ts/no-explicit-any
-          filename: (part as any).filename as string | undefined,
+          url,
+          mediaType: mediaType ?? mimeType ?? '',
+          filename,
         };
         return converted as unknown as T['parts'][number];
       }
     }
     if (part.type === 'image') {
-      if ('image' in part) {
+      const imageParseResult = ImagePartExtractSchema.safeParse(part);
+      if (imageParseResult.success) {
+        const { image, mimeType } = imageParseResult.data;
         const converted = {
           type: 'image' as const,
-          // eslint-disable-next-line ts/no-explicit-any
-          image: (part as any).image as string,
-          // eslint-disable-next-line ts/no-explicit-any
-          mimeType: (part as any).mimeType as string,
+          image,
+          mimeType,
         };
         return converted as unknown as T['parts'][number];
       }

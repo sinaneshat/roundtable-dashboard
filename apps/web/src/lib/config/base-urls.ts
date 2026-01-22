@@ -49,6 +49,8 @@ export { BASE_URL_CONFIG, DEFAULT_WEBAPP_ENV, FALLBACK_URLS, isWebappEnv, resolv
  * can't resolve production DNS. We detect this and return localhost URLs instead.
  *
  * Detection: SSR context (no window) + NOT on Cloudflare Workers runtime
+ *
+ * ✅ TYPE-SAFE: Uses in-operator for globalThis property access
  */
 export function isPrerender(): boolean {
   // Client-side: never prerender
@@ -57,9 +59,12 @@ export function isPrerender(): boolean {
 
   // SSR during prerender: check if we're in a build context
   // Cloudflare Workers have globalThis.caches, Node.js build context doesn't
-  const isCloudflareWorkers = typeof globalThis !== 'undefined'
-    && 'caches' in globalThis
-    && typeof (globalThis as unknown as { caches: unknown }).caches === 'object';
+  let isCloudflareWorkers = false;
+  if (typeof globalThis !== 'undefined' && 'caches' in globalThis) {
+    // After in-operator check, use indexed access for type-safe property access
+    const caches = (globalThis as { caches?: unknown }).caches;
+    isCloudflareWorkers = typeof caches === 'object' && caches !== null;
+  }
 
   // If we're in SSR but NOT on Cloudflare Workers, we're likely in prerender/build
   return !isCloudflareWorkers;

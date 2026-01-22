@@ -4,7 +4,7 @@
  *
  * ✅ PATTERN: Type guards use discriminant property checks instead of Zod schemas
  * ✅ PERFORMANCE: Zero runtime overhead compared to Zod .safeParse()
- * ✅ TYPE-SAFE: Full TypeScript inference without manual casting
+ * ✅ TYPE-SAFE: Full TypeScript inference via in-operator narrowing
  */
 
 import { MessageRoles, UIMessageRoles } from '@roundtable/shared';
@@ -17,6 +17,21 @@ import type {
   DbPreSearchMessageMetadata,
   DbUserMessageMetadata,
 } from './threads';
+
+// ============================================================================
+// Type-Safe Property Access Helper
+// ============================================================================
+
+/**
+ * Type-safe property access after in-operator check
+ * Returns the property value with proper type narrowing
+ */
+function getProperty<T extends object, K extends string>(
+  obj: T,
+  key: K,
+): K extends keyof T ? T[K] : unknown {
+  return (obj as Record<string, unknown>)[key] as K extends keyof T ? T[K] : unknown;
+}
 
 // ============================================================================
 // Message Metadata Type Guards
@@ -34,25 +49,36 @@ export function isUserMessageMetadata(metadata: DbMessageMetadata): metadata is 
  * Excludes moderator messages (isModerator: true)
  */
 export function isAssistantMessageMetadata(metadata: DbMessageMetadata): metadata is DbAssistantMessageMetadata {
-  return (
-    metadata.role === MessageRoles.ASSISTANT
-    && 'participantId' in metadata
-    && !('isModerator' in metadata && (metadata as DbModeratorMessageMetadata).isModerator === true)
-  );
+  if (metadata.role !== MessageRoles.ASSISTANT)
+    return false;
+  if (!('participantId' in metadata))
+    return false;
+  // Exclude moderator messages: check if isModerator exists and is true
+  if ('isModerator' in metadata && getProperty(metadata, 'isModerator') === true)
+    return false;
+  return true;
 }
 
 /**
  * Check if metadata is for a pre-search system message
  */
 export function isPreSearchMessageMetadata(metadata: DbMessageMetadata): metadata is DbPreSearchMessageMetadata {
-  return metadata.role === UIMessageRoles.SYSTEM && 'isPreSearch' in metadata && (metadata as DbPreSearchMessageMetadata).isPreSearch === true;
+  if (metadata.role !== UIMessageRoles.SYSTEM)
+    return false;
+  if (!('isPreSearch' in metadata))
+    return false;
+  return getProperty(metadata, 'isPreSearch') === true;
 }
 
 /**
  * Check if metadata is for a moderator message
  */
 export function isModeratorMessageMetadata(metadata: DbMessageMetadata): metadata is DbModeratorMessageMetadata {
-  return metadata.role === MessageRoles.ASSISTANT && 'isModerator' in metadata && (metadata as DbModeratorMessageMetadata).isModerator === true;
+  if (metadata.role !== MessageRoles.ASSISTANT)
+    return false;
+  if (!('isModerator' in metadata))
+    return false;
+  return getProperty(metadata, 'isModerator') === true;
 }
 
 /**

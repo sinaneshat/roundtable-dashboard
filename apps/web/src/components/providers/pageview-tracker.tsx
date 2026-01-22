@@ -15,15 +15,79 @@
 import { useLocation, useSearch } from '@tanstack/react-router';
 import { usePostHog } from 'posthog-js/react';
 import { useEffect, useRef } from 'react';
+import { z } from 'zod';
 
 import { useSession } from '@/lib/auth/client';
 
+// ============================================================================
+// Zod Schemas for Type-Safe Pageview Tracking
+// ============================================================================
+
+/**
+ * Schema for trackable search params
+ * Only specific params that are safe to track in analytics
+ */
+const TrackableSearchParamsSchema = z.object({
+  model: z.string().optional(),
+  view: z.string().optional(),
+}).passthrough();
+
+type TrackableSearchParams = z.infer<typeof TrackableSearchParamsSchema>;
+
+/**
+ * Type for page context
+ * All possible context fields for pageview tracking
+ */
+type PageContext = {
+  pathname: string;
+  section?: string;
+  threadId?: string;
+  hasThread?: boolean;
+  projectId?: string;
+  hasProject?: boolean;
+  isNewProject?: boolean;
+  settingsTab?: string;
+  authPage?: string;
+  hasQueryParams?: boolean;
+  selectedModel?: string;
+  viewMode?: string;
+  userId?: string;
+  userEmail?: string;
+  authenticated?: boolean;
+};
+
+/**
+ * Safely parse search params from router
+ */
+function parseSearchParams(params: unknown): TrackableSearchParams | null {
+  if (!params || typeof params !== 'object')
+    return null;
+  const result = TrackableSearchParamsSchema.safeParse(params);
+  return result.success ? result.data : null;
+}
+
+/**
+ * Build URL search string from parsed params
+ */
+function buildSearchString(params: TrackableSearchParams | null): string {
+  if (!params)
+    return '';
+  const entries = Object.entries(params).filter(
+    (entry): entry is [string, string] =>
+      typeof entry[1] === 'string' && entry[1].length > 0,
+  );
+  if (entries.length === 0)
+    return '';
+  return `?${new URLSearchParams(entries).toString()}`;
+}
+
 /**
  * Extracts context from pathname for PostHog events
+ * ✅ ZOD-FIRST PATTERN: Returns typed PageContext
  */
-function extractPageContext(pathname: string, searchParams: Record<string, unknown> | null) {
+function extractPageContext(pathname: string, searchParams: TrackableSearchParams | null): PageContext {
   const segments = pathname.split('/').filter(Boolean);
-  const context: Record<string, string | boolean> = {
+  const context: PageContext = {
     pathname,
   };
 
@@ -61,15 +125,14 @@ function extractPageContext(pathname: string, searchParams: Record<string, unkno
   }
 
   // Add search params if present
-  if (searchParams && typeof searchParams === 'object') {
-    const params = searchParams as Record<string, string | undefined>;
-    if (Object.keys(params).length > 0) {
+  if (searchParams) {
+    const hasParams = Object.values(searchParams).some(v => typeof v === 'string' && v.length > 0);
+    if (hasParams) {
       context.hasQueryParams = true;
-      // Add specific query params that are safe to track
-      if (params.model)
-        context.selectedModel = String(params.model);
-      if (params.view)
-        context.viewMode = String(params.view);
+      if (searchParams.model)
+        context.selectedModel = searchParams.model;
+      if (searchParams.view)
+        context.viewMode = searchParams.view;
     }
   }
 
@@ -86,7 +149,8 @@ function extractPageContext(pathname: string, searchParams: Record<string, unkno
 export function PageViewTracker() {
   const posthog = usePostHog();
   const { pathname } = useLocation();
-  const searchParams = useSearch({ strict: false }) as Record<string, unknown> | null;
+  const rawSearchParams = useSearch({ strict: false });
+  const searchParams = parseSearchParams(rawSearchParams);
   const { data: session } = useSession();
   const lastTrackedPath = useRef<string>('');
   const isFirstRender = useRef(true);
@@ -95,7 +159,7 @@ export function PageViewTracker() {
     if (!posthog)
       return;
 
-    const currentPath = `${pathname}${searchParams ? `?${new URLSearchParams(searchParams as Record<string, string>).toString()}` : ''}`;
+    const currentPath = `${pathname}${buildSearchString(searchParams)}`;
 
     // Avoid duplicate tracking of the same path
     if (lastTrackedPath.current === currentPath)

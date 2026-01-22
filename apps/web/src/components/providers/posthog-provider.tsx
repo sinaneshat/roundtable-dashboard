@@ -23,27 +23,54 @@ type PostHogProviderProps = {
 };
 
 /**
+ * Detect environment from hostname (client-side fallback)
+ * Used when server-side env detection fails (known TanStack Start + CF issue)
+ */
+function detectEnvFromHostname(): 'local' | 'preview' | 'prod' {
+  if (typeof window === 'undefined')
+    return 'local';
+
+  const hostname = window.location.hostname;
+  if (hostname === 'localhost' || hostname === '127.0.0.1') {
+    return 'local';
+  }
+  if (hostname.includes('preview') || hostname.includes('-preview')) {
+    return 'preview';
+  }
+  return 'prod';
+}
+
+/**
  * PostHog Provider - Synchronous loading for TanStack Start + Cloudflare Workers
  *
  * PostHog is initialized synchronously to ensure window.posthog is available
  * for toolbar authorization and other integrations.
+ *
+ * NOTE: Uses hostname-based env detection as fallback due to known TanStack Start
+ * SSR issue where Cloudflare env vars don't propagate correctly.
  */
 export default function PostHogProvider({
   children,
   apiKey,
-  environment,
+  environment: envProp,
 }: PostHogProviderProps) {
   const initStarted = useRef(false);
+
+  // Detect actual environment from hostname (fallback for CF SSR issue)
+  const detectedEnv = typeof window !== 'undefined' ? detectEnvFromHostname() : 'local';
+  // Use detected env if prop says "local" but hostname says otherwise
+  const environment = (envProp === 'local' && detectedEnv !== 'local') ? detectedEnv : envProp;
 
   // Debug: Log props on every render (client-side only)
   useEffect(() => {
     console.log('[PostHog] Provider mounted', {
       apiKey: apiKey ? `${apiKey.slice(0, 10)}...` : 'MISSING',
-      environment,
-      hasApiKey: !!apiKey,
-      isLocal: environment === 'local',
+      envProp,
+      detectedEnv,
+      resolvedEnv: environment,
+      hostname: window.location.hostname,
     });
-  }, [apiKey, environment]);
+  }, [apiKey, envProp, detectedEnv, environment]);
 
   useEffect(() => {
     // Skip SSR
@@ -51,9 +78,9 @@ export default function PostHogProvider({
       return;
     }
 
-    // Skip local env
+    // Skip truly local env (localhost/127.0.0.1)
     if (environment === 'local') {
-      console.log('[PostHog] Skipped: local environment');
+      console.log('[PostHog] Skipped: local environment (localhost)');
       return;
     }
 
@@ -138,8 +165,13 @@ export default function PostHogProvider({
     console.log('[PostHog] Init complete, window.posthog set');
   }, [apiKey, environment]);
 
-  // Skip SSR or local/missing config - render children without provider
-  if (typeof window === 'undefined' || environment === 'local' || !apiKey) {
+  // Skip SSR
+  if (typeof window === 'undefined') {
+    return <>{children}</>;
+  }
+
+  // Skip truly local env or missing API key
+  if (environment === 'local' || !apiKey) {
     return <>{children}</>;
   }
 
