@@ -12,7 +12,7 @@
  * Reference pattern: /src/api/core/enums.ts, /src/stores/chat/store-schemas.ts
  */
 
-import { ChatModes, DEFAULT_CHAT_MODE, ModelIds, ScreenModes } from '@roundtable/shared';
+import { ChatModes, DEFAULT_CHAT_MODE, ModelIds, RoundFlowStates, ScreenModes } from '@roundtable/shared';
 import { z } from 'zod';
 
 import type { ApiChangelog } from '@/services/api';
@@ -27,6 +27,7 @@ import type {
   FlagsState,
   FormState,
   PreSearchState,
+  RoundFlowState,
   ScreenState,
   SidebarAnimationState,
   StreamResumptionSliceState,
@@ -268,6 +269,37 @@ export const STREAM_RESUMPTION_DEFAULTS = {
 } satisfies StreamResumptionSliceState;
 
 // ============================================================================
+// ROUND FLOW SLICE DEFAULTS (FSM-based orchestration)
+// ============================================================================
+
+export const ROUND_FLOW_DEFAULTS = {
+  /** Current FSM state - starts in IDLE */
+  flowState: RoundFlowStates.IDLE,
+  /** Round number being orchestrated */
+  flowRoundNumber: null,
+  /** Current participant index within round */
+  flowParticipantIndex: 0,
+  /** Total enabled participants for current round */
+  flowParticipantCount: 0,
+  /** Last error that occurred */
+  flowLastError: null,
+  /** Event history for debugging (dev mode only) */
+  flowEventHistory: [],
+} satisfies RoundFlowState;
+
+/**
+ * Round flow state reset - clears FSM state when round completes or navigation occurs
+ */
+export const ROUND_FLOW_STATE_RESET = {
+  flowState: RoundFlowStates.IDLE,
+  flowRoundNumber: null,
+  flowParticipantIndex: 0,
+  flowParticipantCount: 0,
+  flowLastError: null,
+  flowEventHistory: [],
+} satisfies RoundFlowState;
+
+// ============================================================================
 // ANIMATION SLICE DEFAULTS
 // ============================================================================
 
@@ -472,6 +504,13 @@ export const COMPLETE_RESET_STATE = {
   oldTitle: SIDEBAR_ANIMATION_DEFAULTS.oldTitle,
   newTitle: SIDEBAR_ANIMATION_DEFAULTS.newTitle,
   displayedTitle: SIDEBAR_ANIMATION_DEFAULTS.displayedTitle,
+  // Round flow state (FSM orchestration)
+  flowState: ROUND_FLOW_DEFAULTS.flowState,
+  flowRoundNumber: ROUND_FLOW_DEFAULTS.flowRoundNumber,
+  flowParticipantIndex: ROUND_FLOW_DEFAULTS.flowParticipantIndex,
+  flowParticipantCount: ROUND_FLOW_DEFAULTS.flowParticipantCount,
+  flowLastError: ROUND_FLOW_DEFAULTS.flowLastError,
+  flowEventHistory: [],
 };
 
 /**
@@ -536,6 +575,13 @@ export const THREAD_RESET_STATE = {
   // Animation state
   pendingAnimations: new Set<number>(),
   animationResolvers: new Map(),
+  // Round flow state (FSM orchestration)
+  flowState: ROUND_FLOW_DEFAULTS.flowState,
+  flowRoundNumber: ROUND_FLOW_DEFAULTS.flowRoundNumber,
+  flowParticipantIndex: ROUND_FLOW_DEFAULTS.flowParticipantIndex,
+  flowParticipantCount: ROUND_FLOW_DEFAULTS.flowParticipantCount,
+  flowLastError: ROUND_FLOW_DEFAULTS.flowLastError,
+  flowEventHistory: [],
   // ✅ FIX: Removed pendingAttachments from reset state
   // Attachments should ONLY be cleared via clearAttachments() after the message is created
   // This prevents attachments from being cleared prematurely during navigation

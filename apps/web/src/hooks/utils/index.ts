@@ -51,7 +51,6 @@ export {
   useFileValidation,
   UseFileValidationOptionsSchema,
 } from './use-file-validation';
-export type { FreeTrialStateReturn } from './use-free-trial-state';
 export { useFreeTrialState } from './use-free-trial-state';
 export { useHydrationInputCapture } from './use-hydration-input-capture';
 export { useInView } from './use-in-view';

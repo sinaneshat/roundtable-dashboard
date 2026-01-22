@@ -68,7 +68,7 @@ export function HoverBorderGradient<T extends PolymorphicElementType = 'button'>
     onMouseEnter: () => setHovered(true),
     onMouseLeave: () => setHovered(false),
     className: cn(
-      'relative flex h-min w-fit flex-col flex-nowrap content-center items-center justify-center gap-10 overflow-visible rounded-4xl border border-input bg-background/50 p-px decoration-clone transition duration-500 hover:border-primary/50',
+      'relative flex h-min w-fit flex-col flex-nowrap content-center items-center justify-center gap-10 overflow-visible rounded-xl border border-input bg-background/50 p-px decoration-clone transition duration-500 hover:border-primary/50',
       containerClassName,
     ),
     ...props,

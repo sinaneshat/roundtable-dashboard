@@ -113,12 +113,6 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         { name: 'mobile-web-app-capable', content: 'yes' },
       ],
       links: [
-        // Critical: Preload fonts to prevent FOUT (Flash of Unstyled Text)
-        // WOFF2 is ~60% smaller than TTF for faster loading
-        // These start loading immediately with HTML, before CSS is parsed
-        { rel: 'preload', href: '/static/fonts/Geist-Regular.woff2', as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' },
-        { rel: 'preload', href: '/static/fonts/Geist-SemiBold.woff2', as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' },
-        { rel: 'preload', href: '/static/fonts/Geist-Bold.woff2', as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' },
         // Performance: DNS prefetch and preconnect for external resources
         { rel: 'dns-prefetch', href: 'https://challenges.cloudflare.com' },
         { rel: 'dns-prefetch', href: 'https://us.posthog.com' },
@@ -144,7 +138,8 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
-  const { env } = Route.useLoaderData();
+  const loaderData = Route.useLoaderData();
+  const env = loaderData?.env ?? DEFAULT_PUBLIC_ENV;
   return (
     <RootDocument env={env}>
       <Outlet />

@@ -16,8 +16,8 @@
  * Reference: https://developers.cloudflare.com/ai-search/configuration/indexing/
  */
 
-import type { ProjectIndexStatus } from '@roundtable/shared/enums';
-import { LogTypes, ProjectIndexStatuses } from '@roundtable/shared/enums';
+import type { AiSearchCheckStatus, ProjectIndexStatus } from '@roundtable/shared/enums';
+import { AiSearchCheckStatuses, LogTypes, ProjectIndexStatuses } from '@roundtable/shared/enums';
 import { and, eq, inArray } from 'drizzle-orm';
 
 import type { getDbAsync } from '@/db';
@@ -139,33 +139,38 @@ export async function getProjectIndexStatus(
     orderBy: (t, { desc }) => [desc(t.updatedAt)],
   });
 
-  const counts = {
-    pending: 0,
-    indexing: 0,
-    indexed: 0,
-    failed: 0,
-  };
-
+  let pending = 0;
+  let indexing = 0;
+  let indexed = 0;
+  let failed = 0;
   let lastIndexedAt: Date | null = null;
 
   for (const att of attachments) {
-    const status = att.indexStatus as keyof typeof counts;
-    if (status in counts) {
-      counts[status]++;
-    }
-    if (att.indexStatus === ProjectIndexStatuses.INDEXED && att.updatedAt) {
-      if (!lastIndexedAt || att.updatedAt > lastIndexedAt) {
-        lastIndexedAt = att.updatedAt;
-      }
+    switch (att.indexStatus) {
+      case ProjectIndexStatuses.PENDING:
+        pending++;
+        break;
+      case ProjectIndexStatuses.INDEXING:
+        indexing++;
+        break;
+      case ProjectIndexStatuses.INDEXED:
+        indexed++;
+        if (att.updatedAt && (!lastIndexedAt || att.updatedAt > lastIndexedAt)) {
+          lastIndexedAt = att.updatedAt;
+        }
+        break;
+      case ProjectIndexStatuses.FAILED:
+        failed++;
+        break;
     }
   }
 
   return {
     total: attachments.length,
-    pending: counts.pending,
-    inProgress: counts.indexing,
-    indexed: counts.indexed,
-    failed: counts.failed,
+    pending,
+    inProgress: indexing,
+    indexed,
+    failed,
     lastIndexedAt,
   };
 }
@@ -188,7 +193,7 @@ export async function checkAiSearchInstance(
   },
 ): Promise<{
   available: boolean;
-  status: string;
+  status: AiSearchCheckStatus | string;
   paused: boolean;
 }> {
   const { ai, instanceId, logger } = params;
@@ -204,7 +209,7 @@ export async function checkAiSearchInstance(
         instanceId,
         availableInstances: instances.map(i => i.id),
       });
-      return { available: false, status: 'not_found', paused: false };
+      return { available: false, status: AiSearchCheckStatuses.NOT_FOUND, paused: false };
     }
 
     return {
@@ -219,7 +224,7 @@ export async function checkAiSearchInstance(
       instanceId,
       error: error instanceof Error ? error.message : String(error),
     });
-    return { available: false, status: 'error', paused: false };
+    return { available: false, status: AiSearchCheckStatuses.ERROR, paused: false };
   }
 }
 

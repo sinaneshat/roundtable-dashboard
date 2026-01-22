@@ -32,39 +32,39 @@ Project guidance for Claude Code specialized agents working on Roundtable - a co
 
 ```bash
 # Development
-pnpm dev                    # Start development with turbo
-pnpm build                  # Build for production
-pnpm lint                   # Run ESLint
-pnpm lint:fix               # Fix ESLint issues
-pnpm check-types            # TypeScript type checking
-pnpm lint:modified          # Lint only modified files
+bun run dev                 # Start development with turbo
+bun run build               # Build for production
+bun run lint                # Run ESLint
+bun run lint:fix            # Fix ESLint issues
+bun run check-types         # TypeScript type checking
+bun run lint:modified       # Lint only modified files
 
 # Database Management
-pnpm db:generate            # Generate Drizzle migrations
-pnpm db:migrate:local       # Apply migrations locally
-pnpm db:migrate:preview     # Apply migrations to preview
-pnpm db:migrate:prod        # Apply migrations to production
-pnpm db:studio:local        # Open Drizzle Studio
-pnpm db:full-reset:local    # Full reset: wipe all state (D1, R2, KV), migrate, seed
-pnpm local:wipe-state       # Clear all Wrangler state (D1, R2, KV, tmp)
-pnpm local:nuclear-reset    # Nuclear: clear build cache + all Wrangler state + migrate + seed
+bun run db:generate         # Generate Drizzle migrations
+bun run db:migrate:local    # Apply migrations locally
+bun run db:migrate:preview  # Apply migrations to preview
+bun run db:migrate:prod     # Apply migrations to production
+bun run db:studio:local     # Open Drizzle Studio
+bun run db:full-reset:local # Full reset: wipe all state (D1, R2, KV), migrate, seed
+bun run local:wipe-state    # Clear all Wrangler state (D1, R2, KV, tmp)
+bun run local:nuclear-reset # Nuclear: clear build cache + all Wrangler state + migrate + seed
 
 # Cloudflare Deployment
-pnpm cf-typegen            # Generate CloudflareEnv types
-pnpm preview               # Build and preview worker locally
-pnpm deploy:preview        # Deploy to preview environment
-pnpm deploy:production     # Deploy to production
+bun run cf-typegen          # Generate CloudflareEnv types
+bun run preview             # Build and preview worker locally
+bun run deploy:preview      # Deploy to preview environment
+bun run deploy:production   # Deploy to production
 
 # Testing
-pnpm test                  # Run all tests
-pnpm test:watch            # Run tests in watch mode
-pnpm test:coverage         # Run tests with coverage
-pnpm test:ci               # Run tests in CI mode
+bun run test                # Run all tests
+bun run test:watch          # Run tests in watch mode
+bun run test:coverage       # Run tests with coverage
+bun run test:ci             # Run tests in CI mode
 
 # Testing & Quality
-pnpm i18n:full-check       # Check all i18n translation keys
-pnpm i18n:validate         # Validate translation structure
-pnpm i18n:check-unused     # Find unused translation keys
+bun run i18n:full-check     # Check all i18n translation keys
+bun run i18n:validate       # Validate translation structure
+bun run i18n:check-unused   # Find unused translation keys
 ```
 
 ## Project Structure
@@ -737,9 +737,9 @@ research-analyst findings → backend-pattern-expert implementation → frontend
 ## Quality Requirements
 
 **Before Committing**:
-- Run `pnpm lint && pnpm check-types` for code quality
-- Execute `pnpm i18n:full-check` for translation key completeness
-- Test database migrations with `pnpm db:migrate:local`
+- Run `bun run lint && bun run check-types` for code quality
+- Execute `bun run i18n:full-check` for translation key completeness
+- Test database migrations with `bun run db:migrate:local`
 - Verify API documentation at `http://localhost:8787/api/v1/scalar`
 
 **Security Considerations**:

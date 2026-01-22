@@ -153,7 +153,7 @@ Testing utilities organized following project architecture:
 ### ✅ Tests Running Successfully
 
 ```bash
-$ pnpm test
+$ bun run test
 
 PASS src/__tests__/example.test.tsx
   example test suite
@@ -258,22 +258,22 @@ These are pre-existing issues and do not affect the testing infrastructure.
 
 ```bash
 # Run all tests
-pnpm test
+bun run test
 
 # Run tests in watch mode
-pnpm test:watch
+bun run test:watch
 
 # Run tests with coverage
-pnpm test:coverage
+bun run test:coverage
 
 # Run tests in CI mode
-pnpm test:ci
+bun run test:ci
 
 # Type check all files
-pnpm check-types
+bun run check-types
 
 # Lint all files
-pnpm lint
+bun run lint
 ```
 
 ## Conclusion

@@ -61,4 +61,4 @@ When 3+ occurrences of same pattern:
 3. Create/update shared utilities
 4. Update imports to use barrel exports
 5. Remove dead code
-6. Verify with `pnpm lint && pnpm check-types`
+6. Verify with `bun run lint && bun run check-types`

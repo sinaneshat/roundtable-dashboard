@@ -270,13 +270,13 @@ The test suite verifies the following ordering is **always** maintained:
 
 ```bash
 # Run all tests
-pnpm test src/stores/chat/__tests__/config-change-race-prevention.test.ts
+bun run test src/stores/chat/__tests__/config-change-race-prevention.test.ts
 
 # Run in watch mode
-pnpm test:watch src/stores/chat/__tests__/config-change-race-prevention.test.ts
+bun run test:watch src/stores/chat/__tests__/config-change-race-prevention.test.ts
 
 # Run with coverage
-pnpm test:coverage src/stores/chat/__tests__/config-change-race-prevention.test.ts
+bun run test:coverage src/stores/chat/__tests__/config-change-race-prevention.test.ts
 ```
 
 ### Test Structure

@@ -15,7 +15,7 @@
  */
 
 import type { ChatMode, FeedbackType, ScreenMode } from '@roundtable/shared';
-import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundPhases, ScreenModes, StreamStatuses, TextPartStates, UploadStatuses, WebSearchDepths } from '@roundtable/shared';
+import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundFlowStates, RoundPhases, ScreenModes, StreamStatuses, TextPartStates, UploadStatuses, WebSearchDepths } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { castDraft, enableMapSet } from 'immer';
 import type { StateCreator } from 'zustand';
@@ -48,6 +48,7 @@ import {
   PENDING_MESSAGE_STATE_RESET,
   PRESEARCH_DEFAULTS,
   REGENERATION_STATE_RESET,
+  ROUND_FLOW_DEFAULTS,
   SCREEN_DEFAULTS,
   SIDEBAR_ANIMATION_DEFAULTS,
   STREAM_RESUMPTION_DEFAULTS,
@@ -72,6 +73,7 @@ import type {
   FormSlice,
   OperationsActions,
   PreSearchSlice,
+  RoundFlowSlice,
   ScreenSlice,
   SidebarAnimationSlice,
   StreamResumptionPrefillUpdate,
@@ -1046,6 +1048,53 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
   },
 });
 
+// ============================================================================
+// ROUND FLOW SLICE (FSM-based round orchestration)
+// ============================================================================
+
+const createRoundFlowSlice: SliceCreator<RoundFlowSlice> = (set, get) => ({
+  ...ROUND_FLOW_DEFAULTS,
+
+  dispatchFlowEvent: (event, payload) => {
+    const state = get();
+    const currentFlowState = state.flowState;
+
+    // Log event dispatch in development
+    rlog.phase('fsm-dispatch', `Event: ${event}, Current: ${currentFlowState}${payload ? `, Payload: ${JSON.stringify(payload)}` : ''}`);
+
+    // Record event in history (dev mode only, limit to 50 entries)
+    set((draft) => {
+      if (draft.flowEventHistory.length >= 50) {
+        draft.flowEventHistory.shift();
+      }
+      draft.flowEventHistory.push({
+        event,
+        fromState: currentFlowState,
+        toState: currentFlowState, // Will be updated after transition
+        timestamp: Date.now(),
+      });
+    }, false, `roundFlow/dispatch_${event}`);
+  },
+
+  setFlowState: state =>
+    set({ flowState: state }, false, 'roundFlow/setFlowState'),
+
+  resetFlowState: () =>
+    set(ROUND_FLOW_DEFAULTS, false, 'roundFlow/resetFlowState'),
+
+  setFlowParticipantIndex: index =>
+    set({ flowParticipantIndex: index }, false, 'roundFlow/setFlowParticipantIndex'),
+
+  setFlowParticipantCount: count =>
+    set({ flowParticipantCount: count }, false, 'roundFlow/setFlowParticipantCount'),
+
+  setFlowRoundNumber: roundNumber =>
+    set({ flowRoundNumber: roundNumber }, false, 'roundFlow/setFlowRoundNumber'),
+
+  setFlowError: error =>
+    set({ flowLastError: error, flowState: error ? RoundFlowStates.ERROR : get().flowState }, false, 'roundFlow/setFlowError'),
+});
+
 const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
   ...ANIMATION_DEFAULTS,
 
@@ -1089,24 +1138,15 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
       return Promise.resolve();
     }
 
-    const ANIMATION_TIMEOUT_MS = 5000;
-
+    // ✅ REMOVED TIMEOUT: Previously used 5s timeout as fallback
+    // Problem: Timeout-based fallback caused premature animation clearing
+    // Solution: Let animations complete naturally via their resolvers
+    // Each animation component calls completeAnimation() when done, which resolves its promise
+    // If an animation never completes (bug), the promise hangs - but this is better than
+    // prematurely clearing animations and causing visual glitches
     const animationPromises = pendingIndices.map(index => state.waitForAnimation(index));
 
-    const timeoutPromise = new Promise<void>((resolve) => {
-      setTimeout(() => {
-        set({
-          pendingAnimations: new Set<number>(),
-          animationResolvers: new Map<number, () => void>(),
-        }, false, 'animation/waitForAllAnimationsTimeout');
-        resolve();
-      }, ANIMATION_TIMEOUT_MS);
-    });
-
-    await Promise.race([
-      Promise.all(animationPromises),
-      timeoutPromise,
-    ]);
+    await Promise.all(animationPromises);
   },
 
   clearAnimations: () =>
@@ -1440,12 +1480,27 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     const hasActiveFormSubmission
       = currentState.configChangeRoundNumber !== null
         || currentState.isWaitingForChangelog;
-    const preserveStreamingState = isActiveResumption || hasActiveFormSubmission;
+    // ✅ FIX v5: Detect newly created thread by ONLY checking createdThreadId matches
+    // Race condition: route loader triggers initializeThread BEFORE prepareForNewMessage completes
+    // So pendingMessage is still null when initializeThread runs. We can't rely on it.
+    // createdThreadId is:
+    // - Set by handleCreateThread after API success, BEFORE navigation
+    // - Cleared by resetForThreadNavigation on any navigation away
+    // So if createdThreadId matches thread.id, we KNOW this is the thread being created
+    const isNewlyCreatedThread = currentState.createdThreadId === thread.id;
+
+    rlog.init('newThreadCheck', `created=${currentState.createdThreadId?.slice(-8) ?? '-'} thread=${thread.id.slice(-8)} pending=${!!currentState.pendingMessage} sent=${currentState.hasSentPendingMessage} waiting=${currentState.waitingToStartStreaming} creating=${currentState.isCreatingThread} isNew=${isNewlyCreatedThread ? 1 : 0}`);
+
+    const preserveStreamingState = isActiveResumption || hasActiveFormSubmission || isNewlyCreatedThread;
     const resumptionRoundNumber = validatedResumptionRoundNumber;
 
     set({
       // ✅ CONDITIONAL: Only reset streaming state if NOT resuming or active submission
-      waitingToStartStreaming: preserveStreamingState ? currentState.waitingToStartStreaming : false,
+      // ✅ FIX v4: For newly created threads, FORCE waitingToStartStreaming=true
+      // Even if prepareForNewMessage reset it to false, we need it true to trigger streaming
+      waitingToStartStreaming: isNewlyCreatedThread
+        ? true
+        : (preserveStreamingState ? currentState.waitingToStartStreaming : false),
       streamingRoundNumber: preserveStreamingState
         ? (currentState.streamingRoundNumber ?? resumptionRoundNumber)
         : null,
@@ -1497,6 +1552,11 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       showInitialUI: false,
       hasInitiallyLoaded: true,
     }, false, 'operations/initializeThread');
+
+    // ✅ DEBUG v7: Log AFTER set() to confirm waitingToStartStreaming value
+    const afterState = get();
+    rlog.init('postSet', `wait=${afterState.waitingToStartStreaming ? 1 : 0} isNew=${isNewlyCreatedThread ? 1 : 0} preserve=${preserveStreamingState ? 1 : 0}`);
+    rlog.flow('init-thread', `DONE t=${thread.id.slice(-8)} wait=${afterState.waitingToStartStreaming ? 1 : 0} pending=${afterState.pendingMessage ? 1 : 0} hasSent=${afterState.hasSentPendingMessage ? 1 : 0} nextP=${afterState.nextParticipantToTrigger !== null ? 1 : 0}`);
   },
 
   updateParticipants: (participants: ChatParticipant[]) => {
@@ -1530,7 +1590,16 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
         },
       );
 
-      draft.waitingToStartStreaming = false;
+      // ✅ FIX v6: Don't reset waitingToStartStreaming during thread creation
+      // initializeThread sets it to true, but prepareForNewMessage runs AFTER and resets it
+      // THEN setWaitingToStartStreaming(true) runs - but effects fire between prepareForNewMessage
+      // and setWaitingToStartStreaming, seeing wait=0. Preserve it if createdThreadId is set.
+      const isThreadCreationFlow = draft.createdThreadId !== null;
+      const waitBefore = draft.waitingToStartStreaming;
+      if (!isThreadCreationFlow) {
+        draft.waitingToStartStreaming = false;
+      }
+      rlog.msg('prepareFlags', `createFlow=${isThreadCreationFlow ? 1 : 0} created=${draft.createdThreadId?.slice(-8) ?? '-'} waitBefore=${waitBefore ? 1 : 0} waitAfter=${draft.waitingToStartStreaming ? 1 : 0}`);
       draft.isStreaming = false;
       draft.currentParticipantIndex = 0;
       draft.error = null;
@@ -1701,6 +1770,7 @@ export function createChatStore() {
           ...createCallbacksSlice(...args),
           ...createScreenSlice(...args),
           ...createStreamResumptionSlice(...args),
+          ...createRoundFlowSlice(...args),
           ...createAnimationSlice(...args),
           ...createAttachmentsSlice(...args),
           ...createSidebarAnimationSlice(...args),

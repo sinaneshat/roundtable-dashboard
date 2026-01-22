@@ -1,6 +1,5 @@
 import { MessageRoles, MessageStatuses, ScreenModes } from '@roundtable/shared';
 import type { QueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
 import type { RefObject } from 'react';
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
@@ -8,8 +7,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
-import { showApiErrorToast } from '@/lib/toast';
-import { extractFileContextForSearch, getCurrentRoundNumber, getRoundNumber, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils';
+import { extractFileContextForSearch, getCurrentRoundNumber, getRoundNumber } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import { executePreSearchStreamService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
@@ -30,16 +28,16 @@ export function useStreamingTrigger({
   effectiveThreadId,
   queryClientRef,
 }: UseStreamingTriggerParams) {
-  const navigate = useNavigate();
-
   // ✅ STALE SELECTOR FIX: These selectors are kept for effect dependency tracking,
   // but the effect reads fresh state from store.getState() to avoid stale values.
   const {
     waitingToStart,
     chatIsStreaming,
+    hasSentPending,
   } = useStore(store, useShallow(s => ({
     waitingToStart: s.waitingToStartStreaming,
     chatIsStreaming: s.isStreaming,
+    hasSentPending: s.hasSentPendingMessage,
   })));
 
   const startRoundCalledForRoundRef = useRef<number | null>(null);
@@ -63,10 +61,12 @@ export function useStreamingTrigger({
     const freshIsPatchInProgress = freshState.isPatchInProgress;
     const freshEnableWebSearch = freshState.enableWebSearch;
 
+    rlog.flow('trigger', `EFFECT-RUN wait=${freshWaitingToStart ? 1 : 0} screen=${freshScreenMode} created=${freshCreatedThreadId?.slice(-8) ?? '-'} parts=${freshParticipants.length} msgs=${freshMessages.length} thread=${freshThread?.id?.slice(-8) ?? '-'} hasSent=${freshState.hasSentPendingMessage ? 1 : 0}`);
     rlog.trigger('streaming-trigger', `effect-run wait=${freshWaitingToStart ? 1 : 0} screen=${freshScreenMode} created=${freshCreatedThreadId?.slice(-8) ?? '-'} parts=${freshParticipants.length} msgs=${freshMessages.length}`);
 
     if (!freshWaitingToStart) {
       startRoundCalledForRoundRef.current = null;
+      rlog.flow('trigger', 'EXIT-EARLY: waitingToStartStreaming=false');
       rlog.trigger('streaming-trigger', 'EXIT: not waiting');
       return;
     }
@@ -89,8 +89,17 @@ export function useStreamingTrigger({
       return;
     }
 
-    if (!chat.startRound || freshParticipants.length === 0 || freshMessages.length === 0) {
-      rlog.trigger('streaming-trigger', `EXIT: missing data startRound=${!!chat.startRound} parts=${freshParticipants.length} msgs=${freshMessages.length}`);
+    // ✅ RACE CONDITION FIX: Split checks with recovery for parts=0 but msgs>0
+    if (!chat.startRound || freshMessages.length === 0) {
+      rlog.trigger('streaming-trigger', `EXIT: startRound=${!!chat.startRound} msgs=${freshMessages.length}`);
+      return;
+    }
+
+    if (freshParticipants.length === 0) {
+      rlog.trigger('streaming-trigger', `RECOVERY-NEEDED: parts=0 but msgs=${freshMessages.length}`);
+      // Clear flags to prevent infinite loop, let screen-init handle recovery
+      freshState.setWaitingToStartStreaming(false);
+      freshState.setStreamingRoundNumber(null);
       return;
     }
 
@@ -305,11 +314,38 @@ export function useStreamingTrigger({
       // participant's stream than what we need to trigger. We shouldn't clear the flags
       // because our target participant (nextParticipantToTrigger) hasn't been triggered yet.
       if (freshState.streamResumptionPrefilled && freshState.currentResumptionPhase === 'participants') {
+        rlog.trigger('clear-guard', 'skip: prefilled resumption');
         return;
       }
 
+      // ✅ STREAMING BUG FIX: Don't clear until message actually sent to AI SDK
+      // startRound() sets isStreaming=true sync via flushSync, but actual send is in queueMicrotask
+      // hasSentPendingMessage is set by startRound AFTER aiSendMessage() returns (not before)
+      // Without this guard, we clear waitingToStartStreaming before the API call happens
+      if (!freshState.hasSentPendingMessage) {
+        rlog.trigger('clear-guard', `skip: msg not sent (pending=${freshState.pendingMessage?.slice(0, 20) ?? '-'})`);
+        return;
+      }
+
+      // ✅ RACE CONDITION FIX (Issue 1): Don't clear if pre-search still streaming
+      // When web search is enabled, pre-search streams before participant streaming.
+      // If we clear waitingToStartStreaming while pre-search is still active, navigation
+      // or other effects could leave the round in a stuck state. The pre-search must
+      // complete or abort before we clear the waiting flag.
+      const webSearchEnabled = getEffectiveWebSearchEnabled(freshState.thread, freshState.enableWebSearch);
+      if (webSearchEnabled) {
+        const currentRound = getCurrentRoundNumber(freshState.messages);
+        const preSearchForRound = freshState.preSearches.find(ps => ps.roundNumber === currentRound);
+        if (preSearchForRound && preSearchForRound.status === MessageStatuses.STREAMING) {
+          rlog.trigger('clear-guard', `skip: preSearch still streaming for r${currentRound}`);
+          return;
+        }
+      }
+
+      rlog.trigger('clear-flags', `clearing waitingToStart (sent=${freshState.hasSentPendingMessage})`);
       freshState.setWaitingToStartStreaming(false);
-      freshState.setHasSentPendingMessage(true);
+      // ✅ REMOVED: Don't set hasSentPendingMessage here - startRound sets it after aiSendMessage
+
       // ✅ HANDOFF FIX: Set handoff flag BEFORE clearing nextParticipantToTrigger
       // This prevents stale-streaming-cleanup from firing during P0→P1 transition
       // The handoff flag acts as a guard that persists until the next participant actually starts
@@ -318,9 +354,22 @@ export function useStreamingTrigger({
         // ✅ V8 FIX: Don't clear nextParticipantToTrigger here
         // Let incomplete-round-resumption clear it after triggering P1
       }
-    }
-  }, [waitingToStart, chatIsStreaming, store]);
 
+      // ✅ FIX 4: Clear handoff flag when next participant is actively streaming
+      // When: handoff=true, isStreaming=true, and nextP already cleared (P1 was triggered)
+      // This prevents handoff flag from persisting indefinitely and blocking cleanup
+      if (freshState.participantHandoffInProgress && freshState.isStreaming && freshState.nextParticipantToTrigger === null) {
+        rlog.trigger('clear-handoff', 'P1 streaming, handoff complete');
+        freshState.setParticipantHandoffInProgress(false);
+      }
+    }
+  }, [waitingToStart, chatIsStreaming, hasSentPending, store]);
+
+  // ✅ REMOVED: Timeout-based auto-navigation to overview
+  // Previously: 5s interval checking for 60s timeout, then auto-navigate to /chat
+  // Problem: This caused premature navigation when moderator started after participants finished
+  // Solution: Never auto-navigate based on timeouts - rely on event-driven completion signals
+  // (streamFinishAcknowledged, isModeratorStreaming, explicit API errors)
   useEffect(() => {
     if (!waitingToStart) {
       waitingStartTimeRef.current = null;
@@ -330,128 +379,16 @@ export function useStreamingTrigger({
     if (waitingStartTimeRef.current === null) {
       waitingStartTimeRef.current = Date.now();
     }
+    // No interval - just track start time for debugging
+  }, [waitingToStart]);
 
-    const checkInterval = setInterval(() => {
-      const latestState = store.getState();
+  // ✅ REMOVED: Interval-based stuck pre-search detection
+  // Previously: 5s interval calling checkStuckPreSearches()
+  // Problem: Timeout-based detection caused premature state changes
+  // Solution: Pre-search completion is now event-driven via API response callbacks
 
-      if (!latestState.waitingToStartStreaming || latestState.isStreaming) {
-        return;
-      }
-
-      const now = Date.now();
-      const waitingStartTime = waitingStartTimeRef.current ?? now;
-      const elapsedWaitingTime = now - waitingStartTime;
-      const latestWebSearchEnabled = getEffectiveWebSearchEnabled(latestState.thread, latestState.enableWebSearch);
-
-      if (!latestState.createdThreadId && elapsedWaitingTime < 60_000) {
-        return;
-      }
-
-      if (latestWebSearchEnabled) {
-        if (latestState.messages.length === 0) {
-          if (elapsedWaitingTime < 60_000)
-            return;
-        } else {
-          const currentRound = getCurrentRoundNumber(latestState.messages);
-          const preSearchForRound = Array.isArray(latestState.preSearches)
-            ? latestState.preSearches.find(ps => ps.roundNumber === currentRound)
-            : undefined;
-
-          if (!preSearchForRound) {
-            if (elapsedWaitingTime < 60_000)
-              return;
-          } else {
-            const isStillRunning = preSearchForRound.status === MessageStatuses.PENDING
-              || preSearchForRound.status === MessageStatuses.STREAMING;
-
-            if (isStillRunning) {
-              const lastActivityTime = latestState.getPreSearchActivityTime(currentRound);
-              if (!shouldPreSearchTimeout(preSearchForRound, lastActivityTime, now)) {
-                return;
-              }
-              return;
-            } else {
-              const PARTICIPANT_START_GRACE_PERIOD_MS = 15_000;
-              // completedAt is always a string or null (ISO format from JSON serialization)
-              const completedTime = preSearchForRound.completedAt
-                ? new Date(preSearchForRound.completedAt).getTime()
-                : now;
-              const timeSinceComplete = now - completedTime;
-
-              if (timeSinceComplete < PARTICIPANT_START_GRACE_PERIOD_MS) {
-                return;
-              }
-              return;
-            }
-          }
-        }
-      } else {
-        if (elapsedWaitingTime < TIMEOUT_CONFIG.DEFAULT_MS) {
-          return;
-        }
-      }
-
-      latestState.setWaitingToStartStreaming(false);
-      latestState.setIsStreaming(false);
-      latestState.setIsCreatingThread(false);
-      latestState.resetToOverview();
-      navigate({ to: '/chat' });
-      showApiErrorToast('Failed to start conversation', new Error('Streaming failed to start. Please try again.'));
-      clearInterval(checkInterval);
-    }, 5000);
-
-    return () => clearInterval(checkInterval);
-  }, [waitingToStart, store, navigate]);
-
-  useEffect(() => {
-    const checkStuckPreSearches = () => {
-      store.getState().checkStuckPreSearches();
-    };
-
-    checkStuckPreSearches();
-
-    const interval = setInterval(checkStuckPreSearches, 5000);
-    return () => clearInterval(interval);
-  }, [store]);
-
-  // ✅ STUCK STATE RECOVERY: Detect and recover from stuck resumption states
-  // When navigation occurs mid-resumption, state can become stuck:
-  // - waitingToStartStreaming: true (from previous thread)
-  // - streamResumptionPrefilled: false or mismatched thread
-  // - AI SDK not streaming
-  // - Store not streaming
-  // This interval detects this stuck state and clears it to allow new resumption
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const s = store.getState();
-
-      // Only check if we think we're waiting to start streaming
-      if (!s.waitingToStartStreaming) {
-        return;
-      }
-
-      // Check if resumption state is valid for current thread
-      const validResumption = s.streamResumptionPrefilled
-        && s.prefilledForThreadId === s.thread?.id;
-
-      // Check if AI SDK is actively streaming (use ref for synchronous check)
-      const aiSdkActive = chat.isStreamingRef.current;
-
-      // Check if this is a newly created thread (not a resumption)
-      // For new threads: createdThreadId is set, validResumption is false (expected)
-      // We should NOT clear waitingToStartStreaming for new threads
-      const isNewlyCreatedThread = s.createdThreadId === s.thread?.id && s.createdThreadId !== null;
-
-      // If no valid resumption AND AI SDK not active AND store not streaming AND not a newly created thread
-      // This is a stuck state - reset it
-      if (!validResumption && !aiSdkActive && !s.isStreaming && !isNewlyCreatedThread) {
-        rlog.trigger('stuck-recovery', `clearing stuck state: prefilled=${s.streamResumptionPrefilled ? 1 : 0} prefilledThread=${s.prefilledForThreadId?.slice(-8) ?? '-'} currentThread=${s.thread?.id?.slice(-8) ?? '-'}`);
-        s.setWaitingToStartStreaming(false);
-        s.setNextParticipantToTrigger(null);
-        s.clearStreamResumption();
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [store, chat.isStreamingRef]);
+  // ✅ REMOVED: Interval-based stuck resumption state recovery
+  // Previously: 3s interval that cleared waitingToStartStreaming if state seemed stuck
+  // Problem: This caused clearing during legitimate phase transitions (participants→moderator)
+  // Solution: State transitions are now event-driven via streamFinishAcknowledged and phase guards
 }

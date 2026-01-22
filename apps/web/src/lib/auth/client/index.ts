@@ -1,6 +1,6 @@
 import { BASE_URL_CONFIG } from '@roundtable/shared';
 import { WebAppEnvs } from '@roundtable/shared/enums';
-import { apiKeyClient, magicLinkClient } from 'better-auth/client/plugins';
+import { adminClient, apiKeyClient, magicLinkClient } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
 
 import { getApiBaseUrl, isPrerender } from '@/lib/config/base-urls';
@@ -66,6 +66,7 @@ export const authClient = createAuthClient({
   plugins: [
     magicLinkClient(),
     apiKeyClient(),
+    adminClient(),
   ],
 });
 

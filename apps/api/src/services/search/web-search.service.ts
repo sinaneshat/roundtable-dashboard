@@ -72,47 +72,7 @@ type PuppeteerRequestHandler = {
   abort: () => void;
   continue: () => void;
 };
-function htmlToMarkdown(html: string): string {
-  try {
-    const markdown = html
-      // Headers
-      .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n')
-      .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n')
-      .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n')
-      .replace(/<h4[^>]*>(.*?)<\/h4>/gi, '#### $1\n\n')
-      .replace(/<h5[^>]*>(.*?)<\/h5>/gi, '##### $1\n\n')
-      .replace(/<h6[^>]*>(.*?)<\/h6>/gi, '###### $1\n\n')
-      // Bold and italic
-      .replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**')
-      .replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**')
-      .replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*')
-      .replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*')
-      // Links
-      .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
-      // Code
-      .replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`')
-      .replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, '```\n$1\n```\n')
-      // Lists
-      .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
-      .replace(/<ul[^>]*>/gi, '\n')
-      .replace(/<\/ul>/gi, '\n')
-      .replace(/<ol[^>]*>/gi, '\n')
-      .replace(/<\/ol>/gi, '\n')
-      // Paragraphs and line breaks
-      .replace(/<p[^>]*>/gi, '\n')
-      .replace(/<\/p>/gi, '\n')
-      .replace(/<br\s*\/?>/gi, '\n')
-      // Remove remaining tags
-      .replace(/<[^>]*>/g, '')
-      // Clean up whitespace
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
 
-    return markdown;
-  } catch {
-    return html.replace(/<[^>]*>/g, '').trim();
-  }
-}
 export async function streamSearchQuery(
   userMessage: string,
   env: ApiEnv['Bindings'],
@@ -313,7 +273,7 @@ type PageOperationConfig = z.infer<typeof _PageOperationConfigSchema>;
 
 const _ExtractedContentSchema = z.object({
   content: z.string(),
-  rawHTML: z.string(),
+  markdown: z.string(),
   metadata: z.object({
     title: z.string(),
     author: z.string().optional(),
@@ -412,19 +372,132 @@ async function searchWithCloudflareBrowser(
   }
 }
 
+/** Function type for content extraction in browser context */
+type ContentExtractorFn = (extractFormat: string) => ExtractedContent;
+
 /**
  * Create content extractor function for page.evaluate
  *
  * Returns a function that can be serialized and executed in browser context.
  * This wrapper ensures proper typing for Puppeteer's page.evaluate.
  */
-function createContentExtractor() {
+function createContentExtractor(): ContentExtractorFn {
   return function extractContent(extractFormat: string): ExtractedContent {
     // Helper to clean text
     const cleanText = (text: string): string => {
       return text
         .replace(/\s+/g, ' ')
         .replace(/\n{3,}/g, '\n\n')
+        .trim();
+    };
+
+    /**
+     * Convert DOM element to markdown - runs in browser context (no external deps)
+     * Handles: headers, links, bold, italic, code, lists, paragraphs, images
+     */
+    const elementToMarkdown = (element: Element): string => {
+      const processNode = (node: Node): string => {
+        if (node.nodeType === Node.TEXT_NODE) {
+          return node.textContent?.replace(/\s+/g, ' ') || '';
+        }
+
+        if (node.nodeType !== Node.ELEMENT_NODE) {
+          return '';
+        }
+
+        const el = node as Element;
+        const tag = el.tagName.toLowerCase();
+        const children = Array.from(el.childNodes).map(processNode).join('');
+
+        switch (tag) {
+          // Headers
+          case 'h1': return `\n\n# ${children.trim()}\n\n`;
+          case 'h2': return `\n\n## ${children.trim()}\n\n`;
+          case 'h3': return `\n\n### ${children.trim()}\n\n`;
+          case 'h4': return `\n\n#### ${children.trim()}\n\n`;
+          case 'h5': return `\n\n##### ${children.trim()}\n\n`;
+          case 'h6': return `\n\n###### ${children.trim()}\n\n`;
+
+          // Text formatting
+          case 'strong':
+          case 'b': return `**${children}**`;
+          case 'em':
+          case 'i': return `*${children}*`;
+          case 'code': return `\`${children}\``;
+          case 'pre': {
+            const codeEl = el.querySelector('code');
+            const lang = codeEl?.className?.match(/language-(\w+)/)?.[1] || '';
+            const code = codeEl?.textContent || el.textContent || '';
+            return `\n\n\`\`\`${lang}\n${code.trim()}\n\`\`\`\n\n`;
+          }
+
+          // Links
+          case 'a': {
+            const href = el.getAttribute('href') || '';
+            if (!href || href.startsWith('javascript:'))
+              return children;
+            return `[${children}](${href})`;
+          }
+
+          // Images
+          case 'img': {
+            const src = el.getAttribute('src') || '';
+            const alt = el.getAttribute('alt') || '';
+            if (!src || src.startsWith('data:'))
+              return '';
+            return `![${alt}](${src})`;
+          }
+
+          // Lists
+          case 'ul':
+          case 'ol': return `\n${children}\n`;
+          case 'li': return `- ${children.trim()}\n`;
+
+          // Block elements
+          case 'p': return `\n\n${children.trim()}\n\n`;
+          case 'br': return '\n';
+          case 'hr': return '\n\n---\n\n';
+          case 'blockquote': return `\n\n> ${children.trim().replace(/\n/g, '\n> ')}\n\n`;
+
+          // Table handling (basic)
+          case 'table': return `\n\n${children}\n\n`;
+          case 'thead':
+          case 'tbody': return children;
+          case 'tr': return `|${children}\n`;
+          case 'th':
+          case 'td': return ` ${children.trim()} |`;
+
+          // Structural elements - just return children
+          case 'div':
+          case 'section':
+          case 'article':
+          case 'main':
+          case 'span':
+          case 'figure':
+          case 'figcaption':
+            return children;
+
+          // Skip unwanted elements
+          case 'script':
+          case 'style':
+          case 'nav':
+          case 'iframe':
+          case 'noscript':
+          case 'svg':
+            return '';
+
+          default:
+            return children;
+        }
+      };
+
+      const raw = processNode(element);
+      // Clean up excessive whitespace
+      return raw
+        .replace(/\n{3,}/g, '\n\n')
+        .replace(/[ \t]+/g, ' ')
+        .replace(/\n +/g, '\n')
+        .replace(/ +\n/g, '\n')
         .trim();
     };
 
@@ -488,10 +561,10 @@ function createContentExtractor() {
       mainContent = document.body.textContent || '';
     }
 
-    // Extract raw HTML for markdown conversion
-    let rawHTML = '';
+    // Convert to markdown in browser context (no external deps needed in Workers)
+    let markdown = '';
     if (extractFormat === 'markdown' && mainElement) {
-      rawHTML = mainElement.innerHTML || '';
+      markdown = elementToMarkdown(mainElement);
     }
 
     // Extract images
@@ -556,7 +629,7 @@ function createContentExtractor() {
 
     return {
       content: cleanedContent.substring(0, 15000),
-      rawHTML: rawHTML.substring(0, 20000),
+      markdown: markdown.substring(0, 20000),
       metadata: {
         title: cleanText(title),
         author: author ? cleanText(author) : undefined,
@@ -569,8 +642,11 @@ function createContentExtractor() {
       },
       images: images.slice(0, 10),
     };
-  } as (extractFormat: string) => ExtractedContent;
+  };
 }
+
+/** Function type for search extraction in browser context */
+type SearchExtractorFn = (max: number) => ExtractedSearchResult[];
 
 /**
  * Create search extractor function for page.evaluate
@@ -578,7 +654,7 @@ function createContentExtractor() {
  * Returns a function that extracts search results from DuckDuckGo HTML page.
  * This wrapper ensures proper typing for Puppeteer's page.evaluate.
  */
-function createSearchExtractor() {
+function createSearchExtractor(): SearchExtractorFn {
   return function extractSearchResults(max: number): ExtractedSearchResult[] {
     const items: ExtractedSearchResult[] = [];
     const resultElements = document.querySelectorAll('.result');
@@ -617,7 +693,7 @@ function createSearchExtractor() {
     }
 
     return items;
-  } as (max: number) => ExtractedSearchResult[];
+  };
 }
 
 async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {
@@ -869,10 +945,10 @@ async function extractPageContent(
     );
     await browserResult.browser.close();
 
-    // Convert raw HTML to markdown if format is 'markdown'
+    // Use markdown from browser context (already converted, no external deps needed)
     let rawContent: string | undefined;
-    if (format === 'markdown' && extracted.rawHTML) {
-      rawContent = htmlToMarkdown(extracted.rawHTML);
+    if (format === 'markdown' && extracted.markdown) {
+      rawContent = extracted.markdown;
     } else if (format === 'text') {
       rawContent = extracted.content;
     }

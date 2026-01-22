@@ -513,4 +513,4 @@ export function useFormState() {
 7. **Validate** defaults in store-defaults.ts with reset groups
 8. **Review** selectors use `useShallow` for object returns
 9. **Verify** middleware applied only at combined store level
-10. **Run** `pnpm check-types && pnpm lint` to validate
+10. **Run** `bun run check-types && bun run lint` to validate

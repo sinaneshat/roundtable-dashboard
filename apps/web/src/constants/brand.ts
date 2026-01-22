@@ -71,9 +71,9 @@ export const BRAND = {
     originalSvg: '/static/logo.svg',
   } as const,
 
-  // Modern tech fonts
+  // System fonts - same approach as ChatGPT
   typography: {
-    fontFamily: 'Inter, system-ui, sans-serif',
+    fontFamily: '-apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, \'Helvetica Neue\', Arial, sans-serif',
     weights: {
       light: 300,
       regular: 400,

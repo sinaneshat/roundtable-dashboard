@@ -2,7 +2,7 @@ import { getShortRoleName } from '@roundtable/shared';
 import { Link } from '@tanstack/react-router';
 import type { PanInfo } from 'motion/react';
 import { Reorder, useDragControls } from 'motion/react';
-import { useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -12,6 +12,8 @@ import { useTranslations } from '@/lib/i18n';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon, getRoleBadgeStyle } from '@/lib/utils';
+
+const REORDER_ITEM_STYLE = { position: 'relative', borderRadius: '0.75rem' } as const;
 
 type PendingRoleConfig = {
   role: string;
@@ -46,7 +48,7 @@ function RoleBadgeDisplay({
       {displayRole
         ? (
             <Badge
-              className="text-[8px] sm:text-[10px] pl-1.5 sm:pl-2 pr-0.5 sm:pr-1 py-0.5 h-4 sm:h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full inline-flex items-center gap-0.5 sm:gap-1 max-w-[100px] sm:max-w-[120px]"
+              className="text-[10px] sm:text-xs pl-1.5 sm:pl-2 pr-0.5 sm:pr-1 py-0.5 h-4 sm:h-5 font-semibold border cursor-pointer hover:opacity-80 transition-opacity rounded-full inline-flex items-center gap-0.5 sm:gap-1 max-w-[120px] sm:max-w-[140px]"
               style={getRoleBadgeStyle(getShortRoleName(displayRole))}
               onClick={() => onOpenRolePanel?.()}
             >
@@ -69,7 +71,7 @@ function RoleBadgeDisplay({
         : (
             <button
               type="button"
-              className="inline-flex items-center gap-0.5 sm:gap-1 h-4 sm:h-5 px-1.5 sm:px-2 rounded-full text-[8px] sm:text-[10px] font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/15 transition-colors"
+              className="inline-flex items-center gap-1 h-6 sm:h-5 px-2 rounded-full text-[10px] sm:text-xs font-medium border border-dashed border-muted-foreground/40 text-muted-foreground hover:border-primary/50 hover:text-primary hover:bg-primary/15 transition-colors touch-manipulation"
               onClick={(e) => {
                 e.stopPropagation();
                 onOpenRolePanel?.();
@@ -83,7 +85,7 @@ function RoleBadgeDisplay({
   );
 }
 
-export type ModelItemProps = {
+type ModelItemProps = {
   orderedModel: OrderedModel;
   onToggle: () => void;
   onClearRole: () => void;
@@ -94,11 +96,8 @@ export type ModelItemProps = {
   isVisionIncompatible?: boolean;
   isFileIncompatible?: boolean;
   pendingRole?: PendingRoleConfig;
-  /** Custom drag move handler for edge scroll */
   onDragMove?: (event: PointerEvent, info: PanInfo) => void;
-  /** Custom drag start handler for edge scroll */
   onDragStartCustom?: () => void;
-  /** Custom drag end handler for edge scroll */
   onDragEndCustom?: () => void;
 };
 
@@ -120,6 +119,8 @@ export function ModelItem({
   const t = useTranslations();
   const dragControls = useDragControls();
   const [isDragging, setIsDragging] = useState(false);
+  // Track if drag just ended to prevent accidental toggle on click
+  const justDraggedRef = useRef(false);
   const { model, participant } = orderedModel;
   const isSelected = participant !== null;
   const isAccessible = model.is_accessible_to_user ?? isSelected;
@@ -129,8 +130,18 @@ export function ModelItem({
   const isDisabledDueToFileIncompatibility = !isSelected && hasAnyFileIncompatibility;
   const isDisabled = isDisabledDueToTier || isDisabledDueToLimit || isDisabledDueToFileIncompatibility;
 
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onToggle();
+      }
+    },
+    [onToggle],
+  );
+
   const itemContent = (
-    <div className="flex items-center gap-2 sm:gap-3 w-full min-w-0">
+    <div className="flex items-center gap-3 w-full min-w-0">
       {enableDrag && (
         <div
           className="shrink-0 text-muted-foreground cursor-grab active:cursor-grabbing select-none p-1 -m-1"
@@ -143,8 +154,8 @@ export function ModelItem({
           <Icons.gripVertical className="size-4 sm:size-5" />
         </div>
       )}
-      <div className="flex items-center gap-2 sm:gap-3 flex-1 min-w-0 overflow-hidden">
-        <Avatar className="size-8 sm:size-10 shrink-0">
+      <div className="flex items-center gap-3 flex-1 min-w-0 overflow-hidden">
+        <Avatar className="size-9 sm:size-10 shrink-0">
           <AvatarImage src={getProviderIcon(model.provider)} alt={`${model.name} provider icon`} />
           <AvatarFallback className="text-[10px] sm:text-xs">
             {model.name.slice(0, 2).toUpperCase()}
@@ -155,12 +166,12 @@ export function ModelItem({
             <span className="text-xs sm:text-sm font-semibold truncate min-w-0">{model.name}</span>
 
             {isDisabledDueToTier && (model.required_tier_name || model.required_tier) && (
-              <Badge variant="secondary" className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
+              <Badge variant="secondary" className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 font-semibold bg-amber-500/20 text-amber-400 border-amber-500/30 shrink-0 uppercase">
                 {model.required_tier_name || model.required_tier}
               </Badge>
             )}
             {isDisabledDueToLimit && !isDisabledDueToTier && (
-              <Badge variant="outline" className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-warning/50 text-warning shrink-0">
+              <Badge variant="outline" className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-warning/50 text-warning shrink-0">
                 {t('chat.models.limitReached')}
               </Badge>
             )}
@@ -168,7 +179,7 @@ export function ModelItem({
               <Badge
                 variant="outline"
                 title={t('chat.models.noVisionTooltip')}
-                className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-destructive/50 text-destructive shrink-0 gap-1"
+                className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-destructive/50 text-destructive shrink-0 gap-1"
               >
                 <Icons.eyeOff className="size-2.5 sm:size-3" />
                 {t('chat.models.noVision')}
@@ -178,7 +189,7 @@ export function ModelItem({
               <Badge
                 variant="outline"
                 title={t('chat.models.noFileSupportTooltip')}
-                className="text-[8px] sm:text-[10px] px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-destructive/50 text-destructive shrink-0 gap-1"
+                className="text-[10px] sm:text-xs px-1.5 sm:px-2 py-0.5 h-4 sm:h-5 border-destructive/50 text-destructive shrink-0 gap-1"
               >
                 <Icons.fileX className="size-2.5 sm:size-3" />
                 {t('chat.models.noFileSupport')}
@@ -216,7 +227,7 @@ export function ModelItem({
               checked={isSelected}
               onCheckedChange={isDisabled ? undefined : onToggle}
               disabled={isDisabled}
-              className="shrink-0 scale-90 sm:scale-100"
+              className="shrink-0"
               onClick={e => e.stopPropagation()}
               onPointerDownCapture={e => e.stopPropagation()}
             />
@@ -233,7 +244,7 @@ export function ModelItem({
         dragElastic={0}
         dragMomentum={false}
         layout
-        style={{ position: 'relative', borderRadius: '0.75rem' }}
+        style={REORDER_ITEM_STYLE}
         className={cn(
           'p-3 sm:p-4 w-full rounded-xl block touch-manipulation cursor-pointer',
           'transition-[background-color,backdrop-filter,box-shadow] duration-150',
@@ -244,14 +255,28 @@ export function ModelItem({
         onDrag={onDragMove}
         onDragStart={() => {
           setIsDragging(true);
+          justDraggedRef.current = true;
           onDragStartCustom?.();
         }}
         onDragEnd={() => {
           setIsDragging(false);
           onDragEndCustom?.();
+          // Clear the flag after a short delay to allow click event to check it
+          setTimeout(() => {
+            justDraggedRef.current = false;
+          }, 100);
         }}
         transition={{ duration: 0.15 }}
-        onClick={isDisabled ? undefined : onToggle}
+        onClick={
+          isDisabled
+            ? undefined
+            : () => {
+                // Prevent toggle if drag just ended
+                if (justDraggedRef.current)
+                  return;
+                onToggle();
+              }
+        }
       >
         {itemContent}
       </Reorder.Item>
@@ -270,16 +295,7 @@ export function ModelItem({
         isDisabled && 'opacity-50 cursor-not-allowed',
       )}
       onClick={isDisabled ? undefined : onToggle}
-      onKeyDown={
-        isDisabled
-          ? undefined
-          : (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onToggle();
-              }
-            }
-      }
+      onKeyDown={isDisabled ? undefined : handleKeyDown}
     >
       {itemContent}
     </div>

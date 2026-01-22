@@ -184,10 +184,10 @@ await waitFor(() => {
 - Global mocks in `vitest.setup.ts` (matchMedia, IntersectionObserver, etc.)
 
 **Test Scripts:**
-- `pnpm test` - Run all tests
-- `pnpm test:watch` - Watch mode
-- `pnpm test:coverage` - Coverage report
-- `pnpm test:ci` - CI mode
+- `bun run test` - Run all tests
+- `bun run test:watch` - Watch mode
+- `bun run test:coverage` - Coverage report
+- `bun run test:ci` - CI mode
 
 **ERROR PREVENTION:**
 

@@ -5,20 +5,18 @@ import { useMemo } from 'react';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { Icons } from '@/components/icons';
+import { Logo } from '@/components/logo';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
+import { BRAND } from '@/constants';
 import { usePublicThreadQuery } from '@/hooks/queries';
 import type { TimelineItem } from '@/hooks/utils';
 import { useChatScroll, useThreadTimeline } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import { chatMessagesToUIMessages, transformChatParticipants, transformPreSearches } from '@/lib/utils';
 import type { PublicThreadData, StoredPreSearch } from '@/services/api';
-
-// ============================================================================
-// NO LONGER PUBLIC VIEW - Blurred mock chat with overlay message
-// ============================================================================
 
 function NoLongerPublicView() {
   const t = useTranslations();
@@ -128,15 +126,12 @@ type PublicChatThreadScreenProps = {
 export default function PublicChatThreadScreen({ slug, initialData, errorState }: PublicChatThreadScreenProps) {
   const t = useTranslations();
 
-  // ✅ HOOKS MUST BE CALLED UNCONDITIONALLY - before any early returns
-  // This follows React's rules of hooks
   const hasLoaderData = Boolean(initialData);
   const { data: queryData } = usePublicThreadQuery(slug, {
     initialData: hasLoaderData && initialData
       ? { success: true as const, data: initialData }
       : undefined,
     staleTime: hasLoaderData ? 10_000 : undefined,
-    // Disable query when we already know it's an error state
     enabled: errorState !== 'no_longer_public',
   });
 
@@ -161,7 +156,6 @@ export default function PublicChatThreadScreen({ slug, initialData, errorState }
     preSearches,
   });
 
-  // Data is ready when we have messages from SSR or React Query cache
   const isStoreReady = messages.length > 0;
 
   useChatScroll({
@@ -169,30 +163,61 @@ export default function PublicChatThreadScreen({ slug, initialData, errorState }
     enableNearBottomDetection: true,
   });
 
-  // ✅ NOW we can do early returns AFTER all hooks have been called
-  // GRACEFUL ERROR: Thread was made private - show blurred mock chat
   if (errorState === 'no_longer_public') {
     return <NoLongerPublicView />;
   }
 
-  // No inline skeleton needed - route's pendingComponent handles loading
-  // If we reach here without thread data, show error state (not loading)
+  const publicHeader = (
+    <header className="fixed top-0 left-0 right-0 z-50 bg-background/80 backdrop-blur-xl border-b border-border/20">
+      <div className="max-w-4xl mx-auto flex items-center justify-between gap-4 px-5 md:px-6 py-3">
+        <Link
+          to="/"
+          className="flex items-center gap-3 hover:opacity-80 transition-opacity min-w-0"
+        >
+          <Logo size="sm" variant="icon" className="shrink-0" />
+          <div className="flex flex-col min-w-0">
+            <span className="font-semibold tracking-tight text-sm sm:text-base leading-tight">
+              {BRAND.displayName}
+            </span>
+            <span className="text-[10px] sm:text-xs text-muted-foreground leading-tight truncate">
+              {BRAND.tagline}
+            </span>
+          </div>
+        </Link>
+
+        <Button asChild size="sm" className="shrink-0">
+          <Link
+            to="/auth/sign-in"
+            search={{ utm_source: 'public_chat', utm_medium: 'header', utm_campaign: 'try_free' }}
+            className="flex items-center gap-1.5"
+          >
+            <span>{t('chat.public.tryFree')}</span>
+            <Icons.arrowRight className="size-3.5" />
+          </Link>
+        </Button>
+      </div>
+    </header>
+  );
+
   if (!thread) {
     return (
-      <div className="flex flex-1 items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-4 max-w-md mx-auto px-4">
-          <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto">
-            <Icons.lock className="w-8 h-8 text-destructive" />
+      <div className="flex flex-col min-h-dvh relative">
+        {publicHeader}
+        <div className="flex flex-1 items-center justify-center min-h-[60vh] pt-16">
+          <div className="text-center space-y-4 max-w-md mx-auto px-4">
+            <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto">
+              <Icons.lock className="w-8 h-8 text-destructive" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold">{t('chat.public.threadNotFound')}</h1>
+              <p className="text-muted-foreground">
+                {t('chat.public.threadNotFoundDescription')}
+              </p>
+            </div>
+            <Button asChild variant={ComponentVariants.DEFAULT}>
+              <Link to="/">{t('actions.goHome')}</Link>
+            </Button>
           </div>
-          <div className="space-y-2">
-            <h1 className="text-2xl font-bold">{t('chat.public.threadNotFound')}</h1>
-            <p className="text-muted-foreground">
-              {t('chat.public.threadNotFoundDescription')}
-            </p>
-          </div>
-          <Button asChild variant={ComponentVariants.DEFAULT}>
-            <Link to="/">{t('actions.goHome')}</Link>
-          </Button>
         </div>
       </div>
     );
@@ -200,20 +225,23 @@ export default function PublicChatThreadScreen({ slug, initialData, errorState }
 
   if (!thread.isPublic) {
     return (
-      <div className="flex flex-1 items-center justify-center min-h-[60vh]">
-        <div className="text-center space-y-4 max-w-md mx-auto px-4">
-          <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto">
-            <Icons.lock className="w-8 h-8 text-destructive" />
+      <div className="flex flex-col min-h-dvh relative">
+        {publicHeader}
+        <div className="flex flex-1 items-center justify-center min-h-[60vh] pt-16">
+          <div className="text-center space-y-4 max-w-md mx-auto px-4">
+            <div className="w-16 h-16 bg-destructive/10 rounded-full flex items-center justify-center mx-auto">
+              <Icons.lock className="w-8 h-8 text-destructive" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold">{t('chat.public.privateChat')}</h1>
+              <p className="text-muted-foreground">
+                {t('chat.public.privateChatDescription')}
+              </p>
+            </div>
+            <Button asChild variant={ComponentVariants.DEFAULT}>
+              <Link to="/">{t('chat.public.goHome')}</Link>
+            </Button>
           </div>
-          <div className="space-y-2">
-            <h1 className="text-2xl font-bold">{t('chat.public.privateChat')}</h1>
-            <p className="text-muted-foreground">
-              {t('chat.public.privateChatDescription')}
-            </p>
-          </div>
-          <Button asChild variant={ComponentVariants.DEFAULT}>
-            <Link to="/">{t('chat.public.goHome')}</Link>
-          </Button>
         </div>
       </div>
     );
@@ -221,6 +249,8 @@ export default function PublicChatThreadScreen({ slug, initialData, errorState }
 
   return (
     <div className="flex flex-col min-h-dvh relative">
+      {publicHeader}
+
       <UnifiedErrorBoundary context={ErrorBoundaryContexts.CHAT}>
         <div
           id="public-chat-scroll-container"

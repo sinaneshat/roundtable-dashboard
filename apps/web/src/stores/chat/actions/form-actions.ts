@@ -1,6 +1,7 @@
 import type { ChatMode } from '@roundtable/shared';
 import { MessagePartTypes, MessageRoles } from '@roundtable/shared';
 import { useQueryClient } from '@tanstack/react-query';
+import { useNavigate } from '@tanstack/react-router';
 import { useCallback } from 'react';
 import { z } from 'zod';
 import { useShallow } from 'zustand/react/shallow';
@@ -59,6 +60,7 @@ export type UseChatFormActionsReturn = {
  */
 export function useChatFormActions(): UseChatFormActionsReturn {
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const storeApi = useChatStoreApi();
 
   const formState = useChatStore(useShallow(s => ({
@@ -158,10 +160,12 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       actions.setShowInitialUI(false);
       actions.setCreatedThreadId(thread.id);
+      rlog.flow('create', `1-setCreatedThreadId id=${thread.id.slice(-8)}`);
 
       const uiMessages = chatMessagesToUIMessages(messagesWithDates);
 
       actions.initializeThread(threadWithDates, participantsWithDates, uiMessages);
+      rlog.flow('create', `2-initializeThread done parts=${participantsWithDates.length} msgs=${uiMessages.length}`);
 
       const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
       actions.setSelectedParticipants(syncedParticipantConfigs);
@@ -251,16 +255,22 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         meta: createPrefetchMeta(),
       });
 
+      // ✅ FIX v8: Use TanStack Router navigate with replace instead of window.history.replaceState
+      // window.history.replaceState triggers route loader re-runs and state resets
+      // TanStack Router's navigate with replace: true does a client-side URL update only
+      rlog.flow('create', `3-queueMicrotask navigate slug=${thread.slug}`);
       queueMicrotask(() => {
-        window.history.replaceState(
-          window.history.state,
-          '',
-          `/chat/${thread.slug}`,
-        );
+        rlog.flow('create', `4-MICROTASK-FIRE navigate to /chat/${thread.slug}`);
+        navigate({
+          to: '/chat/$slug',
+          params: { slug: thread.slug },
+          replace: true,
+        });
       });
 
       actions.setInputValue('');
       actions.clearAttachments();
+      rlog.flow('create', `5-clearInput webSearch=${freshEnableWebSearch ? 1 : 0}`);
 
       if (freshEnableWebSearch) {
         actions.addPreSearch(createPlaceholderPreSearch({
@@ -271,12 +281,21 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       }
 
       actions.prepareForNewMessage(prompt, getEnabledParticipantModelIds(participants), attachmentIds);
+      rlog.flow('create', `6-prepareForNewMessage done`);
+
       actions.setStreamingRoundNumber(0);
       actions.setWaitingToStartStreaming(true);
+      rlog.flow('create', `7-setWaitingToStartStreaming=true`);
+
       const firstParticipant = participantsWithDates[0];
       if (firstParticipant) {
         actions.setNextParticipantToTrigger({ index: 0, participantId: firstParticipant.id });
+        rlog.flow('create', `8-setNextParticipant idx=0 id=${firstParticipant.id.slice(-8)}`);
       }
+
+      // ✅ DEBUG: Log final state after all setup
+      const finalState = storeApi.getState();
+      rlog.flow('create', `9-FINAL wait=${finalState.waitingToStartStreaming ? 1 : 0} pending=${finalState.pendingMessage ? 1 : 0} created=${finalState.createdThreadId?.slice(-8) ?? '-'} nextP=${finalState.nextParticipantToTrigger ? (typeof finalState.nextParticipantToTrigger === 'object' ? finalState.nextParticipantToTrigger.index : finalState.nextParticipantToTrigger) : '-'}`);
     } catch (error) {
       showApiErrorToast('Error creating thread', error);
       actions.setShowInitialUI(true);
@@ -288,6 +307,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     createThreadMutation,
     actions,
     queryClient,
+    navigate,
   ]);
 
   const handleUpdateThreadAndSend = useCallback(async (threadId: string, attachmentIds?: string[], attachmentInfos?: AttachmentInfo[]) => {
@@ -454,7 +474,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         }
       }
 
-      if (responseData?.participants) {
+      // ✅ RACE CONDITION FIX: Guard against empty array ([] is truthy but wipes store)
+      if (responseData?.participants && responseData.participants.length > 0) {
         const participantsWithDates = transformChatParticipants(responseData.participants);
         actions.updateParticipants(participantsWithDates);
         actions.setExpectedParticipantIds(getEnabledParticipantModelIds(participantsWithDates));
@@ -466,6 +487,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         if (newFirstParticipant) {
           actions.setNextParticipantToTrigger({ index: 0, participantId: newFirstParticipant.id });
         }
+      } else if (responseData?.participants?.length === 0) {
+        rlog.submit('skip-empty-participants', `r${nextRoundNumber} server returned empty, preserving existing`);
       }
 
       if (responseData?.thread) {

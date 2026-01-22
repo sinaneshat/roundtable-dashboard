@@ -9,7 +9,7 @@
 set -o pipefail
 
 # Run tsc and capture output
-output=$(pnpm exec tsc --noEmit 2>&1)
+output=$(bunx tsc --noEmit 2>&1)
 exit_code=$?
 
 # Filter out errors from ../api/ paths (cross-package import errors)

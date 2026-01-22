@@ -44,6 +44,31 @@ export {
 } from './actions/types';
 // Reusable selector hooks
 export { useIsInCreationFlow } from './hooks';
+// FSM Machine exports
+export {
+  type AiSdkSnapshot,
+  buildContext,
+  createEmptyContext,
+  type EventPayload,
+  actions as fsmActions,
+  guards,
+  isModeratorPhase,
+  isParticipantPhase,
+  isPreSearchPhase,
+  isStreamingState,
+  isTerminalState,
+  noTransition,
+  type ParticipantCompletePayload,
+  type ParticipantStartPayload,
+  type RoundContext,
+  type RoundFlowAction,
+  type StartRoundPayload,
+  type StoreSnapshot,
+  transition,
+  type TransitionResult,
+} from './machine';
+// FSM Selectors
+export { selectors } from './selectors';
 export type { ChatStoreApi } from './store';
 export { createChatStore } from './store';
 export {
@@ -53,7 +78,13 @@ export {
 } from './store-constants';
 export type {
   ChatStore,
+  DispatchFlowEvent,
   NextParticipantToTrigger,
+  ResetFlowState,
+  RoundFlowActions,
+  RoundFlowSlice,
+  RoundFlowState,
+  SetFlowState,
   StoredModeratorData,
   StoredModeratorSummary,
 } from './store-schemas';

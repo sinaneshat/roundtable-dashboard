@@ -23,10 +23,8 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
-// IMPORTANT: No static imports of @/api/services here!
+// IMPORTANT: No static imports of @/api/services or Zod here!
 // Use dynamic imports in methods to lazy-load heavy dependencies
-// NOTE: Zod is imported statically for SQL row validation (lightweight schema only)
-import * as z from 'zod';
 
 // ============================================================================
 // REQUEST VALIDATION (inline, no Zod dependency at startup)
@@ -177,23 +175,24 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
     if (!row)
       return null;
 
-    // Validate SQL row with inline Zod schema
-    const sqlRowSchema = z.object({
-      upload_id: z.string(),
-      user_id: z.string(),
-      r2_key: z.string(),
-      scheduled_at: z.number(),
-      created_at: z.number(),
-    });
-
-    const validated = sqlRowSchema.parse(row);
+    // Inline validation - no Zod dependency at startup
+    const r = row as Record<string, unknown>;
+    if (
+      typeof r.upload_id !== 'string'
+      || typeof r.user_id !== 'string'
+      || typeof r.r2_key !== 'string'
+      || typeof r.scheduled_at !== 'number'
+      || typeof r.created_at !== 'number'
+    ) {
+      throw new TypeError('Invalid cleanup_state row format');
+    }
 
     return {
-      uploadId: validated.upload_id,
-      userId: validated.user_id,
-      r2Key: validated.r2_key,
-      scheduledAt: validated.scheduled_at,
-      createdAt: validated.created_at,
+      uploadId: r.upload_id,
+      userId: r.user_id,
+      r2Key: r.r2_key,
+      scheduledAt: r.scheduled_at,
+      createdAt: r.created_at,
     };
   }
 
@@ -220,19 +219,21 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
       now,
     ).toArray();
 
-    // Validate SQL row schema
-    const sqlRowSchema = z.object({
-      upload_id: z.string(),
-      user_id: z.string(),
-      r2_key: z.string(),
-      scheduled_at: z.number(),
-    });
-
     for (const row of dueUploads) {
-      const validated = sqlRowSchema.parse(row);
-      const uploadId = validated.upload_id;
-      const r2Key = validated.r2_key;
-      const scheduledAt = validated.scheduled_at;
+      // Inline validation - no Zod dependency at startup
+      const r = row as Record<string, unknown>;
+      if (
+        typeof r.upload_id !== 'string'
+        || typeof r.user_id !== 'string'
+        || typeof r.r2_key !== 'string'
+        || typeof r.scheduled_at !== 'number'
+      ) {
+        console.error({ log_type: 'invalid_row', row });
+        continue;
+      }
+      const uploadId = r.upload_id;
+      const r2Key = r.r2_key;
+      const scheduledAt = r.scheduled_at;
 
       // Additional grace period check - if scheduled time + grace period hasn't passed,
       // reschedule for later to allow any in-flight attachment operations to complete

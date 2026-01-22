@@ -34,6 +34,31 @@ export const ProjectIndexStatuses = {
 } as const;
 
 // ============================================================================
+// AI SEARCH CHECK STATUS (result of checking AI Search instance availability)
+// ============================================================================
+
+export const AI_SEARCH_CHECK_STATUSES = [
+  'active',
+  'paused',
+  'not_found',
+  'error',
+] as const;
+
+export const AiSearchCheckStatusSchema = z.enum(AI_SEARCH_CHECK_STATUSES).openapi({
+  description: 'Status result from checking AI Search instance availability',
+  example: 'active',
+});
+
+export type AiSearchCheckStatus = z.infer<typeof AiSearchCheckStatusSchema>;
+
+export const AiSearchCheckStatuses = {
+  ACTIVE: 'active' as const,
+  PAUSED: 'paused' as const,
+  NOT_FOUND: 'not_found' as const,
+  ERROR: 'error' as const,
+} as const;
+
+// ============================================================================
 // PROJECT MEMORY SOURCE (origin of memory entries)
 // ============================================================================
 

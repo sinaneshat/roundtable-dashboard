@@ -16,10 +16,10 @@ globs: *
 When on `soheil-design` branch, you MUST REFUSE and immediately stop if asked to:
 
 #### Package Management (BLOCKED)
-- `pnpm add`, `pnpm install <package>`, `npm install <package>`
+- `bun run add`, `bun run install <package>`, `npm install <package>`
 - Adding ANY new dependencies to package.json
 - Updating package versions
-- Running `pnpm update` or similar
+- Running `bun run update` or similar
 
 #### Backend/API Work (BLOCKED)
 - Creating or modifying files in `src/api/`

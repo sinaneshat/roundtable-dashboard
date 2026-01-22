@@ -1,6 +1,7 @@
 import type { ComponentProps } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 type BreadcrumbSkeletonProps = {
@@ -12,10 +13,12 @@ export function BreadcrumbSkeleton({
   className,
   ...props
 }: BreadcrumbSkeletonProps) {
+  const t = useTranslations();
+
   return (
     <nav
       className={cn('flex items-center gap-2', className)}
-      aria-label="Loading breadcrumb"
+      aria-label={t('skeletons.loadingBreadcrumb')}
       {...props}
     >
       {Array.from({ length: count }, (_, i) => (

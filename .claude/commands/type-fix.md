@@ -25,7 +25,7 @@ Target: $ARGUMENTS (or entire codebase if not specified)
 
 ## Fix strategy:
 
-1. Run `pnpm check-types` to get error list
+1. Run `bun run check-types` to get error list
 2. Search for forbidden patterns:
    - `grep -r "as any" --include="*.ts" --include="*.tsx"`
    - `grep -r ": any" --include="*.ts" --include="*.tsx"`
@@ -35,7 +35,7 @@ Target: $ARGUMENTS (or entire codebase if not specified)
    - Find the source schema/type it should derive from
    - Apply `z.infer<typeof Schema>` pattern
    - Use discriminated unions for variants
-4. Run `pnpm check-types` again to verify
+4. Run `bun run check-types` again to verify
 
 ## Reference patterns:
 - Type inference chain: `/docs/type-inference-patterns.md`

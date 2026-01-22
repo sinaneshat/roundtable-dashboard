@@ -4,54 +4,12 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* Geist font-face declarations with WOFF2 primary, TTF fallback
- * font-display: swap shows fallback immediately, swaps when loaded (best for CWV)
- * WOFF2 is ~60% smaller than TTF for faster loading */
-@font-face {
-  font-family: 'Geist';
-  src:
-    url('/static/fonts/Geist-Regular.woff2') format('woff2'),
-    url('/static/fonts/Geist-Regular.ttf') format('truetype');
-  font-weight: 400;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Geist';
-  src:
-    url('/static/fonts/Geist-SemiBold.woff2') format('woff2'),
-    url('/static/fonts/Geist-SemiBold.ttf') format('truetype');
-  font-weight: 600;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Geist';
-  src:
-    url('/static/fonts/Geist-Bold.woff2') format('woff2'),
-    url('/static/fonts/Geist-Bold.ttf') format('truetype');
-  font-weight: 700;
-  font-style: normal;
-  font-display: swap;
-}
-
-@font-face {
-  font-family: 'Geist';
-  src:
-    url('/static/fonts/Geist-Black.woff2') format('woff2'),
-    url('/static/fonts/Geist-Black.ttf') format('truetype');
-  font-weight: 900;
-  font-style: normal;
-  font-display: swap;
-}
-
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: 'Geist', system-ui, -apple-system, sans-serif;
-  --font-mono: 'Geist Mono', 'Courier New', monospace;
+  /* System font stack - same approach as ChatGPT */
+  --font-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, Consolas, 'Liberation Mono', monospace;
   --color-sidebar-ring: var(--sidebar-ring);
   --color-sidebar-border: var(--sidebar-border);
   --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
@@ -204,16 +162,6 @@ html,
   overflow-anchor: none;
 }
 
-/*
- * REMOVED: contain: strict and content-visibility: auto
- * These CSS properties conflict with TanStack Virtual's measurement system:
- * - contain: strict includes 'size' containment which prevents dynamic height updates
- * - content-visibility: auto is browser-level virtualization that conflicts with TanStack's item management
- *
- * TanStack Virtual handles its own containment and visibility - do not add CSS containment here.
- * See: https://tanstack.com/virtual/latest/docs/introduction
- */
-
 @keyframes collapsible-down {
   from {
     height: 0;
@@ -267,8 +215,6 @@ html,
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: hsl(var(--border));
   border-radius: 9999px;
-  border: 2px solid transparent;
-  background-clip: content-box;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
@@ -310,5 +256,38 @@ html,
   .animate-blink {
     animation: none;
     opacity: 1;
+  }
+}
+
+/* === TAILWIND UTILITIES === */
+
+/* Safe area insets for notched devices (iPhone X+, Android punch-holes) */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+/* Touch feedback for mobile - subtle press effect on touch devices */
+@utility touch-feedback {
+  @media (hover: none) and (pointer: coarse) {
+    &:active {
+      transform: scale(0.98);
+      transition: transform 0.1s ease-out;
+    }
+  }
+}
+
+/* Enhanced reduced motion - comprehensive animation disabling */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -132,10 +132,11 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
         streamResumption = cachedStream?.success ? cachedStream.data : undefined;
         feedback = cachedFeedback?.success ? cachedFeedback.data?.feedback : undefined;
 
+        // ✅ FIX: Swallow prefetch errors - for new threads, no auxiliary data exists yet
         if (!cachedStream)
-          queryClient.prefetchQuery(streamOptions);
+          queryClient.prefetchQuery(streamOptions).catch(() => {});
         if (!cachedFeedback)
-          queryClient.prefetchQuery(feedbackOptions);
+          queryClient.prefetchQuery(feedbackOptions).catch(() => {});
       }
     }
 

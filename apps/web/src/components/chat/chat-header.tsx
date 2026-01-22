@@ -30,10 +30,6 @@ import { ChatSection } from './chat-states';
 import { ChatThreadActions } from './chat-thread-actions';
 import { useThreadHeaderOptional } from './thread-header-context';
 
-// ============================================================================
-// BREADCRUMB CONFIGURATION - Enum-based pattern
-// ============================================================================
-
 const BREADCRUMB_PATHS = ['/chat', '/chat/pricing'] as const;
 type BreadcrumbPath = (typeof BREADCRUMB_PATHS)[number];
 
@@ -46,21 +42,14 @@ function isBreadcrumbPath(path: string): path is BreadcrumbPath {
   return BREADCRUMB_PATHS.includes(path as BreadcrumbPath);
 }
 
-// ============================================================================
-// ROUTE LOADER DATA SCHEMAS - Zod-based validation
-// ============================================================================
-
-/** Minimal thread schema for header actions - only fields needed for ChatThreadActions */
 const RouteThreadSchema = z.object({
   id: z.string(),
-  // Transform null to undefined to match ChatThreadFlexible's expected type
   title: z.string().nullish().transform(v => v ?? undefined),
   isPublic: z.boolean().optional(),
   isFavorite: z.boolean().optional(),
 });
 type RouteThread = z.output<typeof RouteThreadSchema>;
 
-/** Thread route loader data schema */
 const ThreadLoaderDataSchema = z.object({
   threadTitle: z.string().nullish(),
   threadData: z.object({
@@ -68,12 +57,10 @@ const ThreadLoaderDataSchema = z.object({
   }).nullish(),
 });
 
-/** Route params schema */
 const RouteParamsSchema = z.object({
   slug: z.string(),
 });
 
-/** Safely extract thread from loader data using Zod validation */
 function extractThreadFromLoaderData(loaderData: unknown): RouteThread | null {
   const result = ThreadLoaderDataSchema.safeParse(loaderData);
   if (!result.success)
@@ -81,7 +68,6 @@ function extractThreadFromLoaderData(loaderData: unknown): RouteThread | null {
   return result.data.threadData?.thread ?? null;
 }
 
-/** Safely extract thread title from loader data using Zod validation */
 function extractThreadTitle(loaderData: unknown): string | null {
   const result = ThreadLoaderDataSchema.safeParse(loaderData);
   if (!result.success)
@@ -89,7 +75,6 @@ function extractThreadTitle(loaderData: unknown): string | null {
   return result.data.threadTitle ?? null;
 }
 
-/** Safely extract slug from route params using Zod validation */
 function extractSlugFromParams(params: unknown): string | null {
   const result = RouteParamsSchema.safeParse(params);
   if (!result.success)
@@ -115,25 +100,25 @@ function NavigationHeaderComponent({
   maxWidth = false,
   showScrollButton = false,
 }: NavigationHeaderProps = {}) {
-  // useLocation works during SSR (reads from router context)
-  // useCurrentPathname returns '' during SSR which breaks path checks
   const { pathname } = useLocation();
   const t = useTranslations();
   const sidebarContext = useSidebarOptional();
   const hasSidebar = sidebarContext !== null;
 
-  const { storeThreadTitle, showInitialUI, createdThreadId, thread, storeThreadId } = useChatStore(
+  const { storeThreadTitle, showInitialUI, createdThreadId, thread, storeThreadId, animatingThreadId, animationNewTitle, animationPhase, displayedTitle } = useChatStore(
     useShallow(s => ({
       storeThreadTitle: s.thread?.title ?? null,
       storeThreadId: s.thread?.id ?? null,
       showInitialUI: s.showInitialUI,
       createdThreadId: s.createdThreadId,
       thread: s.thread,
+      animatingThreadId: s.animatingThreadId,
+      animationNewTitle: s.newTitle,
+      animationPhase: s.animationPhase,
+      displayedTitle: s.displayedTitle,
     })),
   );
 
-  // Get thread data from route loader (available on SSR)
-  // useMatches() returns ALL matched routes - works on SSR unlike useMatch with shouldThrow: false
   const matches = useMatches();
   const threadMatch = matches.find(m => m.routeId === '/_protected/chat/$slug');
   const routeThreadTitle = extractThreadTitle(threadMatch?.loaderData);
@@ -144,7 +129,6 @@ function NavigationHeaderComponent({
   const navigate = useNavigate();
   const handleNavigationReset = useNavigationReset();
 
-  // Handle breadcrumb click to /chat - resets store before navigation
   const handleBreadcrumbClick = useCallback((e: React.MouseEvent) => {
     e.preventDefault();
     handleNavigationReset();
@@ -154,24 +138,19 @@ function NavigationHeaderComponent({
   const isStaticRoute = isBreadcrumbPath(pathname);
   const hasActiveThread = pathname === '/chat' && !showInitialUI && (createdThreadId || thread);
   const isOnThreadPage = pathname?.startsWith('/chat/') && pathname !== '/chat' && !isStaticRoute;
-  // Skip fetching when we have thread data in the store from an active chat session
-  // !showInitialUI means we're in an active chat - data is already in the Zustand store
-  // This prevents unnecessary API calls when URL is replaced via history.replaceState()
   const hasThreadInStore = !showInitialUI && !!thread;
   const shouldFetchThread = !!storeThreadId && isOnThreadPage && !hasThreadInStore;
   const { data: cachedThreadData } = useThreadQuery(storeThreadId ?? '', shouldFetchThread);
 
-  // Priority: route loader data (SSR) > cached query data > store data
-  const effectiveThreadTitle = routeThreadTitle
-    ?? (cachedThreadData?.success ? cachedThreadData.data?.thread?.title : null)
-    ?? storeThreadTitle;
+  // Prefer store title when available (most up-to-date after AI title generation)
+  // Fall back to route/cache for SSR hydration
+  const effectiveThreadTitle = storeThreadTitle
+    ?? routeThreadTitle
+    ?? (cachedThreadData?.success ? cachedThreadData.data?.thread?.title : null);
 
   const shouldUseStoreThreadTitle = hasActiveThread || (!isStaticRoute && pathname?.startsWith('/chat/') && pathname !== '/chat');
   const threadTitle = threadTitleProp ?? (showSidebarTrigger && shouldUseStoreThreadTitle ? effectiveThreadTitle : null);
 
-  // Thread actions priority: prop > context (set via useEffect after hydration) > SSR fallback from route data
-  // During SSR, context.threadActions is null because useEffect hasn't run yet
-  // Fall back to rendering ChatThreadActions directly when we have route data
   const contextThreadActions = showSidebarTrigger && shouldUseStoreThreadTitle ? context.threadActions : null;
   const ssrThreadActions = routeThread && routeSlug && !contextThreadActions
     ? <ChatThreadActions thread={routeThread} slug={routeSlug} />
@@ -190,8 +169,7 @@ function NavigationHeaderComponent({
   return (
     <header
       className={cn(
-        'sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center gap-2 transition-all duration-200 ease-in-out',
-        !isOverviewPage && 'bg-background w-full',
+        'sticky top-0 left-0 right-0 z-50 flex h-14 sm:h-16 shrink-0 items-center gap-2 transition-all duration-200 ease-in-out bg-background',
         className,
       )}
     >
@@ -205,7 +183,7 @@ function NavigationHeaderComponent({
             <Button
               variant="ghost"
               size="icon"
-              className="md:hidden min-h-11 min-w-11 shrink-0"
+              className="md:hidden min-h-11 min-w-11 shrink-0 -ms-2"
               onClick={() => sidebarContext.setOpenMobile(true)}
               aria-label={t('accessibility.openSidebar')}
             >
@@ -244,7 +222,14 @@ function NavigationHeaderComponent({
                     title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey as Parameters<typeof t>[0])}
                   >
                     {'isDynamic' in currentPage && currentPage.isDynamic
-                      ? currentPage.titleKey
+                      ? (animatingThreadId && (animationPhase === 'deleting' || animationPhase === 'typing')
+                          ? (
+                              <>
+                                {displayedTitle}
+                                <span className="animate-blink inline-block w-[2px] h-[1em] bg-current ml-[1px] align-middle" aria-hidden="true" />
+                              </>
+                            )
+                          : (animationNewTitle ?? currentPage.titleKey))
                       : t(currentPage.titleKey as Parameters<typeof t>[0])}
                   </BreadcrumbPage>
                 </BreadcrumbItem>
@@ -253,7 +238,7 @@ function NavigationHeaderComponent({
           )}
         </div>
         {!isOverviewPage && (
-          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">
+          <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0 -me-1.5 sm:me-0">
             {showScrollButton && <ChatScrollButton variant="header" />}
             {threadActions}
           </div>
@@ -263,6 +248,7 @@ function NavigationHeaderComponent({
   );
 }
 export const NavigationHeader = memo(NavigationHeaderComponent);
+
 function MinimalHeaderComponent({ className }: { className?: string } = {}) {
   const t = useTranslations();
   const sidebarContext = useSidebarOptional();
@@ -317,6 +303,7 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
   );
 }
 export const MinimalHeader = memo(MinimalHeaderComponent);
+
 type PageHeaderProps = {
   title: string;
   description?: string;
@@ -369,6 +356,7 @@ export function PageHeader({
     </div>
   );
 }
+
 type ChatPageHeaderProps = {
   title: string;
   description: string;

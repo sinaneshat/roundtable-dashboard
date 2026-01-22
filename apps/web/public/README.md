@@ -15,13 +15,13 @@ robots.txt is generated at build time based on environment:
 `scripts/generate-robots.sh [local|preview|production]`
 
 ### Build Commands
-- `pnpm build:local` - Build with local robots.txt
-- `pnpm build:preview` - Build with preview robots.txt (disallow all)
-- `pnpm build:production` - Build with production robots.txt (allow crawling)
+- `bun run build:local` - Build with local robots.txt
+- `bun run build:preview` - Build with preview robots.txt (disallow all)
+- `bun run build:production` - Build with production robots.txt (allow crawling)
 
 ### Deployment
-- `pnpm deploy:preview` - Deploys with preview robots.txt
-- `pnpm deploy:production` - Deploys with production robots.txt
+- `bun run deploy:preview` - Deploys with preview robots.txt
+- `bun run deploy:production` - Deploys with production robots.txt
 
 ### Cache Headers
 Configured in `_headers`:

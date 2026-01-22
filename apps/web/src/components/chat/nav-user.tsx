@@ -23,7 +23,7 @@ import {
 } from '@/hooks';
 import { useBoolean } from '@/hooks/utils';
 import { clearCachedSession } from '@/lib/auth';
-import { deleteUser, signOut, useSession } from '@/lib/auth/client';
+import { authClient, deleteUser, signOut, useSession } from '@/lib/auth/client';
 import type { Session, User } from '@/lib/auth/types';
 import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
@@ -61,6 +61,7 @@ export function NavUser({ initialSession }: NavUserProps) {
   const showDeleteDialog = useBoolean(false);
   const showFeedbackModal = useBoolean(false);
   const isDeleting = useBoolean(false);
+  const isStoppingImpersonation = useBoolean(false);
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
   const cancelSubscriptionMutation = useCancelSubscriptionMutation();
   const showDeleteAccountOption = getWebappEnv() !== WebAppEnvs.PROD;
@@ -81,8 +82,9 @@ export function NavUser({ initialSession }: NavUserProps) {
 
   const displayName = user?.name || t('user.defaultName');
   const displayEmail = user?.email || '';
-  const subscriptions: Subscription[] = subscriptionsData?.success && subscriptionsData.data?.items
-    ? (subscriptionsData.data.items as Subscription[])
+  // Type narrowing: when success is true, data.items is correctly typed from API response
+  const subscriptions = subscriptionsData?.success && subscriptionsData.data?.items
+    ? subscriptionsData.data.items
     : [];
   const activeSubscription = subscriptions.find(
     (sub: Subscription) => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
@@ -154,6 +156,21 @@ export function NavUser({ initialSession }: NavUserProps) {
     }
   };
 
+  const handleStopImpersonating = async () => {
+    isStoppingImpersonation.onTrue();
+    try {
+      await authClient.admin.stopImpersonating();
+      // Full page refresh to clear all caches
+      const baseUrl = getAppBaseUrl();
+      window.location.href = `${baseUrl}/admin/impersonate`;
+    } catch (error) {
+      showApiErrorToast('Failed to Stop Impersonation', error);
+      isStoppingImpersonation.onFalse();
+    }
+  };
+
+  const isImpersonating = !!clientSession?.session?.impersonatedBy;
+
   // Track mount state for client-only functionality (dropdown opening)
   // SSR renders the same structure - dropdown just won't open until mounted
   const mounted = useBoolean(false);
@@ -184,6 +201,7 @@ export function NavUser({ initialSession }: NavUserProps) {
             <AvatarImage
               src={user?.image || undefined}
               alt={displayName}
+              loading="eager"
             />
             <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
           </Avatar>
@@ -207,6 +225,7 @@ export function NavUser({ initialSession }: NavUserProps) {
                 <AvatarImage
                   src={user?.image || undefined}
                   alt={displayName}
+                  loading="eager"
                 />
                 <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
               </Avatar>
@@ -273,6 +292,35 @@ export function NavUser({ initialSession }: NavUserProps) {
                     <p className="text-[10px] text-muted-foreground/70">{t('userMenu.deleteAccountDescription')}</p>
                   </div>
                 </DropdownMenuItem>
+              )}
+              {user?.role === 'admin' && (
+                <DropdownMenuItem asChild>
+                  <Link to="/admin/impersonate" preload="intent" className="flex items-center gap-2">
+                    <Icons.userCog className="size-4" />
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold">{t('userMenu.impersonateUser')}</p>
+                      <p className="text-[10px] text-muted-foreground">{t('userMenu.impersonateDescription')}</p>
+                    </div>
+                  </Link>
+                </DropdownMenuItem>
+              )}
+              {isImpersonating && (
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    onClick={handleStopImpersonating}
+                    disabled={isStoppingImpersonation.value}
+                    className="text-amber-500 focus:text-amber-400 focus:bg-amber-500/10"
+                  >
+                    {isStoppingImpersonation.value
+                      ? <Icons.loader className="size-4 animate-spin" />
+                      : <Icons.alertTriangle className="size-4" />}
+                    <div className="flex-1">
+                      <p className="text-xs font-semibold">{t('admin.banner.stopButton')}</p>
+                      <p className="text-[10px] text-muted-foreground">{t('admin.banner.impersonating', { email: user?.email || 'user' })}</p>
+                    </div>
+                  </DropdownMenuItem>
+                </>
               )}
               <DropdownMenuSeparator />
               <DropdownMenuItem onClick={handleSignOut}>

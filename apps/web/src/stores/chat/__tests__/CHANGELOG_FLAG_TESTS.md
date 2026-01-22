@@ -182,13 +182,13 @@ All tests verify:
 
 ```bash
 # Run all changelog flag tests
-pnpm test src/stores/chat/__tests__/changelog-flag-management.test.ts
+bun run test src/stores/chat/__tests__/changelog-flag-management.test.ts
 
 # Run in watch mode
-pnpm test:watch src/stores/chat/__tests__/changelog-flag-management.test.ts
+bun run test:watch src/stores/chat/__tests__/changelog-flag-management.test.ts
 
 # Run with verbose output
-pnpm test src/stores/chat/__tests__/changelog-flag-management.test.ts --reporter=verbose
+bun run test src/stores/chat/__tests__/changelog-flag-management.test.ts --reporter=verbose
 ```
 
 ## Related Files

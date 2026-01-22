@@ -11,7 +11,7 @@ import { cn } from '@/lib/ui/cn';
 function ToastProvider({
   ...props
 }: ComponentProps<typeof ToastPrimitives.Provider>) {
-  return <ToastPrimitives.Provider data-slot="toast-provider" {...props} />;
+  return <ToastPrimitives.Provider {...props} />;
 }
 
 function ToastViewport({
@@ -20,9 +20,8 @@ function ToastViewport({
 }: ComponentProps<typeof ToastPrimitives.Viewport>) {
   return (
     <ToastPrimitives.Viewport
-      data-slot="toast-viewport"
       className={cn(
-        'fixed bottom-0 end-0 z-[100] flex max-h-screen w-full flex-col p-3 sm:p-4 sm:max-w-[380px] md:max-w-[420px]',
+        'fixed bottom-0 end-0 z-[100] flex max-h-screen w-full flex-col p-3 pb-safe sm:p-4 sm:max-w-[380px] md:max-w-[420px]',
         className,
       )}
       {...props}
@@ -49,7 +48,7 @@ const toastVariants = cva(
   },
 );
 
-type ToastProps = {} & ComponentProps<typeof ToastPrimitives.Root> & VariantProps<typeof toastVariants>;
+type ToastProps = ComponentProps<typeof ToastPrimitives.Root> & VariantProps<typeof toastVariants>;
 
 function Toast({
   className,
@@ -58,7 +57,6 @@ function Toast({
 }: ToastProps) {
   return (
     <ToastPrimitives.Root
-      data-slot="toast"
       className={cn(toastVariants({ variant }), className)}
       {...props}
     />
@@ -71,7 +69,6 @@ function ToastAction({
 }: ComponentProps<typeof ToastPrimitives.Action>) {
   return (
     <ToastPrimitives.Action
-      data-slot="toast-action"
       className={cn(
         'inline-flex h-8 shrink-0 items-center justify-center rounded-4xl border bg-transparent px-3 text-sm font-medium ring-offset-background transition-colors hover:bg-secondary focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 group-[.destructive]:border-muted/40 group-[.destructive]:hover:border-destructive/30 group-[.destructive]:hover:bg-destructive group-[.destructive]:hover:text-destructive-foreground group-[.destructive]:focus-visible:ring-destructive',
         className,
@@ -87,7 +84,6 @@ function ToastClose({
 }: ComponentProps<typeof ToastPrimitives.Close>) {
   return (
     <ToastPrimitives.Close
-      data-slot="toast-close"
       className={cn(
         'absolute end-2 top-2 rounded-full min-h-11 min-w-11 flex items-center justify-center text-foreground/50 transition-opacity hover:text-foreground focus:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2',
         'md:opacity-0 md:group-hover:opacity-100 focus-visible:opacity-100',
@@ -108,7 +104,6 @@ function ToastTitle({
 }: ComponentProps<typeof ToastPrimitives.Title>) {
   return (
     <ToastPrimitives.Title
-      data-slot="toast-title"
       className={cn('text-sm font-semibold', className)}
       {...props}
     />
@@ -121,7 +116,6 @@ function ToastDescription({
 }: ComponentProps<typeof ToastPrimitives.Description>) {
   return (
     <ToastPrimitives.Description
-      data-slot="toast-description"
       className={cn('text-sm opacity-90', className)}
       {...props}
     />

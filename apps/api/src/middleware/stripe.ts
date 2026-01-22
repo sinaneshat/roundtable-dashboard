@@ -13,7 +13,9 @@
 
 import { createMiddleware } from 'hono/factory';
 
-import { initializeStripe } from '@/services/billing';
+// PERF FIX: Import directly from service file to avoid barrel export circular dependency chain
+// The barrel export (@/services/billing) pulls in ALL billing services which cascade to models, usage, etc.
+import { initializeStripe } from '@/services/billing/stripe.service';
 import type { ApiEnv } from '@/types';
 
 /**

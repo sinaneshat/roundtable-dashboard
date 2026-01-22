@@ -42,7 +42,7 @@ export const [Name]s = {
 2. Create enum in `/src/api/core/enums.ts` following 5-part pattern
 3. Replace all hardcoded strings with constant object references
 4. Update imports in affected files
-5. Verify with `pnpm check-types`
+5. Verify with `bun run check-types`
 
 ## Usage after creation:
 ```typescript

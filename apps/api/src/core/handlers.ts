@@ -11,7 +11,8 @@ import { executeBatch, validateBatchSize } from '@/common/batch-operations';
 import { AppError } from '@/common/error-handling';
 import { getErrorMessage } from '@/common/error-types';
 import { getDbAsync } from '@/db';
-import { auth } from '@/lib/auth/server';
+// PERF FIX: Lazy load auth module to avoid loading Better Auth + Drizzle for public routes
+// import { auth } from '@/lib/auth/server';
 import type { Session, User } from '@/lib/auth/types';
 import type { ApiEnv } from '@/types';
 
@@ -19,6 +20,16 @@ import { HTTPExceptionFactory } from './http-exceptions';
 import { Responses } from './responses';
 import { ValidationErrorDetailsSchema } from './schemas';
 import { validateWithSchema } from './validation';
+
+// Lazy auth module loading - only initialized when session auth is needed
+let authModule: typeof import('@/lib/auth/server') | null = null;
+
+async function getAuth() {
+  if (!authModule) {
+    authModule = await import('@/lib/auth/server');
+  }
+  return authModule.auth;
+}
 
 // ============================================================================
 // TYPE DEFINITIONS
@@ -236,6 +247,8 @@ export type BatchHandler<
 async function applyAuthentication<TEnv extends ApiEnv>(c: Context<TEnv>, authMode: AuthMode): Promise<void> {
   switch (authMode) {
     case 'session': {
+      // PERF FIX: Lazy load auth only when session authentication is needed
+      const auth = await getAuth();
       // Better Auth reads session_data cookie first (no DB lookup if valid)
       const sessionData = await auth.api.getSession({
         headers: c.req.raw.headers,
@@ -254,6 +267,8 @@ async function applyAuthentication<TEnv extends ApiEnv>(c: Context<TEnv>, authMo
     }
     case 'session-optional': {
       try {
+        // PERF FIX: Lazy load auth only when session authentication is needed
+        const auth = await getAuth();
         const sessionData = await auth.api.getSession({
           headers: c.req.raw.headers,
         });

@@ -116,6 +116,16 @@ export function useServiceWorkerRegistration(): ServiceWorkerRegistrationState {
           registration.update().catch(() => {});
         }, 10 * 60 * 1000);
 
+        // Warm up cache for common routes when browser is idle
+        if ('requestIdleCallback' in window) {
+          requestIdleCallback(() => {
+            navigator.serviceWorker.controller?.postMessage({
+              type: 'WARM_CACHE',
+              routes: ['/auth/sign-in', '/chat/pricing', '/legal/terms', '/legal/privacy'],
+            });
+          }, { timeout: 5000 });
+        }
+
         // When new SW takes control (after user triggers update), reload
         navigator.serviceWorker.addEventListener('controllerchange', handleControllerChange);
       } catch {

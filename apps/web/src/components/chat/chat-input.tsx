@@ -94,13 +94,11 @@ export const ChatInput = memo(({
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
   const { isFreeUser, hasUsedTrial } = useFreeTrialState();
 
-  // Capture any text typed during SSR/hydration before React takes over
   const handleCapture = useCallback((capturedValue: string) => {
     onChange(capturedValue);
   }, [onChange]);
   useHydrationInputCapture(textareaRef, handleCapture, value);
 
-  // Real-time credit estimation based on selected models and their pricing tiers
   const creditEstimate = useCreditEstimation({
     participants,
     autoMode: false,
@@ -125,7 +123,6 @@ export const ChatInput = memo(({
   const isMicDisabled = disabled || isQuotaExceeded || isFreeUserBlocked || isSubmitting;
   const isOverLimit = value.length > STRING_LIMITS.MESSAGE_MAX;
   const isSubmitDisabled = disabled || isStreaming || isQuotaExceeded || isUploading || isOverLimit || isSubmitting || isLoadingStats || creditEstimate.isLoading || isFreeUserBlocked;
-  // In auto mode, skip participant validation - AI will select models based on prompt
   const hasValidInput = (value.trim().length > 0 || attachments.length > 0) && (autoMode || participants.length > 0) && !isOverLimit;
 
   const handleFilesSelected = useCallback((files: File[]) => {
@@ -144,7 +141,6 @@ export const ChatInput = memo(({
     fileInputRef.current?.click();
   }, []);
 
-  // Paste handler for clipboard file attachments (Cmd+V / Ctrl+V)
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
     if (!enableAttachments || !onAddAttachments)
       return;
@@ -234,12 +230,10 @@ export const ChatInput = memo(({
     }
   };
 
-  // Don't show "no models" error in auto mode - AI will select models based on prompt
   const showNoModelsError = !autoMode && participants.length === 0 && !isQuotaExceeded && !isHydrating && !isModelsLoading;
 
   return (
     <div className="w-full">
-      {/* Always render file input to prevent hydration mismatch - it's hidden anyway */}
       <input
         ref={fileInputRef}
         type="file"
@@ -259,7 +253,6 @@ export const ChatInput = memo(({
           'shadow-lg',
           'transition-all duration-200',
           isSubmitDisabled && !isQuotaExceeded && !isOverLimit && !showNoModelsError && 'cursor-not-allowed',
-          // Border colors passed from parent via borderVariant
           borderVariant === BorderVariants.SUCCESS && 'border-green-500/30',
           borderVariant === BorderVariants.WARNING && 'border-amber-500/30',
           borderVariant === BorderVariants.ERROR && 'border-destructive/30',
@@ -270,7 +263,6 @@ export const ChatInput = memo(({
         {enableAttachments && <ChatInputDropzoneOverlay isDragging={isDragging} />}
 
         <div className="flex flex-col overflow-hidden h-full">
-
           {enableSpeech && isSpeechSupported && (
             <VoiceVisualization
               isActive={isListening}
@@ -298,7 +290,7 @@ export const ChatInput = memo(({
               isQuotaExceeded && 'opacity-50 pointer-events-none',
             )}
           >
-            <div className="px-3 sm:px-4 py-3 sm:py-4">
+            <div className="py-3 sm:py-4">
               <textarea
                 ref={textareaRef}
                 dir="auto"
@@ -321,7 +313,8 @@ export const ChatInput = memo(({
                   'focus:outline-none focus:ring-0',
                   'placeholder:text-muted-foreground/60',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
-                  'resize-none scrollbar-thin',
+                  'resize-none custom-scrollbar',
+                  'px-3 sm:px-4',
                 )}
                 aria-disabled={isInputDisabled}
                 aria-label={isStreaming ? t('chat.input.streamingLabel') : t('chat.input.label')}

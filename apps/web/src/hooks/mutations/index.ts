@@ -1,4 +1,7 @@
 export {
+  useAdminSearchUserMutation,
+} from './admin-mutations';
+export {
   useCreateApiKeyMutation,
   useDeleteApiKeyMutation,
 } from './api-key-mutations';

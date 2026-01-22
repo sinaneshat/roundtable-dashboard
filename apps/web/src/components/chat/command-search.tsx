@@ -3,7 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
 import { Icons } from '@/components/icons';
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { LinkLoadingIndicator } from '@/components/ui/link-loading-indicator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -109,7 +109,6 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
     setSearchQuery('');
     setSelectedIndex(0);
     onClose();
-    // Close mobile sidebar when closing search after navigation
     if (isMobile) {
       setOpenMobile(false);
     }
@@ -200,7 +199,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
         glass
         className="!max-w-2xl !w-[calc(100vw-2.5rem)]"
       >
-        <DialogHeader className="flex flex-row items-center gap-3 bg-card px-4 sm:px-5 md:px-6 py-4">
+        <div className="flex items-center gap-3 bg-card px-4 py-2">
           <VisuallyHidden>
             <DialogTitle>{t('chat.searchChats')}</DialogTitle>
             <DialogDescription>{t('chat.searchChatsDescription')}</DialogDescription>
@@ -212,7 +211,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
             placeholder={t('chat.searchChats')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="flex-1 min-w-0 bg-transparent border-none outline-none text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
+            className="flex-1 min-w-0 h-10 bg-transparent border-none outline-none text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-0"
             aria-label={t('chat.searchChats')}
             autoComplete="off"
             autoCorrect="off"
@@ -222,12 +221,12 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
           <button
             type="button"
             onClick={handleClose}
-            className="min-h-11 min-w-11 shrink-0 flex items-center justify-center hover:bg-white/[0.07] rounded-full transition-colors"
+            className="size-10 shrink-0 flex items-center justify-center hover:bg-white/[0.07] rounded-full transition-colors -mr-1"
             aria-label={t('actions.close')}
           >
             <Icons.x className="size-5 text-muted-foreground" />
           </button>
-        </DialogHeader>
+        </div>
 
         <DialogBody className="h-[400px] border-t border-border bg-card">
           <ScrollArea ref={scrollAreaRef} className="h-full">

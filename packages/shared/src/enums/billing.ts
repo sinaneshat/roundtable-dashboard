@@ -829,3 +829,33 @@ export const TrialStates = {
 export function isValidTrialState(value: unknown): value is TrialState {
   return TrialStateSchema.safeParse(value).success;
 }
+
+// ============================================================================
+// CREDIT STATUS (for chat input credit availability)
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT - Source of truth for values
+export const CREDIT_STATUSES = ['ok', 'low', 'insufficient'] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_CREDIT_STATUS: CreditStatus = 'ok';
+
+// 3️⃣ ZOD SCHEMA - Runtime validation + OpenAPI docs
+export const CreditStatusSchema = z.enum(CREDIT_STATUSES).openapi({
+  description: 'Credit availability status for chat input',
+  example: 'ok',
+});
+
+// 4️⃣ TYPESCRIPT TYPE - Inferred from Zod schema
+export type CreditStatus = z.infer<typeof CreditStatusSchema>;
+
+// 5️⃣ CONSTANT OBJECT - For usage in code (prevents typos)
+export const CreditStatuses = {
+  OK: 'ok' as const,
+  LOW: 'low' as const,
+  INSUFFICIENT: 'insufficient' as const,
+} as const;
+
+export function isValidCreditStatus(value: unknown): value is CreditStatus {
+  return CreditStatusSchema.safeParse(value).success;
+}

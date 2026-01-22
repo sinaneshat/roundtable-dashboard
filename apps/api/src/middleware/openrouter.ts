@@ -13,7 +13,9 @@
 
 import { createMiddleware } from 'hono/factory';
 
-import { initializeOpenRouter } from '@/services/models';
+// PERF FIX: Import directly from service file to avoid barrel export circular dependency chain
+// The barrel export (@/services/models) pulls in openrouter.service which imports from billing, causing cascade
+import { initializeOpenRouter } from '@/services/models/openrouter.service';
 import type { ApiEnv } from '@/types';
 
 /**

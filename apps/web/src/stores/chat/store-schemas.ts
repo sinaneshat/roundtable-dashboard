@@ -12,11 +12,13 @@
  * Reference: /src/api/routes/chat/schema.ts
  */
 
-import type { FeedbackType, RoundPhase } from '@roundtable/shared';
+import type { FeedbackType, RoundFlowEvent, RoundPhase } from '@roundtable/shared';
 import {
   ChatModeSchema,
   FeedbackTypeSchema,
   MessageStatusSchema,
+  RoundFlowEventSchema,
+  RoundFlowStateSchema,
   RoundPhaseSchema,
   ScreenModeSchema,
   StreamStatusSchema,
@@ -654,6 +656,62 @@ export const StreamResumptionActionsSchema = z.object({
 export const StreamResumptionSliceSchema = z.intersection(StreamResumptionSliceStateSchema, StreamResumptionActionsSchema);
 
 // ============================================================================
+// ROUND FLOW SLICE SCHEMAS (FSM-based orchestration)
+// ============================================================================
+
+/**
+ * Round Flow State - FSM state for round orchestration
+ * Replaces multiple boolean flags with explicit state machine states
+ */
+export const RoundFlowStateSliceSchema = z.object({
+  /** Current FSM state - THE source of truth for round lifecycle */
+  flowState: RoundFlowStateSchema,
+  /** Round number being orchestrated */
+  flowRoundNumber: z.number().nullable(),
+  /** Participant index within current round */
+  flowParticipantIndex: z.number(),
+  /** Total enabled participants for current round */
+  flowParticipantCount: z.number(),
+  /** Last error that occurred during round flow */
+  flowLastError: z.custom<Error | null>(),
+  /** Event history for debugging (dev mode only) */
+  flowEventHistory: z.array(z.object({
+    event: RoundFlowEventSchema,
+    fromState: RoundFlowStateSchema,
+    toState: RoundFlowStateSchema,
+    timestamp: z.number(),
+  })),
+});
+
+/** Type for FSM dispatch function */
+export type DispatchFlowEvent = (event: RoundFlowEvent, payload?: Record<string, unknown>) => void;
+
+/** Type for FSM state setter - uses the FSM state enum type from shared */
+export type SetFlowState = (state: z.infer<typeof RoundFlowStateSchema>) => void;
+
+/** Type for resetting flow state */
+export type ResetFlowState = () => void;
+
+export const RoundFlowActionsSchema = z.object({
+  /** Dispatch an FSM event - triggers state transition */
+  dispatchFlowEvent: z.custom<DispatchFlowEvent>(),
+  /** Directly set FSM state (for internal use) */
+  setFlowState: z.custom<SetFlowState>(),
+  /** Reset flow state to IDLE */
+  resetFlowState: z.custom<ResetFlowState>(),
+  /** Set participant index for current round */
+  setFlowParticipantIndex: z.custom<(index: number) => void>(),
+  /** Set participant count for current round */
+  setFlowParticipantCount: z.custom<(count: number) => void>(),
+  /** Set round number for flow tracking */
+  setFlowRoundNumber: z.custom<(roundNumber: number | null) => void>(),
+  /** Record flow error */
+  setFlowError: z.custom<(error: Error | null) => void>(),
+});
+
+export const RoundFlowSliceSchema = z.intersection(RoundFlowStateSliceSchema, RoundFlowActionsSchema);
+
+// ============================================================================
 // ANIMATION SLICE SCHEMAS
 // ============================================================================
 
@@ -753,28 +811,31 @@ export const ChatStoreSchema = z.intersection(
                         z.intersection(
                           z.intersection(
                             z.intersection(
-                              FormSliceSchema,
-                              FeedbackSliceSchema,
+                              z.intersection(
+                                FormSliceSchema,
+                                FeedbackSliceSchema,
+                              ),
+                              UISliceSchema,
                             ),
-                            UISliceSchema,
+                            PreSearchSliceSchema,
                           ),
-                          PreSearchSliceSchema,
+                          ChangelogSliceSchema,
                         ),
-                        ChangelogSliceSchema,
+                        ThreadSliceSchema,
                       ),
-                      ThreadSliceSchema,
+                      FlagsSliceSchema,
                     ),
-                    FlagsSliceSchema,
+                    DataSliceSchema,
                   ),
-                  DataSliceSchema,
+                  TrackingSliceSchema,
                 ),
-                TrackingSliceSchema,
+                CallbacksSliceSchema,
               ),
-              CallbacksSliceSchema,
+              ScreenSliceSchema,
             ),
-            ScreenSliceSchema,
+            StreamResumptionSliceSchema,
           ),
-          StreamResumptionSliceSchema,
+          RoundFlowSliceSchema,
         ),
         AnimationSliceSchema,
       ),
@@ -841,6 +902,10 @@ export type OperationsActions = z.infer<typeof OperationsActionsSchema>;
 export type StreamResumptionSliceState = z.infer<typeof StreamResumptionSliceStateSchema>;
 export type StreamResumptionActions = z.infer<typeof StreamResumptionActionsSchema>;
 export type StreamResumptionSlice = z.infer<typeof StreamResumptionSliceSchema>;
+
+export type RoundFlowState = z.infer<typeof RoundFlowStateSliceSchema>;
+export type RoundFlowActions = z.infer<typeof RoundFlowActionsSchema>;
+export type RoundFlowSlice = z.infer<typeof RoundFlowSliceSchema>;
 
 export type AnimationState = z.infer<typeof AnimationStateSchema>;
 export type AnimationActions = z.infer<typeof AnimationActionsSchema>;

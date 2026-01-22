@@ -228,16 +228,16 @@ setStreamingRoundNumber: (roundNumber) =>
 
 ```bash
 # Run all placeholder tests
-pnpm test src/__tests__/flows/placeholder-immediate-visibility.test.ts src/__tests__/flows/placeholder-transitions-edge-cases.test.ts
+bun run test src/__tests__/flows/placeholder-immediate-visibility.test.ts src/__tests__/flows/placeholder-transitions-edge-cases.test.ts
 
 # Run specific file
-pnpm test src/__tests__/flows/placeholder-immediate-visibility.test.ts
+bun run test src/__tests__/flows/placeholder-immediate-visibility.test.ts
 
 # Watch mode
-pnpm test:watch src/__tests__/flows/placeholder-immediate-visibility.test.ts
+bun run test:watch src/__tests__/flows/placeholder-immediate-visibility.test.ts
 
 # Run with coverage
-pnpm test:coverage src/__tests__/flows/placeholder-immediate-visibility.test.ts
+bun run test:coverage src/__tests__/flows/placeholder-immediate-visibility.test.ts
 ```
 
 ## Test Results

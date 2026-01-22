@@ -4,8 +4,25 @@
       "description": "Main navigation menu",
       "title": "Navigation"
     },
+    "moreOptions": "More options",
     "openSidebar": "Open sidebar",
     "toggleSidebar": "Toggle Sidebar"
+  },
+  "admin": {
+    "banner": {
+      "impersonating": "Impersonating {email}",
+      "stopButton": "Stop Impersonating"
+    },
+    "impersonate": {
+      "description": "Search for a user by email to impersonate their session",
+      "emailLabel": "User Email",
+      "emailPlaceholder": "user@example.com",
+      "impersonateButton": "Impersonate User",
+      "searchButton": "Search User",
+      "success": "Impersonation Started",
+      "title": "Impersonate User",
+      "userNotFound": "No user found with that email"
+    }
   },
   "actions": {
     "back": "Back",
@@ -138,7 +155,8 @@
       "subtitle": "Get perspectives from multiple AI models working together to solve your toughest problems"
     },
     "magicLink": {
-      "emailSentMessage": "We've sent a magic link to {email}. Click the link to sign in.",
+      "emailSentTo": "We've sent a magic link to {email}.",
+      "clickToSignIn": "Click the link to sign in.",
       "error": "Error",
       "sendButton": "Send Magic Link",
       "title": "Check your email",
@@ -263,6 +281,7 @@
       "defaultName": "File",
       "dropDescription": "Upload files to include in your message",
       "dropHere": "Drop files here",
+      "removeAttachment": "Remove attachment",
       "errors": {
         "emptyFile": "File is empty",
         "filenameTooLong": "Filename must be 255 characters or less",
@@ -405,7 +424,7 @@
         "description": "Select at least {count} models to continue"
       },
       "modal": {
-        "customRolePlaceholder": "Enter custom role instructions...",
+        "customRolePlaceholder": "e.g., Technical Writer, Data Analyst...",
         "saveRole": "Save Role",
         "selectAtLeastOneModel": "Select at least one model"
       },
@@ -427,6 +446,8 @@
       "presets": {
         "cancel": "Cancel",
         "cannotSave": "Cannot save preset",
+        "customizePreset": "Customize preset",
+        "deletePreset": "Delete preset",
         "done": "Done",
         "failedToDelete": "Failed to delete preset",
         "failedToSave": "Failed to save preset",
@@ -499,6 +520,8 @@
         "show": "Show search plan",
         "title": "Search Plan"
       },
+      "query": "query",
+      "queries": "queries",
       "retry": "Retry",
       "searchDepth": {
         "advanced": "advanced",
@@ -952,6 +975,9 @@
     }
   },
   "setRoleFor": "Set role for",
+  "skeletons": {
+    "loadingBreadcrumb": "Loading breadcrumb"
+  },
   "states": {
     "empty": {
       "default": "No data found",
@@ -1009,6 +1035,7 @@
     "freeTrial": {
       "availableDescription": "Try 1 free round with 3 models. Upgrade for all 10+ models & unlimited chats.",
       "upgradeToPro": "Upgrade to Pro",
+      "upgradeToProShort": "Upgrade",
       "usedDescription": "Free trial complete. Go Pro for all 10+ models & unlimited conversations."
     },
     "gracePeriod": "You're on {currentPlan} until {date}. After that, you'll switch to {newPlan}.",
@@ -1025,6 +1052,8 @@
     "deleteAccount": "Delete Account",
     "deleteAccountDescription": "Permanently delete your account",
     "feedbackDescription": "Help us improve Roundtable",
+    "impersonateDescription": "Impersonate another user",
+    "impersonateUser": "Impersonate User",
     "manageBilling": "Manage billing",
     "proPlan": "Pro Plan",
     "sendFeedback": "Send Feedback",

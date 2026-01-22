@@ -26,6 +26,25 @@ export const CACHE_TTL = {
   ANALYTICS: 60 * 60 * 24 * 30,
 } as const;
 
+/** Cache key prefixes - single source of truth for KV key structure */
+const CACHE_KEY_PREFIX = {
+  SEARCH: 'search',
+  IMAGE_DESC: 'image:desc',
+  STATS_HITS: 'stats:cache:hits',
+  STATS_MISSES: 'stats:cache:misses',
+} as const;
+
+/** Cache operation scenarios for logging */
+const CACHE_SCENARIOS = {
+  INVALID_DATA_FORMAT: 'invalidCacheDataFormat',
+  KV_READ_FAILED: 'kvCacheReadFailed',
+  KV_WRITE_FAILED: 'kvCacheWriteFailed',
+  IMAGE_READ_FAILED: 'imageCacheReadFailed',
+  IMAGE_WRITE_FAILED: 'imageCacheWriteFailed',
+  HIT_TRACKING_FAILED: 'cacheHitTrackingFailed',
+  MISS_TRACKING_FAILED: 'cacheMissTrackingFailed',
+} as const;
+
 // ============================================================================
 // Cache Key Generation
 // ============================================================================
@@ -55,12 +74,12 @@ export function generateSearchCacheKey(
 ): string {
   const normalized = normalizeQuery(query);
   const hash = simpleHash(normalized);
-  return `search:${hash}:${maxResults}:${searchDepth}`;
+  return `${CACHE_KEY_PREFIX.SEARCH}:${hash}:${maxResults}:${searchDepth}`;
 }
 
 export function generateImageCacheKey(imageUrl: string): string {
   const hash = simpleHash(imageUrl);
-  return `image:desc:${hash}`;
+  return `${CACHE_KEY_PREFIX.IMAGE_DESC}:${hash}`;
 }
 
 // ============================================================================
@@ -86,7 +105,7 @@ export async function getCachedSearch(
     if (!result) {
       logger?.warn('Invalid cache data format, treating as cache miss', {
         logType: LogTypes.EDGE_CASE,
-        scenario: 'invalidCacheDataFormat',
+        scenario: CACHE_SCENARIOS.INVALID_DATA_FORMAT,
         query: query.substring(0, 50),
       });
       await trackCacheMiss(env, logger);
@@ -109,7 +128,7 @@ export async function getCachedSearch(
   } catch (error) {
     logger?.warn('KV cache read failed', {
       logType: LogTypes.EDGE_CASE,
-      scenario: 'kvCacheReadFailed',
+      scenario: CACHE_SCENARIOS.KV_READ_FAILED,
       error: error instanceof Error ? error.message : 'Unknown error',
       query: query.substring(0, 50),
     });
@@ -150,7 +169,7 @@ export async function cacheSearchResult(
   } catch (error) {
     logger?.warn('KV cache write failed', {
       logType: LogTypes.EDGE_CASE,
-      scenario: 'kvCacheWriteFailed',
+      scenario: CACHE_SCENARIOS.KV_WRITE_FAILED,
       error: error instanceof Error ? error.message : 'Unknown error',
       query: query.substring(0, 50),
     });
@@ -177,7 +196,7 @@ export async function getCachedImageDescription(
   } catch (error) {
     logger?.warn('Image cache read failed', {
       logType: LogTypes.EDGE_CASE,
-      scenario: 'imageCacheReadFailed',
+      scenario: CACHE_SCENARIOS.IMAGE_READ_FAILED,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
     return null;
@@ -202,7 +221,7 @@ export async function cacheImageDescription(
   } catch (error) {
     logger?.warn('Image cache write failed', {
       logType: LogTypes.EDGE_CASE,
-      scenario: 'imageCacheWriteFailed',
+      scenario: CACHE_SCENARIOS.IMAGE_WRITE_FAILED,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
@@ -214,13 +233,13 @@ export async function cacheImageDescription(
 
 async function trackCacheHit(env: ApiEnv['Bindings'], logger?: TypedLogger): Promise<void> {
   try {
-    const current = await env.KV.get('stats:cache:hits', 'text');
+    const current = await env.KV.get(CACHE_KEY_PREFIX.STATS_HITS, 'text');
     const count = Number.parseInt(current || '0', 10) + 1;
-    await env.KV.put('stats:cache:hits', count.toString(), { expirationTtl: CACHE_TTL.ANALYTICS });
+    await env.KV.put(CACHE_KEY_PREFIX.STATS_HITS, count.toString(), { expirationTtl: CACHE_TTL.ANALYTICS });
   } catch (error) {
     logger?.debug('Cache hit tracking failed', {
       logType: LogTypes.EDGE_CASE,
-      scenario: 'cacheHitTrackingFailed',
+      scenario: CACHE_SCENARIOS.HIT_TRACKING_FAILED,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
   }
@@ -228,13 +247,13 @@ async function trackCacheHit(env: ApiEnv['Bindings'], logger?: TypedLogger): Pro
 
 async function trackCacheMiss(env: ApiEnv['Bindings'], logger?: TypedLogger): Promise<void> {
   try {
-    const current = await env.KV.get('stats:cache:misses', 'text');
+    const current = await env.KV.get(CACHE_KEY_PREFIX.STATS_MISSES, 'text');
     const count = Number.parseInt(current || '0', 10) + 1;
-    await env.KV.put('stats:cache:misses', count.toString(), { expirationTtl: CACHE_TTL.ANALYTICS });
+    await env.KV.put(CACHE_KEY_PREFIX.STATS_MISSES, count.toString(), { expirationTtl: CACHE_TTL.ANALYTICS });
   } catch (error) {
     logger?.debug('Cache miss tracking failed', {
       logType: LogTypes.EDGE_CASE,
-      scenario: 'cacheMissTrackingFailed',
+      scenario: CACHE_SCENARIOS.MISS_TRACKING_FAILED,
       error: error instanceof Error ? error.message : 'Unknown error',
     });
   }

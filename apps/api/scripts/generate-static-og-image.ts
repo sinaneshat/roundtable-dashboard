@@ -69,7 +69,7 @@ async function generateStaticOgImage() {
           backgroundColor: OG_COLORS.background,
           backgroundImage: `linear-gradient(180deg, ${OG_COLORS.backgroundGradientStart} 0%, ${OG_COLORS.backgroundGradientEnd} 100%)`,
           padding: '60px',
-          fontFamily: 'Geist, Inter, sans-serif',
+          fontFamily: 'sans-serif',
         },
         children: [
           // Header with logo

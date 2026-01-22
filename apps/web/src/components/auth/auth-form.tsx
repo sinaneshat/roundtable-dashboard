@@ -56,10 +56,9 @@ function AuthFormContent() {
         showApiInfoToast(t('auth.errors.notice'), message);
       }
 
-      // ✅ TanStack Router: Clear query params properly
       router.navigate({
         to: '.',
-        search: (prev: Record<string, unknown>) => {
+        search: (prev) => {
           const { toast: _toast, message: _message, action: _action, from: _from, ...rest } = prev;
           return rest;
         },
@@ -137,8 +136,7 @@ function AuthFormContent() {
             transition={{ duration: 0.15 }}
             className="flex flex-col gap-3 pb-5"
           >
-            <div className="flex items-center justify-between">
-              <span className="text-sm font-medium">{t('auth.email')}</span>
+            <div className="flex items-center justify-end">
               <Button
                 variant="ghost"
                 size="sm"
@@ -200,9 +198,10 @@ function AuthFormContent() {
                 {t('auth.magicLink.title')}
               </h3>
             </div>
-            <p className="text-sm text-muted-foreground">
-              {t('auth.magicLink.emailSentMessage', { email: sentEmail })}
-            </p>
+            <div className="text-sm text-muted-foreground space-y-1">
+              <p>{t('auth.magicLink.emailSentTo', { email: sentEmail })}</p>
+              <p>{t('auth.magicLink.clickToSignIn')}</p>
+            </div>
             <Button
               variant="outline"
               size="lg"

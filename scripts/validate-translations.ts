@@ -37,7 +37,7 @@ function isJsonObject(value: JsonValue): value is JsonObject {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
 }
 
-const TRANSLATION_FILE = path.join(process.cwd(), 'src/i18n/locales/en/common.json');
+const TRANSLATION_FILE = path.join(process.cwd(), 'apps/web/src/i18n/locales/en/common.json');
 
 function flattenObject(obj: JsonObject, prefix = ''): Record<string, JsonValue> {
   const result: Record<string, JsonValue> = {};

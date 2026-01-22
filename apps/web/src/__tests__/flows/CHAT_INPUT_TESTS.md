@@ -136,14 +136,14 @@ Round complete (input re-enables)
 
 ```bash
 # Run all chat input flow tests
-pnpm test src/__tests__/flows/chat-input
+bun run test src/__tests__/flows/chat-input
 
 # Run specific test file
-pnpm test src/__tests__/flows/chat-input-round-behavior.test.ts
-pnpm test src/__tests__/flows/chat-input-event-sequence.test.ts
+bun run test src/__tests__/flows/chat-input-round-behavior.test.ts
+bun run test src/__tests__/flows/chat-input-event-sequence.test.ts
 
 # Run in watch mode
-pnpm test:watch src/__tests__/flows/chat-input
+bun run test:watch src/__tests__/flows/chat-input
 ```
 
 ## Test Results

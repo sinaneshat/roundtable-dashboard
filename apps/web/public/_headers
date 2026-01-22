@@ -71,3 +71,19 @@
 # PWA manifest - cache for 1 day
 /manifest.webmanifest
   Cache-Control: public, max-age=86400
+
+# =============================================================================
+# SSR Page Caching (Edge CDN optimization)
+# =============================================================================
+
+# Auth pages - cache static shell at edge, session check happens client-side
+/auth/*
+  Cache-Control: public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400
+
+# Legal pages - fully static, aggressive caching
+/legal/*
+  Cache-Control: public, max-age=86400, s-maxage=604800, stale-while-revalidate=604800
+
+# Pricing page - public content, cache at edge
+/chat/pricing
+  Cache-Control: public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400

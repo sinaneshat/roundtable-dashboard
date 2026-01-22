@@ -14,7 +14,7 @@ Tests must simulate exact UI behavior and store interactions in the same order a
 
 ### 1. Run tests to identify failures
 ```bash
-pnpm test $ARGUMENTS
+bun run test $ARGUMENTS
 ```
 
 ### 2. For each failing test:
@@ -72,8 +72,8 @@ await waitFor(() => {
 
 ### 5. Verify fixes:
 ```bash
-pnpm test $ARGUMENTS
-pnpm test:coverage  # if needed
+bun run test $ARGUMENTS
+bun run test:coverage  # if needed
 ```
 
 ## Reference:

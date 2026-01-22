@@ -4,7 +4,8 @@ import type { LanguageModelUsage, UIMessage } from 'ai';
 import { createError } from '@/common/error-handling';
 import type { ErrorContext } from '@/core';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
-import { DEFAULT_AI_PARAMS } from '@/services/billing';
+// PERF FIX: Import directly to avoid circular dependency chain through billing barrel
+import { DEFAULT_AI_PARAMS } from '@/services/billing/product-logic.service';
 import type { ApiEnv } from '@/types';
 
 // ============================================================================

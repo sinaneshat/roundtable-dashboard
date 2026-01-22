@@ -150,14 +150,25 @@ export function createMockStreamResumptionState(
   overrides?: Partial<ThreadStreamResumptionState>,
 ): ThreadStreamResumptionState {
   return {
-    threadId: 'thread-123',
     roundNumber: 0,
-    roundComplete: false,
     currentPhase: RoundPhases.PARTICIPANTS,
-    nextParticipantIndex: 0,
+    preSearch: null,
+    participants: {
+      hasActiveStream: false,
+      streamId: null,
+      totalParticipants: 2,
+      currentParticipantIndex: 0,
+      participantStatuses: null,
+      nextParticipantToTrigger: 0,
+      allComplete: false,
+    },
+    moderator: null,
+    roundComplete: false,
+    hasActiveStream: false,
+    streamId: null,
     totalParticipants: 2,
-    preSearchStatus: null,
-    moderatorStatus: null,
+    participantStatuses: null,
+    nextParticipantToTrigger: 0,
     ...overrides,
   };
 }

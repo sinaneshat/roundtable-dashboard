@@ -170,23 +170,23 @@ All tests pass successfully:
 
 ```bash
 # Run new comprehensive test
-pnpm test streaming-visibility-during-flow.test.ts
+bun run test streaming-visibility-during-flow.test.ts
 ✅ 17 tests passed
 
 # Run existing enhanced test
-pnpm test non-initial-round-immediate-visibility.test.ts
+bun run test non-initial-round-immediate-visibility.test.ts
 ✅ 21 tests passed
 
 # Run multi-round lifecycle test
-pnpm test multi-round-streaming-lifecycle.test.ts
+bun run test multi-round-streaming-lifecycle.test.ts
 ✅ 22 tests passed
 
 # Run timeline ordering test
-pnpm test timeline-ordering-during-streaming.test.ts
+bun run test timeline-ordering-during-streaming.test.ts
 ✅ 9 tests passed
 
 # Run second round participant test
-pnpm test second-round-first-participant-streaming.test.ts
+bun run test second-round-first-participant-streaming.test.ts
 ✅ 21 tests passed
 ```
 

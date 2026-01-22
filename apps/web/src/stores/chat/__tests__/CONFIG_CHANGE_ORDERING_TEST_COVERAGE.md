@@ -173,7 +173,7 @@ User Changes Config → handleUpdateThreadAndSend:
 ## Test Execution
 
 ```bash
-pnpm test config-change-ordering
+bun run test config-change-ordering
 ```
 
 **Results**:

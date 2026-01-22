@@ -1,11 +1,12 @@
 {
-  "$schema": "./node_modules/wrangler/config-schema.json",
+  "$schema": "node_modules/wrangler/config-schema.json",
   "name": "roundtable-web",
   "account_id": "499b6c3c38f75f7f7dc7d3127954b921",
   "compatibility_date": "2026-01-20",
   "compatibility_flags": ["nodejs_compat"],
   "upload_source_maps": true,
   "main": "@tanstack/react-start/server-entry",
+  "workers_dev": false,
   "observability": {
     "enabled": true
   },
@@ -27,7 +28,6 @@
       "name": "roundtable-web-preview",
       "workers_dev": false,
       "upload_source_maps": true,
-      "placement": { "mode": "smart" },
       "observability": {
         "enabled": true,
         "head_sampling_rate": 0.1
@@ -53,7 +53,6 @@
       "name": "roundtable-web-prod",
       "workers_dev": false,
       "upload_source_maps": false,
-      "placement": { "mode": "smart" },
       "observability": {
         "enabled": true,
         "head_sampling_rate": 0.1

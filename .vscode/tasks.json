@@ -43,7 +43,7 @@
     {
       "label": "Startup: 2 - Clean and Kill Processes",
       "type": "shell",
-      "command": "echo 'Step 2/5: Killing processes and cleaning cache...' && lsof -ti:5173 | xargs kill -9 2>/dev/null || true && lsof -ti:8787 | xargs kill -9 2>/dev/null || true && pnpm clean && rm -rf .turbo && echo 'Cache cleaned and processes killed'",
+      "command": "echo 'Step 2/5: Killing processes and cleaning cache...' && lsof -ti:5173 | xargs kill -9 2>/dev/null || true && lsof -ti:8787 | xargs kill -9 2>/dev/null || true && bun run clean && rm -rf .turbo && echo 'Cache cleaned and processes killed'",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -62,7 +62,7 @@
     {
       "label": "Startup: 3 - Install and Migrate DB",
       "type": "shell",
-      "command": "echo 'Step 3/5: Installing dependencies and applying migrations...' && pnpm i && pnpm db:migrate:local && echo 'Dependencies installed and migrations applied'",
+      "command": "echo 'Step 3/5: Installing dependencies and applying migrations...' && bun install && bun run db:migrate:local && echo 'Dependencies installed and migrations applied'",
       "options": {
         "cwd": "${workspaceFolder}"
       },
@@ -81,7 +81,7 @@
     {
       "label": "Startup: 4 - Dev Server",
       "type": "shell",
-      "command": "echo 'Step 4/5: Starting dev server...' && pnpm dev",
+      "command": "echo 'Step 4/5: Starting dev server...' && bun run dev",
       "options": {
         "cwd": "${workspaceFolder}"
       },

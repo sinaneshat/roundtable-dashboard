@@ -227,13 +227,27 @@ export function usePendingMessage({
       }
     }
 
-    const { setHasSentPendingMessage, setStreamingRoundNumber, setHasPendingConfigChanges } = store.getState();
+    const { setHasSentPendingMessage, setStreamingRoundNumber, setHasPendingConfigChanges, getRoundEpoch } = store.getState();
+
+    // ✅ RACE CONDITION FIX (Issue 2): Capture epoch BEFORE microtask
+    // This epoch acts as a "version" for the current send operation.
+    // If another round starts between now and microtask execution, the epoch will change.
+    const sendEpoch = getRoundEpoch();
 
     setHasSentPendingMessage(true);
     setStreamingRoundNumber(newRoundNumber);
     setHasPendingConfigChanges(false);
 
     queueMicrotask(() => {
+      // ✅ RACE CONDITION FIX (Issue 2): Verify epoch hasn't changed
+      // If epoch changed, another round was started (e.g., user submitted new message)
+      // and this send operation is stale - skip it to prevent "streaming already in progress"
+      const currentEpoch = store.getState().getRoundEpoch();
+      if (currentEpoch !== sendEpoch) {
+        rlog.msg('pending-skip', `stale send (epoch ${sendEpoch} -> ${currentEpoch}), skipping`);
+        return;
+      }
+
       if (chat.isStreamingRef.current) {
         // ✅ FIX: Don't reset hasSentPendingMessage if streaming is in progress
         // The message was already sent by a concurrent call - just skip this one

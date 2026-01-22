@@ -25,12 +25,22 @@ import type { WebSearchResultItem } from '@/services/api';
 
 /**
  * Web search metadata from API response
+ * Includes both API response metadata and tool result cache tracking
  */
 export type WebSearchMeta = {
+  // API response metadata
   requestId?: string;
   provider?: string;
   timestamp?: string;
-  [key: string]: unknown;
+  // Tool result cache tracking (from WebSearchResultMetaSchema)
+  cached?: boolean;
+  cacheAge?: number;
+  cacheHitRate?: number;
+  limitReached?: boolean;
+  searchesUsed?: number;
+  maxSearches?: number;
+  remainingSearches?: number;
+  error?: boolean;
 };
 
 /**
@@ -40,7 +50,6 @@ export type WebSearchAutoParameters = {
   maxResults?: number;
   searchDepth?: string;
   includeImages?: boolean;
-  [key: string]: unknown;
 };
 
 export type WebSearchDisplayExtendedProps = {

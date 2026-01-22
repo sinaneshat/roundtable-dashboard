@@ -26,12 +26,9 @@ type ChatQuickStartProps = {
     participants: ParticipantConfig[],
   ) => void;
   className?: string;
-  /** Disable all suggestion buttons (e.g., during submission) */
   disabled?: boolean;
-  /** Server-side pre-selected quick start data (from route loader) */
   quickStartData: QuickStartData;
 };
-export { QuickStartSkeleton };
 
 export function ChatQuickStart({
   onSuggestionClick,
@@ -39,7 +36,6 @@ export function ChatQuickStart({
   disabled = false,
   quickStartData,
 }: ChatQuickStartProps) {
-  // ✅ SSR: Pre-selected prompts from route loader - no client skeleton flash
   const randomPrompts = useMemo(
     () => getPromptsByIndices(quickStartData.promptIndices),
     [quickStartData.promptIndices],
@@ -49,9 +45,6 @@ export function ChatQuickStart({
   const { data: usageData } = useUsageStatsQuery();
   const { data: modelsResponse, isPending: isModelsPending } = useModelsQuery();
 
-  // HYDRATION FIX: Check data presence, not loading state
-  // SSR prefetches this data - if it exists, render immediately
-  // Only show skeleton if we have NO data AND are actively fetching
   const hasModelsData = modelsResponse?.success;
   const isInitialLoad = !hasModelsData && isModelsPending;
 
@@ -85,18 +78,15 @@ export function ChatQuickStart({
     return grouped;
   }, [accessibleModels]);
 
-  // Stable provider order - sorted alphabetically for deterministic selection
   const sortedProviders = useMemo(() => {
     return Array.from(modelsByProvider.keys()).sort();
   }, [modelsByProvider]);
 
-  // Pre-select one model per provider (deterministic, first model from each)
   const modelPerProvider = useMemo(() => {
     const result = new Map<string, string>();
     for (const provider of sortedProviders) {
       const models = modelsByProvider.get(provider);
       if (models && models.length > 0) {
-        // Sort by ID for stable, deterministic selection
         const sorted = [...models].sort((a, b) => a.id.localeCompare(b.id));
         const firstModel = sorted[0];
         if (firstModel) {
@@ -111,7 +101,6 @@ export function ChatQuickStart({
     (count: number, offset: number = 0): string[] => {
       const selectedModels: string[] = [];
 
-      // Rotate providers based on offset for variety across suggestions
       const rotatedProviders = [
         ...sortedProviders.slice(offset % sortedProviders.length),
         ...sortedProviders.slice(0, offset % sortedProviders.length),
@@ -126,7 +115,6 @@ export function ChatQuickStart({
         }
       }
 
-      // If we need more models than providers, fill from remaining
       if (selectedModels.length < count) {
         const used = new Set(selectedModels);
         for (const model of accessibleModels) {
@@ -145,20 +133,16 @@ export function ChatQuickStart({
   );
 
   const suggestions: QuickStartSuggestion[] = useMemo(() => {
-    // Guard against empty models (still loading from server)
     if (accessibleModels.length === 0 || randomPrompts.length === 0) {
       return [];
     }
 
     const idealCount = getExampleParticipantCount(userTier);
 
-    // Build each suggestion with a DIFFERENT provider offset for maximum diversity
     const buildSuggestion = (
       template: { title: string; prompt: string; mode: ChatMode; roles: string[] },
       suggestionIndex: number,
     ): QuickStartSuggestion => {
-      // Combine initial random offset with suggestion index for variety on each page load
-      // while still ensuring diversity across the 3 suggestions
       const models = selectUniqueProviderModels(idealCount, initialProviderOffset + suggestionIndex);
 
       return {
@@ -188,14 +172,14 @@ export function ChatQuickStart({
     );
   }, [userTier, accessibleModels, selectUniqueProviderModels, randomPrompts, initialProviderOffset]);
 
-  // Show skeleton only if genuinely loading models (no cached data)
-  // quickStartData is always available from server loader - no client skeleton needed
   if (isInitialLoad) {
     return <QuickStartSkeleton className={className} />;
   }
+
   return (
-    <div className={cn('w-full relative z-20', className)}>
-      <div className="flex flex-col">
+    <div className={cn('w-full max-w-lg md:max-w-none mx-auto md:mx-0 relative z-20', className)}>
+      <p className="text-xs text-white/30 mb-2 text-center md:hidden">Try asking...</p>
+      <div className="flex flex-col gap-1 md:gap-0">
         {suggestions.map((suggestion, index) => {
           const isLast = index === suggestions.length - 1;
           return (
@@ -216,20 +200,20 @@ export function ChatQuickStart({
                   suggestion.participants,
                 )}
               className={cn(
-                'group/suggestion w-full text-left px-4 py-3 rounded-2xl focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation',
+                'group/suggestion w-full text-left px-3 md:px-4 py-3 rounded-xl md:rounded-2xl focus-visible:ring-2 focus-visible:ring-white/20 focus-visible:outline-none touch-manipulation',
                 'transition-all duration-200 ease-out',
-                !isLast && 'border-b border-white/[0.02]',
+                !isLast && 'border-b border-white/[0.06] md:border-white/[0.02]',
                 disabled
                   ? 'cursor-not-allowed opacity-50'
-                  : 'cursor-pointer hover:bg-white/[0.07] active:bg-black/20',
+                  : 'cursor-pointer hover:bg-white/[0.04] md:hover:bg-white/[0.07] active:bg-black/20',
               )}
             >
-              <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-3">
-                <h3 className="text-[15px] sm:text-[15px] font-medium text-white leading-snug flex-1 min-w-0">
+              <div className="flex flex-row items-center justify-between gap-3">
+                <span className="text-[13px] md:text-[15px] font-normal md:font-medium text-white/50 md:text-white leading-snug flex-1 min-w-0">
                   {suggestion.title}
-                </h3>
-                <div className="flex items-center gap-2.5 shrink-0">
-                  <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.04] border border-white/[0.02]">
+                </span>
+                <div className="flex items-center gap-2.5 opacity-50 md:opacity-100 shrink-0">
+                  <div className="hidden md:flex items-center gap-1.5 px-2.5 py-1 rounded-2xl bg-white/[0.04] border border-white/[0.02]">
                     <span className="text-[11px] font-medium whitespace-nowrap text-white/60">
                       {getChatModeLabel(suggestion.mode)}
                     </span>

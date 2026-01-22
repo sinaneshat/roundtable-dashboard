@@ -112,13 +112,13 @@ Roundtable Platform is an enterprise-grade SaaS application where you can watch 
 Ensure you have the following installed:
 
 - **Node.js**: Version 22.14.0 or higher
-- **pnpm**: Version 10.11.0 or higher
+- **Bun**: Version 1.2.15 or higher
 - **Git**: For version control
 
 ```bash
 # Verify installations
 node --version  # Should be 22.14.0+
-pnpm --version  # Should be 10.11.0+
+bun --version   # Should be 1.2.15+
 ```
 
 ### Installation
@@ -131,7 +131,7 @@ pnpm --version  # Should be 10.11.0+
 
 2. **Install dependencies**
    ```bash
-   pnpm install
+   bun install
    ```
 
 3. **Environment setup**
@@ -145,18 +145,18 @@ pnpm --version  # Should be 10.11.0+
 4. **Database setup**
    ```bash
    # Generate database schema
-   pnpm db:generate
+   bun run db:generate
 
    # Apply migrations
-   pnpm db:migrate:local
+   bun run db:migrate:local
 
    # Seed with sample data
-   pnpm db:fresh:quick
+   bun run db:fresh:quick
    ```
 
 5. **Start development server**
    ```bash
-   pnpm dev
+   bun run dev
    ```
 
 Visit [http://localhost:3000](http://localhost:3000) to see your application running!
@@ -212,18 +212,18 @@ The database includes core authentication tables:
 
 ```bash
 # Development
-pnpm db:generate         # Generate migrations
-pnpm db:migrate:local    # Apply migrations locally
-pnpm db:studio:local     # Open Drizzle Studio
-pnpm db:fresh:quick      # Reset and seed database
+bun run db:generate         # Generate migrations
+bun run db:migrate:local    # Apply migrations locally
+bun run db:studio:local     # Open Drizzle Studio
+bun run db:fresh:quick      # Reset and seed database
 
 # Preview Environment
-pnpm db:migrate:preview  # Apply to preview database
-pnpm db:studio:preview   # Studio for preview
+bun run db:migrate:preview  # Apply to preview database
+bun run db:studio:preview   # Studio for preview
 
 # Production
-pnpm db:migrate:prod     # Apply to production database
-pnpm db:studio:prod      # Studio for production
+bun run db:migrate:prod     # Apply to production database
+bun run db:studio:prod      # Studio for production
 ```
 
 ### Data Models
@@ -291,13 +291,13 @@ The API is organized by domain under `/src/api/routes/`:
 
 ```bash
 # Preview deployment
-pnpm deploy:preview
+bun run deploy:preview
 
 # Production deployment
-pnpm deploy:production
+bun run deploy:production
 
 # Quick preview build
-pnpm preview
+bun run preview
 ```
 
 #### Environment Setup
@@ -330,10 +330,10 @@ pnpm preview
 4. **Deploy Database Schema**
    ```bash
    # Preview
-   pnpm db:migrate:preview
+   bun run db:migrate:preview
 
    # Production
-   pnpm db:migrate:prod
+   bun run db:migrate:prod
    ```
 
 ### Production Checklist
@@ -354,20 +354,20 @@ pnpm preview
 
 ```bash
 # Start development server
-pnpm dev
+bun run dev
 
 # Run linting
-pnpm lint
-pnpm lint:fix
+bun run lint
+bun run lint:fix
 
 # Type checking
-pnpm check-types
+bun run check-types
 
 # Database development
-pnpm db:studio:local
+bun run db:studio:local
 
 # Email template development
-pnpm email:preview
+bun run email:preview
 ```
 
 ### Code Quality
@@ -480,38 +480,38 @@ src/
 
 ### Development
 ```bash
-pnpm dev                    # Start development with turbo
-pnpm build                  # Build for production
-pnpm lint                   # Run ESLint
-pnpm lint:fix               # Fix ESLint issues
-pnpm check-types            # TypeScript type checking
-pnpm lint:modified          # Lint only modified files
+bun run dev                 # Start development with turbo
+bun run build               # Build for production
+bun run lint                # Run ESLint
+bun run lint:fix            # Fix ESLint issues
+bun run check-types         # TypeScript type checking
+bun run lint:modified       # Lint only modified files
 ```
 
 ### Database Management
 ```bash
-pnpm db:generate            # Generate Drizzle migrations
-pnpm db:migrate:local       # Apply migrations locally
-pnpm db:migrate:preview     # Apply migrations to preview
-pnpm db:migrate:prod        # Apply migrations to production
-pnpm db:studio:local        # Open Drizzle Studio
-pnpm db:fresh:quick         # Reset and seed database quickly
-pnpm db:full-reset:local    # Complete database reset
+bun run db:generate         # Generate Drizzle migrations
+bun run db:migrate:local    # Apply migrations locally
+bun run db:migrate:preview  # Apply migrations to preview
+bun run db:migrate:prod     # Apply migrations to production
+bun run db:studio:local     # Open Drizzle Studio
+bun run db:fresh:quick      # Reset and seed database quickly
+bun run db:full-reset:local # Complete database reset
 ```
 
 ### Cloudflare Deployment
 ```bash
-pnpm cf-typegen            # Generate CloudflareEnv types
-pnpm preview               # Build and preview worker locally
-pnpm deploy:preview        # Deploy to preview environment
-pnpm deploy:production     # Deploy to production
+bun run cf-typegen          # Generate CloudflareEnv types
+bun run preview             # Build and preview worker locally
+bun run deploy:preview      # Deploy to preview environment
+bun run deploy:production   # Deploy to production
 ```
 
 ### Testing & Quality
 ```bash
-pnpm i18n:full-check       # Check all i18n translations
-pnpm i18n:validate         # Validate translation structure
-pnpm i18n:check-unused     # Find unused translation keys
+bun run i18n:full-check     # Check all i18n translations
+bun run i18n:validate       # Validate translation structure
+bun run i18n:check-unused   # Find unused translation keys
 ```
 
 ---

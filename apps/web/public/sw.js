@@ -18,13 +18,21 @@ const STATIC_CACHE = `roundtable-static-${CACHE_VERSION}`;
 const RUNTIME_CACHE = `roundtable-runtime-${CACHE_VERSION}`;
 const DOCUMENT_CACHE = `roundtable-docs-${CACHE_VERSION}`;
 
-// Assets to precache on install
+// Assets to precache on install - critical paths for fast navigation
 const PRECACHE_ASSETS = [
   '/',
   '/manifest.webmanifest',
   '/apple-touch-icon.png',
   '/icons/icon-192x192.png',
   '/icons/icon-512x512.png',
+  // Critical pages for faster subsequent navigation
+  '/auth/sign-in',
+  '/chat/pricing',
+  '/legal/terms',
+  '/legal/privacy',
+  // Logo for LCP optimization
+  '/static/logo.webp',
+  '/static/og-image.png',
 ];
 
 // Install event - cache core assets
@@ -118,6 +126,8 @@ self.addEventListener('fetch', (event) => {
             });
           }
           return response;
+        }).catch(() => {
+          return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
         });
       }),
     );
@@ -139,6 +149,8 @@ self.addEventListener('fetch', (event) => {
             });
           }
           return response;
+        }).catch(() => {
+          return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
         });
       }),
     );
@@ -156,9 +168,13 @@ self.addEventListener('fetch', (event) => {
               cache.put(request, response.clone());
             }
             return response;
-          }).catch(() => {
+          }).catch(async () => {
             // Network failed, return cached or fallback to root
-            return cached || cache.match('/');
+            if (cached) return cached;
+            const fallback = await cache.match('/');
+            if (fallback) return fallback;
+            // Last resort: return a basic offline response
+            return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
           });
 
           // Return cached immediately if available, otherwise wait for network
@@ -180,8 +196,11 @@ self.addEventListener('fetch', (event) => {
         });
       }
       return response;
-    }).catch(() => {
-      return caches.match(request);
+    }).catch(async () => {
+      const cached = await caches.match(request);
+      if (cached) return cached;
+      // Return 503 if no cache available
+      return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
     }),
   );
 });
@@ -248,4 +267,36 @@ self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
   }
+
+  // Proactive route caching - warm up cache when browser is idle
+  if (event.data && event.data.type === 'WARM_CACHE') {
+    const routes = event.data.routes || [];
+    event.waitUntil(warmUpCache(routes));
+  }
 });
+
+/**
+ * Proactively cache routes for faster navigation
+ * Called from main thread when browser is idle
+ */
+async function warmUpCache(routes) {
+  const cache = await caches.open(DOCUMENT_CACHE);
+  const fetchPromises = routes.map(async (route) => {
+    try {
+      // Check if already cached
+      const cached = await cache.match(route);
+      if (cached)
+        return;
+
+      // Fetch and cache with low priority
+      const response = await fetch(route, { priority: 'low' });
+      if (response.ok) {
+        await cache.put(route, response);
+      }
+    } catch {
+      // Silently fail - this is just optimization
+    }
+  });
+
+  await Promise.allSettled(fetchPromises);
+}

@@ -43,13 +43,11 @@ type ChatThreadActionsProps = {
   slug: string;
   onDeleteClick?: () => void;
   isPublicMode?: boolean;
-  /** Skip fetching thread data - use when data is already available (e.g., from Zustand store) */
   skipFetch?: boolean;
 };
 
 export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = false, skipFetch = false }: ChatThreadActionsProps) {
   const t = useTranslations();
-  // Desktop-first SSR: render full desktop UI on server, hydrate to actual viewport
   const isDesktop = useMediaQuery('(min-width: 768px)', true);
   const toggleFavoriteMutation = useToggleFavoriteMutation();
   const togglePublicMutation = useTogglePublicMutation();
@@ -57,7 +55,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const [isRenameDialogOpen, setIsRenameDialogOpen] = useState(false);
 
-  // Skip query when data is already available (overview screen with active chat)
   const { data: cachedThreadData } = useThreadQuery(thread.id, !isPublicMode && !skipFetch);
 
   const threadIsPublic = cachedThreadData?.success && cachedThreadData.data && typeof cachedThreadData.data === 'object' && 'thread' in cachedThreadData.data && cachedThreadData.data.thread && typeof cachedThreadData.data.thread === 'object' && 'isPublic' in cachedThreadData.data.thread
@@ -90,7 +87,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
     return thread.isFavorite ?? false;
   })();
 
-  // Derived value: use optimistic mutation value when pending, otherwise use cache
   const displayIsPublic = togglePublicMutation.isPending && togglePublicMutation.variables
     ? togglePublicMutation.variables.isPublic
     : threadIsPublic;
@@ -190,7 +186,6 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                 variant={ComponentVariants.GHOST}
                 size={ComponentSizes.ICON}
                 aria-label={t('chat.moreOptions')}
-                className="min-h-11 min-w-11"
                 disabled={isBusy}
               >
                 <Icons.moreHorizontal className="size-4" />
@@ -245,10 +240,9 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
               variant={ComponentVariants.GHOST}
               size={ComponentSizes.ICON}
               aria-label={t('moreOptions')}
-              className="min-h-11 min-w-11"
               disabled={isBusy}
             >
-              <Icons.moreVertical className="size-4" />
+              <Icons.moreHorizontal className="size-4" />
             </Button>
           </DropdownMenuTrigger>
           <DropdownMenuContent side="bottom" align="end">
