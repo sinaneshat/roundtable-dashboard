@@ -886,7 +886,7 @@ async function extractPageContent(
       await browserResult.browser.close();
     } catch {}
 
-    console.log(`[Search] Browser extraction failed for ${url}, falling back to lightweight:`, browserError);
+    console.error(`[Search] Browser extraction failed for ${url}, falling back to lightweight:`, browserError);
 
     // Fall back to lightweight extraction instead of returning empty
     const lightContent = await extractLightweightContent(url);
