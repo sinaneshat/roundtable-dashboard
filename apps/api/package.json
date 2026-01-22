@@ -55,13 +55,13 @@
     "zod": "^4.3.5"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260103.0",
+    "@cloudflare/workers-types": "^4.20260122.0",
     "@roundtable/typescript-config": "workspace:*",
     "@roundtable/vitest-config": "workspace:*",
     "@types/turndown": "^5.0.6",
     "drizzle-kit": "^0.31.8",
     "typescript": "5.9.3",
     "vitest": "^4.0.16",
-    "wrangler": "^4.59.3"
+    "wrangler": "^4.60.0"
   }
 }

@@ -19,8 +19,8 @@ import type {
   ScheduleCleanupResult,
 } from '@/types/uploads';
 
-export async function scheduleUploadCleanup(
-  cleanupScheduler: DurableObjectNamespace<unknown>,
+export async function scheduleUploadCleanup<T extends Rpc.DurableObjectBranded>(
+  cleanupScheduler: DurableObjectNamespace<T>,
   uploadId: string,
   userId: string,
   r2Key: string,
@@ -46,8 +46,8 @@ export async function scheduleUploadCleanup(
   return response.json();
 }
 
-export async function cancelUploadCleanup(
-  cleanupScheduler: DurableObjectNamespace<unknown>,
+export async function cancelUploadCleanup<T extends Rpc.DurableObjectBranded>(
+  cleanupScheduler: DurableObjectNamespace<T>,
   uploadId: string,
 ): Promise<CancelCleanupResult> {
   const stub = cleanupScheduler.get(cleanupScheduler.idFromName(uploadId));
@@ -65,8 +65,8 @@ export async function cancelUploadCleanup(
   return response.json();
 }
 
-export async function getUploadCleanupState(
-  cleanupScheduler: DurableObjectNamespace<unknown>,
+export async function getUploadCleanupState<T extends Rpc.DurableObjectBranded>(
+  cleanupScheduler: DurableObjectNamespace<T>,
   uploadId: string,
 ): Promise<GetCleanupStateResult> {
   const stub = cleanupScheduler.get(cleanupScheduler.idFromName(uploadId));
