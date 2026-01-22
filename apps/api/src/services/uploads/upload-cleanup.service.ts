@@ -20,7 +20,7 @@ import type {
 } from '@/types/uploads';
 
 export async function scheduleUploadCleanup(
-  cleanupScheduler: DurableObjectNamespace,
+  cleanupScheduler: DurableObjectNamespace<unknown>,
   uploadId: string,
   userId: string,
   r2Key: string,
@@ -47,7 +47,7 @@ export async function scheduleUploadCleanup(
 }
 
 export async function cancelUploadCleanup(
-  cleanupScheduler: DurableObjectNamespace,
+  cleanupScheduler: DurableObjectNamespace<unknown>,
   uploadId: string,
 ): Promise<CancelCleanupResult> {
   const stub = cleanupScheduler.get(cleanupScheduler.idFromName(uploadId));
@@ -66,7 +66,7 @@ export async function cancelUploadCleanup(
 }
 
 export async function getUploadCleanupState(
-  cleanupScheduler: DurableObjectNamespace,
+  cleanupScheduler: DurableObjectNamespace<unknown>,
   uploadId: string,
 ): Promise<GetCleanupStateResult> {
   const stub = cleanupScheduler.get(cleanupScheduler.idFromName(uploadId));
