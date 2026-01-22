@@ -1,7 +1,6 @@
+import { CREDIT_CONFIG } from '@roundtable/shared';
 import { PlanTypes } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
-
-import { CREDIT_CONFIG } from '@/lib/config';
 
 describe('thread Creation Credit Enforcement', () => {
   describe('credit Requirements', () => {

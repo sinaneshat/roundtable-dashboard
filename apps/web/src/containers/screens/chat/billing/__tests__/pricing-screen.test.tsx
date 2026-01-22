@@ -19,7 +19,6 @@ import {
   Outlet,
   RouterProvider,
 } from '@tanstack/react-router';
-import { render, screen, waitFor } from '@testing-library/react';
 import type { ReactNode } from 'react';
 import React, { useMemo, useRef } from 'react';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,6 +28,9 @@ import { I18nProvider } from '@/lib/i18n';
 import {
   createActiveSubscription,
   createMockProductCatalog,
+  render,
+  screen,
+  waitFor,
 } from '@/lib/testing';
 
 import PricingScreen from '../PricingScreen';

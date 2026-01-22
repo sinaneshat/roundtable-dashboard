@@ -1,9 +1,9 @@
+import { SUBSCRIPTION_TIER_NAMES } from '@roundtable/shared';
 import type { SubscriptionTier } from '@roundtable/shared/enums';
 import * as z from 'zod';
 
 import { createError } from '@/common/error-handling';
 import type { getDbAsync } from '@/db';
-import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 import type { ModelForPricing } from '@/services/billing';
 import {
   canAccessModelByPricing,

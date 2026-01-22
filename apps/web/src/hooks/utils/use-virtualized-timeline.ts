@@ -26,6 +26,12 @@ export type UseVirtualizedTimelineOptions = {
   isDataReady?: boolean;
   isStreaming?: boolean;
   getIsStreamingFromStore?: () => boolean;
+  /**
+   * Start virtualizer scrolled to the bottom on initial render.
+   * Uses TanStack Virtual's initialOffset for SSR hydration.
+   * After hydration, scrolls to last item with align: 'end'.
+   */
+  initialScrollToBottom?: boolean;
 };
 
 /**
@@ -68,6 +74,7 @@ export function useVirtualizedTimeline({
   isDataReady = true,
   isStreaming = false,
   getIsStreamingFromStore,
+  initialScrollToBottom = false,
 }: UseVirtualizedTimelineOptions): UseVirtualizedTimelineResult {
   // ✅ SSR FIX: Detect client-side mount using useSyncExternalStore
   // Window virtualizer requires window object - disable during SSR to render content
@@ -125,6 +132,20 @@ export function useVirtualizedTimeline({
     }
   }, [timelineItems.length, shouldEnable]);
 
+  // ✅ SSR SCROLL FIX: Calculate initial offset to start at bottom
+  // TanStack Virtual's initialOffset positions scroll on first render
+  // This ensures SSR hydration starts at the bottom, not top
+  const getInitialOffset = useCallback(() => {
+    if (!initialScrollToBottom || timelineItems.length === 0) {
+      return 0;
+    }
+    // Estimate total size: items * estimateSize + padding
+    // Add extra buffer to ensure we're at the absolute bottom
+    const estimatedTotal = timelineItems.length * estimateSize + paddingStart + paddingEnd;
+    // Return a large value - browser will clamp to actual scrollHeight
+    return estimatedTotal + 10000;
+  }, [initialScrollToBottom, timelineItems.length, estimateSize, paddingStart, paddingEnd]);
+
   // Initialize window virtualizer - OFFICIAL REACT 19 PATTERN
   // useFlushSync: false eliminates React 19 flushSync warnings during scroll
   // Official docs: https://tanstack.com/virtual/latest/docs/framework/react/react-virtual#useflushsync
@@ -138,6 +159,8 @@ export function useVirtualizedTimeline({
     paddingEnd,
     enabled: shouldEnable,
     useFlushSync: false, // React 19 compatibility - prevents flushSync warning
+    // ✅ SSR: Start scrolled to bottom for initial hydration
+    initialOffset: getInitialOffset,
   });
 
   // Scroll position adjustment during streaming
@@ -203,6 +226,64 @@ export function useVirtualizedTimeline({
       forceUpdate(c => c + 1);
     }
   }, [timelineItems.length]);
+
+  // ✅ SSR SCROLL FIX: After virtualization enables, scroll to last item
+  // initialOffset provides estimated position, this ensures accurate final position
+  // BUT: Skip if user manually scrolled during SSR/initial load (user intent takes priority)
+  const hasInitialScrolledRef = useRef(false);
+  const userScrolledBeforeInitialRef = useRef(false);
+  const initialScrollPositionRef = useRef<number | null>(null);
+
+  // Track user scroll BEFORE initial auto-scroll fires
+  // If user scrolls away from initial position, skip auto-scroll (respect user intent)
+  useEffect(() => {
+    // Only track until initial scroll decision is made
+    if (hasInitialScrolledRef.current || !initialScrollToBottom)
+      return;
+
+    // Capture initial scroll position on mount
+    if (initialScrollPositionRef.current === null) {
+      initialScrollPositionRef.current = window.scrollY;
+    }
+
+    const handleUserScroll = () => {
+      // If already processed, ignore
+      if (hasInitialScrolledRef.current)
+        return;
+
+      const currentScroll = window.scrollY;
+      const initialScroll = initialScrollPositionRef.current ?? 0;
+
+      // User scrolled more than 50px from initial position = user intent
+      if (Math.abs(currentScroll - initialScroll) > 50) {
+        userScrolledBeforeInitialRef.current = true;
+      }
+    };
+
+    window.addEventListener('scroll', handleUserScroll, { passive: true });
+    return () => window.removeEventListener('scroll', handleUserScroll);
+  }, [initialScrollToBottom]);
+
+  useLayoutEffect(() => {
+    if (
+      initialScrollToBottom
+      && shouldEnable
+      && timelineItems.length > 0
+      && !hasInitialScrolledRef.current
+    ) {
+      hasInitialScrolledRef.current = true;
+
+      // Skip auto-scroll if user already scrolled during initial load
+      if (userScrolledBeforeInitialRef.current)
+        return;
+
+      // Use virtualizer's scrollToIndex for accurate positioning
+      virtualizer.scrollToIndex(timelineItems.length - 1, {
+        align: 'end',
+        behavior: 'auto',
+      });
+    }
+  }, [initialScrollToBottom, shouldEnable, timelineItems.length, virtualizer]);
 
   return {
     virtualizer,

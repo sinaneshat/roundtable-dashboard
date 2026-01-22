@@ -13,11 +13,10 @@ import {
   FinishReasons,
   MessageRoles,
 } from '@roundtable/shared';
-import { renderHook } from '@testing-library/react';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import { useThreadTimeline } from '@/hooks/utils';
-import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
+import { createTestAssistantMessage, createTestUserMessage, renderHook } from '@/lib/testing';
 import type { DbAssistantMessageMetadata, DbUserMessageMetadata } from '@/services/api';
 
 import { createChatStore } from '../store';

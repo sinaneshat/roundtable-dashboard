@@ -280,8 +280,8 @@ export function createMockResumptionPreSearch(
         }
       : undefined,
     errorMessage: isFailed ? 'Pre-search failed' : null,
-    createdAt: new Date(),
-    completedAt: isComplete ? new Date() : null,
+    createdAt: new Date().toISOString(),
+    completedAt: isComplete ? new Date().toISOString() : null,
   } as StoredPreSearch;
 }
 

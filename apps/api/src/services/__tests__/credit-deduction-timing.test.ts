@@ -16,10 +16,10 @@
  * 8. Free user round completion triggers zero-out
  */
 
+import { CREDIT_CONFIG } from '@roundtable/shared';
 import { CreditActions, CreditTransactionTypes } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
 
-import { CREDIT_CONFIG } from '@/lib/config';
 import {
   calculateBaseCredits,
   tokensToCredits,

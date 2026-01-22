@@ -5,10 +5,9 @@
  */
 
 import { BETTER_AUTH_SESSION_COOKIE_NAME, EMAIL_DOMAIN_CONFIG } from '@roundtable/shared';
+import { WebAppEnvs, WebAppEnvSchema } from '@roundtable/shared/enums';
 import { APIError } from 'better-auth/api';
 import { z } from 'zod';
-
-import { isWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 
 // ============================================================================
 // SCHEMAS
@@ -35,17 +34,17 @@ type AuthContext = {
 
 export function isRestrictedEnvironment(): boolean {
   // Check import.meta.env (Vite build-time replacement)
-  const viteEnv = import.meta.env?.VITE_WEBAPP_ENV;
-  if (viteEnv && isWebappEnv(viteEnv)) {
+  const viteEnvResult = WebAppEnvSchema.safeParse(import.meta.env?.VITE_WEBAPP_ENV);
+  if (viteEnvResult.success) {
     // Only restrict PREVIEW - LOCAL/localhost should allow any email
-    return viteEnv === WEBAPP_ENVS.PREVIEW;
+    return viteEnvResult.data === WebAppEnvs.PREVIEW;
   }
 
   // Check process.env fallback
-  const processEnv = process.env.WEBAPP_ENV;
-  if (processEnv && isWebappEnv(processEnv)) {
+  const processEnvResult = WebAppEnvSchema.safeParse(process.env.WEBAPP_ENV);
+  if (processEnvResult.success) {
     // Only restrict PREVIEW - LOCAL/localhost should allow any email
-    return processEnv === WEBAPP_ENVS.PREVIEW;
+    return processEnvResult.data === WebAppEnvs.PREVIEW;
   }
 
   // Default: no restriction for local development

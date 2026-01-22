@@ -15,10 +15,31 @@ const POSTHOG_HOST = 'us.i.posthog.com';
 const POSTHOG_ASSETS_HOST = 'us-assets.i.posthog.com';
 
 /**
+ * Standard CORS headers for PostHog proxy
+ * Allow all origins since analytics should work from anywhere
+ */
+function getCorsHeaders(): Record<string, string> {
+  return {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, X-PostHog-Token, X-PostHog-Decide-Version',
+    'Access-Control-Max-Age': '86400', // Cache preflight for 24h
+  };
+}
+
+/**
  * Proxy handler for PostHog ingest requests
  * Handles both static assets and API requests
  */
 export async function ingestProxyHandler(c: Context<ApiEnv>): Promise<Response> {
+  // Handle CORS preflight immediately - no need to proxy OPTIONS to PostHog
+  if (c.req.method === 'OPTIONS') {
+    return new Response(null, {
+      status: 204,
+      headers: getCorsHeaders(),
+    });
+  }
+
   const path = c.req.path;
   const isStatic = path.startsWith('/ingest/static/');
 
@@ -40,6 +61,12 @@ export async function ingestProxyHandler(c: Context<ApiEnv>): Promise<Response> 
   }
   headers.set('Host', targetHost);
 
+  // Forward real client IP for accurate geolocation (PostHog proxy requirement)
+  const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
+  if (clientIp) {
+    headers.set('X-Forwarded-For', clientIp);
+  }
+
   try {
     const response = await fetch(targetUrl, {
       method: c.req.method,
@@ -58,9 +85,12 @@ export async function ingestProxyHandler(c: Context<ApiEnv>): Promise<Response> 
       }
       responseHeaders.set(key, value);
     }
-    responseHeaders.set('Access-Control-Allow-Origin', '*');
-    responseHeaders.set('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    responseHeaders.set('Access-Control-Allow-Headers', 'Content-Type');
+
+    // Add CORS headers
+    const corsHeaders = getCorsHeaders();
+    for (const [key, value] of Object.entries(corsHeaders)) {
+      responseHeaders.set(key, value);
+    }
 
     return new Response(response.body, {
       status: response.status,
@@ -68,6 +98,13 @@ export async function ingestProxyHandler(c: Context<ApiEnv>): Promise<Response> 
     });
   } catch (error) {
     console.error('PostHog proxy error:', error);
-    return c.json({ error: 'Proxy request failed' }, 502);
+    // Return error with CORS headers so browser can read the error
+    return new Response(JSON.stringify({ error: 'Proxy request failed' }), {
+      status: 502,
+      headers: {
+        'Content-Type': 'application/json',
+        ...getCorsHeaders(),
+      },
+    });
   }
 }

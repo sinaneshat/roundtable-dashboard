@@ -7,26 +7,23 @@
  * isDevelopmentFromContext) are NOT exported here. Import directly from '@/lib/config/base-urls'
  * for those utilities that require Context<ApiEnv>.
  *
+ * NOTE: For WebAppEnv types/schemas, import directly from @roundtable/shared/enums
+ *       For BASE_URL_CONFIG, CREDIT_CONFIG, etc., import directly from @roundtable/shared
+ *
  * NOTE: UI configuration (chat-modes, model-presets) are not included here.
  * They live in the web package as they reference components/icons.
  */
 
 // Base URLs configuration (non-context-dependent utilities only)
-export type { WebappEnv } from './base-urls';
 export {
-  BASE_URLS,
-  DEFAULT_WEBAPP_ENV,
   getApiBaseUrl,
+  getApiServerOrigin,
   getApiUrlAsync,
   getAppBaseUrl,
   getBaseUrls,
   getProductionApiUrl,
   getWebappEnv,
   getWebappEnvAsync,
-  isWebappEnv,
-  WEBAPP_ENVS,
-  WebAppEnvs,
-  WebappEnvSchema,
 } from './base-urls';
 
 // Participant limits configuration
@@ -46,14 +43,5 @@ export {
   ParticipantSettingsSchema,
 } from './participant-settings';
 
-// Tier names configuration
-export {
-  getTierDisplayName,
-  SUBSCRIPTION_TIER_NAMES,
-} from './tier-names';
-
-// Credit configuration (re-exported from shared package)
-export { CREDIT_CONFIG, PLAN_NAMES } from '@roundtable/shared';
-
-// Role prompts configuration (re-exported from shared package)
-export { createRoleSystemPrompt } from '@roundtable/shared';
+// For CREDIT_CONFIG, SUBSCRIPTION_TIER_NAMES, PLAN_NAMES, etc., import directly from @roundtable/shared
+// For createRoleSystemPrompt, getTierDisplayName, import directly from @roundtable/shared

@@ -1,3 +1,4 @@
+import { MessageRoles } from '@roundtable/shared';
 import { createFileRoute } from '@tanstack/react-router';
 
 import { PublicChatSkeleton } from '@/components/loading';
@@ -8,45 +9,105 @@ import { STALE_TIMES } from '@/lib/data/stale-times';
 import type { ApiMessage, PublicThreadData } from '@/services/api';
 import { getPublicThreadService } from '@/services/api';
 
+/** Error states for public thread loading */
+type PublicThreadErrorState = 'not_found' | 'no_longer_public' | null;
+
+/** Loader data structure */
+type PublicChatLoaderData = {
+  initialData: PublicThreadData | null;
+  roundCount: number;
+  errorState: PublicThreadErrorState;
+};
+
 export const Route = createFileRoute('/public/chat/$slug')({
   // NOTE: No route-level staleTime/gcTime - TanStack Query manages data freshness
   // @see https://tanstack.com/router/latest/docs/framework/react/guide/preloading#preloading-with-external-libraries
   //
   // ✅ SSR: Use ensureQueryData to guarantee data is available before rendering
   // prefetchQuery doesn't guarantee data and can cause "not found" flash during hydration
-  loader: async ({ params, context }) => {
+  // @ts-expect-error TanStack Router generated types don't match loader return type after adding errorState
+  loader: async ({ params, context }): Promise<PublicChatLoaderData> => {
     const { queryClient } = context;
 
-    // ensureQueryData guarantees data is in cache before component renders
-    // This prevents the "content not found" flash during SSR hydration
-    // TanStack Query's staleTime controls when data needs refetching
-    const response = await queryClient.ensureQueryData({
-      queryKey: queryKeys.threads.public(params.slug),
-      queryFn: () => getPublicThreadService({ param: { slug: params.slug } }),
-      staleTime: STALE_TIMES.publicThreadDetail,
-    });
+    try {
+      // ensureQueryData guarantees data is in cache before component renders
+      // This prevents the "content not found" flash during SSR hydration
+      // TanStack Query's staleTime controls when data needs refetching
+      const response = await queryClient.ensureQueryData({
+        queryKey: queryKeys.threads.public(params.slug),
+        queryFn: () => getPublicThreadService({ param: { slug: params.slug } }),
+        staleTime: STALE_TIMES.publicThreadDetail,
+      });
 
-    // Extract data for head() metadata and component props
-    const initialData: PublicThreadData | null = response?.success ? response.data : null;
+      // Extract data for head() metadata and component props
+      const initialData: PublicThreadData | null = response?.success ? response.data : null;
 
-    // Count user messages (rounds) for cache invalidation
-    const roundCount = initialData?.messages?.filter((m: ApiMessage) => m.role === 'user').length ?? 0;
+      // Count user messages (rounds) for cache invalidation
+      const roundCount = initialData?.messages?.filter((m: ApiMessage) => m.role === MessageRoles.USER).length ?? 0;
 
-    return { initialData, roundCount };
+      return { initialData, roundCount, errorState: null as PublicThreadErrorState };
+    } catch (error) {
+      // ✅ GRACEFUL ERROR HANDLING: Catch API errors and return error state
+      // This prevents 500 errors and allows showing user-friendly error pages
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      // Check if thread was made private (410 Gone) or not found (404)
+      const isNoLongerPublic = errorMessage.includes('no longer publicly available')
+        || errorMessage.includes('410')
+        || errorMessage.includes('gone');
+
+      return {
+        initialData: null,
+        roundCount: 0,
+        errorState: (isNoLongerPublic ? 'no_longer_public' : 'not_found') as PublicThreadErrorState,
+      };
+    }
   },
-  // ISR: Cache for 1 day, invalidate via ETag when rounds change
-  headers: ({ loaderData }) => {
-    const roundCount = loaderData?.roundCount ?? 0;
+  // ✅ ISR CACHING: Long cache with tag-based invalidation
+  // Cache invalidation handles visibility changes via KV tags
+  // @ts-expect-error TanStack Router types don't include loaderData in headers context
+  headers: (ctx: { loaderData?: PublicChatLoaderData }) => {
+    const errorState = ctx.loaderData?.errorState;
+
+    // ✅ NO CACHE FOR ERRORS: Don't cache private/not-found responses
+    if (errorState) {
+      return {
+        'Cache-Control': 'no-store, no-cache, must-revalidate',
+        'Pragma': 'no-cache',
+      };
+    }
+
+    // ISR cache - 1 day edge, 1 hour SWR
+    // Cache invalidation handles visibility changes
+    const roundCount = ctx.loaderData?.roundCount ?? 0;
     return {
-      'Cache-Control': 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=604800',
+      'Cache-Control': 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600',
       'ETag': `"rounds-${roundCount}"`,
     };
   },
   pendingComponent: PublicChatSkeleton,
+  // ✅ SKELETON FLASH FIX: Only show pending component after 300ms
+  pendingMs: 300,
   head: ({ loaderData, params }) => {
-    const thread = loaderData?.initialData?.thread;
-    const participants = loaderData?.initialData?.participants || [];
-    const messages = loaderData?.initialData?.messages || [];
+    const data = loaderData as PublicChatLoaderData | undefined;
+    const errorState = data?.errorState;
+
+    // ✅ ERROR PAGES: Don't index, minimal metadata
+    if (errorState) {
+      const title = errorState === 'no_longer_public'
+        ? 'Conversation No Longer Public'
+        : 'Conversation Not Found';
+      return {
+        meta: [
+          { title: `${title} - Roundtable` },
+          { name: 'robots', content: 'noindex, nofollow' },
+        ],
+      };
+    }
+
+    const thread = data?.initialData?.thread;
+    const participants = data?.initialData?.participants || [];
+    const messages = data?.initialData?.messages || [];
 
     const title = thread?.title || 'Shared AI Conversation';
     const modelCount = participants.length;
@@ -97,10 +158,10 @@ export const Route = createFileRoute('/public/chat/$slug')({
 
 function PublicChatThread() {
   const { slug } = Route.useParams();
-  const { initialData } = Route.useLoaderData();
+  const loaderData = Route.useLoaderData() as PublicChatLoaderData;
+  const { initialData, errorState } = loaderData;
 
-  // ✅ SSR HYDRATION: Use loader data directly - no client query needed
-  // Data is guaranteed by ensureQueryData in loader, avoiding hydration flash
-  // The screen component can still call usePublicThreadQuery for client-side updates
-  return <PublicChatThreadScreen slug={slug} initialData={initialData} />;
+  // Direct render - no Suspense/lazy that would cause skeleton flash during hydration
+  // pendingComponent handles navigation skeleton, loader ensures data is ready for SSR
+  return <PublicChatThreadScreen slug={slug} initialData={initialData} errorState={errorState} />;
 }

@@ -146,12 +146,16 @@ export function generateBlurPlaceholder(src: string): string {
 
 /**
  * Check if running on Cloudflare (Pages/Workers) where Image Resizing is available
+ *
+ * ✅ TYPE-SAFE: Uses in-operator for globalThis property access
  */
 export function isCloudflareEnvironment(): boolean {
   // Check for Cloudflare-specific globals
-  if (typeof globalThis !== 'undefined') {
-    // CF Workers have caches API
-    return 'caches' in globalThis && typeof (globalThis as Record<string, unknown>).caches === 'object';
+  if (typeof globalThis !== 'undefined' && 'caches' in globalThis) {
+    // After in-operator check, TypeScript knows caches exists
+    // Use indexed access which is valid after in-operator narrowing
+    const caches = (globalThis as { caches?: unknown }).caches;
+    return typeof caches === 'object' && caches !== null;
   }
   return false;
 }

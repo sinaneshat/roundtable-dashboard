@@ -195,28 +195,21 @@ export function useThreadTimeline({
       const hasPreSearch = !!roundPreSearch;
       const hasChangelog = roundChangelog && roundChangelog.length > 0;
 
-      // Skip rounds that have nothing to show
-      if (!hasMessages && !hasPreSearch && !hasChangelog) {
+      // Skip rounds without content (messages or pre-search)
+      // Changelog-only rounds are skipped - changelogs only render when round has actual content
+      if (!hasMessages && !hasPreSearch) {
         return;
       }
 
-      // Only show changelog when round is actually starting (has messages or pre-search)
-      // Don't show changelog for "future" rounds where config changed but round hasn't started yet
-      const shouldShowChangelog = hasChangelog && (hasMessages || hasPreSearch);
-
       // Add changelog first (shows configuration changes before messages)
-      if (shouldShowChangelog) {
+      // Only renders when round has messages or pre-search
+      if (hasChangelog) {
         timeline.push({
           type: 'changelog',
           data: roundChangelog,
           key: `round-${roundNumber}-changelog`,
           roundNumber,
         });
-      }
-
-      // Skip entire round if it only has changelog (no messages, no pre-search)
-      if (!hasMessages && !hasPreSearch) {
-        return;
       }
 
       // Pre-search renders at timeline level ONLY for orphaned rounds (rounds without messages)

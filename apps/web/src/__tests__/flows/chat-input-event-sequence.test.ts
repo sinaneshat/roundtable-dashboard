@@ -26,7 +26,7 @@
 import { MessageStatuses, RoundPhases } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
-import { createChatStore } from '../../stores/chat/store';
+import { createChatStore } from '@/stores/chat';
 
 // ============================================================================
 // EVENT SEQUENCE HELPERS

@@ -7,7 +7,6 @@
 
 import { ScreenModes } from '@roundtable/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useRouter } from '@tanstack/react-router';
 import { startTransition, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -25,7 +24,6 @@ export type UseFlowControllerOptions = {
 export function useFlowController(options: UseFlowControllerOptions = {}) {
   const { enabled = true } = options;
   const queryClient = useQueryClient();
-  const router = useRouter();
   const { data: session } = useSession();
 
   // Use store API for imperative access inside effects (avoids dependency loops)
@@ -217,20 +215,22 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
       setHasUpdatedUrl(true);
     });
 
-    // ✅ TanStack Router: Navigate to update URL with AI-generated slug
+    // ✅ FIX: Use history.replaceState instead of router.navigate
+    // ChatOverviewScreen already shows ChatView when thread exists
+    // Full navigation is unnecessary and causes duplicate loader fetches
+    // URL update is sufficient for bookmarking/sharing
     queueMicrotask(() => {
-      router.navigate({
-        to: '/chat/$slug',
-        params: { slug },
-        replace: true,
-      });
+      window.history.replaceState(
+        window.history.state,
+        '',
+        `/chat/${slug}`,
+      );
     });
   }, [
     isActive,
     threadState.currentThread?.isAiGeneratedTitle,
     threadState.currentThread?.slug,
     threadState.createdThreadId,
-    router,
     prepopulateQueryCache,
     session,
   ]);

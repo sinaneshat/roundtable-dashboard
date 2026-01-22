@@ -5,11 +5,10 @@
  */
 
 import { BETTER_AUTH_SESSION_COOKIE_NAME, EMAIL_DOMAIN_CONFIG } from '@roundtable/shared';
+import { WebAppEnvs, WebAppEnvSchema } from '@roundtable/shared/enums';
 import { APIError } from 'better-auth/api';
 import { env as workersEnv } from 'cloudflare:workers';
-import * as z from 'zod';
-
-import { isWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
+import { z } from 'zod';
 
 // ============================================================================
 // SCHEMAS
@@ -35,19 +34,22 @@ type AuthContext = {
 };
 
 export function isRestrictedEnvironment(): boolean {
+  // 1. Try Cloudflare Workers env
   try {
-    if (workersEnv.WEBAPP_ENV && isWebappEnv(workersEnv.WEBAPP_ENV)) {
+    const cfEnvResult = WebAppEnvSchema.safeParse(workersEnv.WEBAPP_ENV);
+    if (cfEnvResult.success) {
       // Only restrict PREVIEW - LOCAL/localhost should allow any email
-      return workersEnv.WEBAPP_ENV === WebAppEnvs.PREVIEW;
+      return cfEnvResult.data === WebAppEnvs.PREVIEW;
     }
   } catch {
     // Workers env not available
   }
 
-  const processEnv = process.env.WEBAPP_ENV;
-  if (processEnv && isWebappEnv(processEnv)) {
+  // 2. Try process.env
+  const processEnvResult = WebAppEnvSchema.safeParse(process.env.WEBAPP_ENV);
+  if (processEnvResult.success) {
     // Only restrict PREVIEW - LOCAL/localhost should allow any email
-    return processEnv === WebAppEnvs.PREVIEW;
+    return processEnvResult.data === WebAppEnvs.PREVIEW;
   }
 
   // Default: no restriction for local development

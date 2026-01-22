@@ -9,5 +9,10 @@
  * Usage: Add <TurnstileProvider> to root layout, use useTurnstile() hook to get tokens
  */
 
-export type { TurnstileContextValue } from './turnstile-provider';
-export { TurnstileProvider, useTurnstile } from './turnstile-provider';
+export type { TurnstileContextValue } from './turnstile-constants';
+export {
+  TOKEN_REFRESH_INTERVAL,
+  TURNSTILE_SCRIPT_URL,
+} from './turnstile-constants';
+export { TurnstileProvider } from './turnstile-provider';
+export { useTurnstile } from './use-turnstile';

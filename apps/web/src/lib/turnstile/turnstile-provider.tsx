@@ -10,7 +10,6 @@
 
 import type { ReactNode } from 'react';
 import {
-  createContext,
   useCallback,
   useEffect,
   useRef,
@@ -18,25 +17,17 @@ import {
 } from 'react';
 
 import type { TurnstileRenderOptions } from './turnstile.d';
-
-export type TurnstileContextValue = {
-  token: string | null;
-  isReady: boolean;
-  isLoading: boolean;
-  error: string | null;
-  refreshToken: () => void;
-  getToken: () => string | null;
-};
-
-const TurnstileContext = createContext<TurnstileContextValue | null>(null);
+import type { TurnstileContextValue } from './turnstile-constants';
+import {
+  TOKEN_REFRESH_INTERVAL,
+  TURNSTILE_SCRIPT_URL,
+} from './turnstile-constants';
+import { TurnstileContext } from './turnstile-context';
 
 type TurnstileProviderProps = {
   children: ReactNode;
   siteKey?: string;
 };
-
-const TURNSTILE_SCRIPT_URL = 'https://challenges.cloudflare.com/turnstile/v0/api.js';
-const TOKEN_REFRESH_INTERVAL = 4 * 60 * 1000; // 4 minutes (tokens expire at 5 min)
 
 export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps) {
   const [token, setToken] = useState<string | null>(null);
@@ -201,20 +192,4 @@ export function TurnstileProvider({ children, siteKey }: TurnstileProviderProps)
       {children}
     </TurnstileContext>
   );
-}
-
-export function useTurnstile(): TurnstileContextValue {
-  const context = use(TurnstileContext);
-  if (!context) {
-    // Return a no-op context when not inside provider (e.g., SSR)
-    return {
-      token: null,
-      isReady: false,
-      isLoading: false,
-      error: null,
-      refreshToken: () => {},
-      getToken: () => null,
-    };
-  }
-  return context;
 }

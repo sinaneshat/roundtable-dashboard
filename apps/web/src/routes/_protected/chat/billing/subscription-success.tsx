@@ -1,15 +1,24 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { lazy, Suspense } from 'react';
 
 import { BillingSuccessSkeleton } from '@/components/billing/billing-success-skeleton';
-import { BillingSuccessClient } from '@/containers/screens/chat/billing/BillingSuccessClient';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
+
+const BillingSuccessClient = lazy(() => import('@/containers/screens/chat/billing/BillingSuccessClient').then(m => ({ default: m.BillingSuccessClient })));
 
 const pageTitle = 'Subscription Successful - Roundtable';
 const pageDescription = 'Your subscription has been activated. Welcome to Roundtable!';
 
+function BillingSuccessRoute() {
+  return (
+    <Suspense fallback={<BillingSuccessSkeleton />}>
+      <BillingSuccessClient />
+    </Suspense>
+  );
+}
+
 export const Route = createFileRoute('/_protected/chat/billing/subscription-success')({
-  component: BillingSuccessClient,
-  pendingComponent: BillingSuccessSkeleton,
+  component: BillingSuccessRoute,
   ssr: false,
   head: () => {
     const siteUrl = getAppBaseUrl();

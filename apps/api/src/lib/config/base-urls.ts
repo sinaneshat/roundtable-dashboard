@@ -13,79 +13,41 @@
  * - Hono middleware: Use getWebappEnvFromContext(c) for per-request env access
  * - Async contexts: Use getWebappEnvAsync()
  * - Sync contexts: Use getWebappEnv()
+ *
+ * NOTE: For WebAppEnv, WebAppEnvs, WebAppEnvSchema, import directly from @roundtable/shared/enums
+ *       For BASE_URL_CONFIG, FALLBACK_URLS, etc., import directly from @roundtable/shared
  */
 
-import type { WebAppEnv as WebappEnv } from '@roundtable/shared';
-/* eslint-disable perfectionist/sort-named-imports -- aliased imports cause circular fix conflicts */
+import type { WebAppEnv } from '@roundtable/shared';
 import {
-  BASE_URL_CONFIG,
-  DEFAULT_WEBAPP_ENV,
-  FALLBACK_URLS,
   getAllowedOrigins as sharedGetAllowedOrigins,
   getApiOrigin as sharedGetApiOrigin,
   getApiUrl as sharedGetApiUrl,
   getAppUrl as sharedGetAppUrl,
   getCookieConfig as sharedGetCookieConfig,
   getUrlConfig as sharedGetUrlConfig,
-  isWebAppEnv as isWebappEnv,
-  LOCALHOST_ORIGINS,
-  NodeEnvs,
-  WEBAPP_ENVS,
-  WebAppEnvs,
-  WebAppEnvSchema as WebappEnvSchema,
 } from '@roundtable/shared';
-/* eslint-enable perfectionist/sort-named-imports */
+import { NodeEnvs, WebAppEnvs, WebAppEnvSchema } from '@roundtable/shared/enums';
 import { env as workersEnv } from 'cloudflare:workers';
 import type { Context } from 'hono';
 
 import type { ApiEnv } from '@/types';
 
-// Re-export for backward compatibility
-export {
-  BASE_URL_CONFIG,
-  DEFAULT_WEBAPP_ENV,
-  FALLBACK_URLS,
-  isWebappEnv,
-  LOCALHOST_ORIGINS,
-  WEBAPP_ENVS,
-  type WebappEnv,
-  WebAppEnvs,
-  WebappEnvSchema,
-};
-
-/**
- * Legacy compatibility: BASE_URLS in old format
- */
-export const BASE_URLS: Record<WebappEnv, { app: string; api: string }> = {
-  [WebAppEnvs.LOCAL]: {
-    app: BASE_URL_CONFIG[WebAppEnvs.LOCAL].app,
-    api: BASE_URL_CONFIG[WebAppEnvs.LOCAL].api,
-  },
-  [WebAppEnvs.PREVIEW]: {
-    app: BASE_URL_CONFIG[WebAppEnvs.PREVIEW].app,
-    api: BASE_URL_CONFIG[WebAppEnvs.PREVIEW].api,
-  },
-  [WebAppEnvs.PROD]: {
-    app: BASE_URL_CONFIG[WebAppEnvs.PROD].app,
-    api: BASE_URL_CONFIG[WebAppEnvs.PROD].api,
-  },
-};
-
 /**
  * Get WEBAPP_ENV from Hono context (sync, for Hono middleware)
  * Use this in Hono handlers where you have access to the context
  */
-export function getWebappEnvFromContext(c: Context<ApiEnv>): WebappEnv {
+export function getWebappEnvFromContext(c: Context<ApiEnv>): WebAppEnv {
   // 1. Try Cloudflare runtime context (c.env)
-  const cfEnv = c.env?.WEBAPP_ENV;
-  if (typeof cfEnv === 'string' && isWebappEnv(cfEnv)) {
-    return cfEnv;
+  const cfEnvResult = WebAppEnvSchema.safeParse(c.env?.WEBAPP_ENV);
+  if (cfEnvResult.success) {
+    return cfEnvResult.data;
   }
 
   // 2. Fall back to process.env (for local dev without wrangler)
-  const processEnv = process.env.WEBAPP_ENV;
-  if (processEnv && isWebappEnv(processEnv)) {
-    return processEnv;
+  const processEnvResult = WebAppEnvSchema.safeParse(process.env.WEBAPP_ENV);
+  if (processEnvResult.success) {
+    return processEnvResult.data;
   }
 
   // 3. Fall back to NODE_ENV detection
@@ -134,21 +96,22 @@ export function getCookieConfigFromContext(c: Context<ApiEnv>): { domain: string
  * 3. NODE_ENV detection (development = local, production = prod)
  * 4. Default to production for safety
  */
-export async function getWebappEnvAsync(): Promise<WebappEnv> {
+export async function getWebappEnvAsync(): Promise<WebAppEnv> {
   // 1. Try Cloudflare Workers runtime env
   try {
     const { env: workersEnvAsync } = await import('cloudflare:workers');
-    if (workersEnvAsync.WEBAPP_ENV && isWebappEnv(workersEnvAsync.WEBAPP_ENV)) {
-      return workersEnvAsync.WEBAPP_ENV;
+    const cfEnvResult = WebAppEnvSchema.safeParse(workersEnvAsync.WEBAPP_ENV);
+    if (cfEnvResult.success) {
+      return cfEnvResult.data;
     }
   } catch {
     // cloudflare:workers not available (local dev without wrangler)
   }
 
   // 2. Check process.env (works in local dev)
-  const processEnv = process.env.WEBAPP_ENV;
-  if (processEnv && isWebappEnv(processEnv)) {
-    return processEnv;
+  const processEnvResult = WebAppEnvSchema.safeParse(process.env.WEBAPP_ENV);
+  if (processEnvResult.success) {
+    return processEnvResult.data;
   }
 
   // 3. Fall back to NODE_ENV detection
@@ -172,21 +135,21 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
  * 3. NODE_ENV detection (development = local, production = prod)
  * 4. Default to production for safety
  */
-export function getWebappEnv(): WebappEnv {
+export function getWebappEnv(): WebAppEnv {
   // 1. Try Cloudflare Workers env (production/preview)
   try {
-    const cfEnv = workersEnv?.WEBAPP_ENV;
-    if (cfEnv && isWebappEnv(cfEnv)) {
-      return cfEnv;
+    const cfEnvResult = WebAppEnvSchema.safeParse(workersEnv?.WEBAPP_ENV);
+    if (cfEnvResult.success) {
+      return cfEnvResult.data;
     }
   } catch {
     // Workers env not available (local dev without wrangler)
   }
 
   // 2. Check process.env (local dev)
-  const processEnv = process.env.WEBAPP_ENV;
-  if (processEnv && isWebappEnv(processEnv)) {
-    return processEnv;
+  const processEnvResult = WebAppEnvSchema.safeParse(process.env.WEBAPP_ENV);
+  if (processEnvResult.success) {
+    return processEnvResult.data;
   }
 
   // 3. Fall back to NODE_ENV detection

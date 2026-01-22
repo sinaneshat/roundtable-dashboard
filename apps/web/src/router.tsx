@@ -1,12 +1,14 @@
 import type { QueryClient } from '@tanstack/react-query';
 import { createRouter as createTanStackRouter } from '@tanstack/react-router';
 import { setupRouterSsrQueryIntegration } from '@tanstack/react-router-ssr-query';
+import { lazy } from 'react';
 
-import NotFoundScreen from '@/containers/screens/general/NotFoundScreen';
 import type { SessionData } from '@/lib/auth';
 import { makeQueryClient } from '@/lib/data/query-client';
 
 import { routeTree } from './routeTree.gen';
+
+const NotFoundScreen = lazy(() => import('@/containers/screens/general/NotFoundScreen'));
 
 export type RouterContext = {
   queryClient: QueryClient;

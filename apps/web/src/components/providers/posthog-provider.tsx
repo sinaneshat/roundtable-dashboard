@@ -1,185 +1,122 @@
-import type { PostHog } from 'posthog-js';
+import { WebAppEnvs } from '@roundtable/shared/enums';
+import posthog from 'posthog-js';
 import { PostHogProvider as PHProvider } from 'posthog-js/react';
 import type { ReactNode } from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 
-import { getApiOriginUrl } from '@/lib/config/base-urls';
+import { getApiOriginUrl, getWebappEnv } from '@/lib/config/base-urls';
 
 import { PageViewTracker } from './pageview-tracker';
 import { PostHogIdentifyUser } from './posthog-identify-user';
 
-type PostHogProviderProps = {
-  children: ReactNode;
-  apiKey?: string;
-  environment?: string;
-};
-
-/**
- * Schedule a callback to run when the browser is idle.
- * Falls back to setTimeout if requestIdleCallback is not available.
- */
-function scheduleWhenIdle(callback: () => void, timeout = 2000): void {
-  if (typeof requestIdleCallback !== 'undefined') {
-    requestIdleCallback(callback, { timeout });
-  } else {
-    setTimeout(callback, 50); // Small delay to let initial paint complete
+declare global {
+  // eslint-disable-next-line ts/consistent-type-definitions
+  interface Window {
+    posthog?: typeof posthog;
   }
 }
 
+type PostHogProviderProps = {
+  children: ReactNode;
+  apiKey?: string;
+};
+
 /**
- * PostHog Provider - Performance Optimized for TanStack Start + Cloudflare Workers
+ * PostHog Provider - Deferred loading for TanStack Start + Cloudflare Workers
  *
- * Uses TRUE async loading via script injection to avoid blocking initial paint.
- * The PostHog bundle (~150KB) is loaded from our reverse proxy AFTER first paint.
- *
- * Performance Optimizations:
- * 1. requestIdleCallback: Defers loading until browser is idle
- * 2. Script injection: True async loading (not bundled with app)
- * 3. Minimal config: Heavy features disabled on first load
- * 4. Manual pageview: Captured after init completes in loaded callback
- *
- * Heavy features disabled:
- * - Session recording (enable via useDeferredSessionRecording)
- * - Surveys (opt-in only)
- * - Feature flags on first load (fetched on identify)
- * - Heatmaps, dead click detection (lightweight but deferred)
- *
- * @see https://posthog.com/docs/libraries/react
+ * PostHog is loaded after browser idle via IdleLazyProvider for optimization.
+ * API key passed as prop from root loader (TanStack Start pattern).
+ * Environment detection via import.meta.env (Vite build-time replacement).
  */
 export default function PostHogProvider({
   children,
   apiKey,
-  environment,
 }: PostHogProviderProps) {
-  const [client, setClient] = useState<PostHog | null>(null);
   const initStarted = useRef(false);
+
+  // Environment detection via hydrated env vars from server
+  const environment = getWebappEnv();
+  const isLocal = environment === WebAppEnvs.LOCAL;
 
   useEffect(() => {
     // Skip SSR
-    if (typeof window === 'undefined')
+    if (typeof window === 'undefined') {
       return;
+    }
 
-    // Skip local env or missing config
-    if (environment === 'local' || !apiKey)
+    // Skip local env (localhost/127.0.0.1)
+    if (isLocal) {
       return;
+    }
+
+    // Skip missing API key
+    if (!apiKey) {
+      return;
+    }
 
     // Prevent double init
-    if (initStarted.current)
+    if (initStarted.current) {
       return;
+    }
     initStarted.current = true;
 
-    // Schedule PostHog initialization when browser is idle
-    // This ensures initial paint is not blocked
-    scheduleWhenIdle(() => {
-      // Dynamic import the library - this doesn't block initial paint
-      // because we're already past first paint when this runs
-      import('posthog-js').then((module) => {
-        const posthog = module.default;
+    // Check if already initialized (e.g., HMR)
+    if (posthog.__loaded) {
+      window.posthog = posthog;
+      return;
+    }
 
-        // Check if already initialized (e.g., HMR)
-        if (posthog.__loaded) {
-          setClient(posthog);
-          return;
-        }
+    const apiHost = `${getApiOriginUrl()}/ingest`;
 
-        const apiHost = `${getApiOriginUrl()}/ingest`;
+    posthog.init(apiKey, {
+      // Route through our API reverse proxy to bypass ad blockers
+      api_host: apiHost,
+      ui_host: 'https://us.posthog.com',
 
-        posthog.init(apiKey, {
-          // Route through our API reverse proxy to bypass ad blockers
-          api_host: apiHost,
-          ui_host: 'https://us.posthog.com',
+      // Pageview: Manual control for SPA accuracy
+      capture_pageview: false,
+      capture_pageleave: 'if_capture_pageview',
 
-          // ═══════════════════════════════════════════════════════════════
-          // PERFORMANCE: Disable heavy features on first load
-          // ═══════════════════════════════════════════════════════════════
+      // Core tracking
+      person_profiles: 'identified_only',
+      autocapture: true,
+      capture_exceptions: true,
+      session_recording: {
+        maskAllInputs: true,
+        maskTextSelector: '[data-private], .ph-mask',
+        blockClass: 'ph-no-capture',
+        blockSelector: '[data-ph-no-capture]',
+        recordCrossOriginIframes: false,
+      },
 
-          // Don't fetch feature flags until identify() - saves network request
-          advanced_disable_feature_flags_on_first_load: true,
+      // Other config
+      scroll_root_selector: '#root',
+      // Disable debug mode to prevent verbose console logging
+      debug: false,
 
-          // Defer session recording - enable via useDeferredSessionRecording
-          disable_session_recording: true,
-
-          // Disable surveys on load - reduces initial processing
-          disable_surveys: true,
-
-          // Disable scroll depth tracking - minor perf gain
-          disable_scroll_properties: true,
-
-          // Disable web experiments - not using A/B testing on load
-          disable_web_experiments: true,
-
-          // ═══════════════════════════════════════════════════════════════
-          // PAGEVIEW: Manual control for accurate tracking
-          // ═══════════════════════════════════════════════════════════════
-
-          capture_pageview: false, // Manual in loaded callback
-          capture_pageleave: 'if_capture_pageview',
-
-          // ═══════════════════════════════════════════════════════════════
-          // CORE TRACKING: Keep essential features lightweight
-          // ═══════════════════════════════════════════════════════════════
-
-          // Only create person profiles on identify
-          person_profiles: 'identified_only',
-
-          // Keep basic autocapture for button clicks, form submissions
-          autocapture: true,
-
-          // Exception tracking - essential for error monitoring
-          capture_exceptions: true,
-
-          // Disable heatmaps - enable via dashboard if needed
-          capture_heatmaps: false,
-
-          // Disable dead click detection on load
-          capture_dead_clicks: false,
-
-          // ═══════════════════════════════════════════════════════════════
-          // SESSION RECORDING CONFIG (when enabled later)
-          // ═══════════════════════════════════════════════════════════════
-
-          session_recording: {
-            maskAllInputs: true,
-            maskTextSelector: '[data-private], .ph-mask',
-            blockClass: 'ph-no-capture',
-            blockSelector: '[data-ph-no-capture]',
-            recordCrossOriginIframes: false,
-          },
-          enable_recording_console_log: false,
-
-          // ═══════════════════════════════════════════════════════════════
-          // OTHER CONFIG
-          // ═══════════════════════════════════════════════════════════════
-
-          // Scroll tracking root for TanStack Start
-          scroll_root_selector: '#root',
-
-          // Debug mode in non-prod
-          debug: environment !== 'prod',
-
-          // Expose to window for toolbar + capture initial pageview
-          loaded: (ph) => {
-            if (typeof window !== 'undefined') {
-              // eslint-disable-next-line ts/no-explicit-any
-              (window as any).posthog = ph;
-            }
-            // Capture initial pageview that was deferred
-            ph.capture('$pageview');
-          },
-        });
-
-        setClient(posthog);
-      });
+      // Expose to window + capture initial pageview
+      loaded: (ph) => {
+        window.posthog = ph as typeof window.posthog;
+        ph.capture('$pageview');
+      },
     });
-  }, [apiKey, environment]);
 
-  // Render children immediately - PostHog loads in background after idle
-  if (!client) {
+    // Set window.posthog immediately after init call
+    window.posthog = posthog;
+  }, [apiKey, environment, isLocal]);
+
+  // Skip SSR
+  if (typeof window === 'undefined') {
+    return <>{children}</>;
+  }
+
+  // Skip local env or missing API key
+  if (isLocal || !apiKey) {
     return <>{children}</>;
   }
 
   return (
-    <PHProvider client={client}>
+    <PHProvider client={posthog}>
       <PostHogIdentifyUser />
       <PageViewTracker />
       {children}

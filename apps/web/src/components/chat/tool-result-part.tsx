@@ -6,9 +6,39 @@ import { Card, CardContent, CardHeader } from '@/components/ui/card';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { cn } from '@/lib/ui/cn';
 import dynamic from '@/lib/utils/dynamic';
+import { WebSearchResultItemSchema } from '@/services/api';
 
-// Simple schema for web search tool results validation
-const WebSearchResultSchema = z.any();
+/**
+ * Web search result metadata schema
+ * Tracks cache information and search limits
+ */
+const WebSearchResultMetaSchema = z.object({
+  cached: z.boolean().optional(),
+  cacheAge: z.number().optional(),
+  cacheHitRate: z.number().min(0).max(1).optional(),
+  limitReached: z.boolean().optional(),
+  searchesUsed: z.number().int().min(0).optional(),
+  maxSearches: z.number().int().positive().optional(),
+  remainingSearches: z.number().int().min(0).optional(),
+  error: z.boolean().optional(),
+});
+
+/**
+ * Web search tool result validation schema
+ * Matches the structure returned by the web_search tool
+ */
+const WebSearchResultSchema = z.object({
+  query: z.string(),
+  answer: z.string().nullable(),
+  results: z.array(WebSearchResultItemSchema),
+  responseTime: z.number(),
+  requestId: z.string().optional(),
+  images: z.array(z.object({
+    url: z.string(),
+    description: z.string().optional(),
+  })).optional(),
+  _meta: WebSearchResultMetaSchema.optional(),
+});
 
 // Lazy-loaded - only rendered when web_search tool results exist (~180 lines)
 const WebSearchDisplay = dynamic(

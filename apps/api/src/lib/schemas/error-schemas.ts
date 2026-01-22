@@ -183,9 +183,10 @@ export function categorizeErrorMessage(errorMessage: string): ErrorCategory {
 
 /**
  * ✅ UTILITY: Get human-readable error message for category
+ * Uses exhaustive mapping with fallback for type safety
  */
 export function getErrorCategoryMessage(category: ErrorCategory): string {
-  const messages: Record<ErrorCategory, string> = {
+  const messages: Readonly<Record<ErrorCategory, string>> = {
     // Frontend-style categories
     model_not_found: 'The requested model could not be found',
     content_filter: 'Content was filtered by safety systems',
@@ -203,5 +204,6 @@ export function getErrorCategoryMessage(category: ErrorCategory): string {
     model_content_filter: 'Content was filtered by safety systems',
   };
 
-  return messages[category] as string;
+  // Return message with fallback for type safety
+  return messages[category] ?? 'An unknown error occurred';
 }

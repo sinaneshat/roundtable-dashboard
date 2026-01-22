@@ -165,6 +165,12 @@ type UseMultiParticipantChatOptions = {
    * Called after setIsStreaming(true) to indicate the transition is complete
    */
   setParticipantHandoffInProgress?: (value: boolean) => void;
+  /**
+   * ✅ RACE CONDITION FIX: Callback to acknowledge stream finish
+   * Called in onFinish to signal that message state is finalized.
+   * Replaces the 50ms timeout workaround for stream settling detection.
+   */
+  acknowledgeStreamFinish?: () => void;
 };
 
 /**
@@ -326,6 +332,8 @@ export function useMultiParticipantChat(
     setIsStreaming,
     // ✅ HANDOFF FIX: Callback to clear handoff flag when participant starts streaming
     setParticipantHandoffInProgress,
+    // ✅ RACE CONDITION FIX: Callback to acknowledge stream finish
+    acknowledgeStreamFinish,
   } = options;
 
   // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
@@ -364,6 +372,8 @@ export function useMultiParticipantChat(
     setIsStreaming,
     // ✅ HANDOFF FIX: Clear handoff flag when participant starts streaming
     setParticipantHandoffInProgress,
+    // ✅ RACE CONDITION FIX: Acknowledge stream finish to signal completion
+    acknowledgeStreamFinish,
   });
 
   // Participant error tracking - simple Set-based tracking to prevent duplicate responses
@@ -1220,13 +1230,15 @@ export function useMultiParticipantChat(
       }
 
       // ✅ Skip phantom resume completions (no active stream to resume)
+      // Use OR logic - skip if message ID is malformed OR completely empty
       const notOurMessageId = !data.message?.id?.includes('_r');
       const emptyParts = data.message?.parts?.length === 0;
       const noFinishReason = data.finishReason === undefined;
-      const noActiveRound = roundParticipantsRef.current.length === 0;
       const notStreaming = !isStreamingRef.current;
 
-      if (notOurMessageId && emptyParts && noFinishReason && noActiveRound && notStreaming) {
+      const isMalformedMessage = notOurMessageId || (emptyParts && noFinishReason);
+      if (isMalformedMessage && notStreaming) {
+        rlog.stream('end', `SKIP: phantom completion (malformed=${notOurMessageId} empty=${emptyParts} noReason=${noFinishReason})`);
         return;
       }
 
@@ -1251,6 +1263,11 @@ export function useMultiParticipantChat(
       if (messageId) {
         processedMessageIdsRef.current.add(messageId);
       }
+
+      // ✅ RACE CONDITION FIX: Acknowledge stream finish to signal completion
+      // This replaces the 50ms timeout workaround in incomplete-round-resumption.ts
+      // Called early in onFinish to unblock resumption logic waiting for this signal
+      callbackRefs.acknowledgeStreamFinish.current?.();
 
       // ✅ RESUMABLE STREAMS: Detect and handle resumed stream completion
       // After page reload, refs are reset but message metadata has correct values
@@ -2053,26 +2070,42 @@ export function useMultiParticipantChat(
     // EXCEPTION: Allow going back to an INCOMPLETE round (missing participants).
     // During page refresh, currentRoundRef might have been prematurely incremented
     // when P1 finished but P0's message doesn't exist. This is legitimate resumption.
+    //
+    // ✅ RACE CONDITION FIX: Also check for streaming parts, not just message existence
+    // When round increments but streaming hasn't fully settled, messages may exist
+    // but still have streaming parts. Allow resumption in this case.
     if (roundNumber < currentRoundRef.current) {
-      // Check if roundNumber's round actually completed (has all participants)
+      // Check if roundNumber's round actually completed (has all participants AND no streaming)
       const effectiveThreadId = callbackRefs.threadId.current;
       let roundIsComplete = true;
+      let hasStreamingParts = false;
+
       for (let i = 0; i < enabled.length; i++) {
         const expectedMsgId = `${effectiveThreadId}_r${roundNumber}_p${i}`;
-        const msgExists = messagesRef.current.some(m => m.id === expectedMsgId);
-        if (!msgExists) {
+        const msg = messagesRef.current.find(m => m.id === expectedMsgId);
+        if (!msg) {
           roundIsComplete = false;
           break;
         }
+        // ✅ FIX: Check if message has streaming parts (state='streaming' or partial tool calls)
+        const msgHasStreaming = msg.parts?.some(
+          p => ('state' in p && p.state === 'streaming')
+            || (p.type === 'tool-invocation' && 'toolInvocation' in p && (p.toolInvocation as { state?: string }).state === 'partial-call'),
+        );
+        if (msgHasStreaming) {
+          hasStreamingParts = true;
+        }
       }
-      if (roundIsComplete) {
+
+      // Only block if round is TRULY complete (all messages exist AND no streaming parts)
+      if (roundIsComplete && !hasStreamingParts) {
         // Round actually completed - this is a stale trigger, block it
         rlog.stream('start', `BLOCKED: stale round r${roundNumber} < current r${currentRoundRef.current} (round complete)`);
         isTriggeringRef.current = false;
         return;
       }
-      // Round is incomplete (missing participants) - allow resumption
-      rlog.stream('start', `ALLOW: incomplete round r${roundNumber} (currentRef=${currentRoundRef.current})`);
+      // Round is incomplete (missing participants or still streaming) - allow resumption
+      rlog.stream('start', `ALLOW: incomplete round r${roundNumber} (currentRef=${currentRoundRef.current}, allMsgs=${roundIsComplete ? 1 : 0}, streaming=${hasStreamingParts ? 1 : 0})`);
     }
 
     // CRITICAL: Update refs FIRST to avoid race conditions

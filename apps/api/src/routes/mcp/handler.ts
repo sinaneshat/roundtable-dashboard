@@ -454,7 +454,7 @@ async function executeToolInternal(
         const parsed = DeleteProjectInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
-        return await toolDeleteProject(parsed.data, user, db, env);
+        return await toolDeleteProject(parsed.data, user, db);
       }
 
       case MCPToolMethods.LIST_PROJECT_THREADS: {
@@ -512,7 +512,7 @@ async function executeToolInternal(
         const parsed = RegenerateRoundInputSchema.safeParse(args);
         if (!parsed.success)
           return mcpError(`Invalid input: ${parsed.error.message}`);
-        return await toolRegenerateRound(parsed.data, user, db, env);
+        return await toolRegenerateRound(parsed.data, user, db);
       }
 
       case MCPToolMethods.ROUND_FEEDBACK: {
@@ -989,7 +989,6 @@ async function toolRegenerateRound(
   input: RegenerateRoundInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-  _env: ApiEnv['Bindings'],
 ): Promise<ToolCallResult> {
   await verifyThreadOwnership(input.threadId, user.id, db);
 
@@ -1392,7 +1391,6 @@ async function toolDeleteProject(
   input: DeleteProjectInput,
   user: { id: string },
   db: Awaited<ReturnType<typeof getDbAsync>>,
-  _env: ApiEnv['Bindings'],
 ): Promise<ToolCallResult> {
   // Verify ownership
   const project = await db.query.chatProject.findFirst({

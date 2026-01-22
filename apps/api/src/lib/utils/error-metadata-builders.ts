@@ -24,32 +24,37 @@
 
 import { ErrorCategorySchema, FinishReasonSchema } from '@roundtable/shared/enums';
 import type { LanguageModelUsage } from 'ai';
+import { z } from 'zod';
 
 import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
 
 import { isObject } from './type-guards';
 
 // ============================================================================
-// Types
+// Schemas & Types
 // ============================================================================
 
-export type ErrorMetadataFields = {
-  hasError: boolean;
-  openRouterError?: string;
-  errorCategory?: string;
-  errorMessage?: string;
-  providerMessage?: string;
-  isTransient: boolean;
-  isPartialResponse: boolean;
-};
+export const ErrorMetadataFieldsSchema = z.object({
+  hasError: z.boolean(),
+  openRouterError: z.string().optional(),
+  errorCategory: z.string().optional(),
+  errorMessage: z.string().optional(),
+  providerMessage: z.string().optional(),
+  isTransient: z.boolean(),
+  isPartialResponse: z.boolean(),
+});
 
-export type OpenRouterErrorContext = {
-  providerMetadata: unknown;
-  response: unknown;
-  finishReason: string;
-  usage?: LanguageModelUsage;
-  text?: string;
-};
+export type ErrorMetadataFields = z.infer<typeof ErrorMetadataFieldsSchema>;
+
+export const OpenRouterErrorContextSchema = z.object({
+  providerMetadata: z.unknown(),
+  response: z.unknown(),
+  finishReason: z.string(),
+  usage: z.custom<LanguageModelUsage>().optional(),
+  text: z.string().optional(),
+});
+
+export type OpenRouterErrorContext = z.infer<typeof OpenRouterErrorContextSchema>;
 
 // ============================================================================
 // Error Message Generation

@@ -1,5 +1,5 @@
 import type { SubscriptionChangeType, SubscriptionTier } from '@roundtable/shared';
-import { StripeSubscriptionStatuses, SubscriptionChangeTypes, SubscriptionChangeTypeSchema, SubscriptionTiers, SubscriptionTierSchema } from '@roundtable/shared';
+import { StripeSubscriptionStatuses, SUBSCRIPTION_TIER_NAMES, SubscriptionChangeTypes, SubscriptionChangeTypeSchema, SubscriptionTiers, SubscriptionTierSchema } from '@roundtable/shared';
 import { getRouteApi, Link } from '@tanstack/react-router';
 import { Suspense, useMemo } from 'react';
 
@@ -10,7 +10,6 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { ScaleIn, StaggerContainer, StaggerItem } from '@/components/ui/motion';
 import { useSubscriptionsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { useCountdownRedirect } from '@/hooks/utils';
-import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { getMaxModelsForTier, getMonthlyCreditsForTier, getTierFromProductId } from '@/lib/utils/product-logic';

@@ -5,7 +5,9 @@ import { useMemo } from 'react';
 import { ThreadTimeline } from '@/components/chat/thread-timeline';
 import { UnifiedErrorBoundary } from '@/components/chat/unified-error-boundary';
 import { Icons } from '@/components/icons';
+import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
 import { GlowingEffect } from '@/components/ui/glowing-effect';
 import { usePublicThreadQuery } from '@/hooks/queries';
 import type { TimelineItem } from '@/hooks/utils';
@@ -14,22 +16,132 @@ import { useTranslations } from '@/lib/i18n';
 import { chatMessagesToUIMessages, transformChatParticipants, transformPreSearches } from '@/lib/utils';
 import type { PublicThreadData, StoredPreSearch } from '@/services/api';
 
+// ============================================================================
+// NO LONGER PUBLIC VIEW - Blurred mock chat with overlay message
+// ============================================================================
+
+function NoLongerPublicView() {
+  const t = useTranslations();
+
+  return (
+    <div className="flex flex-col min-h-dvh relative">
+      <div className="container max-w-4xl mx-auto px-5 md:px-6 pt-16 sm:pt-20 pb-16 relative">
+        {/* Blurred mock chat background */}
+        <div className="blur-sm pointer-events-none select-none" aria-hidden="true">
+          {/* Mock user message */}
+          <div className="flex gap-3 mb-6">
+            <Avatar className="size-8 shrink-0">
+              <AvatarFallback className="bg-primary/10 text-primary text-xs">U</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 space-y-1">
+              <div className="text-sm font-medium text-foreground/80">User</div>
+              <Card className="p-4 bg-muted/30">
+                <div className="h-4 bg-muted rounded w-3/4 mb-2" />
+                <div className="h-4 bg-muted rounded w-1/2" />
+              </Card>
+            </div>
+          </div>
+
+          {/* Mock AI response 1 */}
+          <div className="flex gap-3 mb-6">
+            <Avatar className="size-8 shrink-0">
+              <AvatarFallback className="bg-blue-500/10 text-blue-500 text-xs">AI</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 space-y-1">
+              <div className="text-sm font-medium text-foreground/80">Claude</div>
+              <Card className="p-4 bg-card">
+                <div className="space-y-2">
+                  <div className="h-4 bg-muted rounded w-full" />
+                  <div className="h-4 bg-muted rounded w-5/6" />
+                  <div className="h-4 bg-muted rounded w-4/5" />
+                  <div className="h-4 bg-muted rounded w-2/3" />
+                </div>
+              </Card>
+            </div>
+          </div>
+
+          {/* Mock AI response 2 */}
+          <div className="flex gap-3 mb-6">
+            <Avatar className="size-8 shrink-0">
+              <AvatarFallback className="bg-green-500/10 text-green-500 text-xs">AI</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 space-y-1">
+              <div className="text-sm font-medium text-foreground/80">GPT-4</div>
+              <Card className="p-4 bg-card">
+                <div className="space-y-2">
+                  <div className="h-4 bg-muted rounded w-full" />
+                  <div className="h-4 bg-muted rounded w-4/5" />
+                  <div className="h-4 bg-muted rounded w-3/4" />
+                </div>
+              </Card>
+            </div>
+          </div>
+
+          {/* Mock moderator summary */}
+          <div className="flex gap-3">
+            <Avatar className="size-8 shrink-0">
+              <AvatarFallback className="bg-purple-500/10 text-purple-500 text-xs">M</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 space-y-1">
+              <div className="text-sm font-medium text-foreground/80">Moderator</div>
+              <Card className="p-4 bg-purple-500/5 border-purple-500/20">
+                <div className="space-y-2">
+                  <div className="h-4 bg-muted rounded w-full" />
+                  <div className="h-4 bg-muted rounded w-5/6" />
+                </div>
+              </Card>
+            </div>
+          </div>
+        </div>
+
+        {/* Overlay message */}
+        <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[2px]">
+          <div className="text-center space-y-4 max-w-md mx-auto px-4">
+            <div className="w-16 h-16 bg-muted/50 rounded-full flex items-center justify-center mx-auto">
+              <Icons.eyeOff className="w-8 h-8 text-muted-foreground" />
+            </div>
+            <div className="space-y-2">
+              <h1 className="text-2xl font-bold">{t('chat.public.noLongerPublic')}</h1>
+              <p className="text-muted-foreground">
+                {t('chat.public.noLongerPublicDescription')}
+              </p>
+            </div>
+            <Button asChild variant={ComponentVariants.DEFAULT}>
+              <Link to="/">{t('actions.goHome')}</Link>
+            </Button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Error states for public thread loading */
+type PublicThreadErrorState = 'not_found' | 'no_longer_public' | null;
+
 type PublicChatThreadScreenProps = {
   slug: string;
   initialData?: PublicThreadData | null;
+  errorState?: PublicThreadErrorState;
 };
 
-export default function PublicChatThreadScreen({ slug, initialData }: PublicChatThreadScreenProps) {
+export default function PublicChatThreadScreen({ slug, initialData, errorState }: PublicChatThreadScreenProps) {
   const t = useTranslations();
 
-  // SSR HYDRATION: Data is prefetched in route loader, available immediately via React Query cache
-  // The route's pendingComponent (PublicChatSkeleton) handles loading states
-  // We rely on React Query's cache having data from the loader's prefetchQuery
-  const { data: threadData } = usePublicThreadQuery(slug);
-  const queryResponse = threadData?.success ? threadData.data : null;
+  // ✅ HOOKS MUST BE CALLED UNCONDITIONALLY - before any early returns
+  // This follows React's rules of hooks
+  const hasLoaderData = Boolean(initialData);
+  const { data: queryData } = usePublicThreadQuery(slug, {
+    initialData: hasLoaderData && initialData
+      ? { success: true as const, data: initialData }
+      : undefined,
+    staleTime: hasLoaderData ? 10_000 : undefined,
+    // Disable query when we already know it's an error state
+    enabled: errorState !== 'no_longer_public',
+  });
 
-  // Prefer SSR props (passed from route), fallback to React Query cached data
-  const threadResponse = initialData || queryResponse;
+  // Prefer query data (which includes initialData), fall back to loader data
+  const threadResponse = queryData?.success ? queryData.data : initialData;
   const thread = threadResponse?.thread || null;
 
   const serverMessages = useMemo(() => threadResponse?.messages || [], [threadResponse]);
@@ -56,6 +168,12 @@ export default function PublicChatThreadScreen({ slug, initialData }: PublicChat
     messages,
     enableNearBottomDetection: true,
   });
+
+  // ✅ NOW we can do early returns AFTER all hooks have been called
+  // GRACEFUL ERROR: Thread was made private - show blurred mock chat
+  if (errorState === 'no_longer_public') {
+    return <NoLongerPublicView />;
+  }
 
   // No inline skeleton needed - route's pendingComponent handles loading
   // If we reach here without thread data, show error state (not loading)

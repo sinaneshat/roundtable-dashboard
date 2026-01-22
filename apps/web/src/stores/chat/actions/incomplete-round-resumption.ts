@@ -98,6 +98,8 @@ export function useIncompleteRoundResumption(
     resumptionScopeVersion,
     // ✅ RACE CONDITION FIX: Track which thread prefill state was set for
     prefilledForThreadId,
+    // ✅ RACE CONDITION FIX: Explicit stream completion signal from onFinish
+    streamFinishAcknowledged,
   } = useChatStore(useShallow(s => ({
     messages: s.messages,
     participants: s.participants,
@@ -123,6 +125,8 @@ export function useIncompleteRoundResumption(
     resumptionScopeVersion: s.resumptionScopeVersion,
     // ✅ RACE CONDITION FIX: Track which thread prefill state was set for
     prefilledForThreadId: s.prefilledForThreadId,
+    // ✅ RACE CONDITION FIX: Explicit stream completion signal from onFinish
+    streamFinishAcknowledged: s.streamFinishAcknowledged,
   })));
 
   // Actions - batched with useShallow for stable reference
@@ -303,8 +307,14 @@ export function useIncompleteRoundResumption(
   // The message parts still have `state: 'streaming'`, so the hook sees "incomplete round"
   // and incorrectly tries to re-trigger the participant that just finished.
   //
-  // Fix: Track isStreaming transitions. When it goes false, enter a "settling" period
-  // of 50ms before allowing resumption triggers. This gives onFinish time to run.
+  // ✅ RACE CONDITION FIX: Use explicit completion signal instead of timeout
+  // Previously we used a 50ms timeout to wait for onFinish to run after isStreaming went false.
+  // Now we use the streamFinishAcknowledged flag which is set by onFinish directly.
+  //
+  // Settling state management:
+  // - When isStreaming goes false, enter settling state
+  // - When streamFinishAcknowledged becomes true, exit settling state
+  // - Fallback: 100ms timeout in case onFinish never fires (error cases)
   const wasStreamingRef = useRef(false);
 
   useEffect(() => {
@@ -324,15 +334,24 @@ export function useIncompleteRoundResumption(
       // Just transitioned from streaming to not streaming
       wasStreamingRef.current = false;
 
-      // Enter settling period
-      updateSettlingState(true);
-      rlog.resume('settle-start', `streaming ended, waiting 50ms for onFinish`);
-
-      // Clear settling after delay
-      streamSettlingTimeoutRef.current = setTimeout(() => {
+      // ✅ RACE CONDITION FIX: Check if onFinish already acknowledged completion
+      if (streamFinishAcknowledged) {
+        // onFinish already ran, no need to settle
+        rlog.resume('settle-skip', `streamFinishAcknowledged=true, skipping settle`);
         updateSettlingState(false);
-        rlog.resume('settle-end', `settling complete, resumption allowed`);
-      }, 50);
+      } else {
+        // Enter settling period, waiting for streamFinishAcknowledged or timeout
+        updateSettlingState(true);
+        rlog.resume('settle-start', `streaming ended, waiting for onFinish acknowledgment`);
+
+        // Fallback timeout in case onFinish never fires (100ms is generous)
+        streamSettlingTimeoutRef.current = setTimeout(() => {
+          if (isStreamSettlingRef.current) {
+            rlog.resume('settle-timeout', `fallback timeout - clearing settling state`);
+            updateSettlingState(false);
+          }
+        }, 100);
+      }
     }
 
     return () => {
@@ -341,7 +360,20 @@ export function useIncompleteRoundResumption(
         streamSettlingTimeoutRef.current = null;
       }
     };
-  }, [isStreaming, updateSettlingState]);
+  }, [isStreaming, streamFinishAcknowledged, updateSettlingState]);
+
+  // ✅ RACE CONDITION FIX: Exit settling state when streamFinishAcknowledged becomes true
+  useEffect(() => {
+    if (streamFinishAcknowledged && isStreamSettlingRef.current) {
+      rlog.resume('settle-ack', `streamFinishAcknowledged=true, clearing settling state`);
+      updateSettlingState(false);
+      // Clear the fallback timeout since we got the signal
+      if (streamSettlingTimeoutRef.current) {
+        clearTimeout(streamSettlingTimeoutRef.current);
+        streamSettlingTimeoutRef.current = null;
+      }
+    }
+  }, [streamFinishAcknowledged, updateSettlingState]);
 
   const currentRoundNumber = messages.length > 0 ? getCurrentRoundNumber(messages) : null;
 

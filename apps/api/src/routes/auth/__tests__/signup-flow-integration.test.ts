@@ -15,10 +15,9 @@
  * Pattern: Logical validation of signup requirements and constraints
  */
 
+import { CREDIT_CONFIG } from '@roundtable/shared';
 import { CreditActions, CreditTransactionTypes, PlanTypes, SubscriptionTiers } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
-
-import { CREDIT_CONFIG } from '@/lib/config';
 
 describe('signup Flow Integration', () => {
   describe('credit Balance Initialization', () => {

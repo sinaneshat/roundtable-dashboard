@@ -29,10 +29,8 @@ import {
   createTestUserMessage,
 } from '@/lib/testing';
 import type { StoredPreSearch } from '@/services/api';
-
-import type { ChatStoreApi } from '../../stores/chat/store';
-import { createChatStore } from '../../stores/chat/store';
-import { getEffectiveWebSearchEnabled, shouldWaitForPreSearch } from '../../stores/chat/utils/pre-search-execution';
+import type { ChatStoreApi } from '@/stores/chat';
+import { createChatStore, getEffectiveWebSearchEnabled, shouldWaitForPreSearch } from '@/stores/chat';
 
 // ============================================================================
 // TEST SETUP HELPERS

@@ -5,6 +5,7 @@
  * Optimistic locking prevents concurrent update conflicts.
  */
 
+import { CREDIT_CONFIG } from '@roundtable/shared';
 import type { CreditAction, CreditGrantType, CreditTransactionType } from '@roundtable/shared/enums';
 import {
   CreditActions,
@@ -30,7 +31,6 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { DbTextPartSchema } from '@/db/schemas/chat-metadata';
 import type { UserCreditBalance } from '@/db/validation';
-import { CREDIT_CONFIG } from '@/lib/config';
 import { getModelById } from '@/services/models';
 
 import type { ModelForPricing } from './product-logic.service';
@@ -521,7 +521,7 @@ export async function zeroOutFreeUserCredits(userId: string): Promise<void> {
 
 async function provisionPaidUserCredits(userId: string): Promise<void> {
   const db = await getDbAsync();
-  const planConfig = getPlanConfig('paid');
+  const planConfig = getPlanConfig();
   const now = new Date();
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);
@@ -846,7 +846,7 @@ export async function processMonthlyRefill(userId: string): Promise<void> {
     return;
   }
 
-  const planConfig = getPlanConfig('paid');
+  const planConfig = getPlanConfig();
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);
 
@@ -895,7 +895,7 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
     return;
   }
 
-  const planConfig = getPlanConfig('paid');
+  const planConfig = getPlanConfig();
   const now = new Date();
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);

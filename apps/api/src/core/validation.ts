@@ -93,28 +93,34 @@ export function createOmitSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   omitFields: readonly K[],
 ) {
-  // Zod's omit() accepts Record<string, true> - we construct it correctly from field keys
-  // TypeScript inference chain: K extends keyof T → Record<K, true> → compatible with omit parameter
-  const omitObj: Record<K, true> = Object.fromEntries(
-    omitFields.map(key => [key, true]),
-  ) as Record<K, true>;
+  // Build omit record with proper type inference using reduce
+  const omitRecord = omitFields.reduce(
+    (acc, key) => {
+      acc[key] = true;
+      return acc;
+    },
+    {} as Record<K, true>,
+  );
 
-  // Pass to schema.omit() - Zod internally handles the type compatibility
-  return schema.omit(omitObj as Parameters<(typeof schema)['omit']>[0]);
+  // Use type parameter to match Zod's expected omit signature
+  return schema.omit(omitRecord as Parameters<(typeof schema)['omit']>[0]);
 }
 
 export function createPickSchema<T extends z.ZodRawShape, K extends keyof T>(
   schema: z.ZodObject<T>,
   pickFields: readonly K[],
 ) {
-  // Zod's pick() accepts Record<string, true> - we construct it correctly from field keys
-  // TypeScript inference chain: K extends keyof T → Record<K, true> → compatible with pick parameter
-  const pickObj: Record<K, true> = Object.fromEntries(
-    pickFields.map(key => [key, true]),
-  ) as Record<K, true>;
+  // Build pick record with proper type inference using reduce
+  const pickRecord = pickFields.reduce(
+    (acc, key) => {
+      acc[key] = true;
+      return acc;
+    },
+    {} as Record<K, true>,
+  );
 
-  // Pass to schema.pick() - Zod internally handles the type compatibility
-  return schema.pick(pickObj as Parameters<(typeof schema)['pick']>[0]);
+  // Use type parameter to match Zod's expected pick signature
+  return schema.pick(pickRecord as Parameters<(typeof schema)['pick']>[0]);
 }
 
 export const FilterValueSchema = z.union([
@@ -127,7 +133,6 @@ export const FilterValueSchema = z.union([
 export type FilterValue = z.infer<typeof FilterValueSchema>;
 
 export function createSearchSchema<T extends z.ZodRawShape>(
-  _schema: z.ZodObject<T>,
   searchableFields: Array<keyof T>,
 ) {
   return z.object({

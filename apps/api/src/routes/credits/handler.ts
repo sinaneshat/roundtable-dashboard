@@ -1,9 +1,9 @@
 import type { RouteHandler } from '@hono/zod-openapi';
+import { CREDIT_CONFIG } from '@roundtable/shared';
 import type { UsageStatus } from '@roundtable/shared/enums';
 import { CreditActions, PlanTypes, UsageStatuses } from '@roundtable/shared/enums';
 
 import { createHandler, Responses } from '@/core';
-import { CREDIT_CONFIG } from '@/lib/config';
 import {
   canAffordCredits,
   estimateStreamingCredits,

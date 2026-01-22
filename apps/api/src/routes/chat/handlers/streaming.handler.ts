@@ -16,6 +16,7 @@ import {
   FinishReasons,
   MessagePartTypes,
   MessageRoles,
+  MessageStatuses,
   ParticipantStreamStatuses,
   PlanTypes,
   RoundOrchestrationMessageTypes,
@@ -575,9 +576,53 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // ✅ FIX: Filter out moderator messages from conversation context
       // Moderator messages are round summaries that should not be included in
       // the context sent to AI models - they would cause models to repeat the summary
-      const previousDbMessages = allDbMessages.filter(
+      let previousDbMessages = allDbMessages.filter(
         (msg: typeof allDbMessages[number]) => !msg.metadata || !isModeratorMessageMetadata(msg.metadata),
       );
+
+      // =========================================================================
+      // STEP 8.5: Ensure pre-search data is available (race condition fix)
+      // =========================================================================
+      // Pre-search message may not be in previousDbMessages yet due to timing:
+      // - Pre-search SSE completes → frontend calls streaming
+      // - But chatMessage insert happens at END of SSE (race condition)
+      // Fix: Query chatPreSearch directly and inject synthetic message if needed
+      if (thread.enableWebSearch) {
+        const hasPreSearchMsg = previousDbMessages.some(
+          msg => msg.metadata && 'isPreSearch' in msg.metadata && msg.metadata.isPreSearch === true,
+        );
+
+        if (!hasPreSearchMsg) {
+          const currentPreSearch = await db.query.chatPreSearch.findFirst({
+            where: and(
+              eq(tables.chatPreSearch.threadId, threadId),
+              eq(tables.chatPreSearch.roundNumber, currentRoundNumber),
+              eq(tables.chatPreSearch.status, MessageStatuses.COMPLETE),
+            ),
+          });
+
+          if (currentPreSearch?.searchData) {
+            // Inject synthetic pre-search message for buildSearchContextWithCitations
+            const syntheticPreSearchMsg = {
+              id: `presearch-${currentRoundNumber}-${Date.now()}`,
+              threadId,
+              participantId: null,
+              role: 'assistant' as const,
+              parts: [] as Array<{ type: string; text: string }>,
+              roundNumber: currentRoundNumber,
+              toolCalls: null,
+              metadata: {
+                role: 'system' as const,
+                roundNumber: currentRoundNumber,
+                isPreSearch: true as const,
+                preSearch: currentPreSearch.searchData,
+              },
+              createdAt: new Date(),
+            };
+            previousDbMessages = [syntheticPreSearchMsg as typeof previousDbMessages[number], ...previousDbMessages];
+          }
+        }
+      }
 
       // Convert to UIMessages for validation
       const previousMessages

@@ -275,3 +275,14 @@ export function useCurrentStreamingParticipant() {
 export function useHasActiveThread() {
   return useChatStore(s => !s.showInitialUI && Boolean(s.createdThreadId || s.thread));
 }
+
+/**
+ * Detect if currently in an active chat creation flow
+ * During creation flow, thread data exists in Zustand store - no need to fetch
+ * Returns primitive - no useShallow needed
+ */
+export function useIsInCreationFlow(): boolean {
+  return useChatStore(s =>
+    (s.createdThreadId !== null && !s.showInitialUI) || s.isStreaming,
+  );
+}

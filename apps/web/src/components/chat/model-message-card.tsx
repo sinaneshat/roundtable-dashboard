@@ -340,7 +340,7 @@ export const ModelMessageCard = memo(({
           );
         }
 
-        // Use ReactMarkdown for SSR/read-only pages, Streamdown for interactive streaming
+        // Use ReactMarkdown for SSR/read-only pages, LazyStreamdown for interactive streaming
         return (
           <div
             key={messageId ? `${messageId}-text-${partIndex}` : `text-${partIndex}`}
@@ -349,10 +349,11 @@ export const ModelMessageCard = memo(({
           >
             {skipTransitions
               ? (
-                  // SSR-friendly: Use ReactMarkdown with shared components
+                  // SSR: Direct import renders synchronously - no hydration flash
                   <Markdown components={streamdownComponents}>{part.text}</Markdown>
                 )
               : (
+                  // Client-side streaming: Use lazy-loaded streamdown
                   <LazyStreamdown
                     className="text-foreground [&>*:first-child]:mt-0 [&>*:last-child]:mb-0"
                     components={streamdownComponents}

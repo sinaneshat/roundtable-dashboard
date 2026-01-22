@@ -1,7 +1,6 @@
+import { CREDIT_CONFIG } from '@roundtable/shared';
 import { CreditActions, CreditTransactionTypes, MessageRoles, PlanTypes } from '@roundtable/shared/enums';
 import { beforeEach, describe, expect, it } from 'vitest';
-
-import { CREDIT_CONFIG } from '@/lib/config';
 
 /**
  * Free User Credit Journey Integration Tests

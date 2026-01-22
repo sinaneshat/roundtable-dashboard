@@ -53,6 +53,6 @@ export function isTextPart(
     return false;
   }
 
-  const typed = value as { type?: unknown; text?: unknown };
-  return typed.type === MessagePartTypes.TEXT && isNonEmptyString(typed.text);
+  // After isObject check, value is Record<string, unknown> so we can access properties safely
+  return value.type === MessagePartTypes.TEXT && isNonEmptyString(value.text);
 }

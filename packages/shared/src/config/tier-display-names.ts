@@ -1,18 +1,18 @@
 /**
- * Subscription Tier Names Configuration
+ * Subscription Tier Display Names
  *
- * ✅ CLIENT-SAFE: No server-only dependencies
  * ✅ SINGLE SOURCE OF TRUTH: Display names for subscription tiers
+ * ✅ CLIENT-SAFE: No server-only dependencies
  *
- * Used by UI components to display tier labels.
+ * Used by both API and web packages for consistent tier labeling.
  */
 
-import type { SubscriptionTier } from '@roundtable/shared/enums';
-import { SubscriptionTiers } from '@roundtable/shared/enums';
+import type { SubscriptionTier } from '../enums/billing';
+import { SubscriptionTiers } from '../enums/billing';
 
 /**
  * Human-readable names for subscription tiers
- * Used in UI for tier badges, upgrade prompts, etc.
+ * Used in UI for tier badges, upgrade prompts, API responses, etc.
  */
 export const SUBSCRIPTION_TIER_NAMES: Record<SubscriptionTier, string> = {
   [SubscriptionTiers.FREE]: 'Free',
@@ -23,5 +23,5 @@ export const SUBSCRIPTION_TIER_NAMES: Record<SubscriptionTier, string> = {
  * Get display name for a subscription tier
  */
 export function getTierDisplayName(tier: SubscriptionTier): string {
-  return SUBSCRIPTION_TIER_NAMES[tier] as string;
+  return SUBSCRIPTION_TIER_NAMES[tier];
 }

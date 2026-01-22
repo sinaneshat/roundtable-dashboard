@@ -238,7 +238,7 @@ export function createEnvironmentValidationMiddleware() {
     // Skip validation in test environment (vitest sets NODE_ENV='test')
     // Type guard: process.env.NODE_ENV may be 'test' at runtime even though CloudflareEnv
     // type only defines 'development' | 'production'
-    const nodeEnv = process.env.NODE_ENV;
+    const nodeEnv = process.env.NODE_ENV as string | undefined;
     if (nodeEnv === NodeEnvs.TEST) {
       await next();
       return;

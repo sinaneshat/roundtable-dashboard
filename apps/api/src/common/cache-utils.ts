@@ -5,14 +5,10 @@
  * TanStack Start handles client-side caching via TanStack Query.
  */
 
-import type { SubscriptionTier } from '@roundtable/shared/enums';
-import { SUBSCRIPTION_TIERS } from '@roundtable/shared/enums';
-
 import type { getDbAsync } from '@/db';
 import {
   CreditCacheTags,
   MessageCacheTags,
-  ModelsCacheTags,
   PublicSlugsListCacheTags,
   PublicThreadCacheTags,
   ThreadCacheTags,
@@ -58,19 +54,6 @@ export async function invalidatePublicThreadCache(
 
   if (r2Bucket) {
     await deleteOgImageFromCache(r2Bucket, 'public-thread', slug).catch(() => {});
-  }
-}
-
-export async function invalidateModelsCache(
-  db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<void> {
-  if (db.$cache?.invalidate) {
-    await db.$cache.invalidate({
-      tags: [
-        ModelsCacheTags.static,
-        ...SUBSCRIPTION_TIERS.map((tier: SubscriptionTier) => ModelsCacheTags.byTier(tier)),
-      ],
-    });
   }
 }
 

@@ -1,4 +1,4 @@
-import { BILLING_INTERVALS, INVOICE_STATUSES, PAYMENT_METHOD_TYPES, PRICE_TYPES, STRIPE_SUBSCRIPTION_STATUSES } from '@roundtable/shared/enums';
+import { BILLING_INTERVALS, DEFAULT_PRICE_TYPE, INVOICE_STATUSES, PAYMENT_METHOD_TYPES, PRICE_TYPES, STRIPE_SUBSCRIPTION_STATUSES } from '@roundtable/shared/enums';
 import { relations } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
@@ -46,7 +46,7 @@ export const stripePrice = sqliteTable(
     unitAmount: integer('unit_amount'), // Price in smallest currency unit (cents for USD)
     type: text('type', { enum: PRICE_TYPES })
       .notNull()
-      .default('recurring'),
+      .default(DEFAULT_PRICE_TYPE),
     interval: text('interval', {
       enum: BILLING_INTERVALS,
     }), // For recurring prices

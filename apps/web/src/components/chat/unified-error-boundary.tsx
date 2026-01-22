@@ -1,12 +1,13 @@
 import type { ErrorBoundaryContext } from '@roundtable/shared';
 import { ErrorBoundaryContexts } from '@roundtable/shared';
+import { WebAppEnvs } from '@roundtable/shared/enums';
 import type { ErrorInfo, ReactNode } from 'react';
 import React, { Component } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { getWebappEnv } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
 
 /**
@@ -19,7 +20,7 @@ function isPostHogAvailable(): boolean {
     return false;
   }
   // Skip in local environment (PostHog not initialized)
-  return getWebappEnv() !== WEBAPP_ENVS.LOCAL;
+  return getWebappEnv() !== WebAppEnvs.LOCAL;
 }
 
 type UnifiedErrorBoundaryProps = {
@@ -82,7 +83,7 @@ const DefaultErrorFallback: React.FC<ErrorFallbackProps> = ({
           <p className="text-muted-foreground">{contextMessage}</p>
         </div>
 
-        {getWebappEnv() !== WEBAPP_ENVS.PROD && error && (
+        {getWebappEnv() !== WebAppEnvs.PROD && error && (
           <details className="w-full rounded-lg bg-muted/50 p-4 text-left">
             <summary className="cursor-pointer font-medium">
               {t('errors.boundary.devDetailsLabel')}

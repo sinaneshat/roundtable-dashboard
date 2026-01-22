@@ -11,6 +11,7 @@
  * 4. No participant info is lost when viewing public vs private thread
  */
 
+import { MessageRoles } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
 import type { ApiParticipant } from '@/services/api';
@@ -145,7 +146,7 @@ describe('public Thread Participant Consistency', () => {
       const response = createMockPublicThreadResponse();
       const participantMap = new Map(response.participants.map(p => [p.id, p]));
 
-      const assistantMessages = response.messages.filter(m => m.role === 'assistant');
+      const assistantMessages = response.messages.filter(m => m.role === MessageRoles.ASSISTANT);
 
       for (const msg of assistantMessages) {
         const participantId = msg.participantId || (msg.metadata as { participantId?: string }).participantId;
@@ -178,7 +179,7 @@ describe('public Thread Participant Consistency', () => {
         return undefined;
       };
 
-      const assistantMessages = response.messages.filter(m => m.role === 'assistant');
+      const assistantMessages = response.messages.filter(m => m.role === MessageRoles.ASSISTANT);
 
       for (const msg of assistantMessages) {
         const participant = resolveParticipant(msg);
@@ -256,7 +257,7 @@ describe('public Thread Participant Consistency', () => {
 
       // Messages should still be resolvable
       const participantMap = new Map(response.participants.map(p => [p.id, p]));
-      const assistantMessages = response.messages.filter(m => m.role === 'assistant');
+      const assistantMessages = response.messages.filter(m => m.role === MessageRoles.ASSISTANT);
 
       for (const msg of assistantMessages) {
         const hasParticipant = msg.participantId ? participantMap.has(msg.participantId) : false;

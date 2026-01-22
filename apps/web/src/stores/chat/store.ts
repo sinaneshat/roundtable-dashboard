@@ -29,7 +29,7 @@ import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { getEnabledSortedParticipants, getParticipantIndex, getRoundNumber, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant, ChatThread, PreSearchQuery, PreSearchResult, StoredPreSearch, WebSearchResultItem } from '@/services/api';
+import type { ApiChangelog, ChatParticipant, ChatThread, PreSearchQuery, PreSearchResult, StoredPreSearch, WebSearchResultItem } from '@/services/api';
 
 import type { SendMessage, StartRound } from './store-action-types';
 import { isUpsertOptions } from './store-action-types';
@@ -38,6 +38,7 @@ import {
   ANIMATION_DEFAULTS,
   ATTACHMENTS_DEFAULTS,
   CALLBACKS_DEFAULTS,
+  CHANGELOG_DEFAULTS,
   COMPLETE_RESET_STATE,
   DATA_DEFAULTS,
   FEEDBACK_DEFAULTS,
@@ -62,7 +63,9 @@ import type {
   AnimationSlice,
   AttachmentsSlice,
   CallbacksSlice,
+  ChangelogSlice,
   ChatStore,
+  ConfigChangeState,
   DataSlice,
   FeedbackSlice,
   FlagsSlice,
@@ -315,6 +318,22 @@ const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
     }, false, 'preSearch/clearPreSearchActivity'),
 });
 
+const createChangelogSlice: SliceCreator<ChangelogSlice> = (set, get) => ({
+  ...CHANGELOG_DEFAULTS,
+
+  setChangelogItems: (items: ApiChangelog[]) =>
+    set({ changelogItems: items }, false, 'changelog/setChangelogItems'),
+
+  addChangelogItems: (items: ApiChangelog[]) => {
+    const existing = get().changelogItems;
+    const ids = new Set(existing.map(i => i.id));
+    const newItems = items.filter(i => !ids.has(i.id));
+    if (newItems.length > 0) {
+      set({ changelogItems: [...existing, ...newItems] }, false, 'changelog/addChangelogItems');
+    }
+  },
+});
+
 const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
   ...THREAD_DEFAULTS,
 
@@ -546,6 +565,16 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
       }
     }, false, 'thread/deduplicateMessages');
   },
+
+  // ============================================================================
+  // ✅ RACE CONDITION FIX: STREAM FINISH ACKNOWLEDGMENT ACTIONS
+  // ============================================================================
+
+  acknowledgeStreamFinish: () =>
+    set({ streamFinishAcknowledged: true }, false, 'thread/acknowledgeStreamFinish'),
+
+  resetStreamFinishAcknowledgment: () =>
+    set({ streamFinishAcknowledged: false }, false, 'thread/resetStreamFinishAcknowledgment'),
 });
 
 const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
@@ -574,9 +603,37 @@ const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
     set({ isPatchInProgress: value }, false, 'flags/setIsPatchInProgress'),
   setParticipantHandoffInProgress: (value: boolean) =>
     set({ participantHandoffInProgress: value }, false, 'flags/setParticipantHandoffInProgress'),
+
+  // ============================================================================
+  // ✅ RACE CONDITION FIX: ATOMIC CONFIG CHANGE STATE UPDATES
+  // ============================================================================
+
+  atomicUpdateConfigChangeState: (update: Partial<ConfigChangeState>) =>
+    set(
+      () => ({
+        ...(update.configChangeRoundNumber !== undefined && { configChangeRoundNumber: update.configChangeRoundNumber }),
+        ...(update.isWaitingForChangelog !== undefined && { isWaitingForChangelog: update.isWaitingForChangelog }),
+        ...(update.isPatchInProgress !== undefined && { isPatchInProgress: update.isPatchInProgress }),
+        ...(update.hasPendingConfigChanges !== undefined && { hasPendingConfigChanges: update.hasPendingConfigChanges }),
+      }),
+      false,
+      'flags/atomicUpdateConfigChangeState',
+    ),
+
+  clearConfigChangeState: () =>
+    set(
+      {
+        configChangeRoundNumber: null,
+        isWaitingForChangelog: false,
+        isPatchInProgress: false,
+        hasPendingConfigChanges: false,
+      },
+      false,
+      'flags/clearConfigChangeState',
+    ),
 });
 
-const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({
+const createDataSlice: SliceCreator<DataSlice> = (set, get) => ({
   ...DATA_DEFAULTS,
 
   setRegeneratingRoundNumber: (value: number | null) =>
@@ -602,6 +659,28 @@ const createDataSlice: SliceCreator<DataSlice> = (set, _get) => ({
     set({ currentRoundNumber: value }, false, 'data/setCurrentRoundNumber'),
   setConfigChangeRoundNumber: (value: number | null) =>
     set({ configChangeRoundNumber: value }, false, 'data/setConfigChangeRoundNumber'),
+
+  // ============================================================================
+  // ✅ RACE CONDITION FIX: ROUND EPOCH MANAGEMENT
+  // ============================================================================
+
+  startNewRound: (roundNumber: number) => {
+    let newEpoch = 0;
+    set(
+      (state) => {
+        newEpoch = state.roundEpoch + 1;
+        return {
+          streamingRoundNumber: roundNumber,
+          roundEpoch: newEpoch,
+        };
+      },
+      false,
+      'data/startNewRound',
+    );
+    return newEpoch;
+  },
+
+  getRoundEpoch: () => get().roundEpoch,
 });
 
 const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
@@ -1212,8 +1291,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
               return aRound - bRound;
             if (a.role !== b.role)
               return a.role === MessageRoles.USER ? -1 : 1;
-            const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
-            const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
+            const aPIdx = getParticipantIndex(a.metadata) ?? 999;
+            const bPIdx = getParticipantIndex(b.metadata) ?? 999;
             return aPIdx - bPIdx;
           });
         } else {
@@ -1614,6 +1693,7 @@ export function createChatStore() {
           ...createFeedbackSlice(...args),
           ...createUISlice(...args),
           ...createPreSearchSlice(...args),
+          ...createChangelogSlice(...args),
           ...createThreadSlice(...args),
           ...createFlagsSlice(...args),
           ...createDataSlice(...args),

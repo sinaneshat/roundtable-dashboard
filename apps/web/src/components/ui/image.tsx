@@ -124,6 +124,7 @@ export default function Image({
         style={{ ...style, ...fillStyle }}
         loading={priority ? 'eager' : 'lazy'}
         decoding="async"
+        fetchPriority={priority ? 'high' : 'auto'}
         className={className}
         {...props}
       />
@@ -147,7 +148,8 @@ export default function Image({
           src={src}
           alt={alt}
           layout="fullWidth"
-          fetchPriority={priority ? 'high' : undefined}
+          fetchPriority={priority ? 'high' : 'auto'}
+          loading={priority ? 'eager' : 'lazy'}
           background={background}
           className={imageClassName}
           {...props}
@@ -162,7 +164,8 @@ export default function Image({
     alt,
     width: numWidth,
     height: numHeight,
-    fetchPriority: priority ? 'high' : undefined,
+    fetchPriority: priority ? 'high' : 'auto',
+    loading: priority ? 'eager' : 'lazy',
     background,
     className: imageClassName,
   } as UnpicImageProps;

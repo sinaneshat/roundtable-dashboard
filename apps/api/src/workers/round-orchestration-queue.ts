@@ -24,10 +24,9 @@
  */
 
 import type { Message, MessageBatch } from '@cloudflare/workers-types';
-import { BETTER_AUTH_SESSION_COOKIE_NAME, MessagePartTypes, RoundOrchestrationMessageTypes, UIMessageRoles } from '@roundtable/shared/enums';
+import { BASE_URL_CONFIG } from '@roundtable/shared';
+import { BETTER_AUTH_SESSION_COOKIE_NAME, MessagePartTypes, RoundOrchestrationMessageTypes, UIMessageRoles, WebAppEnvs, WebAppEnvSchema } from '@roundtable/shared/enums';
 
-import type { WebappEnv } from '@/lib/config/base-urls';
-import { BASE_URLS, isWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
 import { calculateExponentialBackoff } from '@/lib/utils/queue-utils';
 import type {
   CheckRoundCompletionQueueMessage,
@@ -55,13 +54,9 @@ const BASE_RETRY_DELAY_SECONDS = 60;
  * Get base URL for current environment
  */
 function getBaseUrl(env: CloudflareEnv): string {
-  const webappEnv = env.WEBAPP_ENV;
-  const validEnv: WebappEnv = isWebappEnv(webappEnv) ? webappEnv : WebAppEnvs.LOCAL;
-  const urls = BASE_URLS[validEnv];
-  if (!urls) {
-    throw new Error(`BASE_URLS not configured for environment: ${validEnv}`);
-  }
-  return urls.app;
+  const envResult = WebAppEnvSchema.safeParse(env.WEBAPP_ENV);
+  const validEnv = envResult.success ? envResult.data : WebAppEnvs.LOCAL;
+  return BASE_URL_CONFIG[validEnv].app;
 }
 
 /**

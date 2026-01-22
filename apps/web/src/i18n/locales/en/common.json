@@ -541,6 +541,8 @@
       "privateChatDescription": "This conversation is private and cannot be viewed.",
       "threadNotFound": "Thread Not Found",
       "threadNotFoundDescription": "This public chat thread doesn't exist or has been made private.",
+      "noLongerPublic": "No Longer Public",
+      "noLongerPublicDescription": "The owner has made this conversation private. It is no longer available for public viewing.",
       "tryFree": "Try Free"
     },
     "rename": "Rename",
@@ -875,7 +877,8 @@
     "page": {
       "description": "Choose the perfect plan for your needs",
       "title": "Pricing & Plans"
-    }
+    },
+    "pageTitle": "Pricing"
   },
   "roleDeleted": "Role deleted",
   "roleDeletedMessage": "The custom role has been deleted.",

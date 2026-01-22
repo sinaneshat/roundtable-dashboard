@@ -23,9 +23,10 @@
  */
 
 import { DurableObject } from 'cloudflare:workers';
-
-// IMPORTANT: No static imports of @/api/services or zod here!
+// IMPORTANT: No static imports of @/api/services here!
 // Use dynamic imports in methods to lazy-load heavy dependencies
+// NOTE: Zod is imported statically for SQL row validation (lightweight schema only)
+import * as z from 'zod';
 
 // ============================================================================
 // REQUEST VALIDATION (inline, no Zod dependency at startup)
@@ -89,8 +90,8 @@ type UploadCleanupState = {
  */
 export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
   private sql: SqlStorage;
-  // NOTE: db is lazily initialized via dynamic import to prevent startup memory issues
-  private _db: unknown = null;
+  // Explicitly typed for type safety - no unknown
+  private _db: Awaited<ReturnType<typeof import('@/services/uploads')['createDrizzleFromD1']>> | null = null;
 
   constructor(ctx: DurableObjectState, env: CloudflareEnv) {
     super(ctx, env);
@@ -113,12 +114,12 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
    * Lazy initialization of Drizzle database instance
    * Uses dynamic import to prevent startup memory overflow
    */
-  private async getDb() {
+  private async getDb(): Promise<Awaited<ReturnType<typeof import('@/services/uploads')['createDrizzleFromD1']>>> {
     if (!this._db) {
       const { createDrizzleFromD1 } = await import('@/services/uploads');
       this._db = createDrizzleFromD1(this.env.DB);
     }
-    return this._db as Awaited<ReturnType<typeof import('@/services/uploads')['createDrizzleFromD1']>>;
+    return this._db;
   }
 
   /**
@@ -176,12 +177,23 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
     if (!row)
       return null;
 
+    // Validate SQL row with inline Zod schema
+    const sqlRowSchema = z.object({
+      upload_id: z.string(),
+      user_id: z.string(),
+      r2_key: z.string(),
+      scheduled_at: z.number(),
+      created_at: z.number(),
+    });
+
+    const validated = sqlRowSchema.parse(row);
+
     return {
-      uploadId: row.upload_id as string,
-      userId: row.user_id as string,
-      r2Key: row.r2_key as string,
-      scheduledAt: row.scheduled_at as number,
-      createdAt: row.created_at as number,
+      uploadId: validated.upload_id,
+      userId: validated.user_id,
+      r2Key: validated.r2_key,
+      scheduledAt: validated.scheduled_at,
+      createdAt: validated.created_at,
     };
   }
 
@@ -208,10 +220,19 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
       now,
     ).toArray();
 
+    // Validate SQL row schema
+    const sqlRowSchema = z.object({
+      upload_id: z.string(),
+      user_id: z.string(),
+      r2_key: z.string(),
+      scheduled_at: z.number(),
+    });
+
     for (const row of dueUploads) {
-      const uploadId = row.upload_id as string;
-      const r2Key = row.r2_key as string;
-      const scheduledAt = row.scheduled_at as number;
+      const validated = sqlRowSchema.parse(row);
+      const uploadId = validated.upload_id;
+      const r2Key = validated.r2_key;
+      const scheduledAt = validated.scheduled_at;
 
       // Additional grace period check - if scheduled time + grace period hasn't passed,
       // reschedule for later to allow any in-flight attachment operations to complete

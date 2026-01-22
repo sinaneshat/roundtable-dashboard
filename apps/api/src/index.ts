@@ -225,14 +225,10 @@ import {
 // ============================================================================
 // System/health routes
 import {
-  benchmarkHandler,
-  clearCacheHandler,
   detailedHealthHandler,
   healthHandler,
 } from './routes/system/handler';
 import {
-  benchmarkRoute,
-  clearCacheRoute,
   detailedHealthRoute,
   healthRoute,
 } from './routes/system/route';
@@ -559,18 +555,10 @@ app.use('/uploads/multipart/:id/complete', RateLimiterFactory.create('upload'), 
 // Step 5: Register all routes
 // ============================================================================
 
-let routeChain = app
+const appRoutes = app
   .openapi(healthRoute, healthHandler)
   .openapi(detailedHealthRoute, detailedHealthHandler)
-  .openapi(ogChatRoute, ogChatHandler);
-
-if (IS_DEV_ENVIRONMENT) {
-  routeChain = routeChain
-    .openapi(clearCacheRoute, clearCacheHandler)
-    .openapi(benchmarkRoute, benchmarkHandler);
-}
-
-const appRoutes = routeChain
+  .openapi(ogChatRoute, ogChatHandler)
   .openapi(secureMeRoute, secureMeHandler)
   .openapi(listApiKeysRoute, listApiKeysHandler)
   .openapi(getApiKeyRoute, getApiKeyHandler)

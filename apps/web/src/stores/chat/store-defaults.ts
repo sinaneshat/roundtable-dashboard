@@ -15,10 +15,13 @@
 import { ChatModes, DEFAULT_CHAT_MODE, ModelIds, ScreenModes } from '@roundtable/shared';
 import { z } from 'zod';
 
+import type { ApiChangelog } from '@/services/api';
+
 import type {
   AnimationState,
   AttachmentsState,
   CallbacksState,
+  ChangelogState,
   DataState,
   FeedbackState,
   FlagsState,
@@ -40,7 +43,7 @@ import type {
  * Type for streaming state reset - all streaming-related flags
  * Extracted from STREAMING_STATE_RESET satisfies clause
  */
-type StreamingStateResetType = Pick<ThreadState & UIState & DataState, 'isStreaming' | 'currentParticipantIndex'> & Pick<DataState, 'streamingRoundNumber' | 'currentRoundNumber'> & Pick<UIState, 'waitingToStartStreaming'> & Pick<FlagsState, 'participantHandoffInProgress'>;
+type StreamingStateResetType = Pick<ThreadState & UIState & DataState, 'isStreaming' | 'currentParticipantIndex'> & Pick<DataState, 'streamingRoundNumber' | 'currentRoundNumber'> & Pick<UIState, 'waitingToStartStreaming'> & Pick<FlagsState, 'participantHandoffInProgress'> & Pick<ThreadState, 'streamFinishAcknowledged'>;
 
 /**
  * Type for pending message state reset - all pending message-related flags
@@ -135,6 +138,14 @@ export const PRESEARCH_DEFAULTS = {
 } satisfies PreSearchState;
 
 // ============================================================================
+// CHANGELOG SLICE DEFAULTS
+// ============================================================================
+
+export const CHANGELOG_DEFAULTS = {
+  changelogItems: [] as ApiChangelog[],
+} satisfies ChangelogState;
+
+// ============================================================================
 // THREAD SLICE DEFAULTS
 // ============================================================================
 
@@ -151,6 +162,8 @@ export const THREAD_DEFAULTS = {
   chatSetMessages: undefined,
   // ✅ NAVIGATION CLEANUP: Stop function to abort in-flight streaming
   chatStop: undefined,
+  // ✅ RACE CONDITION FIX: Explicit completion signal for stream settling
+  streamFinishAcknowledged: false,
 } satisfies ThreadState;
 
 // ============================================================================
@@ -185,6 +198,11 @@ export const DATA_DEFAULTS = {
   currentRoundNumber: null,
   /** Track round number when config changes submitted (for incremental changelog fetch) */
   configChangeRoundNumber: null,
+  /**
+   * ✅ RACE CONDITION FIX: Round epoch counter
+   * Increments each time a new round starts. Used to detect stale operations.
+   */
+  roundEpoch: 0,
 } satisfies DataState;
 
 // ============================================================================
@@ -297,6 +315,8 @@ export const STREAMING_STATE_RESET = {
   currentParticipantIndex: 0,
   /** ✅ HANDOFF FIX: Clear handoff flag when streaming completes */
   participantHandoffInProgress: false,
+  /** ✅ RACE CONDITION FIX: Reset stream finish acknowledgment */
+  streamFinishAcknowledged: false,
 } satisfies StreamingStateResetType;
 
 /**
@@ -384,6 +404,8 @@ export const COMPLETE_RESET_STATE = {
   // Pre-search state
   preSearches: PRESEARCH_DEFAULTS.preSearches,
   preSearchActivityTimes: new Map<number, number>(),
+  // Changelog state
+  changelogItems: CHANGELOG_DEFAULTS.changelogItems,
   // Thread state
   thread: THREAD_DEFAULTS.thread,
   participants: THREAD_DEFAULTS.participants,
@@ -395,6 +417,8 @@ export const COMPLETE_RESET_STATE = {
   startRound: THREAD_DEFAULTS.startRound,
   chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
   chatStop: THREAD_DEFAULTS.chatStop,
+  // ✅ RACE CONDITION FIX: Explicit stream completion signal
+  streamFinishAcknowledged: THREAD_DEFAULTS.streamFinishAcknowledged,
   // Flags state
   hasInitiallyLoaded: FLAGS_DEFAULTS.hasInitiallyLoaded,
   isRegenerating: FLAGS_DEFAULTS.isRegenerating,
@@ -412,6 +436,8 @@ export const COMPLETE_RESET_STATE = {
   streamingRoundNumber: DATA_DEFAULTS.streamingRoundNumber,
   currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
   configChangeRoundNumber: DATA_DEFAULTS.configChangeRoundNumber,
+  // ✅ RACE CONDITION FIX: Round epoch for stale operation detection
+  roundEpoch: DATA_DEFAULTS.roundEpoch,
   // Tracking state
   hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
   // Create fresh Set instances for each complete reset
@@ -477,6 +503,8 @@ export const THREAD_RESET_STATE = {
   streamingRoundNumber: DATA_DEFAULTS.streamingRoundNumber,
   currentRoundNumber: DATA_DEFAULTS.currentRoundNumber,
   configChangeRoundNumber: DATA_DEFAULTS.configChangeRoundNumber,
+  // ✅ RACE CONDITION FIX: Round epoch for stale operation detection
+  roundEpoch: DATA_DEFAULTS.roundEpoch,
   // Tracking state
   hasSentPendingMessage: TRACKING_DEFAULTS.hasSentPendingMessage,
   // Create fresh Set/Map instances for each thread reset
@@ -491,6 +519,8 @@ export const THREAD_RESET_STATE = {
   startRound: THREAD_DEFAULTS.startRound,
   chatSetMessages: THREAD_DEFAULTS.chatSetMessages,
   chatStop: THREAD_DEFAULTS.chatStop,
+  // ✅ RACE CONDITION FIX: Explicit stream completion signal
+  streamFinishAcknowledged: THREAD_DEFAULTS.streamFinishAcknowledged,
   // Callbacks (included in thread reset)
   onComplete: CALLBACKS_DEFAULTS.onComplete,
   // Stream resumption state
@@ -529,6 +559,9 @@ export const THREAD_NAVIGATION_RESET_STATE = {
   currentParticipantIndex: THREAD_DEFAULTS.currentParticipantIndex,
   // 🚨 CRITICAL: Clear pre-searches from previous thread
   preSearches: PRESEARCH_DEFAULTS.preSearches,
+  // ✅ FIX: Do NOT clear changelogItems here - changelog should persist across navigation
+  // Previously clearing changelogItems caused it to disappear when navigating back to thread
+  // because useSyncHydrateStore guard skips re-hydration for same thread (isInitialized && isSameThread)
   // Reset UI flags related to thread creation
   createdThreadId: UI_DEFAULTS.createdThreadId,
   isCreatingThread: UI_DEFAULTS.isCreatingThread,

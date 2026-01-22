@@ -33,9 +33,8 @@ import {
   createTestUserMessage,
 } from '@/lib/testing';
 import type { ChatParticipant, ChatThread } from '@/services/api';
-
-import type { ChatStoreApi } from '../../stores/chat/store';
-import { createChatStore } from '../../stores/chat/store';
+import type { ChatStoreApi } from '@/stores/chat';
+import { createChatStore } from '@/stores/chat';
 
 // ============================================================================
 // TEST SETUP

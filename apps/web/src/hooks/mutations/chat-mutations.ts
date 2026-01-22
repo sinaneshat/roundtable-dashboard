@@ -413,6 +413,16 @@ export function useTogglePublicMutation() {
 
       return { previousDetail, previousBySlug, slug: variables.slug, threadId: variables.threadId };
     },
+    onSuccess: (_data, variables) => {
+      // ✅ CACHE INVALIDATION: Invalidate public thread cache when visibility changes
+      // This ensures the public page shows the correct state (no longer public / now public)
+      if (variables.slug) {
+        // Invalidate the public thread query - forces fresh fetch on next visit
+        queryClient.invalidateQueries({ queryKey: queryKeys.threads.public(variables.slug) });
+        // Also invalidate the public slugs list
+        queryClient.invalidateQueries({ queryKey: queryKeys.threads.publicSlugs() });
+      }
+    },
     onError: (_error, _variables, context) => {
       if (context?.threadId && context?.previousDetail) {
         queryClient.setQueryData(queryKeys.threads.detail(context.threadId), context.previousDetail);

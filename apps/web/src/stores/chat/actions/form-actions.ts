@@ -15,7 +15,7 @@ import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
 import { isListOrSidebarQuery, queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
-import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
+import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, createPrefetchMeta, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, toISOString, toISOStringOrNull, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatParticipant } from '@/services/api';
 
@@ -93,6 +93,16 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     setConfigChangeRoundNumber: s.setConfigChangeRoundNumber,
     setIsPatchInProgress: s.setIsPatchInProgress,
     clearStreamResumption: s.clearStreamResumption,
+    setPendingFileParts: s.setPendingFileParts,
+    setPendingMessage: s.setPendingMessage,
+    setPendingAttachmentIds: s.setPendingAttachmentIds,
+    // ✅ RACE CONDITION FIX: Atomic config change state updates
+    atomicUpdateConfigChangeState: s.atomicUpdateConfigChangeState,
+    clearConfigChangeState: s.clearConfigChangeState,
+    // ✅ RACE CONDITION FIX: Round epoch management
+    startNewRound: s.startNewRound,
+    // ✅ RACE CONDITION FIX: Explicit stream completion signal
+    resetStreamFinishAcknowledgment: s.resetStreamFinishAcknowledgment,
   })));
 
   const createThreadMutation = useCreateThreadMutation();
@@ -198,6 +208,48 @@ export function useChatFormActions(): UseChatFormActionsReturn {
           };
         },
       );
+
+      // ✅ FIX: Pre-populate thread-by-slug cache BEFORE URL update
+      // This prevents skeleton flash when navigating to /chat/{slug} later
+      // The cache entry includes prefetch meta so loader knows data is fresh
+      queryClient.setQueryData(queryKeys.threads.bySlug(thread.slug), {
+        success: true,
+        data: {
+          thread: {
+            ...thread,
+            createdAt: toISOString(thread.createdAt),
+            updatedAt: toISOString(thread.updatedAt),
+            lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
+          },
+          participants: participantsWithDates.map(p => ({
+            ...p,
+            createdAt: toISOString(p.createdAt),
+            updatedAt: toISOString(p.updatedAt),
+          })),
+          messages: messagesWithDates,
+        },
+        meta: createPrefetchMeta(),
+      });
+
+      // Also pre-populate by thread ID for consistency
+      queryClient.setQueryData(queryKeys.threads.detail(thread.id), {
+        success: true,
+        data: {
+          thread: {
+            ...thread,
+            createdAt: toISOString(thread.createdAt),
+            updatedAt: toISOString(thread.updatedAt),
+            lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
+          },
+          participants: participantsWithDates.map(p => ({
+            ...p,
+            createdAt: toISOString(p.createdAt),
+            updatedAt: toISOString(p.updatedAt),
+          })),
+          messages: messagesWithDates,
+        },
+        meta: createPrefetchMeta(),
+      });
 
       queueMicrotask(() => {
         window.history.replaceState(
@@ -323,9 +375,20 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       actions.updateParticipants(optimisticParticipants);
     }
 
+    // ✅ RACE CONDITION FIX: Atomically set all config change flags together
+    // This prevents effects from seeing inconsistent state (e.g., isPatchInProgress=true but configChangeRoundNumber=null)
     if (hasAnyChanges) {
-      rlog.submit('pre-patch-flag', `r${nextRoundNumber} setting configChangeRoundNumber`);
-      actions.setConfigChangeRoundNumber(nextRoundNumber);
+      rlog.submit('pre-patch-flag', `r${nextRoundNumber} atomic: configChangeRoundNumber + isPatchInProgress`);
+      actions.atomicUpdateConfigChangeState({
+        configChangeRoundNumber: nextRoundNumber,
+        isPatchInProgress: true,
+        hasPendingConfigChanges: false, // Clear pending since we're about to apply
+      });
+    } else {
+      // Still need isPatchInProgress even without config changes
+      actions.atomicUpdateConfigChangeState({
+        isPatchInProgress: true,
+      });
     }
 
     if (freshEnableWebSearch) {
@@ -342,9 +405,13 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     actions.setPendingMessage(trimmed);
     actions.setPendingAttachmentIds(attachmentIds?.length ? attachmentIds : null);
 
-    // CRITICAL: Set isPatchInProgress BEFORE setWaitingToStartStreaming to prevent race condition
-    // The streaming trigger effect checks isPatchInProgress - must be true before effect runs
-    actions.setIsPatchInProgress(true);
+    // ✅ RACE CONDITION FIX: Reset stream finish acknowledgment for new round
+    actions.resetStreamFinishAcknowledgment();
+
+    // ✅ RACE CONDITION FIX: Use startNewRound to atomically set round number and increment epoch
+    // This allows effects to detect stale operations by comparing epochs
+    const roundEpoch = actions.startNewRound(nextRoundNumber);
+    rlog.submit('round-epoch', `r${nextRoundNumber} epoch=${roundEpoch}`);
 
     actions.setWaitingToStartStreaming(true);
     const firstParticipant = freshParticipants[0];
@@ -401,29 +468,33 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         }
       }
 
-      actions.setHasPendingConfigChanges(false);
-
       if (responseData?.thread) {
         actions.setThread(transformChatThread(responseData.thread));
       }
 
+      // ✅ RACE CONDITION FIX: Atomically update all config change flags after PATCH
       if (hasAnyChanges) {
-        rlog.submit('post-patch-flag', `r${nextRoundNumber} setting isWaitingForChangelog=true (PATCH complete, triggering changelog fetch)`);
-        actions.setIsWaitingForChangelog(true);
+        rlog.submit('post-patch-flag', `r${nextRoundNumber} atomic: isPatchInProgress=false, isWaitingForChangelog=true`);
+        actions.atomicUpdateConfigChangeState({
+          isPatchInProgress: false,
+          isWaitingForChangelog: true,
+          hasPendingConfigChanges: false,
+          // Keep configChangeRoundNumber until changelog is fetched
+        });
       } else {
-        rlog.submit('no-changelog', `r${nextRoundNumber} skipping changelog (no config changes)`);
+        rlog.submit('no-changelog', `r${nextRoundNumber} atomic: clearing config change state`);
+        actions.clearConfigChangeState();
       }
-
-      actions.setIsPatchInProgress(false);
     } catch (error) {
       actions.setMessages(currentMessages => currentMessages.filter(m => m.id !== optimisticMessage.id));
 
       actions.setWaitingToStartStreaming(false);
       actions.setStreamingRoundNumber(null);
       actions.setNextParticipantToTrigger(null);
-      actions.setConfigChangeRoundNumber(null);
-      actions.setIsWaitingForChangelog(false);
-      actions.setIsPatchInProgress(false);
+
+      // ✅ RACE CONDITION FIX: Atomically clear all config change flags on error
+      rlog.submit('patch-error', `r${nextRoundNumber} atomic: clearing all config change state`);
+      actions.clearConfigChangeState();
 
       showApiErrorToast('Error updating thread', error);
     }

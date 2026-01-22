@@ -6,11 +6,8 @@ import { Toaster } from '@/components/ui/toaster';
 import type { AbstractIntlMessages } from '@/lib/i18n';
 import { I18nProvider, useTranslations } from '@/lib/i18n';
 import dynamic from '@/lib/utils/dynamic';
+import { IdleLazyProvider } from '@/lib/utils/lazy-provider';
 import type { ModelPreferencesState } from '@/stores/preferences';
-
-import PostHogProvider from './posthog-provider';
-import { PreferencesStoreProvider } from './preferences-store-provider';
-import { ServiceWorkerProvider } from './service-worker-provider';
 
 // Lazy-loaded - only shown when app version changes
 const VersionUpdateModal = dynamic(
@@ -41,6 +38,8 @@ type AppProvidersProps = {
  * App-level providers for TanStack Start
  * Note: QueryClientProvider is in __root.tsx via router context
  * NuqsAdapter uses tanstack-router adapter for URL state sync
+ *
+ * PostHog loaded via IdleLazyProvider after browser idle for optimization
  */
 export function AppProviders({
   children,
@@ -52,28 +51,38 @@ export function AppProviders({
   initialPreferences,
 }: AppProvidersProps) {
   return (
-    <ServiceWorkerProvider>
-      <PostHogProvider
-        apiKey={env.VITE_POSTHOG_API_KEY}
-        environment={env.VITE_WEBAPP_ENV}
+    <NuqsAdapter>
+      <I18nProvider
+        messages={messages}
+        locale={locale}
+        timeZone={timeZone}
+        now={now}
       >
-        <PreferencesStoreProvider initialState={initialPreferences}>
-          <NuqsAdapter>
-            <I18nProvider
-              messages={messages}
-              locale={locale}
-              timeZone={timeZone}
-              now={now}
+        <GlobalErrorBoundary>
+          {/* Non-critical providers loaded after browser idle */}
+          <IdleLazyProvider<{ children: ReactNode }>
+            loader={() => import('./service-worker-provider').then(m => ({ default: m.ServiceWorkerProvider }))}
+            providerProps={{ children: null }}
+          >
+            <IdleLazyProvider<{ children: ReactNode; apiKey?: string }>
+              loader={() => import('./posthog-provider').then(m => ({ default: m.default }))}
+              providerProps={{ children: null, apiKey: env.VITE_POSTHOG_API_KEY }}
             >
-              <GlobalErrorBoundary>
+              <IdleLazyProvider<{ initialState?: ModelPreferencesState | null; children: ReactNode }>
+                loader={() => import('./preferences-store-provider').then(m => ({ default: m.PreferencesStoreProvider }))}
+                providerProps={{
+                  initialState: initialPreferences,
+                  children: null,
+                }}
+              >
                 {env.VITE_MAINTENANCE === 'true' ? <MaintenanceMessage /> : children}
-              </GlobalErrorBoundary>
-              <VersionUpdateModal />
-              <Toaster />
-            </I18nProvider>
-          </NuqsAdapter>
-        </PreferencesStoreProvider>
-      </PostHogProvider>
-    </ServiceWorkerProvider>
+              </IdleLazyProvider>
+            </IdleLazyProvider>
+          </IdleLazyProvider>
+          <VersionUpdateModal />
+          <Toaster />
+        </GlobalErrorBoundary>
+      </I18nProvider>
+    </NuqsAdapter>
   );
 }

@@ -14,6 +14,7 @@
 
 import type { ModelPricingTier } from '@roundtable/shared';
 import {
+  CREDIT_CONFIG,
   MODEL_PRICING_TIERS,
   MODEL_TIER_CREDIT_MULTIPLIERS,
   MODEL_TIER_THRESHOLDS,
@@ -22,7 +23,6 @@ import {
 import { useMemo } from 'react';
 
 import { useUsageStatsQuery } from '@/hooks/queries';
-import { CREDIT_CONFIG } from '@/lib/config';
 import type { CreditEstimationStatus } from '@/lib/enums/billing-ui';
 import { CreditEstimationStatuses } from '@/lib/enums/billing-ui';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';

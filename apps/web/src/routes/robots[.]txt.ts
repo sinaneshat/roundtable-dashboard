@@ -11,16 +11,17 @@
  * - CDN cacheable
  */
 
+import { WebAppEnvs } from '@roundtable/shared/enums';
 import { createFileRoute } from '@tanstack/react-router';
 
-import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
 
 function generateRobotsTxt(): string {
   const env = getWebappEnv();
   const baseUrl = getAppBaseUrl();
 
-  if (env === WEBAPP_ENVS.LOCAL || env === WEBAPP_ENVS.PREVIEW) {
-    return `# Roundtable - ${env === WEBAPP_ENVS.LOCAL ? 'Local Development' : 'Preview Environment'}
+  if (env === WebAppEnvs.LOCAL || env === WebAppEnvs.PREVIEW) {
+    return `# Roundtable - ${env === WebAppEnvs.LOCAL ? 'Local Development' : 'Preview Environment'}
 # ${baseUrl}
 
 User-agent: *

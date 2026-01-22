@@ -470,7 +470,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 imageContext = await analyzeImagesForSearchContext(fileParts, c.env, {
                   userId: user.id,
                   threadId,
-                  executionCtx: c.executionCtx,
+                  executionCtx: c.executionCtx as ExecutionContext,
                 });
               }
             } catch (error) {

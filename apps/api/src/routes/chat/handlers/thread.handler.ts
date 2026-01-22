@@ -1,4 +1,5 @@
 import type { RouteHandler } from '@hono/zod-openapi';
+import { SUBSCRIPTION_TIER_NAMES } from '@roundtable/shared';
 import type { ChatMode, ThreadStatus } from '@roundtable/shared/enums';
 import { ChangelogChangeTypes, ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, PlanTypes, SubscriptionTiers, ThreadStatusSchema } from '@roundtable/shared/enums';
 import type { SQL } from 'drizzle-orm';
@@ -31,7 +32,6 @@ import { isModeChange, isWebSearchChange, safeParseChangelogData } from '@/db/sc
 import type {
   ChatCustomRole,
 } from '@/db/validation';
-import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { sortByPriority } from '@/lib/utils';
@@ -1293,8 +1293,14 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
 
     // ✅ PUBLIC THREAD CACHE: Invalidate when visibility changes
     // Also clears cached OG images from R2
+    // CRITICAL: Must invalidate BOTH current slug AND previousSlug caches
+    // since public pages can be accessed via either URL
     if (body.isPublic !== undefined && thread.slug) {
       await invalidatePublicThreadCache(db, thread.slug, id, c.env.UPLOADS_R2_BUCKET);
+      // Also invalidate previousSlug cache if it exists
+      if (thread.previousSlug) {
+        await invalidatePublicThreadCache(db, thread.previousSlug, id, c.env.UPLOADS_R2_BUCKET);
+      }
     }
 
     // ✅ NEW MESSAGE CREATION: Create user message if provided
@@ -1450,8 +1456,12 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
 
     // ✅ PUBLIC THREAD CACHE: Invalidate if thread was public
     // Also clears cached OG images from R2
+    // CRITICAL: Must invalidate BOTH current slug AND previousSlug caches
     if (thread.isPublic && thread.slug) {
       await invalidatePublicThreadCache(db, thread.slug, id, c.env.UPLOADS_R2_BUCKET);
+      if (thread.previousSlug) {
+        await invalidatePublicThreadCache(db, thread.previousSlug, id, c.env.UPLOADS_R2_BUCKET);
+      }
     }
 
     return Responses.ok(c, {

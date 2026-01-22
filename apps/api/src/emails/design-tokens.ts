@@ -5,7 +5,10 @@
  * All values are converted to pixels for maximum email client compatibility.
  */
 
-import { BASE_URLS, getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
+import { BASE_URL_CONFIG } from '@roundtable/shared';
+import { WebAppEnvs } from '@roundtable/shared/enums';
+
+import { getWebappEnv } from '@/lib/config/base-urls';
 
 /**
  * Get the base URL for email assets.
@@ -16,17 +19,9 @@ function getEmailAssetsBaseUrl(): string {
   const env = getWebappEnv();
   // Local dev: use production URL (localhost blocked by email clients)
   if (env === WebAppEnvs.LOCAL) {
-    const prodUrls = BASE_URLS[WebAppEnvs.PROD];
-    if (!prodUrls) {
-      throw new Error('Production BASE_URLS not configured');
-    }
-    return prodUrls.app;
+    return BASE_URL_CONFIG[WebAppEnvs.PROD].app;
   }
-  const envUrls = BASE_URLS[env];
-  if (!envUrls) {
-    throw new Error(`BASE_URLS not configured for environment: ${env}`);
-  }
-  return envUrls.app;
+  return BASE_URL_CONFIG[env].app;
 }
 
 export const EMAIL_ASSETS_BASE_URL = getEmailAssetsBaseUrl();

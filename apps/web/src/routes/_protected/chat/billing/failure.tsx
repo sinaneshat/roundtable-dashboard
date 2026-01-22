@@ -3,7 +3,6 @@ import { BillingErrorTypes } from '@roundtable/shared';
 import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 
-import { BillingFailureSkeleton } from '@/components/billing/billing-failure-skeleton';
 import { BillingFailureClient } from '@/containers/screens/chat/billing/BillingFailureClient';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
@@ -21,7 +20,6 @@ const pageDescription = 'There was an issue processing your payment. Please try 
 
 export const Route = createFileRoute('/_protected/chat/billing/failure')({
   component: BillingFailurePage,
-  pendingComponent: BillingFailureSkeleton,
   validateSearch: billingFailureSearchSchema,
   ssr: false,
   head: () => {

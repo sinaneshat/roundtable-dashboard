@@ -377,7 +377,8 @@ async function extractWithCloudflareBrowser(
       } catch {}
     }
 
-    const extracted = await (page.evaluate as (fn: unknown, arg: string) => Promise<ExtractedContent>)(createContentExtractor(), extractFormat);
+    const extractFn = createContentExtractor();
+    const extracted = await page.evaluate(extractFn, extractFormat);
     await page.close();
     return extracted;
   } catch {
@@ -401,7 +402,8 @@ async function searchWithCloudflareBrowser(
       timeout: 15000,
     });
 
-    const results = await (page.evaluate as (fn: unknown, arg: number) => Promise<ExtractedSearchResult[]>)(createSearchExtractor(), maxResults);
+    const searchFn = createSearchExtractor();
+    const results = await page.evaluate(searchFn, maxResults);
     await page.close();
     return results;
   } catch {
@@ -414,10 +416,10 @@ async function searchWithCloudflareBrowser(
  * Create content extractor function for page.evaluate
  *
  * Returns a function that can be serialized and executed in browser context.
- * This is called separately for each browser type to avoid union type conflicts.
+ * This wrapper ensures proper typing for Puppeteer's page.evaluate.
  */
-function createContentExtractor(): (extractFormat: string) => ExtractedContent {
-  return (extractFormat: string): ExtractedContent => {
+function createContentExtractor() {
+  return function extractContent(extractFormat: string): ExtractedContent {
     // Helper to clean text
     const cleanText = (text: string): string => {
       return text
@@ -567,16 +569,17 @@ function createContentExtractor(): (extractFormat: string) => ExtractedContent {
       },
       images: images.slice(0, 10),
     };
-  };
+  } as (extractFormat: string) => ExtractedContent;
 }
 
 /**
  * Create search extractor function for page.evaluate
  *
  * Returns a function that extracts search results from DuckDuckGo HTML page.
+ * This wrapper ensures proper typing for Puppeteer's page.evaluate.
  */
-function createSearchExtractor(): (max: number) => ExtractedSearchResult[] {
-  return (max: number): ExtractedSearchResult[] => {
+function createSearchExtractor() {
+  return function extractSearchResults(max: number): ExtractedSearchResult[] {
     const items: ExtractedSearchResult[] = [];
     const resultElements = document.querySelectorAll('.result');
 
@@ -614,7 +617,7 @@ function createSearchExtractor(): (max: number) => ExtractedSearchResult[] {
     }
 
     return items;
-  };
+  } as (max: number) => ExtractedSearchResult[];
 }
 
 async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {
@@ -826,14 +829,15 @@ async function extractPageContent(
 }> {
   const browserResult = await initBrowser(env);
 
-  // Fallback if no browser available - use lightweight extraction with content
+  // Fallback if no browser available - use lightweight HTML extraction
   if (!browserResult) {
+    console.error(`[Search] No browser for ${url}, using lightweight extraction`);
     const lightContent = await extractLightweightContent(url);
     const content = lightContent.content || '';
     const wordCount = content.split(/\s+/).filter(Boolean).length;
     return {
       content,
-      rawContent: content, // Use same content for rawContent in fallback
+      rawContent: content,
       metadata: {
         title: lightContent.title,
         description: lightContent.description,
@@ -879,14 +883,30 @@ async function extractPageContent(
       metadata: extracted.metadata,
       images: extracted.images,
     };
-  } catch {
+  } catch (browserError) {
     // Close browser on error
     try {
       await browserResult.browser.close();
     } catch {}
+
+    console.error(`[Search] Browser extraction failed for ${url}, falling back to lightweight:`, browserError);
+
+    // Fall back to lightweight extraction instead of returning empty
+    const lightContent = await extractLightweightContent(url);
+    const content = lightContent.content || '';
+    const wordCount = content.split(/\s+/).filter(Boolean).length;
+
     return {
-      content: '',
-      metadata: { wordCount: 0, readingTime: 0 },
+      content,
+      rawContent: content,
+      metadata: {
+        title: lightContent.title,
+        description: lightContent.description,
+        imageUrl: lightContent.imageUrl,
+        faviconUrl: lightContent.faviconUrl,
+        wordCount,
+        readingTime: Math.ceil(wordCount / 200),
+      },
     };
   }
 }

@@ -12,16 +12,17 @@
  */
 
 import { BRAND } from '@roundtable/shared';
+import { WebAppEnvs } from '@roundtable/shared/enums';
 import { createFileRoute } from '@tanstack/react-router';
 
-import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
 
 function generateLlmsTxt(): string {
   const env = getWebappEnv();
   const baseUrl = getAppBaseUrl();
 
   // Only provide full info in production
-  if (env !== WEBAPP_ENVS.PROD) {
+  if (env !== WebAppEnvs.PROD) {
     return `# ${BRAND.name} - ${env} environment
 > This is a non-production environment. Visit ${BRAND.website} for the live application.`;
   }

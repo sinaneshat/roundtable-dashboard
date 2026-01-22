@@ -23,7 +23,7 @@ import type { MessageStatus } from '@roundtable/shared';
 import { MessageStatuses, RoundPhases } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
 
-import { createChatStore } from '../../stores/chat/store';
+import { createChatStore } from '@/stores/chat';
 
 // ============================================================================
 // HELPER: Calculate Input Blocking State (mirrors ChatInput.tsx logic)

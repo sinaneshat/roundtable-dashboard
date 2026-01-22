@@ -13,13 +13,13 @@ import { useMemo } from 'react';
 import Markdown from 'react-markdown';
 
 import { LazyStreamdown } from '@/components/markdown/lazy-streamdown';
+import { streamdownComponents } from '@/components/markdown/unified-markdown-components';
 import { cn } from '@/lib/ui/cn';
 import { parseCitations } from '@/lib/utils';
 import type { AvailableSource, DbCitation } from '@/services/api';
 
 import type { SourceData } from '../ai-elements/inline-citation';
 import { SourcesFooter } from '../ai-elements/inline-citation';
-import { streamdownComponents } from '../markdown/unified-markdown-components';
 
 // ============================================================================
 // Types
@@ -151,8 +151,10 @@ export function CitedMessageContent({
   // Helper to render markdown with SSR support
   const renderMarkdown = (content: string) => {
     if (skipTransitions) {
+      // SSR: Direct import renders synchronously - no hydration flash
       return <Markdown components={streamdownComponents}>{content}</Markdown>;
     }
+    // Client: Use streaming-capable lazy markdown
     return <LazyStreamdown components={streamdownComponents}>{content}</LazyStreamdown>;
   };
 

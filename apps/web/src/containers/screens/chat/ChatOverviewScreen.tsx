@@ -5,7 +5,7 @@ import {
   ScreenModes,
   UploadStatuses,
 } from '@roundtable/shared';
-import { useLocation } from '@tanstack/react-router';
+import { ClientOnly, getRouteApi, useLocation } from '@tanstack/react-router';
 import type { ChatStatus } from 'ai';
 import { motion } from 'motion/react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
@@ -69,6 +69,9 @@ import {
 
 import { ChatView } from './ChatView';
 
+// Route API for accessing loader data (server-side quick start selection)
+const routeApi = getRouteApi('/_protected/chat/');
+
 // ✅ SSR: ChatQuickStart imported directly above for server rendering
 // Dialogs can stay dynamic since they're hidden initially (not part of SSR content)
 const ChatDeleteDialog = dynamic(
@@ -85,6 +88,8 @@ export default function ChatOverviewScreen() {
   const t = useTranslations();
   const { pathname } = useLocation();
   const { data: session } = useSession();
+  // Server-side pre-selected quick start data (no client skeleton flash)
+  const quickStartData = routeApi.useLoaderData();
   const sessionUser = session?.user;
   // Track initial mount to skip showing "models deselected" toast on page load
   const hasCompletedInitialMountRef = useRef(false);
@@ -956,7 +961,9 @@ export default function ChatOverviewScreen() {
                   <div className="w-full">
                     <div className="flex flex-col items-center gap-4 sm:gap-6 text-center relative">
                       <div className="relative h-20 w-20 sm:h-24 sm:w-24">
-                        <LogoGlow />
+                        <ClientOnly fallback={null}>
+                          <LogoGlow />
+                        </ClientOnly>
                         <motion.div
                           className="relative w-full h-full"
                           animate={{
@@ -999,7 +1006,7 @@ export default function ChatOverviewScreen() {
                       </div>
 
                       <div className="w-full mt-6 sm:mt-8">
-                        <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} disabled={isOperationBlocked} />
+                        <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} disabled={isOperationBlocked} quickStartData={quickStartData} />
                       </div>
 
                       {!isMobile && (

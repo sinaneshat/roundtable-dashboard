@@ -2,6 +2,7 @@
  * Zod validation schemas for server function inputs.
  * Used with @tanstack/zod-adapter for type-safe input validation.
  */
+import { BooleanStrings, DEFAULT_WEBAPP_ENV, WebAppEnvSchema } from '@roundtable/shared/enums';
 import { z } from 'zod';
 
 /**
@@ -32,3 +33,30 @@ export const serverFnErrorResponseSchema = z.object({
 });
 
 export type ServerFnErrorResponse = z.infer<typeof serverFnErrorResponseSchema>;
+
+/**
+ * Schema for public environment variables exposed to client.
+ * Uses WebAppEnvSchema from shared for proper type validation.
+ * These are already public (in wrangler.jsonc vars) - just passing
+ * from server runtime to client.
+ */
+export const publicEnvSchema = z.object({
+  VITE_WEBAPP_ENV: WebAppEnvSchema,
+  VITE_POSTHOG_API_KEY: z.string(),
+  VITE_MAINTENANCE: z.string(),
+  VITE_TURNSTILE_SITE_KEY: z.string(),
+  VITE_STRIPE_PUBLISHABLE_KEY: z.string(),
+});
+
+export type PublicEnv = z.infer<typeof publicEnvSchema>;
+
+/**
+ * Default public env values for error boundaries where loader may not have run.
+ */
+export const DEFAULT_PUBLIC_ENV: PublicEnv = {
+  VITE_WEBAPP_ENV: DEFAULT_WEBAPP_ENV,
+  VITE_POSTHOG_API_KEY: '',
+  VITE_MAINTENANCE: BooleanStrings.FALSE,
+  VITE_TURNSTILE_SITE_KEY: '',
+  VITE_STRIPE_PUBLISHABLE_KEY: '',
+};

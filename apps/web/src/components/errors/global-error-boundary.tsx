@@ -1,10 +1,11 @@
+import { WebAppEnvs } from '@roundtable/shared/enums';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { getWebappEnv } from '@/lib/config/base-urls';
 
 /**
  * Check if PostHog is available for tracking
@@ -12,7 +13,7 @@ import { getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
 function isPostHogAvailable(): boolean {
   if (typeof window === 'undefined')
     return false;
-  return getWebappEnv() !== WEBAPP_ENVS.LOCAL;
+  return getWebappEnv() !== WebAppEnvs.LOCAL;
 }
 
 /**
@@ -81,7 +82,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
       }
 
       const { error, errorInfo } = this.state;
-      const isProd = getWebappEnv() === WEBAPP_ENVS.PROD;
+      const isProd = getWebappEnv() === WebAppEnvs.PROD;
 
       return (
         <div className="flex min-h-dvh items-center justify-center bg-gradient-to-br from-background via-muted/20 to-background p-4 sm:p-8">

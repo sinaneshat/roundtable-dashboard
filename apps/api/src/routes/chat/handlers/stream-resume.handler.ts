@@ -66,14 +66,12 @@ async function queueRoundCompletionCheck(
  * @param threadId - Thread to check
  * @param roundNumber - Current round number
  * @param totalParticipants - Total participant count in round
- * @param _kvNextParticipant - KV-stored next participant (may be stale)
  * @param currentStreamingIndex - Index currently streaming (avoids returning earlier index due to DB race)
  */
 async function getDbValidatedNextParticipant(
   threadId: string,
   roundNumber: number,
   totalParticipants: number,
-  _kvNextParticipant: { roundNumber: number; participantIndex: number; totalParticipants: number } | null,
   currentStreamingIndex?: number,
 ): Promise<{ participantIndex: number } | null> {
   const db = await getDbAsync();
@@ -204,7 +202,6 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
           threadId,
           activeStream.roundNumber,
           activeStream.totalParticipants,
-          nextParticipant,
           activeStream.participantIndex,
         );
         const validatedRoundComplete = !dbValidatedNext;
@@ -258,7 +255,7 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
           c.env,
         );
 
-        const kvUpdatedNextParticipant = await getNextParticipantToStream(threadId, c.env);
+        await getNextParticipantToStream(threadId, c.env);
 
         // ✅ FIX: Validate KV result against actual DB messages
         // KV might have marked participant as FAILED but message was never saved
@@ -267,7 +264,6 @@ export const resumeThreadStreamHandler: RouteHandler<typeof resumeThreadStreamRo
           threadId,
           activeStream.roundNumber,
           activeStream.totalParticipants,
-          kvUpdatedNextParticipant,
           activeStream.participantIndex,
         );
         const updatedRoundComplete = !dbValidatedNextParticipant;

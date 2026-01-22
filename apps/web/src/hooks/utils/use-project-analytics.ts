@@ -31,6 +31,8 @@ import { usePostHog } from 'posthog-js/react';
 import { useCallback } from 'react';
 import { z } from 'zod';
 
+import { ProjectAnalyticsEventTypes } from '@/lib/enums';
+
 type ProjectInfo = {
   id: string;
   name: string;
@@ -53,28 +55,28 @@ type ProjectGroupProperties = {
 // ============================================================================
 
 const ProjectMilestoneEventPropertiesSchema = z.object({
-  eventType: z.literal('milestone_completed'),
+  eventType: z.literal(ProjectAnalyticsEventTypes.MILESTONE_COMPLETED),
   milestoneId: z.string(),
   milestoneName: z.string().optional(),
   completedAt: z.string().datetime().optional(),
 });
 
 const ProjectMemberEventPropertiesSchema = z.object({
-  eventType: z.literal('member_added'),
+  eventType: z.literal(ProjectAnalyticsEventTypes.MEMBER_ADDED),
   memberId: z.string(),
   memberRole: z.string().optional(),
   invitedBy: z.string().optional(),
 });
 
 const ProjectStatusEventPropertiesSchema = z.object({
-  eventType: z.literal('status_changed'),
+  eventType: z.literal(ProjectAnalyticsEventTypes.STATUS_CHANGED),
   previousStatus: z.string(),
   newStatus: z.string(),
   reason: z.string().optional(),
 });
 
 const ProjectTaskEventPropertiesSchema = z.object({
-  eventType: z.literal('task_created'),
+  eventType: z.literal(ProjectAnalyticsEventTypes.TASK_CREATED),
   taskId: z.string(),
   taskTitle: z.string().optional(),
   assignedTo: z.string().optional(),
@@ -82,7 +84,7 @@ const ProjectTaskEventPropertiesSchema = z.object({
 });
 
 const ProjectActionEventPropertiesSchema = z.object({
-  eventType: z.literal('project_action'),
+  eventType: z.literal(ProjectAnalyticsEventTypes.PROJECT_ACTION),
   actionType: z.string(),
   actionDetails: z.string().optional(),
   metadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean()])).optional(),

@@ -12,6 +12,7 @@ import {
   Brain,
   Briefcase,
   Calendar,
+  Camera,
   Check,
   CheckCircle,
   ChevronDown,
@@ -65,8 +66,10 @@ import {
   Package,
   PanelLeft,
   Paperclip,
+  Pause,
   Pencil,
   Pin,
+  Play,
   Plus,
   RefreshCw,
   Scale,
@@ -88,6 +91,9 @@ import {
   Upload,
   User,
   Users,
+  Video,
+  Volume2,
+  VolumeX,
   Wifi,
   WifiOff,
   Wrench,
@@ -121,16 +127,20 @@ export const Icons = {
   home: House,
 
   // Actions
+  camera: Camera,
   check: Check,
   copy: Copy,
   download: Download,
   externalLink: ExternalLink,
   lock: Lock,
   lockOpen: LockOpen,
+  video: Video,
   logOut: LogOut,
   minus: Minus,
+  pause: Pause,
   pencil: Pencil,
   pin: Pin,
+  play: Play,
   plus: Plus,
   refreshCw: RefreshCw,
   search: Search,
@@ -215,6 +225,10 @@ export const Icons = {
   wifi: Wifi,
   wifiOff: WifiOff,
   database: Database,
+
+  // Audio
+  volume2: Volume2,
+  volumeX: VolumeX,
 } as const;
 
 export type IconName = keyof typeof Icons;

@@ -1,6 +1,7 @@
 import type { ModelCapabilityTag, ModelSelectionTab, PredefinedRoleTemplate, SubscriptionTier } from '@roundtable/shared';
 import {
   ChatModes,
+  createRoleSystemPrompt,
   DEFAULT_MODEL_SELECTION_TAB,
   MODEL_CAPABILITY_TAG_LABELS,
   MODEL_CAPABILITY_TAGS,
@@ -39,7 +40,7 @@ import {
 } from '@/hooks/mutations';
 import { useUsageStatsQuery, useUserPresetsQuery } from '@/hooks/queries';
 import { useBoolean, useDragEdgeScroll } from '@/hooks/utils';
-import { canAccessPreset, createRoleSystemPrompt, MODEL_PRESETS } from '@/lib/config';
+import { canAccessPreset, MODEL_PRESETS } from '@/lib/config';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
 import { useTranslations } from '@/lib/i18n';

@@ -17,6 +17,9 @@
  */
 
 import {
+  DEFAULT_PROJECT_COLOR,
+  DEFAULT_PROJECT_INDEX_STATUS,
+  DEFAULT_PROJECT_MEMORY_SOURCE,
   PROJECT_COLORS,
   PROJECT_INDEX_STATUSES,
   PROJECT_MEMORY_SOURCES,
@@ -55,7 +58,7 @@ export const chatProject = sqliteTable('chat_project', {
   // Project details
   name: text('name').notNull(), // "Q1 Marketing Strategy"
   description: text('description'), // Optional project description
-  color: text('color', { enum: PROJECT_COLORS }).default('blue'), // Visual identification color
+  color: text('color', { enum: PROJECT_COLORS }).default(DEFAULT_PROJECT_COLOR), // Visual identification color
 
   // Custom instructions (OpenAI Projects pattern)
   customInstructions: text('custom_instructions'), // Project-level instructions for all threads
@@ -116,7 +119,7 @@ export const projectAttachment = sqliteTable('project_attachment', {
   // AutoRAG indexing status (separate from upload status)
   indexStatus: text('index_status', { enum: PROJECT_INDEX_STATUSES })
     .notNull()
-    .default('pending'),
+    .default(DEFAULT_PROJECT_INDEX_STATUS),
 
   // Project-specific metadata for RAG context
   ragMetadata: text('rag_metadata', { mode: 'json' }).$type<ProjectAttachmentRagMetadata>(),
@@ -169,7 +172,7 @@ export const projectMemory = sqliteTable('project_memory', {
   // Source tracking
   source: text('source', { enum: PROJECT_MEMORY_SOURCES })
     .notNull()
-    .default('chat'),
+    .default(DEFAULT_PROJECT_MEMORY_SOURCE),
   sourceThreadId: text('source_thread_id')
     .references(() => chatThread.id, { onDelete: 'set null' }), // Thread this memory came from (if applicable)
   sourceRoundNumber: integer('source_round_number'), // Round number within thread (if from chat)

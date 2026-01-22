@@ -93,23 +93,36 @@ export function useChatScroll({
   /**
    * Scroll to bottom using native window.scrollTo
    * TanStack Virtual handles the heavy lifting - this is just a simple helper
+   * Manual trigger ONLY - no auto-scroll on load
    */
   const scrollToBottom = useCallback((behavior: ScrollBehavior = 'smooth') => {
     isProgrammaticScrollRef.current = true;
     isAtBottomRef.current = true;
 
-    requestAnimationFrame(() => {
+    const doScroll = () => {
       const scrollHeight = Math.max(
         document.body.scrollHeight,
         document.documentElement.scrollHeight,
       );
       window.scrollTo({ top: scrollHeight, behavior });
+    };
 
-      // Reset programmatic flag after scroll completes
+    // For 'instant' behavior, scroll synchronously for immediate positioning
+    if (behavior === 'instant') {
+      doScroll();
+      // Reset flag on next frame
       requestAnimationFrame(() => {
         isProgrammaticScrollRef.current = false;
       });
-    });
+    } else {
+      // For smooth/auto, use requestAnimationFrame for better timing
+      requestAnimationFrame(() => {
+        doScroll();
+        requestAnimationFrame(() => {
+          isProgrammaticScrollRef.current = false;
+        });
+      });
+    }
   }, []);
 
   // ============================================================================

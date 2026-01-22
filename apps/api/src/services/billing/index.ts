@@ -11,3 +11,5 @@ export * from './stripe-kv-cache';
 export * from './stripe-sync-schemas';
 export * from './stripe-sync.service';
 export * from './stripe.service';
+
+// For CREDIT_CONFIG, SUBSCRIPTION_TIER_NAMES, import directly from @roundtable/shared

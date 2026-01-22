@@ -30,7 +30,7 @@ import { act, render, screen } from '@/lib/testing';
 import { toastManager } from '@/lib/toast';
 import { filesHaveDocuments, filesHaveImages, getDetailedIncompatibleModelIds } from '@/lib/utils/file-capability';
 import type { ChatParticipant, ChatThread, Model } from '@/services/api';
-import { createChatStore } from '@/stores/chat/store';
+import { createChatStore } from '@/stores/chat';
 
 // ============================================================================
 // MOCKS

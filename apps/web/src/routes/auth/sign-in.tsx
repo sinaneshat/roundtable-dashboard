@@ -1,10 +1,13 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import { z } from 'zod';
+import { lazy } from 'react';
+import z from 'zod';
 
-import { AuthForm } from '@/components/auth/auth-form';
 import { AuthShowcaseLayout } from '@/components/auth/auth-showcase-layout';
 import { AuthLoadingSkeleton } from '@/components/loading';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
+
+// Lazy-load AuthForm to defer Zod validation bundle (95KB gzipped)
+const AuthForm = lazy(() => import('@/components/auth/auth-form').then(m => ({ default: m.AuthForm })));
 
 const pageTitle = 'Sign In - Roundtable';
 const pageDescription = 'Sign in to Roundtable - the collaborative AI brainstorming platform where multiple AI models work together to solve problems and generate ideas.';
@@ -64,8 +67,8 @@ export const Route = createFileRoute('/auth/sign-in')({
       ],
       links: [
         { rel: 'canonical', href: `${siteUrl}/auth/sign-in` },
-        // Preload LCP image for faster initial render
-        { rel: 'preload', href: '/static/logo.svg', as: 'image', type: 'image/svg+xml' },
+        // Preload optimized WebP logo (10KB vs 112KB SVG) for faster LCP
+        { rel: 'preload', href: '/static/logo.webp', as: 'image', type: 'image/webp' },
       ],
     };
   },
