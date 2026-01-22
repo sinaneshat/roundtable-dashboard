@@ -17,6 +17,7 @@ import { eq } from 'drizzle-orm';
 import { streamSSE } from 'hono/streaming';
 import { ulid } from 'ulid';
 
+import { invalidateMessagesCache } from '@/common/cache-utils';
 import { ErrorContextBuilders } from '@/common/error-contexts';
 import { createError } from '@/common/error-handling';
 import { verifyThreadOwnership } from '@/common/permissions';
@@ -1155,6 +1156,9 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
               createdAt: new Date(),
             })
             .onConflictDoNothing();
+
+          // Invalidate message cache after inserting pre-search results
+          await invalidateMessagesCache(db, threadId);
 
           // Send final done event with complete data
           await bufferedWriteSSE({
