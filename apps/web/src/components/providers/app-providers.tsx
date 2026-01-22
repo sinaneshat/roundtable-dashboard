@@ -66,10 +66,7 @@ export function AppProviders({
             loader={() => import('./service-worker-provider').then(m => ({ default: m.ServiceWorkerProvider }))}
             providerProps={{ children: null }}
           >
-            <PostHogProvider
-              apiKey={env.VITE_POSTHOG_API_KEY}
-              environment={env.VITE_WEBAPP_ENV}
-            >
+            <PostHogProvider apiKey={env.VITE_POSTHOG_API_KEY}>
               <IdleLazyProvider<{ initialState?: ModelPreferencesState | null; children: ReactNode }>
                 loader={() => import('./preferences-store-provider').then(m => ({ default: m.PreferencesStoreProvider }))}
                 providerProps={{

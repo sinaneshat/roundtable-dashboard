@@ -4,7 +4,7 @@ import { PostHogProvider as PHProvider } from 'posthog-js/react';
 import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 
-import { getApiOriginUrl } from '@/lib/config/base-urls';
+import { getApiOriginUrl, getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
 
 import { PageViewTracker } from './pageview-tracker';
 import { PostHogIdentifyUser } from './posthog-identify-user';
@@ -19,26 +19,7 @@ declare global {
 type PostHogProviderProps = {
   children: ReactNode;
   apiKey?: string;
-  environment?: string;
 };
-
-/**
- * Detect environment from hostname (client-side fallback)
- * Used when server-side env detection fails (known TanStack Start + CF issue)
- */
-function detectEnvFromHostname(): 'local' | 'preview' | 'prod' {
-  if (typeof window === 'undefined')
-    return 'local';
-
-  const hostname = window.location.hostname;
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return 'local';
-  }
-  if (hostname.includes('preview') || hostname.includes('-preview')) {
-    return 'preview';
-  }
-  return 'prod';
-}
 
 /**
  * PostHog Provider - Synchronous loading for TanStack Start + Cloudflare Workers
@@ -46,31 +27,26 @@ function detectEnvFromHostname(): 'local' | 'preview' | 'prod' {
  * PostHog is initialized synchronously to ensure window.posthog is available
  * for toolbar authorization and other integrations.
  *
- * NOTE: Uses hostname-based env detection as fallback due to known TanStack Start
- * SSR issue where Cloudflare env vars don't propagate correctly.
+ * Uses getWebappEnv() for reliable environment detection via hostname on client-side.
  */
 export default function PostHogProvider({
   children,
   apiKey,
-  environment: envProp,
 }: PostHogProviderProps) {
   const initStarted = useRef(false);
 
-  // Detect actual environment from hostname (fallback for CF SSR issue)
-  const detectedEnv = typeof window !== 'undefined' ? detectEnvFromHostname() : 'local';
-  // Use detected env if prop says "local" but hostname says otherwise
-  const environment = (envProp === 'local' && detectedEnv !== 'local') ? detectedEnv : envProp;
+  // Use centralized env detection (hostname-based on client, reliable)
+  const environment = getWebappEnv();
+  const isLocal = environment === WebAppEnvs.LOCAL;
 
   // Debug: Log props on every render (client-side only)
   useEffect(() => {
     console.log('[PostHog] Provider mounted', {
       apiKey: apiKey ? `${apiKey.slice(0, 10)}...` : 'MISSING',
-      envProp,
-      detectedEnv,
-      resolvedEnv: environment,
-      hostname: window.location.hostname,
+      environment,
+      hostname: typeof window !== 'undefined' ? window.location.hostname : 'SSR',
     });
-  }, [apiKey, envProp, detectedEnv, environment]);
+  }, [apiKey, environment]);
 
   useEffect(() => {
     // Skip SSR
@@ -78,9 +54,9 @@ export default function PostHogProvider({
       return;
     }
 
-    // Skip truly local env (localhost/127.0.0.1)
-    if (environment === 'local') {
-      console.log('[PostHog] Skipped: local environment (localhost)');
+    // Skip local env (localhost/127.0.0.1)
+    if (isLocal) {
+      console.log('[PostHog] Skipped: local environment');
       return;
     }
 
@@ -134,7 +110,7 @@ export default function PostHogProvider({
 
       // Other config
       scroll_root_selector: '#root',
-      debug: environment !== 'prod',
+      debug: environment !== WebAppEnvs.PROD,
 
       // Expose to window + capture initial pageview
       loaded: (ph) => {
@@ -163,15 +139,15 @@ export default function PostHogProvider({
     // Set window.posthog immediately after init call
     window.posthog = posthog;
     console.log('[PostHog] Init complete, window.posthog set');
-  }, [apiKey, environment]);
+  }, [apiKey, environment, isLocal]);
 
   // Skip SSR
   if (typeof window === 'undefined') {
     return <>{children}</>;
   }
 
-  // Skip truly local env or missing API key
-  if (environment === 'local' || !apiKey) {
+  // Skip local env or missing API key
+  if (isLocal || !apiKey) {
     return <>{children}</>;
   }
 

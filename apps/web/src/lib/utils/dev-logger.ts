@@ -1,6 +1,8 @@
 import type { DebugData, DevLogLevel, RlogCategory, RlogStreamAction } from '@roundtable/shared';
 import { DevLogLevels, RLOG_CATEGORY_STYLES, RlogCategories } from '@roundtable/shared';
 
+import { getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
+
 import { safeStorageRemove, safeStorageSet } from './safe-storage';
 
 type LogEntry = {
@@ -25,10 +27,13 @@ const logCache = new Map<string, LogEntry>();
 const updateCounts = new Map<string, UpdateTracker>();
 
 // Enable client-side logging in development AND preview environments (not production)
-// VITE_WEBAPP_ENV is set at build time: 'local', 'preview', or 'prod'
-const isDev = import.meta.env.MODE === 'development'
-  || import.meta.env.VITE_WEBAPP_ENV === 'local'
-  || import.meta.env.VITE_WEBAPP_ENV === 'preview';
+// Uses hostname-based detection for reliable env detection on client
+function getIsDev(): boolean {
+  const env = getWebappEnv();
+  return env === WebAppEnvs.LOCAL || env === WebAppEnvs.PREVIEW;
+}
+
+const isDev = getIsDev();
 
 /* eslint-disable no-console */
 function getConsoleMethod(level: DevLogLevel): typeof console.debug {

@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useState } from 'react';
 
+import { getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
+
 export type ServiceWorkerRegistrationState = {
   updateAvailable: boolean;
   waitingWorker: ServiceWorker | null;
@@ -34,10 +36,11 @@ export function useServiceWorkerRegistration(): ServiceWorkerRegistrationState {
 
   useEffect(() => {
     // Only register in production (not local dev)
+    // Uses hostname-based detection to avoid build-time env var issues
     if (
       typeof window === 'undefined'
       || !('serviceWorker' in navigator)
-      || import.meta.env.VITE_WEBAPP_ENV === 'local'
+      || getWebappEnv() === WebAppEnvs.LOCAL
     ) {
       return undefined;
     }

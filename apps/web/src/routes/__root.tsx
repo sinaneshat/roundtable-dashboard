@@ -172,10 +172,7 @@ function RootDocument({ children, env = DEFAULT_PUBLIC_ENV }: { children: ReactN
             loader={() => import('@/components/providers/service-worker-provider').then(m => ({ default: m.ServiceWorkerProvider }))}
             providerProps={{ children: null }}
           >
-            <PostHogProvider
-              apiKey={env.VITE_POSTHOG_API_KEY}
-              environment={env.VITE_WEBAPP_ENV}
-            >
+            <PostHogProvider apiKey={env.VITE_POSTHOG_API_KEY}>
               {children}
             </PostHogProvider>
           </IdleLazyProvider>

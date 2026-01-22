@@ -72,37 +72,21 @@ export function isPrerender(): boolean {
 
 /**
  * Detect current environment (async version for server functions)
- *
- * For TanStack Start, we use import.meta.env which is replaced at build time by Vite.
- *
- * Priority:
- * 1. import.meta.env.VITE_WEBAPP_ENV (Vite build-time replacement)
- * 2. process.env.VITE_WEBAPP_ENV (fallback for SSR)
- * 3. NODE_ENV detection (development = local, production = prod)
- * 4. Runtime detection via hostname (client-side only)
- * 5. Falls back to PROD for safety
+ * Uses same logic as getWebappEnv() - see that function for priority docs.
  */
 export async function getWebappEnvAsync(): Promise<WebappEnv> {
-  // 1. Check import.meta.env (Vite build-time replacement)
-  const viteEnv = import.meta.env?.VITE_WEBAPP_ENV;
-  if (viteEnv && isWebappEnv(viteEnv)) {
-    return viteEnv;
-  }
+  // Delegate to sync version - same logic applies
+  return getWebappEnv();
+}
 
-  // 2. Check process.env (SSR fallback)
-  const processEnv = process.env.VITE_WEBAPP_ENV;
-  if (processEnv && isWebappEnv(processEnv)) {
-    return processEnv;
-  }
+/**
+ * Detect environment from hostname (client-side)
+ * Most reliable detection method as it can't be misconfigured
+ */
+function detectEnvFromHostname(): WebappEnv {
+  if (typeof window === 'undefined')
+    return WebAppEnvs.PROD;
 
-  // 3. Server-side: use NODE_ENV
-  if (typeof window === 'undefined') {
-    return import.meta.env.MODE === 'development'
-      ? WebAppEnvs.LOCAL
-      : WebAppEnvs.PROD;
-  }
-
-  // 4. Client-side: detect from hostname
   const hostname = window.location.hostname;
   if (hostname === 'localhost' || hostname === '127.0.0.1') {
     return WebAppEnvs.LOCAL;
@@ -110,52 +94,47 @@ export async function getWebappEnvAsync(): Promise<WebappEnv> {
   if (hostname.includes('preview') || hostname.includes('-preview')) {
     return WebAppEnvs.PREVIEW;
   }
-
-  // 5. Fallback to production
   return WebAppEnvs.PROD;
 }
 
 /**
  * Detect current environment (synchronous - for client-side and non-async contexts)
  *
- * Priority:
- * 1. import.meta.env.VITE_WEBAPP_ENV (Vite build-time replacement - works on CF Workers)
- * 2. process.env.VITE_WEBAPP_ENV (SSR fallback)
+ * CLIENT-SIDE Priority (hostname is most reliable):
+ * 1. Hostname detection (can't be misconfigured)
+ *
+ * SERVER-SIDE Priority:
+ * 1. import.meta.env.VITE_WEBAPP_ENV (Vite build-time replacement)
+ * 2. process.env.VITE_WEBAPP_ENV (SSR/CF Workers fallback)
  * 3. NODE_ENV detection (development = local, production = prod)
- * 4. Runtime detection via hostname (client-side only)
- * 5. Falls back to PROD for safety
+ *
+ * NOTE: Build-time env vars can be incorrect if build env differs from deploy env.
+ * Client-side hostname detection is always accurate.
  */
 export function getWebappEnv(): WebappEnv {
-  // 1. Check import.meta.env (Vite build-time replacement - works on Cloudflare Workers)
+  // CLIENT-SIDE: Use hostname detection (most reliable, can't be misconfigured)
+  if (typeof window !== 'undefined') {
+    return detectEnvFromHostname();
+  }
+
+  // SERVER-SIDE: Try env vars, fall back to NODE_ENV detection
+
+  // 1. Check import.meta.env (Vite build-time replacement)
   const viteEnv = import.meta.env?.VITE_WEBAPP_ENV;
   if (viteEnv && isWebappEnv(viteEnv)) {
     return viteEnv;
   }
 
-  // 2. Check process.env (SSR fallback)
+  // 2. Check process.env (SSR/CF Workers fallback)
   const processEnv = process.env.VITE_WEBAPP_ENV;
   if (processEnv && isWebappEnv(processEnv)) {
     return processEnv;
   }
 
-  // 3. Server-side: use NODE_ENV
-  if (typeof window === 'undefined') {
-    return import.meta.env.MODE === 'development'
-      ? WebAppEnvs.LOCAL
-      : WebAppEnvs.PROD;
-  }
-
-  // 4. Client-side: detect from hostname
-  const hostname = window.location.hostname;
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return WebAppEnvs.LOCAL;
-  }
-  if (hostname.includes('preview') || hostname.includes('-preview')) {
-    return WebAppEnvs.PREVIEW;
-  }
-
-  // 5. Fallback to production
-  return WebAppEnvs.PROD;
+  // 3. Fall back to NODE_ENV detection
+  return import.meta.env.MODE === 'development'
+    ? WebAppEnvs.LOCAL
+    : WebAppEnvs.PROD;
 }
 
 /**
