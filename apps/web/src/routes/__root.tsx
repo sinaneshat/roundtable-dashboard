@@ -13,13 +13,14 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 
 import { Icons } from '@/components/icons';
+import PostHogProvider from '@/components/providers/posthog-provider';
 import { StructuredData } from '@/components/seo';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getCachedSession, setCachedSession } from '@/lib/auth/session-cache';
 import { getAppBaseUrl, getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
 import { TurnstileProvider } from '@/lib/turnstile';
-import { IdleLazyProvider, LazyProvider } from '@/lib/utils/lazy-provider';
+import { IdleLazyProvider } from '@/lib/utils/lazy-provider';
 import type { RouterContext } from '@/router';
 import { getSession } from '@/server/auth';
 import { getPublicEnv } from '@/server/env';
@@ -117,10 +118,12 @@ export const Route = createRootRouteWithContext<RouterContext>()({
         // These start loading immediately with HTML, before CSS is parsed
         { rel: 'preload', href: '/static/fonts/Geist-Regular.woff2', as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' },
         { rel: 'preload', href: '/static/fonts/Geist-SemiBold.woff2', as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' },
+        { rel: 'preload', href: '/static/fonts/Geist-Bold.woff2', as: 'font', type: 'font/woff2', crossOrigin: 'anonymous' },
         // Performance: DNS prefetch and preconnect for external resources
         { rel: 'dns-prefetch', href: 'https://challenges.cloudflare.com' },
         { rel: 'dns-prefetch', href: 'https://us.posthog.com' },
         { rel: 'preconnect', href: 'https://challenges.cloudflare.com', crossOrigin: 'anonymous' },
+        { rel: 'preconnect', href: 'https://us.posthog.com', crossOrigin: 'anonymous' },
         // PWA Manifest
         { rel: 'manifest', href: '/manifest.webmanifest' },
         // Favicon - default for all browsers (without sizes for maximum compatibility)
@@ -156,24 +159,25 @@ function RootDocument({ children, env = DEFAULT_PUBLIC_ENV }: { children: ReactN
         <HeadContent />
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
+        {/* Skip link for keyboard/screen reader users */}
+        <a
+          href="#main-content"
+          className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+        >
+          Skip to main content
+        </a>
         <TurnstileProvider>
           {/* Non-critical analytics and PWA providers - loaded after first render */}
           <IdleLazyProvider<{ children: ReactNode }>
             loader={() => import('@/components/providers/service-worker-provider').then(m => ({ default: m.ServiceWorkerProvider }))}
             providerProps={{ children: null }}
           >
-            {/* PostHog uses LazyProvider (not IdleLazy) because it has its own deferral logic */}
-            {/* Double-deferral would delay initialization by 15+ seconds */}
-            <LazyProvider<{ apiKey?: string; environment?: string; children: ReactNode }>
-              loader={() => import('@/components/providers/posthog-provider')}
-              providerProps={{
-                apiKey: env.VITE_POSTHOG_API_KEY,
-                environment: env.VITE_WEBAPP_ENV,
-                children: null,
-              }}
+            <PostHogProvider
+              apiKey={env.VITE_POSTHOG_API_KEY}
+              environment={env.VITE_WEBAPP_ENV}
             >
               {children}
-            </LazyProvider>
+            </PostHogProvider>
           </IdleLazyProvider>
         </TurnstileProvider>
         <StructuredData type="WebApplication" />

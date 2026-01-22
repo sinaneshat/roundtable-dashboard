@@ -61,6 +61,12 @@ export async function ingestProxyHandler(c: Context<ApiEnv>): Promise<Response> 
   }
   headers.set('Host', targetHost);
 
+  // Forward real client IP for accurate geolocation (PostHog proxy requirement)
+  const clientIp = c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for')?.split(',')[0]?.trim();
+  if (clientIp) {
+    headers.set('X-Forwarded-For', clientIp);
+  }
+
   try {
     const response = await fetch(targetUrl, {
       method: c.req.method,
