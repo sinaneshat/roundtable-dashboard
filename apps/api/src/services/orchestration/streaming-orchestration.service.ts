@@ -51,6 +51,7 @@ import {
   loadMessageAttachmentsUrl,
   uint8ArrayToBase64,
 } from '@/services/messages';
+import type { UrlFilePart } from '@/services/messages/attachment-content.service';
 import {
   buildAttachmentCitationPrompt,
   buildParticipantSystemPrompt,
@@ -67,6 +68,7 @@ import type {
 } from '@/types/citations';
 import type { TypedLogger } from '@/types/logger';
 import { LogHelpers } from '@/types/logger';
+import type { ModelFilePart } from '@/types/uploads';
 import { isModelFilePartWithData } from '@/types/uploads';
 
 // ============================================================================
@@ -99,6 +101,60 @@ type RagSearchResultItem = {
   filename: string;
   score: number;
 };
+
+// ============================================================================
+// TYPE-SAFE CONVERSION HELPERS
+// ============================================================================
+
+/**
+ * Convert model file parts (with data/mimeType fields) to UI message parts (with url/mediaType fields)
+ *
+ * This handles the type conversion between:
+ * - ModelFilePart/UrlFilePart (backend format with data, mimeType, url, mediaType)
+ * - UIMessagePart (AI SDK format with type, url, mediaType, filename)
+ *
+ * The AI SDK's UIMessage expects parts with { type, url, mediaType, filename }
+ * Our backend file parts include extra fields (data, mimeType) for internal processing
+ *
+ * Type safety note: We use `as unknown as` to safely convert between compatible but not
+ * structurally identical types. The runtime shape is correct for the AI SDK.
+ *
+ * @param fileParts - Array of model file parts from attachment loading
+ * @returns Array of UI-compatible file parts suitable for UIMessage.parts
+ */
+function convertFilePartsToUIMessageParts<T extends UIMessage>(
+  fileParts: (ModelFilePart | UrlFilePart)[],
+): Array<T['parts'][number]> {
+  return fileParts.map((part): T['parts'][number] => {
+    if (part.type === 'file') {
+      if ('url' in part) {
+        const converted = {
+          type: 'file' as const,
+          // eslint-disable-next-line ts/no-explicit-any
+          url: (part as any).url as string,
+          // eslint-disable-next-line ts/no-explicit-any
+          mediaType: (part as any).mediaType || (part as any).mimeType as string,
+          // eslint-disable-next-line ts/no-explicit-any
+          filename: (part as any).filename as string | undefined,
+        };
+        return converted as unknown as T['parts'][number];
+      }
+    }
+    if (part.type === 'image') {
+      if ('image' in part) {
+        const converted = {
+          type: 'image' as const,
+          // eslint-disable-next-line ts/no-explicit-any
+          image: (part as any).image as string,
+          // eslint-disable-next-line ts/no-explicit-any
+          mimeType: (part as any).mimeType as string,
+        };
+        return converted as unknown as T['parts'][number];
+      }
+    }
+    return part as unknown as T['parts'][number];
+  });
+}
 
 // ============================================================================
 // ZOD SCHEMAS - SINGLE SOURCE OF TRUTH
@@ -1202,9 +1258,8 @@ export async function prepareValidatedMessages(
           part => part.type !== 'file',
         );
 
-        // Cast URL-based file parts to work with UIMessage format
-        // AI SDK will handle these correctly during model message conversion
-        let combinedParts = [...(fileParts as unknown as typeof existingParts), ...nonFileParts];
+        const uiFileParts = convertFilePartsToUIMessageParts<typeof newMessage>(fileParts);
+        let combinedParts = [...uiFileParts, ...nonFileParts];
 
         // Prepend extracted text from PDFs/documents as a text part
         if (extractedTextContent) {
@@ -1306,7 +1361,8 @@ export async function prepareValidatedMessages(
               part => part.type !== 'file',
             );
 
-            let combinedParts = [...(fileParts as unknown as typeof existingParts), ...nonFileParts];
+            const uiFileParts = convertFilePartsToUIMessageParts<typeof newMessage>(fileParts);
+            let combinedParts = [...uiFileParts, ...nonFileParts];
 
             // Prepend extracted text from PDFs/documents as a text part
             if (extractedTextContent) {
@@ -1396,7 +1452,8 @@ export async function prepareValidatedMessages(
               part => part.type !== 'file',
             );
 
-            let combinedParts = [...(fileParts as unknown as typeof existingParts), ...nonFileParts];
+            const uiFileParts = convertFilePartsToUIMessageParts<typeof newMessage>(fileParts);
+            let combinedParts = [...uiFileParts, ...nonFileParts];
 
             // Prepend extracted text from PDFs/documents as a text part
             if (extractedTextContent) {
@@ -1515,9 +1572,10 @@ export async function prepareValidatedMessages(
             const hasFileParts = currentParts.some(part => part.type === 'file');
 
             if (!hasFileParts && !extractedText) {
+              const uiUrlParts = urlParts ? convertFilePartsToUIMessageParts<typeof msg>(urlParts) : [];
               return {
                 ...msg,
-                parts: [...(urlParts as unknown as typeof currentParts), ...currentParts],
+                parts: [...uiUrlParts, ...currentParts],
               };
             }
 
@@ -1531,8 +1589,9 @@ export async function prepareValidatedMessages(
               return typeof partUrl === 'string' && partUrl.startsWith('data:');
             });
 
+            const uiUrlParts = urlParts ? convertFilePartsToUIMessageParts<typeof msg>(urlParts) : [];
             let combinedParts = [
-              ...((urlParts || []) as unknown as typeof currentParts),
+              ...uiUrlParts,
               ...existingDataUrlParts,
               ...nonFileParts,
             ];
@@ -1685,7 +1744,8 @@ export async function prepareValidatedMessages(
                 continue;
 
               const nonFileParts = msg.parts.filter(p => !isFilePart(p));
-              let newParts = [...(urlParts as unknown as typeof msg.parts), ...nonFileParts];
+              const uiUrlParts = convertFilePartsToUIMessageParts<typeof msg>(urlParts);
+              let newParts = [...uiUrlParts, ...nonFileParts];
 
               // Prepend extracted text from PDFs/documents as a text part
               if (extractedTextContent) {

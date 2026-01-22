@@ -7,6 +7,8 @@
  * ✅ TYPE-SAFE: Full TypeScript inference without manual casting
  */
 
+import { MessageRoles, UIMessageRoles } from '@roundtable/shared';
+
 import type {
   DbAssistantMessageMetadata,
   DbChangelogData,
@@ -24,7 +26,7 @@ import type {
  * Check if metadata is for a user message
  */
 export function isUserMessageMetadata(metadata: DbMessageMetadata): metadata is DbUserMessageMetadata {
-  return metadata.role === 'user';
+  return metadata.role === MessageRoles.USER;
 }
 
 /**
@@ -33,7 +35,7 @@ export function isUserMessageMetadata(metadata: DbMessageMetadata): metadata is 
  */
 export function isAssistantMessageMetadata(metadata: DbMessageMetadata): metadata is DbAssistantMessageMetadata {
   return (
-    metadata.role === 'assistant'
+    metadata.role === MessageRoles.ASSISTANT
     && 'participantId' in metadata
     && !('isModerator' in metadata && (metadata as DbModeratorMessageMetadata).isModerator === true)
   );
@@ -43,14 +45,14 @@ export function isAssistantMessageMetadata(metadata: DbMessageMetadata): metadat
  * Check if metadata is for a pre-search system message
  */
 export function isPreSearchMessageMetadata(metadata: DbMessageMetadata): metadata is DbPreSearchMessageMetadata {
-  return metadata.role === 'system' && 'isPreSearch' in metadata && (metadata as DbPreSearchMessageMetadata).isPreSearch === true;
+  return metadata.role === UIMessageRoles.SYSTEM && 'isPreSearch' in metadata && (metadata as DbPreSearchMessageMetadata).isPreSearch === true;
 }
 
 /**
  * Check if metadata is for a moderator message
  */
 export function isModeratorMessageMetadata(metadata: DbMessageMetadata): metadata is DbModeratorMessageMetadata {
-  return metadata.role === 'assistant' && 'isModerator' in metadata && (metadata as DbModeratorMessageMetadata).isModerator === true;
+  return metadata.role === MessageRoles.ASSISTANT && 'isModerator' in metadata && (metadata as DbModeratorMessageMetadata).isModerator === true;
 }
 
 /**

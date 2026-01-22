@@ -13,26 +13,31 @@
 
 import { WebAppEnvs } from '@roundtable/shared';
 import { createMiddleware } from 'hono/factory';
+import { z } from 'zod';
 
 import type { ApiEnv } from '@/types';
 
-// Performance metrics stored in context
-export type DbQueryTiming = {
-  query: string;
-  duration: number;
-  timestamp: number;
-};
+// Zod schemas for performance tracking (SINGLE SOURCE OF TRUTH)
+export const DbQueryTimingSchema = z.object({
+  query: z.string(),
+  duration: z.number(),
+  timestamp: z.number(),
+});
 
-export type PerformanceMetrics = {
-  requestStartTime: number;
-  totalDuration?: number;
-  dbQueryCount: number;
-  dbTotalTime: number;
-  dbQueries: DbQueryTiming[];
-  workerInitTime?: number;
-  cfPlacement?: string;
-  cfRay?: string;
-};
+export const PerformanceMetricsSchema = z.object({
+  requestStartTime: z.number(),
+  totalDuration: z.number().optional(),
+  dbQueryCount: z.number(),
+  dbTotalTime: z.number(),
+  dbQueries: z.array(DbQueryTimingSchema),
+  workerInitTime: z.number().optional(),
+  cfPlacement: z.string().optional(),
+  cfRay: z.string().optional(),
+});
+
+// Type inference from Zod schemas
+export type DbQueryTiming = z.infer<typeof DbQueryTimingSchema>;
+export type PerformanceMetrics = z.infer<typeof PerformanceMetricsSchema>;
 
 /**
  * Check if performance tracking should be enabled
@@ -100,24 +105,26 @@ export const performanceTracking = createMiddleware<ApiEnv>(async (c, next) => {
 /**
  * Performance response format for API responses
  */
-export type PerformanceResponseFormat = {
-  timing: {
-    total: number;
-    db: {
-      queryCount: number;
-      totalTime: number;
-      avgTime: number;
-      queries: Array<{
-        query: string;
-        duration: number;
-      }>;
-    };
-  };
-  cloudflare: {
-    placement: string;
-    ray: string;
-  };
-};
+export const PerformanceResponseFormatSchema = z.object({
+  timing: z.object({
+    total: z.number(),
+    db: z.object({
+      queryCount: z.number(),
+      totalTime: z.number(),
+      avgTime: z.number(),
+      queries: z.array(z.object({
+        query: z.string(),
+        duration: z.number(),
+      })),
+    }),
+  }),
+  cloudflare: z.object({
+    placement: z.string(),
+    ray: z.string(),
+  }),
+});
+
+export type PerformanceResponseFormat = z.infer<typeof PerformanceResponseFormatSchema>;
 
 /**
  * Format performance metrics for API response
@@ -128,49 +135,38 @@ export function formatPerformanceForResponse(c?: { get: (key: string) => unknown
     return undefined;
   }
 
-  // Type guard: Validate metrics structure at runtime
   const rawMetrics = c?.get('performanceMetrics');
   if (!rawMetrics || typeof rawMetrics !== 'object') {
     return undefined;
   }
 
-  // Runtime type validation for PerformanceMetrics
-  const metrics = rawMetrics as Record<string, unknown>;
-  if (
-    typeof metrics.requestStartTime !== 'number'
-    || typeof metrics.dbQueryCount !== 'number'
-    || typeof metrics.dbTotalTime !== 'number'
-    || !Array.isArray(metrics.dbQueries)
-  ) {
+  // Zod validation instead of unsafe type cast
+  const parseResult = PerformanceMetricsSchema.safeParse(rawMetrics);
+  if (!parseResult.success) {
     return undefined;
   }
 
-  // Now safe to use as PerformanceMetrics
-  const typedMetrics = metrics as PerformanceMetrics;
-  if (!typedMetrics) {
-    return undefined;
-  }
-
+  const metrics = parseResult.data;
   const now = Date.now();
 
   return {
     timing: {
-      total: now - typedMetrics.requestStartTime,
+      total: now - metrics.requestStartTime,
       db: {
-        queryCount: typedMetrics.dbQueryCount,
-        totalTime: typedMetrics.dbTotalTime,
-        avgTime: typedMetrics.dbQueryCount > 0
-          ? Math.round(typedMetrics.dbTotalTime / typedMetrics.dbQueryCount)
+        queryCount: metrics.dbQueryCount,
+        totalTime: metrics.dbTotalTime,
+        avgTime: metrics.dbQueryCount > 0
+          ? Math.round(metrics.dbTotalTime / metrics.dbQueryCount)
           : 0,
-        queries: typedMetrics.dbQueries.map(q => ({
+        queries: metrics.dbQueries.map(q => ({
           query: q.query,
           duration: q.duration,
         })),
       },
     },
     cloudflare: {
-      placement: typedMetrics.cfPlacement || 'unknown',
-      ray: typedMetrics.cfRay || 'unknown',
+      placement: metrics.cfPlacement || 'unknown',
+      ray: metrics.cfRay || 'unknown',
     },
   };
 }

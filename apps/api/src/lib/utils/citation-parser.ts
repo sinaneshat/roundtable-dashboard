@@ -19,58 +19,69 @@
 
 import type { CitationPrefix, CitationSourceType } from '@roundtable/shared/enums';
 import { CITATION_PREFIXES, CitationPrefixToSourceType, CitationSegmentTypes } from '@roundtable/shared/enums';
+import { z } from 'zod';
 
 import type { DbCitation } from '@/db/schemas/chat-metadata';
 
 // ============================================================================
-// Types
+// Schemas & Types
 // ============================================================================
 
 /**
  * Represents a parsed citation marker from AI response text
  */
-export type ParsedCitation = {
+export const ParsedCitationSchema = z.object({
   /** The full citation marker as it appears in text (e.g., "[mem_abc123]") */
-  marker: string;
+  marker: z.string(),
   /** The source ID extracted from the marker (e.g., "mem_abc123") */
-  sourceId: string;
+  sourceId: z.string(),
   /** The type prefix extracted from source ID */
-  typePrefix: string;
+  typePrefix: z.string(),
   /** The source type derived from prefix */
-  sourceType: CitationSourceType;
+  sourceType: z.custom<CitationSourceType>(),
   /** Display number for UI rendering (1, 2, 3...) */
-  displayNumber: number;
+  displayNumber: z.number(),
   /** Start index in original text */
-  startIndex: number;
+  startIndex: z.number(),
   /** End index in original text */
-  endIndex: number;
-};
+  endIndex: z.number(),
+});
+
+export type ParsedCitation = z.infer<typeof ParsedCitationSchema>;
 
 /**
  * A segment of text that is either plain text or a citation
+ * Discriminated union based on 'type' field
  */
-export type TextSegment = {
-  type: 'text';
-  content: string;
-} | {
-  type: 'citation';
-  content: string;
-  citation: ParsedCitation;
-};
+export const TextSegmentSchema = z.discriminatedUnion('type', [
+  z.object({
+    type: z.literal('text'),
+    content: z.string(),
+  }),
+  z.object({
+    type: z.literal('citation'),
+    content: z.string(),
+    citation: ParsedCitationSchema,
+  }),
+]);
+
+export type TextSegment = z.infer<typeof TextSegmentSchema>;
 
 /**
  * Result from parsing citations in text
  */
-export type ParsedCitationResult = {
+export const ParsedCitationResultSchema = z.object({
   /** Array of text and citation segments */
-  segments: TextSegment[];
+  segments: z.array(TextSegmentSchema),
   /** Array of unique citations found in order of appearance */
-  citations: ParsedCitation[];
+  citations: z.array(ParsedCitationSchema),
   /** Original text with citations */
-  originalText: string;
+  originalText: z.string(),
   /** Text with citation markers removed */
-  plainText: string;
-};
+  plainText: z.string(),
+});
+
+export type ParsedCitationResult = z.infer<typeof ParsedCitationResultSchema>;
 
 // ============================================================================
 // Constants (derived from enums for single source of truth)

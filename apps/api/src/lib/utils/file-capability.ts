@@ -16,6 +16,7 @@ import {
   isImageMimeType,
   isVisualMimeType,
 } from '@roundtable/shared/enums';
+import { z } from 'zod';
 
 /**
  * Check if a MIME type requires vision capability.
@@ -43,27 +44,31 @@ export function isDocumentFile(mimeType: string): boolean {
 }
 
 // ============================================================================
-// FILE CAPABILITY CHECKING
+// FILE CAPABILITY CHECKING - SCHEMAS & TYPES
 // ============================================================================
 
 /**
  * Represents a file for capability checking
  */
-export type FileForCapabilityCheck = {
+export const FileForCapabilityCheckSchema = z.object({
   /** MIME type of the file (e.g., 'image/png', 'application/pdf') */
-  mimeType: string;
-};
+  mimeType: z.string(),
+});
+
+export type FileForCapabilityCheck = z.infer<typeof FileForCapabilityCheckSchema>;
 
 /**
  * Model capabilities relevant for file processing
  * ✅ GRANULAR: Separates vision (images) from file (PDFs/documents)
  */
-export type ModelFileCapabilities = {
+export const ModelFileCapabilitiesSchema = z.object({
   /** Whether the model supports vision/image inputs */
-  vision: boolean;
+  vision: z.boolean(),
   /** Whether the model supports file/document inputs (PDFs, DOC, etc.) */
-  file?: boolean;
-};
+  file: z.boolean().optional(),
+});
+
+export type ModelFileCapabilities = z.infer<typeof ModelFileCapabilitiesSchema>;
 
 /**
  * Check if any files in a list require vision capability
@@ -180,14 +185,16 @@ export function getIncompatibleModelIds<T extends { id: string; capabilities: Mo
  * ✅ GRANULAR: Get detailed incompatibility info for each model
  * Returns which models are incompatible and why (vision vs file)
  */
-export type ModelIncompatibilityInfo = {
+export const ModelIncompatibilityInfoSchema = z.object({
   /** All incompatible model IDs */
-  incompatibleIds: Set<string>;
+  incompatibleIds: z.set(z.string()),
   /** Model IDs incompatible due to missing vision support (images) */
-  visionIncompatibleIds: Set<string>;
+  visionIncompatibleIds: z.set(z.string()),
   /** Model IDs incompatible due to missing file support (PDFs) */
-  fileIncompatibleIds: Set<string>;
-};
+  fileIncompatibleIds: z.set(z.string()),
+});
+
+export type ModelIncompatibilityInfo = z.infer<typeof ModelIncompatibilityInfoSchema>;
 
 export function getDetailedIncompatibleModelIds<T extends { id: string; capabilities: ModelFileCapabilities }>(
   models: T[],

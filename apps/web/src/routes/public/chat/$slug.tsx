@@ -1,3 +1,4 @@
+import { MessageRoles } from '@roundtable/shared';
 import { createFileRoute } from '@tanstack/react-router';
 
 import { PublicChatSkeleton } from '@/components/loading';
@@ -42,7 +43,7 @@ export const Route = createFileRoute('/public/chat/$slug')({
       const initialData: PublicThreadData | null = response?.success ? response.data : null;
 
       // Count user messages (rounds) for cache invalidation
-      const roundCount = initialData?.messages?.filter((m: ApiMessage) => m.role === 'user').length ?? 0;
+      const roundCount = initialData?.messages?.filter((m: ApiMessage) => m.role === MessageRoles.USER).length ?? 0;
 
       return { initialData, roundCount, errorState: null as PublicThreadErrorState };
     } catch (error) {

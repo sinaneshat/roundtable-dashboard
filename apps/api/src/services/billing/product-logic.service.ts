@@ -19,12 +19,9 @@ import {
 } from '@roundtable/shared/enums';
 import * as z from 'zod';
 
-import { CREDIT_CONFIG as _CREDIT_CONFIG, SUBSCRIPTION_TIER_NAMES as _SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
+import { CREDIT_CONFIG, SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 // Direct import to avoid barrel export pulling in server-only slug-generator.service.ts
 import { TITLE_GENERATION_PROMPT } from '@/services/prompts/prompts.service';
-
-// Re-export for use in test files and other services
-export { _CREDIT_CONFIG as CREDIT_CONFIG, _SUBSCRIPTION_TIER_NAMES as SUBSCRIPTION_TIER_NAMES };
 
 const _ModelForPricingSchema = z.object({
   id: z.string(),
@@ -95,7 +92,7 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfiguration> = {
       analysisPerMonth: 1000,
     },
     upgradeMessage: 'You have access to all models',
-    monthlyCredits: _CREDIT_CONFIG.PLANS[PlanTypes.PAID]?.monthlyCredits ?? 10000,
+    monthlyCredits: CREDIT_CONFIG.PLANS[PlanTypes.PAID]?.monthlyCredits ?? 10000,
   },
 } as const;
 
@@ -133,15 +130,15 @@ export const TIER_QUOTAS: Record<
 > = deriveTierRecord(config => config.quotas);
 
 export function tokensToCredits(tokens: number): number {
-  return Math.ceil(tokens / _CREDIT_CONFIG.TOKENS_PER_CREDIT);
+  return Math.ceil(tokens / CREDIT_CONFIG.TOKENS_PER_CREDIT);
 }
 
 export function creditsToTokens(credits: number): number {
-  return credits * _CREDIT_CONFIG.TOKENS_PER_CREDIT;
+  return credits * CREDIT_CONFIG.TOKENS_PER_CREDIT;
 }
 
-export function getActionCreditCost(action: keyof typeof _CREDIT_CONFIG.ACTION_COSTS): number {
-  const tokens = _CREDIT_CONFIG.ACTION_COSTS[action];
+export function getActionCreditCost(action: keyof typeof CREDIT_CONFIG.ACTION_COSTS): number {
+  const tokens = CREDIT_CONFIG.ACTION_COSTS[action];
   return tokensToCredits(tokens);
 }
 
@@ -149,9 +146,9 @@ export function estimateStreamingCredits(
   participantCount: number,
   estimatedInputTokens: number = 500,
 ): number {
-  const estimatedOutputTokens = _CREDIT_CONFIG.DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE * participantCount;
+  const estimatedOutputTokens = CREDIT_CONFIG.DEFAULT_ESTIMATED_TOKENS_PER_RESPONSE * participantCount;
   const totalTokens = estimatedInputTokens + estimatedOutputTokens;
-  const reservedTokens = Math.ceil(totalTokens * _CREDIT_CONFIG.RESERVATION_MULTIPLIER);
+  const reservedTokens = Math.ceil(totalTokens * CREDIT_CONFIG.RESERVATION_MULTIPLIER);
   return tokensToCredits(reservedTokens);
 }
 
@@ -160,7 +157,7 @@ export function calculateBaseCredits(inputTokens: number, outputTokens: number):
 }
 
 export function getPlanConfig(): { signupCredits: number; monthlyCredits: number; priceInCents: number } {
-  const config = _CREDIT_CONFIG.PLANS[PlanTypes.PAID];
+  const config = CREDIT_CONFIG.PLANS[PlanTypes.PAID];
   if (!config) {
     throw new Error('Paid plan configuration not found');
   }
@@ -177,7 +174,7 @@ export function getModelPricingTier(model: ModelForPricing): ModelPricingTier {
     }
   }
 
-  return _CREDIT_CONFIG.DEFAULT_MODEL_TIER;
+  return CREDIT_CONFIG.DEFAULT_MODEL_TIER;
 }
 
 export function getModelPricingTierById(
@@ -186,7 +183,7 @@ export function getModelPricingTierById(
 ): ModelPricingTier {
   const model = getModel(modelId);
   if (!model) {
-    return _CREDIT_CONFIG.DEFAULT_MODEL_TIER;
+    return CREDIT_CONFIG.DEFAULT_MODEL_TIER;
   }
   return getModelPricingTier(model);
 }
@@ -228,7 +225,7 @@ export function estimateWeightedCredits(
   participantCount: number,
   modelId: string,
   getModel: (id: string) => ModelForPricing | undefined,
-  estimatedInputTokens: number = _CREDIT_CONFIG.DEFAULT_ESTIMATED_INPUT_TOKENS,
+  estimatedInputTokens: number = CREDIT_CONFIG.DEFAULT_ESTIMATED_INPUT_TOKENS,
 ): number {
   const baseEstimate = estimateStreamingCredits(participantCount, estimatedInputTokens);
   const multiplier = getModelCreditMultiplierById(modelId, getModel);
@@ -396,7 +393,7 @@ export function enrichModelWithTierAccessGeneric<T extends ModelForPricing>(
   userTier: SubscriptionTier,
 ): T & FullTierAccessInfo {
   const requiredTier = getRequiredTierForModel(model);
-  const requiredTierName = _SUBSCRIPTION_TIER_NAMES[requiredTier];
+  const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier];
   const isAccessible = canAccessModelByPricing(userTier, model);
 
   return {
@@ -421,7 +418,7 @@ export function enrichWithTierAccess(
   }
 
   const requiredTier = getRequiredTierForModel(model);
-  const requiredTierName = _SUBSCRIPTION_TIER_NAMES[requiredTier] ?? null;
+  const requiredTierName = SUBSCRIPTION_TIER_NAMES[requiredTier] ?? null;
   const isAccessible = canAccessModelByPricing(userTier, model);
 
   return {

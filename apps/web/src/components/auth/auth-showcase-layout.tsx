@@ -17,7 +17,7 @@ export function AuthShowcaseLayout({ children }: AuthShowcaseLayoutProps) {
   const t = useTranslations();
 
   return (
-    <main className="relative grid h-svh lg:grid-cols-2 overflow-hidden">
+    <main id="main-content" className="relative grid h-svh lg:grid-cols-2 overflow-hidden">
       <div className="absolute inset-0 -z-10 pointer-events-none flex items-center justify-center overflow-hidden">
         <ClientOnly fallback={null}>
           <div className="block sm:hidden">

@@ -23,7 +23,9 @@ export function ChatLayoutShell({ children, session = null }: ChatLayoutShellPro
 
         <SidebarInset id="main-scroll-container" className="flex flex-col relative">
           <ChatHeaderSwitch />
-          {children}
+          <main id="main-content" className="flex flex-col flex-1 min-h-0">
+            {children}
+          </main>
         </SidebarInset>
       </SidebarProvider>
     </ThreadHeaderProvider>
