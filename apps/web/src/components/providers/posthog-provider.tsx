@@ -91,24 +91,12 @@ export default function PostHogProvider({
 
       // Other config
       scroll_root_selector: '#root',
-      debug: environment !== WebAppEnvs.PROD,
+      // Disable debug mode to prevent verbose console logging
+      debug: false,
 
       // Expose to window + capture initial pageview
       loaded: (ph) => {
         window.posthog = ph as typeof window.posthog;
-
-        // Load toolbar if authorization hash present
-        const toolbarJSON = new URLSearchParams(
-          window.location.hash.substring(1),
-        ).get('__posthog');
-        if (toolbarJSON) {
-          try {
-            ph.loadToolbar(JSON.parse(toolbarJSON));
-          } catch {
-            // Toolbar load failed - non-critical
-          }
-        }
-
         ph.capture('$pageview');
       },
     });
