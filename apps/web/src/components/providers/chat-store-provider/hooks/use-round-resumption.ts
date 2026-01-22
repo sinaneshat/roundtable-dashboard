@@ -272,15 +272,32 @@ export function useRoundResumption({ store, chat }: UseRoundResumptionParams) {
         return;
       }
 
+      // ✅ FIX v9: Don't clear flags during thread creation flow
+      // When navigating from overview to thread page after handleCreateThread:
+      // AI SDK auto-resume may briefly set isStreaming=true while checking for resumable streams.
+      // This isn't our initiated stream - we haven't called startRound yet!
+      // Clearing waitingToStartStreaming here would prevent the streaming trigger from firing.
+      const freshCreatedThreadId = freshState.createdThreadId;
+      if (freshCreatedThreadId !== null) {
+        rlog.resume('round-resum', `skip: thread creation flow (created=${freshCreatedThreadId.slice(-8)})`);
+        return;
+      }
+
       rlog.resume('round-resum', 'EXIT: already streaming - clearing wait flags');
       store.getState().setWaitingToStartStreaming(false);
       store.getState().setNextParticipantToTrigger(null);
       resumptionTriggeredRef.current = null;
       return;
     }
-    if (freshParticipants.length === 0 || freshMessages.length === 0) {
-      rlog.resume('round-resum', `EXIT: no data parts=${freshParticipants.length} msgs=${freshMessages.length}`);
+    // ✅ RACE CONDITION FIX: Split checks with logging for parts=0 but msgs>0
+    if (freshMessages.length === 0) {
+      rlog.resume('round-resum', `EXIT: no messages`);
       return;
+    }
+
+    if (freshParticipants.length === 0) {
+      rlog.resume('round-resum', `RECOVERY-NEEDED: parts=0 but msgs=${freshMessages.length}`);
+      return; // Let screen-init handle recovery
     }
 
     // useStreamingTrigger handles OVERVIEW screen via startRound()

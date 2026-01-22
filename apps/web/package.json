@@ -64,7 +64,6 @@
     "date-fns": "^4.1.0",
     "embla-carousel-react": "^8.6.0",
     "fuse.js": "^7.1.0",
-    "geist": "^1.5.1",
     "hono": "^4.11.3",
     "html2canvas": "^1.4.1",
     "immer": "^11.1.3",

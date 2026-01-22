@@ -100,6 +100,8 @@ export function useIncompleteRoundResumption(
     prefilledForThreadId,
     // ✅ RACE CONDITION FIX: Explicit stream completion signal from onFinish
     streamFinishAcknowledged,
+    // ✅ FIX v7: Track thread creation to avoid clearing state during creation flow
+    createdThreadId,
   } = useChatStore(useShallow(s => ({
     messages: s.messages,
     participants: s.participants,
@@ -127,6 +129,8 @@ export function useIncompleteRoundResumption(
     prefilledForThreadId: s.prefilledForThreadId,
     // ✅ RACE CONDITION FIX: Explicit stream completion signal from onFinish
     streamFinishAcknowledged: s.streamFinishAcknowledged,
+    // ✅ FIX v7: Track thread creation to avoid clearing state during creation flow
+    createdThreadId: s.createdThreadId,
   })));
 
   // Actions - batched with useShallow for stable reference
@@ -189,6 +193,9 @@ export function useIncompleteRoundResumption(
   // ✅ SCOPE VERSIONING: Track scope version to invalidate stale effects on navigation
   const scopeVersionRef = useRef(resumptionScopeVersion);
 
+  // ✅ DEBUG: Log when hook mounts/re-renders with key state
+  rlog.flow('resumption-hook', `render t=${threadId?.slice(-8) ?? '-'} enabled=${enabled ? 1 : 0} wait=${waitingToStartStreaming ? 1 : 0} pending=${pendingMessage ? 1 : 0} created=${createdThreadId?.slice(-8) ?? '-'} streaming=${isStreaming ? 1 : 0}`);
+
   // Calculate incomplete round state (moved up for use in pending round recovery)
   const enabledParticipants = getEnabledParticipants(participants);
 
@@ -222,11 +229,14 @@ export function useIncompleteRoundResumption(
   const staleWaitingStateRef = useRef(false);
 
   useEffect(() => {
+    rlog.flow('stale-check', `EFFECT-RUN wait=${waitingToStartStreaming ? 1 : 0} pending=${pendingMessage ? 1 : 0} streaming=${isStreaming ? 1 : 0} prefilled=${streamResumptionPrefilled ? 1 : 0} created=${createdThreadId?.slice(-8) ?? '-'} alreadyChecked=${staleWaitingStateRef.current ? 1 : 0}`);
+
     // ✅ RACE CONDITION FIX: Mark as checked IMMEDIATELY on first run
     // This prevents the effect from re-running when resumption hook sets
     // waitingToStartStreaming=true, which would incorrectly clear the flag.
     // The stale state check should ONLY happen on initial mount.
     if (staleWaitingStateRef.current) {
+      rlog.flow('stale-check', 'EXIT: already checked on mount');
       return;
     }
     staleWaitingStateRef.current = true;
@@ -236,6 +246,18 @@ export function useIncompleteRoundResumption(
     // and streamResumptionPrefilled=true. This is NOT stale state - it's fresh
     // resumption state that should be preserved for the resumption effects to handle.
     if (streamResumptionPrefilled) {
+      rlog.flow('stale-check', 'EXIT: streamResumptionPrefilled=true');
+      return;
+    }
+
+    // ✅ FIX v7: Don't clear state during thread creation flow
+    // When navigating from overview to thread page after handleCreateThread:
+    // - createdThreadId is set (from handleCreateThread)
+    // - waitingToStartStreaming is true (from initializeThread)
+    // - pendingMessage is null (prepareForNewMessage hasn't run yet - it runs AFTER initializeThread)
+    // This looks like "stale state" but it's actually valid creation flow state
+    if (createdThreadId !== null) {
+      rlog.flow('stale-check', `EXIT: createdThreadId=${createdThreadId.slice(-8)} - thread creation flow`);
       return;
     }
 
@@ -243,6 +265,7 @@ export function useIncompleteRoundResumption(
     // This only fires if waitingToStartStreaming was ALREADY true at mount time
     // (leftover from crashed session), not if resumption hook just set it
     if (waitingToStartStreaming && pendingMessage === null && !isStreaming) {
+      rlog.flow('stale-check', 'CLEARING STALE STATE: wait=true pending=null streaming=false');
       // ✅ RACE CONDITION FIX: Clear ALL related stale state, not just waitingToStartStreaming
       // Previously only cleared waitingToStartStreaming, leaving nextParticipantToTrigger set.
       // This caused provider effect to see nextParticipantToTrigger=0 but waitingToStart=false,
@@ -252,8 +275,10 @@ export function useIncompleteRoundResumption(
       actions.setNextParticipantToTrigger(null);
       actions.setStreamingRoundNumber(null);
       actions.setCurrentParticipantIndex(0);
+    } else {
+      rlog.flow('stale-check', 'NO-CLEAR: state not stale');
     }
-  }, [waitingToStartStreaming, pendingMessage, isStreaming, streamResumptionPrefilled, actions]);
+  }, [waitingToStartStreaming, pendingMessage, isStreaming, streamResumptionPrefilled, createdThreadId, actions]);
 
   // ============================================================================
   // ✅ STALE isStreaming FIX: Clear stale isStreaming on page refresh

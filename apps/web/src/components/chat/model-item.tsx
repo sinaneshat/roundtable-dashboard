@@ -2,7 +2,7 @@ import { getShortRoleName } from '@roundtable/shared';
 import { Link } from '@tanstack/react-router';
 import type { PanInfo } from 'motion/react';
 import { Reorder, useDragControls } from 'motion/react';
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -119,6 +119,8 @@ export function ModelItem({
   const t = useTranslations();
   const dragControls = useDragControls();
   const [isDragging, setIsDragging] = useState(false);
+  // Track if drag just ended to prevent accidental toggle on click
+  const justDraggedRef = useRef(false);
   const { model, participant } = orderedModel;
   const isSelected = participant !== null;
   const isAccessible = model.is_accessible_to_user ?? isSelected;
@@ -253,14 +255,28 @@ export function ModelItem({
         onDrag={onDragMove}
         onDragStart={() => {
           setIsDragging(true);
+          justDraggedRef.current = true;
           onDragStartCustom?.();
         }}
         onDragEnd={() => {
           setIsDragging(false);
           onDragEndCustom?.();
+          // Clear the flag after a short delay to allow click event to check it
+          setTimeout(() => {
+            justDraggedRef.current = false;
+          }, 100);
         }}
         transition={{ duration: 0.15 }}
-        onClick={isDisabled ? undefined : onToggle}
+        onClick={
+          isDisabled
+            ? undefined
+            : () => {
+                // Prevent toggle if drag just ended
+                if (justDraggedRef.current)
+                  return;
+                onToggle();
+              }
+        }
       >
         {itemContent}
       </Reorder.Item>

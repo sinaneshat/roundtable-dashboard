@@ -224,6 +224,7 @@ export const rlog = {
   // timeline-render fires on every re-render, causing excessive console spam
   init: (action: string, detail: string): void => rlogLog(RlogCategories.INIT, action, detail),
   sync: (key: string, detail: string): void => rlogLog(RlogCategories.SYNC, key, detail),
+  flow: (key: string, detail: string): void => rlogLog(RlogCategories.RESUME, key, detail),
 };
 
 export const devLog = {

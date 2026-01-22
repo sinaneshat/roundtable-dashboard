@@ -1,32 +1,22 @@
 /**
- * Font Configuration for TanStack Start
+ * Font Configuration
  *
- * Using CSS @font-face with Google Fonts CDN.
- * Add the font import in the root HTML or CSS file.
- *
- * Add this to your CSS:
- * @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
- *
- * Or add this to your HTML <head>:
- * <link rel="preconnect" href="https://fonts.googleapis.com" />
- * <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
- * <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+ * Using system font stack for optimal performance and native feel.
+ * No custom fonts loaded - uses the same approach as ChatGPT.
  */
 
 /**
- * Space Grotesk - Modern geometric sans-serif for display text
- * Perfect for tech/AI branding with its clean, minimalist aesthetic
- * Used for: Brand name, headings on marketing/auth pages
+ * System font stack - uses native OS fonts for best performance
  */
-export const spaceGrotesk = {
-  className: 'font-space-grotesk',
-  variable: '--font-space-grotesk',
+export const systemFonts = {
+  className: 'font-sans',
+  variable: '--font-sans',
   style: {
-    fontFamily: '\'Space Grotesk\', sans-serif',
+    fontFamily: '-apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, \'Helvetica Neue\', Arial, sans-serif',
   },
 };
 
 /**
- * Font CSS variable for use in Tailwind config
+ * System font family string for use in Tailwind config or inline styles
  */
-export const FONT_FAMILY_SPACE_GROTESK = '\'Space Grotesk\', sans-serif';
+export const FONT_FAMILY_SYSTEM = '-apple-system, BlinkMacSystemFont, \'Segoe UI\', Roboto, \'Helvetica Neue\', Arial, sans-serif';

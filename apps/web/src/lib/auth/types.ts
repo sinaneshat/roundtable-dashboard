@@ -24,6 +24,7 @@ export const userSchema = z.object({
   image: z.string().nullable().optional(),
   createdAt: z.coerce.date(),
   updatedAt: z.coerce.date(),
+  role: z.string().nullable().optional(),
 });
 
 export type User = z.infer<typeof userSchema>;
@@ -41,6 +42,7 @@ export const sessionSchema = z.object({
   updatedAt: z.coerce.date(),
   ipAddress: z.string().nullable().optional(),
   userAgent: z.string().nullable().optional(),
+  impersonatedBy: z.string().nullable().optional(),
 });
 
 export type Session = z.infer<typeof sessionSchema>;

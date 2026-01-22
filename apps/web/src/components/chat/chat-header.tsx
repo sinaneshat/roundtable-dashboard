@@ -105,13 +105,17 @@ function NavigationHeaderComponent({
   const sidebarContext = useSidebarOptional();
   const hasSidebar = sidebarContext !== null;
 
-  const { storeThreadTitle, showInitialUI, createdThreadId, thread, storeThreadId } = useChatStore(
+  const { storeThreadTitle, showInitialUI, createdThreadId, thread, storeThreadId, animatingThreadId, animationNewTitle, animationPhase, displayedTitle } = useChatStore(
     useShallow(s => ({
       storeThreadTitle: s.thread?.title ?? null,
       storeThreadId: s.thread?.id ?? null,
       showInitialUI: s.showInitialUI,
       createdThreadId: s.createdThreadId,
       thread: s.thread,
+      animatingThreadId: s.animatingThreadId,
+      animationNewTitle: s.newTitle,
+      animationPhase: s.animationPhase,
+      displayedTitle: s.displayedTitle,
     })),
   );
 
@@ -138,9 +142,11 @@ function NavigationHeaderComponent({
   const shouldFetchThread = !!storeThreadId && isOnThreadPage && !hasThreadInStore;
   const { data: cachedThreadData } = useThreadQuery(storeThreadId ?? '', shouldFetchThread);
 
-  const effectiveThreadTitle = routeThreadTitle
-    ?? (cachedThreadData?.success ? cachedThreadData.data?.thread?.title : null)
-    ?? storeThreadTitle;
+  // Prefer store title when available (most up-to-date after AI title generation)
+  // Fall back to route/cache for SSR hydration
+  const effectiveThreadTitle = storeThreadTitle
+    ?? routeThreadTitle
+    ?? (cachedThreadData?.success ? cachedThreadData.data?.thread?.title : null);
 
   const shouldUseStoreThreadTitle = hasActiveThread || (!isStaticRoute && pathname?.startsWith('/chat/') && pathname !== '/chat');
   const threadTitle = threadTitleProp ?? (showSidebarTrigger && shouldUseStoreThreadTitle ? effectiveThreadTitle : null);
@@ -216,7 +222,14 @@ function NavigationHeaderComponent({
                     title={'isDynamic' in currentPage && currentPage.isDynamic ? currentPage.titleKey : t(currentPage.titleKey as Parameters<typeof t>[0])}
                   >
                     {'isDynamic' in currentPage && currentPage.isDynamic
-                      ? currentPage.titleKey
+                      ? (animatingThreadId && (animationPhase === 'deleting' || animationPhase === 'typing')
+                          ? (
+                              <>
+                                {displayedTitle}
+                                <span className="animate-blink inline-block w-[2px] h-[1em] bg-current ml-[1px] align-middle" aria-hidden="true" />
+                              </>
+                            )
+                          : (animationNewTitle ?? currentPage.titleKey))
                       : t(currentPage.titleKey as Parameters<typeof t>[0])}
                   </BreadcrumbPage>
                 </BreadcrumbItem>

@@ -226,6 +226,43 @@ export function ModelSelectionModal({
     return orderedModels.find(om => om.model.id === selectedModelForRole);
   }, [selectedModelForRole, orderedModels]);
 
+  // Compute which roles are currently in use (for sorting)
+  const rolesInUse = useMemo(() => {
+    const inUse = new Set<string>();
+    for (const om of orderedModels) {
+      if (om.participant?.role) {
+        inUse.add(om.participant.role);
+      }
+    }
+    return inUse;
+  }, [orderedModels]);
+
+  // Sort predefined roles - in-use ones first
+  const sortedPredefinedRoles = useMemo(() => {
+    return [...PREDEFINED_ROLE_TEMPLATES].sort((a, b) => {
+      const aInUse = rolesInUse.has(a.name);
+      const bInUse = rolesInUse.has(b.name);
+      if (aInUse && !bInUse)
+        return -1;
+      if (!aInUse && bInUse)
+        return 1;
+      return 0;
+    });
+  }, [rolesInUse]);
+
+  // Sort custom roles - in-use ones first
+  const sortedCustomRoles = useMemo(() => {
+    return [...customRoles].sort((a, b) => {
+      const aInUse = rolesInUse.has(a.name);
+      const bInUse = rolesInUse.has(b.name);
+      if (aInUse && !bInUse)
+        return -1;
+      if (!aInUse && bInUse)
+        return 1;
+      return 0;
+    });
+  }, [customRoles, rolesInUse]);
+
   const handleOpenRoleSelection = useCallback((modelId: string) => {
     setSelectedModelForRole(modelId);
   }, []);
@@ -603,7 +640,7 @@ export function ModelSelectionModal({
                   >
                     <ScrollArea className="h-[min(420px,50vh)] -mr-4 sm:-mr-6">
                       <div className="flex flex-col pr-4 sm:pr-6">
-                        {PREDEFINED_ROLE_TEMPLATES.map((role: PredefinedRoleTemplate) => {
+                        {sortedPredefinedRoles.map((role: PredefinedRoleTemplate) => {
                           const Icon = getRoleIcon(role.iconName);
                           const currentRole = selectedModelData?.participant?.role
                             ?? (selectedModelForRole ? pendingRoles[selectedModelForRole]?.role : undefined);
@@ -652,7 +689,7 @@ export function ModelSelectionModal({
                           );
                         })}
 
-                        {customRoles.map((role: CustomRole) => {
+                        {sortedCustomRoles.map((role: CustomRole) => {
                           const currentRole = selectedModelData?.participant?.role
                             ?? (selectedModelForRole ? pendingRoles[selectedModelForRole]?.role : undefined);
                           const isSelected = currentRole === role.name;

@@ -207,6 +207,110 @@ export const FlowStates = {
 } as const;
 
 // ============================================================================
+// ROUND FLOW STATE (FSM-based round orchestration state)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const ROUND_FLOW_STATES = [
+  'idle',
+  'pre_search_pending',
+  'pre_search_streaming',
+  'participant_streaming',
+  'participant_transition',
+  'moderator_pending',
+  'moderator_streaming',
+  'complete',
+  'error',
+] as const;
+
+// 2. ZOD SCHEMA
+export const RoundFlowStateSchema = z.enum(ROUND_FLOW_STATES).openapi({
+  description: 'FSM state for round orchestration - explicit states replace boolean flags',
+  example: 'participant_streaming',
+});
+
+// 3. TYPESCRIPT TYPE
+export type RoundFlowState = z.infer<typeof RoundFlowStateSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_ROUND_FLOW_STATE: RoundFlowState = 'idle';
+
+// 5. CONSTANT OBJECT
+export const RoundFlowStates = {
+  IDLE: 'idle' as const,
+  PRE_SEARCH_PENDING: 'pre_search_pending' as const,
+  PRE_SEARCH_STREAMING: 'pre_search_streaming' as const,
+  PARTICIPANT_STREAMING: 'participant_streaming' as const,
+  PARTICIPANT_TRANSITION: 'participant_transition' as const,
+  MODERATOR_PENDING: 'moderator_pending' as const,
+  MODERATOR_STREAMING: 'moderator_streaming' as const,
+  COMPLETE: 'complete' as const,
+  ERROR: 'error' as const,
+} as const;
+
+// 6. TYPE GUARD
+export function isRoundFlowState(value: unknown): value is RoundFlowState {
+  return RoundFlowStateSchema.safeParse(value).success;
+}
+
+// ============================================================================
+// ROUND FLOW EVENT (FSM events that trigger transitions)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const ROUND_FLOW_EVENTS = [
+  'START_ROUND',
+  'RESUME_ROUND',
+  'PRE_SEARCH_START',
+  'PRE_SEARCH_COMPLETE',
+  'PRE_SEARCH_SKIP',
+  'PRE_SEARCH_ERROR',
+  'PARTICIPANT_START',
+  'PARTICIPANT_COMPLETE',
+  'PARTICIPANT_ERROR',
+  'MODERATOR_START',
+  'MODERATOR_COMPLETE',
+  'MODERATOR_ERROR',
+  'ABORT',
+  'RESET',
+] as const;
+
+// 2. ZOD SCHEMA
+export const RoundFlowEventSchema = z.enum(ROUND_FLOW_EVENTS).openapi({
+  description: 'FSM event that triggers state transitions in round orchestration',
+  example: 'START_ROUND',
+});
+
+// 3. TYPESCRIPT TYPE
+export type RoundFlowEvent = z.infer<typeof RoundFlowEventSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_ROUND_FLOW_EVENT: RoundFlowEvent = 'RESET';
+
+// 5. CONSTANT OBJECT
+export const RoundFlowEvents = {
+  START_ROUND: 'START_ROUND' as const,
+  RESUME_ROUND: 'RESUME_ROUND' as const,
+  PRE_SEARCH_START: 'PRE_SEARCH_START' as const,
+  PRE_SEARCH_COMPLETE: 'PRE_SEARCH_COMPLETE' as const,
+  PRE_SEARCH_SKIP: 'PRE_SEARCH_SKIP' as const,
+  PRE_SEARCH_ERROR: 'PRE_SEARCH_ERROR' as const,
+  PARTICIPANT_START: 'PARTICIPANT_START' as const,
+  PARTICIPANT_COMPLETE: 'PARTICIPANT_COMPLETE' as const,
+  PARTICIPANT_ERROR: 'PARTICIPANT_ERROR' as const,
+  MODERATOR_START: 'MODERATOR_START' as const,
+  MODERATOR_COMPLETE: 'MODERATOR_COMPLETE' as const,
+  MODERATOR_ERROR: 'MODERATOR_ERROR' as const,
+  ABORT: 'ABORT' as const,
+  RESET: 'RESET' as const,
+} as const;
+
+// 6. TYPE GUARD
+export function isRoundFlowEvent(value: unknown): value is RoundFlowEvent {
+  return RoundFlowEventSchema.safeParse(value).success;
+}
+
+// ============================================================================
 // CHAIN OF THOUGHT STEP STATUS
 // ============================================================================
 

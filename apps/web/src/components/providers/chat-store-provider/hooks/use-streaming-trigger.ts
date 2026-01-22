@@ -63,10 +63,12 @@ export function useStreamingTrigger({
     const freshIsPatchInProgress = freshState.isPatchInProgress;
     const freshEnableWebSearch = freshState.enableWebSearch;
 
+    rlog.flow('trigger', `EFFECT-RUN wait=${freshWaitingToStart ? 1 : 0} screen=${freshScreenMode} created=${freshCreatedThreadId?.slice(-8) ?? '-'} parts=${freshParticipants.length} msgs=${freshMessages.length} thread=${freshThread?.id?.slice(-8) ?? '-'} hasSent=${freshState.hasSentPendingMessage ? 1 : 0}`);
     rlog.trigger('streaming-trigger', `effect-run wait=${freshWaitingToStart ? 1 : 0} screen=${freshScreenMode} created=${freshCreatedThreadId?.slice(-8) ?? '-'} parts=${freshParticipants.length} msgs=${freshMessages.length}`);
 
     if (!freshWaitingToStart) {
       startRoundCalledForRoundRef.current = null;
+      rlog.flow('trigger', 'EXIT-EARLY: waitingToStartStreaming=false');
       rlog.trigger('streaming-trigger', 'EXIT: not waiting');
       return;
     }
@@ -89,8 +91,17 @@ export function useStreamingTrigger({
       return;
     }
 
-    if (!chat.startRound || freshParticipants.length === 0 || freshMessages.length === 0) {
-      rlog.trigger('streaming-trigger', `EXIT: missing data startRound=${!!chat.startRound} parts=${freshParticipants.length} msgs=${freshMessages.length}`);
+    // ✅ RACE CONDITION FIX: Split checks with recovery for parts=0 but msgs>0
+    if (!chat.startRound || freshMessages.length === 0) {
+      rlog.trigger('streaming-trigger', `EXIT: startRound=${!!chat.startRound} msgs=${freshMessages.length}`);
+      return;
+    }
+
+    if (freshParticipants.length === 0) {
+      rlog.trigger('streaming-trigger', `RECOVERY-NEEDED: parts=0 but msgs=${freshMessages.length}`);
+      // Clear flags to prevent infinite loop, let screen-init handle recovery
+      freshState.setWaitingToStartStreaming(false);
+      freshState.setStreamingRoundNumber(null);
       return;
     }
 
@@ -305,11 +316,38 @@ export function useStreamingTrigger({
       // participant's stream than what we need to trigger. We shouldn't clear the flags
       // because our target participant (nextParticipantToTrigger) hasn't been triggered yet.
       if (freshState.streamResumptionPrefilled && freshState.currentResumptionPhase === 'participants') {
+        rlog.trigger('clear-guard', 'skip: prefilled resumption');
         return;
       }
 
+      // ✅ STREAMING BUG FIX: Don't clear until message actually sent to AI SDK
+      // startRound() sets isStreaming=true sync via flushSync, but actual send is in queueMicrotask
+      // hasSentPendingMessage is set by startRound AFTER aiSendMessage() returns (not before)
+      // Without this guard, we clear waitingToStartStreaming before the API call happens
+      if (!freshState.hasSentPendingMessage) {
+        rlog.trigger('clear-guard', `skip: msg not sent (pending=${freshState.pendingMessage?.slice(0, 20) ?? '-'})`);
+        return;
+      }
+
+      // ✅ RACE CONDITION FIX (Issue 1): Don't clear if pre-search still streaming
+      // When web search is enabled, pre-search streams before participant streaming.
+      // If we clear waitingToStartStreaming while pre-search is still active, navigation
+      // or other effects could leave the round in a stuck state. The pre-search must
+      // complete or abort before we clear the waiting flag.
+      const webSearchEnabled = getEffectiveWebSearchEnabled(freshState.thread, freshState.enableWebSearch);
+      if (webSearchEnabled) {
+        const currentRound = getCurrentRoundNumber(freshState.messages);
+        const preSearchForRound = freshState.preSearches.find(ps => ps.roundNumber === currentRound);
+        if (preSearchForRound && preSearchForRound.status === MessageStatuses.STREAMING) {
+          rlog.trigger('clear-guard', `skip: preSearch still streaming for r${currentRound}`);
+          return;
+        }
+      }
+
+      rlog.trigger('clear-flags', `clearing waitingToStart (sent=${freshState.hasSentPendingMessage})`);
       freshState.setWaitingToStartStreaming(false);
-      freshState.setHasSentPendingMessage(true);
+      // ✅ REMOVED: Don't set hasSentPendingMessage here - startRound sets it after aiSendMessage
+
       // ✅ HANDOFF FIX: Set handoff flag BEFORE clearing nextParticipantToTrigger
       // This prevents stale-streaming-cleanup from firing during P0→P1 transition
       // The handoff flag acts as a guard that persists until the next participant actually starts
@@ -440,7 +478,10 @@ export function useStreamingTrigger({
       // Check if this is a newly created thread (not a resumption)
       // For new threads: createdThreadId is set, validResumption is false (expected)
       // We should NOT clear waitingToStartStreaming for new threads
-      const isNewlyCreatedThread = s.createdThreadId === s.thread?.id && s.createdThreadId !== null;
+      // ✅ BUG FIX: When thread=null (before initializeThread runs), the old check
+      // `createdThreadId === thread?.id` was false ('03791R0V' === undefined)
+      // Now we just check if createdThreadId is set - that's sufficient to identify creation flow
+      const isNewlyCreatedThread = s.createdThreadId !== null;
 
       // If no valid resumption AND AI SDK not active AND store not streaming AND not a newly created thread
       // This is a stuck state - reset it

@@ -363,6 +363,31 @@ export function ChatView({
     modelOrder,
   });
 
+  // Sort selected models to top when modal opens (on revisit)
+  useEffect(() => {
+    if (!isModelModalOpen.value || selectedParticipants.length === 0)
+      return;
+
+    // Get selected model IDs sorted by priority
+    const selectedModelIds = [...selectedParticipants]
+      .sort((a, b) => a.priority - b.priority)
+      .map(p => p.modelId);
+
+    // Get unselected model IDs in current order
+    const unselectedModelIds = modelOrder.filter(id => !selectedModelIds.includes(id));
+
+    // New order: selected first, then unselected
+    const newOrder = [...selectedModelIds, ...unselectedModelIds];
+
+    // Only update if order actually changed
+    const orderChanged = newOrder.some((id, i) => modelOrder[i] !== id);
+    if (orderChanged) {
+      setModelOrder(newOrder);
+    }
+  // Only run when modal opens, not on every participant/order change
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isModelModalOpen.value]);
+
   // ✅ GRANULAR: Track vision (image) and file (document) incompatibilities separately
   const incompatibleModelData = useMemo(() => {
     const incompatible = new Set<string>();

@@ -70,9 +70,9 @@ export const colors = {
   backgroundSecondary: '#FFFFFF', // Background color
 };
 
-// Typography - Matching global.css font system with email-safe fallbacks
+// Typography - System fonts for email-safe rendering
 export const typography = {
-  fontFamily: '"Inter", system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
+  fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif',
 
   fontSize: {
     'xs': '12px',

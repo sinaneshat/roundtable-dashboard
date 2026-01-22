@@ -20,6 +20,7 @@ import {
   useNavigationCleanup,
   usePendingMessage,
   usePreSearchResumption,
+  useRoundOrchestrator,
   useRoundResumption,
   useStaleStreamingCleanup,
   useStateSync,
@@ -28,6 +29,7 @@ import {
   useStuckStreamDetection,
   useTitleAnimationController,
   useTitlePolling,
+  useVisibilityStreamGuard,
 } from './hooks';
 import type { ChatStoreProviderProps } from './types';
 
@@ -368,11 +370,30 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     acknowledgeStreamFinish: () => {
       store.getState().acknowledgeStreamFinish();
     },
+    // ✅ STREAMING BUG FIX: Mark when message actually sent to AI SDK
+    // Called by startRound AFTER aiSendMessage returns (not synchronously)
+    setHasSentPendingMessage: (value) => {
+      store.getState().setHasSentPendingMessage(value);
+    },
   });
 
   const sendMessageRef = useRef(chat.sendMessage);
   const startRoundRef = useRef(chat.startRound);
   const setMessagesRef = useRef(chat.setMessages);
+
+  // ============================================================================
+  // FSM ORCHESTRATOR (Phase 4: Running in parallel with existing hooks)
+  // ============================================================================
+  // The FSM orchestrator provides explicit state machine-based round coordination.
+  // Currently running alongside existing hooks; will replace them in Phase 5.
+  // The orchestrator's dispatch and flowState will be used to replace existing hooks.
+  const roundOrchestrator = useRoundOrchestrator({
+    store,
+    chat,
+    effectiveThreadId,
+  });
+  // Mark as intentionally unused during parallel integration phase
+  void roundOrchestrator;
 
   // ✅ NAVIGATION CLEANUP: Wire up AI SDK's stop function to the store
   // This allows reset functions to stop streaming before clearing state
@@ -428,6 +449,14 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
   useStuckStreamDetection({
     store,
     lastStreamActivityRef,
+  });
+
+  // ✅ VISIBILITY GUARD: Detect tab visibility changes and reconnect streams
+  // Prevents streams from stopping when browser tab loses focus
+  useVisibilityStreamGuard({
+    store,
+    chat,
+    effectiveThreadId,
   });
 
   // ✅ STALE STATE CLEANUP: Detect and clean up stale streaming state

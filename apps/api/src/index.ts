@@ -28,6 +28,9 @@ import type { ApiEnv } from '@/types';
 
 import { createOpenApiApp } from './core/app';
 import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, performanceTracking, RateLimiterFactory, requestLogger } from './middleware';
+// Admin routes
+import { adminSearchUserHandler } from './routes/admin/handler';
+import { adminSearchUserRoute } from './routes/admin/route';
 // API Keys routes
 import {
   createApiKeyHandler,
@@ -502,6 +505,7 @@ app.notFound(notFound);
 
 app.use('/auth/me', csrfProtection);
 app.use('/auth/api-keys', csrfProtection);
+app.use('/admin/*', csrfProtection);
 
 app.use('/billing/checkout', csrfProtection);
 app.use('/billing/portal', csrfProtection);
@@ -560,6 +564,7 @@ const appRoutes = app
   .openapi(detailedHealthRoute, detailedHealthHandler)
   .openapi(ogChatRoute, ogChatHandler)
   .openapi(secureMeRoute, secureMeHandler)
+  .openapi(adminSearchUserRoute, adminSearchUserHandler)
   .openapi(listApiKeysRoute, listApiKeysHandler)
   .openapi(getApiKeyRoute, getApiKeyHandler)
   .openapi(createApiKeyRoute, createApiKeyHandler)

@@ -90,6 +90,8 @@ import {
   TriangleAlert,
   Upload,
   User,
+  UserCheck,
+  UserCog,
   Users,
   Video,
   Volume2,
@@ -203,6 +205,8 @@ export const Icons = {
   key: Key,
   shieldAlert: ShieldAlert,
   user: User,
+  userCheck: UserCheck,
+  userCog: UserCog,
   users: Users,
 
   // Concepts & Ideas

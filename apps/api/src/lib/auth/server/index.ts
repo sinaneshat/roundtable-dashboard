@@ -2,7 +2,7 @@ import { EMAIL_DOMAIN_CONFIG, NodeEnvs } from '@roundtable/shared';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { createAuthMiddleware } from 'better-auth/api';
-import { apiKey, magicLink } from 'better-auth/plugins';
+import { admin, apiKey, magicLink } from 'better-auth/plugins';
 import { env as workersEnv } from 'cloudflare:workers';
 
 import { db } from '@/db';
@@ -368,6 +368,11 @@ function createAuth() {
         // work seamlessly with both session cookies and API keys.
         // To disable this behavior, set: disableSessionForAPIKeys: true
         // @see https://www.better-auth.com/docs/plugins/api-key#sessions-from-api-keys
+      }),
+      admin({
+        defaultRole: 'user',
+        adminRole: 'admin',
+        impersonationSessionDuration: 60 * 60, // 1 hour
       }),
     ],
   });

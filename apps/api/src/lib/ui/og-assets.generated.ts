@@ -42,10 +42,10 @@ export function getOGFontsSync(): OGFontConfig[] {
   }
 
   cachedFonts = [
-    { name: 'Geist', data: base64ToArrayBuffer(FONT_400), style: 'normal', weight: 400 },
-    { name: 'Geist', data: base64ToArrayBuffer(FONT_600), style: 'normal', weight: 600 },
-    { name: 'Geist', data: base64ToArrayBuffer(FONT_700), style: 'normal', weight: 700 },
-    { name: 'Geist', data: base64ToArrayBuffer(FONT_800), style: 'normal', weight: 800 },
+    { name: 'sans-serif', data: base64ToArrayBuffer(FONT_400), style: 'normal', weight: 400 },
+    { name: 'sans-serif', data: base64ToArrayBuffer(FONT_600), style: 'normal', weight: 600 },
+    { name: 'sans-serif', data: base64ToArrayBuffer(FONT_700), style: 'normal', weight: 700 },
+    { name: 'sans-serif', data: base64ToArrayBuffer(FONT_800), style: 'normal', weight: 800 },
   ];
 
   return cachedFonts;

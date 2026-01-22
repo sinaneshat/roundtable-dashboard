@@ -71,7 +71,7 @@ async function generateOgImage(params: {
           height: '100%',
           backgroundColor: '#0a0a0a',
           position: 'relative',
-          fontFamily: 'Geist, Inter, sans-serif',
+          fontFamily: 'sans-serif',
         }}
       >
         {/* Top-right rainbow gradient orb - pink/purple/magenta */}

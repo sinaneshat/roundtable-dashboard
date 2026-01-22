@@ -7,6 +7,22 @@
     "openSidebar": "Open sidebar",
     "toggleSidebar": "Toggle Sidebar"
   },
+  "admin": {
+    "banner": {
+      "impersonating": "Impersonating {email}",
+      "stopButton": "Stop Impersonating"
+    },
+    "impersonate": {
+      "description": "Search for a user by email to impersonate their session",
+      "emailLabel": "User Email",
+      "emailPlaceholder": "user@example.com",
+      "impersonateButton": "Impersonate User",
+      "searchButton": "Search User",
+      "success": "Impersonation Started",
+      "title": "Impersonate User",
+      "userNotFound": "No user found with that email"
+    }
+  },
   "actions": {
     "back": "Back",
     "cancel": "Cancel",
@@ -1027,6 +1043,8 @@
     "deleteAccount": "Delete Account",
     "deleteAccountDescription": "Permanently delete your account",
     "feedbackDescription": "Help us improve Roundtable",
+    "impersonateDescription": "Impersonate another user",
+    "impersonateUser": "Impersonate User",
     "manageBilling": "Manage billing",
     "proPlan": "Pro Plan",
     "sendFeedback": "Send Feedback",

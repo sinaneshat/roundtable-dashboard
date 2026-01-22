@@ -171,6 +171,12 @@ type UseMultiParticipantChatOptions = {
    * Replaces the 50ms timeout workaround for stream settling detection.
    */
   acknowledgeStreamFinish?: () => void;
+  /**
+   * ✅ STREAMING BUG FIX: Callback to mark when message actually sent to AI SDK
+   * Called AFTER aiSendMessage() returns in startRound (not synchronously during startRound).
+   * Guards the flag-clearing effect in use-streaming-trigger.ts to prevent premature clearing.
+   */
+  setHasSentPendingMessage?: (value: boolean) => void;
 };
 
 /**
@@ -334,6 +340,8 @@ export function useMultiParticipantChat(
     setParticipantHandoffInProgress,
     // ✅ RACE CONDITION FIX: Callback to acknowledge stream finish
     acknowledgeStreamFinish,
+    // ✅ STREAMING BUG FIX: Mark when message actually sent to AI SDK
+    setHasSentPendingMessage,
   } = options;
 
   // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
@@ -374,6 +382,8 @@ export function useMultiParticipantChat(
     setParticipantHandoffInProgress,
     // ✅ RACE CONDITION FIX: Acknowledge stream finish to signal completion
     acknowledgeStreamFinish,
+    // ✅ STREAMING BUG FIX: Mark when message actually sent to AI SDK
+    setHasSentPendingMessage,
   });
 
   // Participant error tracking - simple Set-based tracking to prevent duplicate responses
@@ -2248,6 +2258,11 @@ export function useMultiParticipantChat(
             isParticipantTrigger: true,
           },
         });
+        // ✅ STREAMING BUG FIX: Mark that message was actually sent to AI SDK
+        // This MUST happen AFTER sendFn returns, not synchronously in startRound
+        // The flag-clearing effect in use-streaming-trigger.ts guards on this
+        callbackRefs.setHasSentPendingMessage.current?.(true);
+        rlog.stream('start', `setHasSentPendingMessage(true) after aiSendMessage success`);
         // ✅ SUCCESS: Reset trigger lock after aiSendMessage succeeds
         isTriggeringRef.current = false;
       } catch (error) {
