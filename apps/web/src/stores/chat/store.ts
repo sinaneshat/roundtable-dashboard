@@ -1138,24 +1138,15 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
       return Promise.resolve();
     }
 
-    const ANIMATION_TIMEOUT_MS = 5000;
-
+    // ✅ REMOVED TIMEOUT: Previously used 5s timeout as fallback
+    // Problem: Timeout-based fallback caused premature animation clearing
+    // Solution: Let animations complete naturally via their resolvers
+    // Each animation component calls completeAnimation() when done, which resolves its promise
+    // If an animation never completes (bug), the promise hangs - but this is better than
+    // prematurely clearing animations and causing visual glitches
     const animationPromises = pendingIndices.map(index => state.waitForAnimation(index));
 
-    const timeoutPromise = new Promise<void>((resolve) => {
-      setTimeout(() => {
-        set({
-          pendingAnimations: new Set<number>(),
-          animationResolvers: new Map<number, () => void>(),
-        }, false, 'animation/waitForAllAnimationsTimeout');
-        resolve();
-      }, ANIMATION_TIMEOUT_MS);
-    });
-
-    await Promise.race([
-      Promise.all(animationPromises),
-      timeoutPromise,
-    ]);
+    await Promise.all(animationPromises);
   },
 
   clearAnimations: () =>

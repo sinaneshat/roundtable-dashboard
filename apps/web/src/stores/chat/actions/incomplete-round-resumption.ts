@@ -168,10 +168,9 @@ export function useIncompleteRoundResumption(
   const [activeStreamCheckComplete, setActiveStreamCheckComplete] = useState(false);
   // ✅ STREAM SETTLING FIX: Track when streaming just ended
   // When isStreaming goes false, AI SDK's onFinish hasn't run yet (message parts still have state='streaming').
-  // Wait 50ms before allowing resumption triggers to let onFinish update message state.
+  // We use streamFinishAcknowledged to detect when onFinish has run.
   // Using useReducer instead of useState to satisfy react-hooks-extra/no-direct-set-state-in-use-effect
   const [isStreamSettling, dispatchSettling] = useReducer((_: boolean, action: boolean) => action, false);
-  const streamSettlingTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   // Track settling state via ref to avoid dependencies that trigger re-renders
   const isStreamSettlingRef = useRef(false);
   // Callback to update settling state
@@ -281,24 +280,24 @@ export function useIncompleteRoundResumption(
   }, [waitingToStartStreaming, pendingMessage, isStreaming, streamResumptionPrefilled, createdThreadId, actions]);
 
   // ============================================================================
-  // ✅ STALE isStreaming FIX: Clear stale isStreaming on page refresh
+  // ✅ STALE isStreaming FIX: Clear stale isStreaming using event-driven signals
   // ============================================================================
   // When user refreshes during streaming:
   // 1. isStreaming: true persists from previous session
   // 2. AI SDK's resume attempt briefly sets status='streaming' during GET /stream fetch
-  // 3. handleResumedStreamDetection sets isExplicitlyStreaming=true
-  // 4. GET /stream may return some buffered chunks then end without finish event
-  // 5. But isStreaming=true blocks incomplete round resumption
+  // 3. GET /stream may return some buffered chunks then end
   //
-  // Detection: isStreaming: true AND round is incomplete AND no submission in progress
-  // Fix: After 2s of no progress, clear isStreaming to allow resumption
+  // ✅ REMOVED TIMEOUT: Previously used 2s timeout to clear stale isStreaming
+  // Problem: Timeout-based detection can't distinguish legitimate streaming from stale state
+  // Solution: Use event-driven signals - streamFinishAcknowledged + isModeratorStreaming checks
   //
-  // ✅ FIX: Don't use "checked once" ref - timeout should reset when deps change
-  // If resumed stream sends data then stops, deps change → timeout resets → 2s later clears
-  // This handles the case where stream resumes partially then dies without finish event
+  // The streaming state is now managed by:
+  // - AI SDK's onFinish callback sets streamFinishAcknowledged
+  // - isModeratorStreaming indicates moderator phase is active
+  // - Explicit API error handlers clear streaming state
   // ============================================================================
   useEffect(() => {
-    // Skip if not streaming (nothing to clear)
+    // Skip if not in a potentially stale streaming state
     if (!isStreaming) {
       return;
     }
@@ -313,17 +312,15 @@ export function useIncompleteRoundResumption(
       return;
     }
 
-    // ✅ FIX: Set timeout that resets each time deps change
-    // If streaming continues for 2s without any activity (no dep changes),
-    // it's stale and should be cleared to allow incomplete round resumption
-    const timeoutId = setTimeout(() => {
-      // Clear isStreaming to unblock incomplete round resumption
-      // The resumption effect will re-run and trigger remaining participants
+    // ✅ EVENT-DRIVEN: Check if stream has finished via acknowledgment signal
+    // This replaces the 2s timeout with explicit completion signal
+    if (streamFinishAcknowledged) {
+      rlog.resume('stale-clear', 'streamFinishAcknowledged=true, clearing stale isStreaming');
       actions.setIsStreaming(false);
-    }, 2000);
-
-    return () => clearTimeout(timeoutId);
-  }, [isStreaming, waitingToStartStreaming, pendingMessage, hasEarlyOptimisticMessage, actions]);
+    }
+    // Note: If streamFinishAcknowledged is false, the stream may still be active
+    // or the AI SDK may set it via onFinish callback
+  }, [isStreaming, waitingToStartStreaming, pendingMessage, hasEarlyOptimisticMessage, streamFinishAcknowledged, actions]);
 
   // ============================================================================
   // ✅ STREAM SETTLING FIX: Delay resumption after streaming ends
@@ -332,23 +329,17 @@ export function useIncompleteRoundResumption(
   // The message parts still have `state: 'streaming'`, so the hook sees "incomplete round"
   // and incorrectly tries to re-trigger the participant that just finished.
   //
-  // ✅ RACE CONDITION FIX: Use explicit completion signal instead of timeout
-  // Previously we used a 50ms timeout to wait for onFinish to run after isStreaming went false.
-  // Now we use the streamFinishAcknowledged flag which is set by onFinish directly.
+  // ✅ RACE CONDITION FIX: Use explicit completion signal (no timeout fallback)
+  // The streamFinishAcknowledged flag is set by onFinish directly.
+  // We rely purely on this event-driven signal, never on timeouts.
   //
-  // Settling state management:
-  // - When isStreaming goes false, enter settling state
-  // - When streamFinishAcknowledged becomes true, exit settling state
-  // - Fallback: 100ms timeout in case onFinish never fires (error cases)
+  // ✅ REMOVED TIMEOUT: Previously had 100ms fallback in case onFinish never fires
+  // Problem: Timeout-based fallback caused premature state transitions
+  // Solution: If onFinish truly never fires, the stream will be handled by
+  // explicit error handling or the user refreshing the page
   const wasStreamingRef = useRef(false);
 
   useEffect(() => {
-    // Clear any pending timeout when effect re-runs
-    if (streamSettlingTimeoutRef.current) {
-      clearTimeout(streamSettlingTimeoutRef.current);
-      streamSettlingTimeoutRef.current = null;
-    }
-
     if (isStreaming) {
       // Streaming is active - track it and ensure not in settling state
       wasStreamingRef.current = true;
@@ -359,44 +350,25 @@ export function useIncompleteRoundResumption(
       // Just transitioned from streaming to not streaming
       wasStreamingRef.current = false;
 
-      // ✅ RACE CONDITION FIX: Check if onFinish already acknowledged completion
+      // ✅ EVENT-DRIVEN: Check if onFinish already acknowledged completion
       if (streamFinishAcknowledged) {
         // onFinish already ran, no need to settle
         rlog.resume('settle-skip', `streamFinishAcknowledged=true, skipping settle`);
         updateSettlingState(false);
       } else {
-        // Enter settling period, waiting for streamFinishAcknowledged or timeout
+        // Enter settling period, waiting for streamFinishAcknowledged (no timeout fallback)
         updateSettlingState(true);
         rlog.resume('settle-start', `streaming ended, waiting for onFinish acknowledgment`);
-
-        // Fallback timeout in case onFinish never fires (100ms is generous)
-        streamSettlingTimeoutRef.current = setTimeout(() => {
-          if (isStreamSettlingRef.current) {
-            rlog.resume('settle-timeout', `fallback timeout - clearing settling state`);
-            updateSettlingState(false);
-          }
-        }, 100);
+        // No timeout fallback - rely purely on streamFinishAcknowledged signal
       }
     }
-
-    return () => {
-      if (streamSettlingTimeoutRef.current) {
-        clearTimeout(streamSettlingTimeoutRef.current);
-        streamSettlingTimeoutRef.current = null;
-      }
-    };
   }, [isStreaming, streamFinishAcknowledged, updateSettlingState]);
 
-  // ✅ RACE CONDITION FIX: Exit settling state when streamFinishAcknowledged becomes true
+  // ✅ EVENT-DRIVEN: Exit settling state when streamFinishAcknowledged becomes true
   useEffect(() => {
     if (streamFinishAcknowledged && isStreamSettlingRef.current) {
       rlog.resume('settle-ack', `streamFinishAcknowledged=true, clearing settling state`);
       updateSettlingState(false);
-      // Clear the fallback timeout since we got the signal
-      if (streamSettlingTimeoutRef.current) {
-        clearTimeout(streamSettlingTimeoutRef.current);
-        streamSettlingTimeoutRef.current = null;
-      }
     }
   }, [streamFinishAcknowledged, updateSettlingState]);
 
@@ -709,10 +681,6 @@ export function useIncompleteRoundResumption(
     roundTriggerInProgressRef.current = null;
     // ✅ STREAM SETTLING FIX: Reset settling state on navigation
     updateSettlingState(false);
-    if (streamSettlingTimeoutRef.current) {
-      clearTimeout(streamSettlingTimeoutRef.current);
-      streamSettlingTimeoutRef.current = null;
-    }
   }, [threadId, updateSettlingState]);
 
   // ============================================================================
@@ -794,16 +762,14 @@ export function useIncompleteRoundResumption(
     // Mark thread as checked
     activeStreamCheckRef.current = threadId;
 
-    // ✅ RACE CONDITION FIX: Delay marking as complete to allow AI SDK to start resuming
-    // AI SDK's resume:true causes a GET call on mount. If there's data to resume,
-    // isStreaming will become true. We delay briefly to give that a chance to happen
-    // before allowing the main trigger effect to run.
-    // ✅ FIX: Use state setter instead of ref to ensure effect re-runs after timeout
-    const timeoutId = setTimeout(() => {
+    // ✅ REMOVED TIMEOUT: Previously used 100ms delay to allow AI SDK to start resuming
+    // Problem: Timeout-based delays are fragile and can cause race conditions
+    // Solution: Set completion immediately - the main trigger effect has guards for isStreaming
+    // and AI SDK status. If AI SDK is resuming, those guards will prevent double-triggering.
+    // Using queueMicrotask to ensure React has processed the state update
+    queueMicrotask(() => {
       setActiveStreamCheckComplete(true);
-    }, 100);
-
-    return () => clearTimeout(timeoutId);
+    });
   }, [enabled, threadId, isIncomplete, currentRoundNumber, nextParticipantIndex, actions]);
 
   // ✅ ORPHANED PRE-SEARCH UI RECOVERY EFFECT
@@ -1234,48 +1200,23 @@ export function useIncompleteRoundResumption(
   // Later when STALE TRIGGER RECOVERY clears state, waitingToStartStreaming goes
   // false but resumptionAttemptedRef prevents retry.
   //
-  // Detection: waitingToStartStreaming was set (by us) then cleared (by timeout
-  // or stale recovery) WITHOUT isStreaming ever becoming true.
+  // ✅ REMOVED TIMEOUT: Previously used 100ms timeout to detect retry toggle vs failure
+  // Problem: Timeout-based detection is fragile and can clear guards during legit transitions
+  // Solution: Track streaming state transitions directly without timeout:
+  // - waitingToStartStreaming=true → track that we're attempting
+  // - isStreaming=true → success, keep guards to prevent double-trigger
+  // - Thread change → reset all guards (handled by thread change effect)
+  // - API errors → clear guards via explicit error handlers
   //
-  // Fix: Track if we set waitingToStartStreaming. If it transitions to false
-  // without streaming starting, clear resumptionAttemptedRef to allow retry.
+  // The guards are now only cleared on thread change or explicit API errors,
+  // not on timeout-based "failure detection"
   // ============================================================================
-  // ✅ FIX: Track retry toggle to distinguish from actual failure
-  // Retry mechanism toggles waitingToStartStreaming false→true quickly
-  // We should NOT clear guards during retry - only on actual failure
-  const retryToggleTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (waitingToStartStreaming) {
       // We just set waitingToStartStreaming - track it
       wasWaitingRef.current = true;
       sawStreamingRef.current = false;
-      // Clear any pending retry toggle timeout
-      if (retryToggleTimeoutRef.current) {
-        clearTimeout(retryToggleTimeoutRef.current);
-        retryToggleTimeoutRef.current = null;
-      }
-    } else if (wasWaitingRef.current) {
-      // waitingToStartStreaming just went false
-      // Don't clear guards immediately - wait to see if this is a retry toggle
-      // Retry mechanism sets it true again within ~50ms via queueMicrotask
-      retryToggleTimeoutRef.current = setTimeout(() => {
-        // If we get here, waitingToStartStreaming stayed false for 100ms
-        // This is a real trigger failure, not a retry toggle
-        wasWaitingRef.current = false;
-
-        if (!sawStreamingRef.current && !isStreaming) {
-          // Trigger failed - waitingToStartStreaming was cleared but streaming never started
-          // Clear refs to allow retry
-          if (resumptionAttemptedRef.current !== null) {
-            resumptionAttemptedRef.current = null;
-          }
-          // ✅ DOUBLE-TRIGGER FIX: Also clear round-level guard on ACTUAL trigger failure
-          if (roundTriggerInProgressRef.current !== null) {
-            roundTriggerInProgressRef.current = null;
-          }
-        }
-      }, 100); // Wait 100ms to distinguish retry toggle from actual failure
     }
 
     if (isStreaming) {
@@ -1286,20 +1227,13 @@ export function useIncompleteRoundResumption(
       // Subsequent participants (P1, P2, etc.) are triggered internally by use-multi-participant-chat.ts,
       // NOT by this resumption effect. Keeping the guard set prevents duplicate startRound calls
       // when isStreaming briefly becomes false between participants.
-      // The guard is cleared on threadId change (line 537) or on actual trigger failure (line 1057).
-      // Clear retry toggle timeout
-      if (retryToggleTimeoutRef.current) {
-        clearTimeout(retryToggleTimeoutRef.current);
-        retryToggleTimeoutRef.current = null;
-      }
+      // The guard is cleared on threadId change or on explicit API error.
     }
 
-    return () => {
-      if (retryToggleTimeoutRef.current) {
-        clearTimeout(retryToggleTimeoutRef.current);
-        retryToggleTimeoutRef.current = null;
-      }
-    };
+    // ✅ EVENT-DRIVEN: Guard clearing happens on:
+    // 1. Thread change (see thread change effect above)
+    // 2. Explicit API errors (handled by error callbacks in trigger functions)
+    // NOT on timeout-based "failure detection"
   }, [waitingToStartStreaming, isStreaming]);
 
   // ============================================================================

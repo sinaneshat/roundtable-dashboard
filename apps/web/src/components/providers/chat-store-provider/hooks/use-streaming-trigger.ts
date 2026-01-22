@@ -1,6 +1,5 @@
 import { MessageRoles, MessageStatuses, ScreenModes } from '@roundtable/shared';
 import type { QueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
 import type { RefObject } from 'react';
 import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
@@ -8,8 +7,7 @@ import { useShallow } from 'zustand/react/shallow';
 
 import { queryKeys } from '@/lib/data/query-keys';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
-import { showApiErrorToast } from '@/lib/toast';
-import { extractFileContextForSearch, getCurrentRoundNumber, getRoundNumber, shouldPreSearchTimeout, TIMEOUT_CONFIG } from '@/lib/utils';
+import { extractFileContextForSearch, getCurrentRoundNumber, getRoundNumber } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import { executePreSearchStreamService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
@@ -30,8 +28,6 @@ export function useStreamingTrigger({
   effectiveThreadId,
   queryClientRef,
 }: UseStreamingTriggerParams) {
-  const navigate = useNavigate();
-
   // ✅ STALE SELECTOR FIX: These selectors are kept for effect dependency tracking,
   // but the effect reads fresh state from store.getState() to avoid stale values.
   const {
@@ -369,6 +365,11 @@ export function useStreamingTrigger({
     }
   }, [waitingToStart, chatIsStreaming, hasSentPending, store]);
 
+  // ✅ REMOVED: Timeout-based auto-navigation to overview
+  // Previously: 5s interval checking for 60s timeout, then auto-navigate to /chat
+  // Problem: This caused premature navigation when moderator started after participants finished
+  // Solution: Never auto-navigate based on timeouts - rely on event-driven completion signals
+  // (streamFinishAcknowledged, isModeratorStreaming, explicit API errors)
   useEffect(() => {
     if (!waitingToStart) {
       waitingStartTimeRef.current = null;
@@ -378,131 +379,16 @@ export function useStreamingTrigger({
     if (waitingStartTimeRef.current === null) {
       waitingStartTimeRef.current = Date.now();
     }
+    // No interval - just track start time for debugging
+  }, [waitingToStart]);
 
-    const checkInterval = setInterval(() => {
-      const latestState = store.getState();
+  // ✅ REMOVED: Interval-based stuck pre-search detection
+  // Previously: 5s interval calling checkStuckPreSearches()
+  // Problem: Timeout-based detection caused premature state changes
+  // Solution: Pre-search completion is now event-driven via API response callbacks
 
-      if (!latestState.waitingToStartStreaming || latestState.isStreaming) {
-        return;
-      }
-
-      const now = Date.now();
-      const waitingStartTime = waitingStartTimeRef.current ?? now;
-      const elapsedWaitingTime = now - waitingStartTime;
-      const latestWebSearchEnabled = getEffectiveWebSearchEnabled(latestState.thread, latestState.enableWebSearch);
-
-      if (!latestState.createdThreadId && elapsedWaitingTime < 60_000) {
-        return;
-      }
-
-      if (latestWebSearchEnabled) {
-        if (latestState.messages.length === 0) {
-          if (elapsedWaitingTime < 60_000)
-            return;
-        } else {
-          const currentRound = getCurrentRoundNumber(latestState.messages);
-          const preSearchForRound = Array.isArray(latestState.preSearches)
-            ? latestState.preSearches.find(ps => ps.roundNumber === currentRound)
-            : undefined;
-
-          if (!preSearchForRound) {
-            if (elapsedWaitingTime < 60_000)
-              return;
-          } else {
-            const isStillRunning = preSearchForRound.status === MessageStatuses.PENDING
-              || preSearchForRound.status === MessageStatuses.STREAMING;
-
-            if (isStillRunning) {
-              const lastActivityTime = latestState.getPreSearchActivityTime(currentRound);
-              if (!shouldPreSearchTimeout(preSearchForRound, lastActivityTime, now)) {
-                return;
-              }
-              return;
-            } else {
-              const PARTICIPANT_START_GRACE_PERIOD_MS = 15_000;
-              // completedAt is always a string or null (ISO format from JSON serialization)
-              const completedTime = preSearchForRound.completedAt
-                ? new Date(preSearchForRound.completedAt).getTime()
-                : now;
-              const timeSinceComplete = now - completedTime;
-
-              if (timeSinceComplete < PARTICIPANT_START_GRACE_PERIOD_MS) {
-                return;
-              }
-              return;
-            }
-          }
-        }
-      } else {
-        if (elapsedWaitingTime < TIMEOUT_CONFIG.DEFAULT_MS) {
-          return;
-        }
-      }
-
-      latestState.setWaitingToStartStreaming(false);
-      latestState.setIsStreaming(false);
-      latestState.setIsCreatingThread(false);
-      latestState.resetToOverview();
-      navigate({ to: '/chat' });
-      showApiErrorToast('Failed to start conversation', new Error('Streaming failed to start. Please try again.'));
-      clearInterval(checkInterval);
-    }, 5000);
-
-    return () => clearInterval(checkInterval);
-  }, [waitingToStart, store, navigate]);
-
-  useEffect(() => {
-    const checkStuckPreSearches = () => {
-      store.getState().checkStuckPreSearches();
-    };
-
-    checkStuckPreSearches();
-
-    const interval = setInterval(checkStuckPreSearches, 5000);
-    return () => clearInterval(interval);
-  }, [store]);
-
-  // ✅ STUCK STATE RECOVERY: Detect and recover from stuck resumption states
-  // When navigation occurs mid-resumption, state can become stuck:
-  // - waitingToStartStreaming: true (from previous thread)
-  // - streamResumptionPrefilled: false or mismatched thread
-  // - AI SDK not streaming
-  // - Store not streaming
-  // This interval detects this stuck state and clears it to allow new resumption
-  useEffect(() => {
-    const interval = setInterval(() => {
-      const s = store.getState();
-
-      // Only check if we think we're waiting to start streaming
-      if (!s.waitingToStartStreaming) {
-        return;
-      }
-
-      // Check if resumption state is valid for current thread
-      const validResumption = s.streamResumptionPrefilled
-        && s.prefilledForThreadId === s.thread?.id;
-
-      // Check if AI SDK is actively streaming (use ref for synchronous check)
-      const aiSdkActive = chat.isStreamingRef.current;
-
-      // Check if this is a newly created thread (not a resumption)
-      // For new threads: createdThreadId is set, validResumption is false (expected)
-      // We should NOT clear waitingToStartStreaming for new threads
-      // ✅ BUG FIX: When thread=null (before initializeThread runs), the old check
-      // `createdThreadId === thread?.id` was false ('03791R0V' === undefined)
-      // Now we just check if createdThreadId is set - that's sufficient to identify creation flow
-      const isNewlyCreatedThread = s.createdThreadId !== null;
-
-      // If no valid resumption AND AI SDK not active AND store not streaming AND not a newly created thread
-      // This is a stuck state - reset it
-      if (!validResumption && !aiSdkActive && !s.isStreaming && !isNewlyCreatedThread) {
-        rlog.trigger('stuck-recovery', `clearing stuck state: prefilled=${s.streamResumptionPrefilled ? 1 : 0} prefilledThread=${s.prefilledForThreadId?.slice(-8) ?? '-'} currentThread=${s.thread?.id?.slice(-8) ?? '-'}`);
-        s.setWaitingToStartStreaming(false);
-        s.setNextParticipantToTrigger(null);
-        s.clearStreamResumption();
-      }
-    }, 3000);
-
-    return () => clearInterval(interval);
-  }, [store, chat.isStreamingRef]);
+  // ✅ REMOVED: Interval-based stuck resumption state recovery
+  // Previously: 3s interval that cleared waitingToStartStreaming if state seemed stuck
+  // Problem: This caused clearing during legitimate phase transitions (participants→moderator)
+  // Solution: State transitions are now event-driven via streamFinishAcknowledged and phase guards
 }
