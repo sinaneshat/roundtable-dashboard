@@ -779,6 +779,10 @@ export {
 
 // Project and knowledge base enums
 export {
+  AI_SEARCH_CHECK_STATUSES,
+  type AiSearchCheckStatus,
+  AiSearchCheckStatuses,
+  AiSearchCheckStatusSchema,
   CITATION_PREFIXES,
   CITATION_SOURCE_TYPES,
   type CitationPrefix,

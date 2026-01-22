@@ -58,8 +58,7 @@
     "bindings": [
       {
         "name": "UPLOAD_CLEANUP_SCHEDULER",
-        "class_name": "UploadCleanupScheduler",
-        "script_name": "roundtable-api"
+        "class_name": "UploadCleanupScheduler"
       }
     ]
   },
@@ -156,7 +155,7 @@
       "ai": { "binding": "AI", "remote": true },
       "durable_objects": {
         "bindings": [
-          { "name": "UPLOAD_CLEANUP_SCHEDULER", "class_name": "UploadCleanupScheduler", "script_name": "roundtable-api-preview" }
+          { "name": "UPLOAD_CLEANUP_SCHEDULER", "class_name": "UploadCleanupScheduler" }
         ]
       },
       "vars": {
@@ -218,7 +217,7 @@
       "ai": { "binding": "AI", "remote": true },
       "durable_objects": {
         "bindings": [
-          { "name": "UPLOAD_CLEANUP_SCHEDULER", "class_name": "UploadCleanupScheduler", "script_name": "roundtable-api-prod" }
+          { "name": "UPLOAD_CLEANUP_SCHEDULER", "class_name": "UploadCleanupScheduler" }
         ]
       },
       "vars": {

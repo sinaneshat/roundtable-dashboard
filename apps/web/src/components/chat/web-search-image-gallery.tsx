@@ -28,7 +28,11 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
   const [loadedImages, setLoadedImages] = useState(() => new Set<string>());
 
   const handleImageLoad = (url: string) => {
-    setLoadedImages(prev => new Set([...prev, url]));
+    setLoadedImages((prev) => {
+      const next = new Set(prev);
+      next.add(url);
+      return next;
+    });
   };
 
   const allImages: WebSearchImageItem[] = results.flatMap((result) => {
@@ -60,7 +64,11 @@ export function WebSearchImageGallery({ results, className }: WebSearchImageGall
   });
 
   const handleImageError = (url: string) => {
-    setFailedImages(prev => new Set([...prev, url]));
+    setFailedImages((prev) => {
+      const next = new Set(prev);
+      next.add(url);
+      return next;
+    });
   };
 
   // ✅ PERF FIX: Use Set for O(n) deduplication instead of O(n²) findIndex

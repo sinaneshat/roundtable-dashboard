@@ -59,6 +59,7 @@ import {
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
 
+import { htmlToMarkdown } from './content-extractor.service';
 import {
   cacheImageDescription,
   cacheSearchResult,
@@ -72,47 +73,6 @@ type PuppeteerRequestHandler = {
   abort: () => void;
   continue: () => void;
 };
-function htmlToMarkdown(html: string): string {
-  try {
-    const markdown = html
-      // Headers
-      .replace(/<h1[^>]*>(.*?)<\/h1>/gi, '# $1\n\n')
-      .replace(/<h2[^>]*>(.*?)<\/h2>/gi, '## $1\n\n')
-      .replace(/<h3[^>]*>(.*?)<\/h3>/gi, '### $1\n\n')
-      .replace(/<h4[^>]*>(.*?)<\/h4>/gi, '#### $1\n\n')
-      .replace(/<h5[^>]*>(.*?)<\/h5>/gi, '##### $1\n\n')
-      .replace(/<h6[^>]*>(.*?)<\/h6>/gi, '###### $1\n\n')
-      // Bold and italic
-      .replace(/<strong[^>]*>(.*?)<\/strong>/gi, '**$1**')
-      .replace(/<b[^>]*>(.*?)<\/b>/gi, '**$1**')
-      .replace(/<em[^>]*>(.*?)<\/em>/gi, '*$1*')
-      .replace(/<i[^>]*>(.*?)<\/i>/gi, '*$1*')
-      // Links
-      .replace(/<a[^>]*href="([^"]*)"[^>]*>(.*?)<\/a>/gi, '[$2]($1)')
-      // Code
-      .replace(/<code[^>]*>(.*?)<\/code>/gi, '`$1`')
-      .replace(/<pre[^>]*>([\s\S]*?)<\/pre>/gi, '```\n$1\n```\n')
-      // Lists
-      .replace(/<li[^>]*>(.*?)<\/li>/gi, '- $1\n')
-      .replace(/<ul[^>]*>/gi, '\n')
-      .replace(/<\/ul>/gi, '\n')
-      .replace(/<ol[^>]*>/gi, '\n')
-      .replace(/<\/ol>/gi, '\n')
-      // Paragraphs and line breaks
-      .replace(/<p[^>]*>/gi, '\n')
-      .replace(/<\/p>/gi, '\n')
-      .replace(/<br\s*\/?>/gi, '\n')
-      // Remove remaining tags
-      .replace(/<[^>]*>/g, '')
-      // Clean up whitespace
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
-
-    return markdown;
-  } catch {
-    return html.replace(/<[^>]*>/g, '').trim();
-  }
-}
 export async function streamSearchQuery(
   userMessage: string,
   env: ApiEnv['Bindings'],
@@ -412,13 +372,16 @@ async function searchWithCloudflareBrowser(
   }
 }
 
+/** Function type for content extraction in browser context */
+type ContentExtractorFn = (extractFormat: string) => ExtractedContent;
+
 /**
  * Create content extractor function for page.evaluate
  *
  * Returns a function that can be serialized and executed in browser context.
  * This wrapper ensures proper typing for Puppeteer's page.evaluate.
  */
-function createContentExtractor() {
+function createContentExtractor(): ContentExtractorFn {
   return function extractContent(extractFormat: string): ExtractedContent {
     // Helper to clean text
     const cleanText = (text: string): string => {
@@ -569,8 +532,11 @@ function createContentExtractor() {
       },
       images: images.slice(0, 10),
     };
-  } as (extractFormat: string) => ExtractedContent;
+  };
 }
+
+/** Function type for search extraction in browser context */
+type SearchExtractorFn = (max: number) => ExtractedSearchResult[];
 
 /**
  * Create search extractor function for page.evaluate
@@ -578,7 +544,7 @@ function createContentExtractor() {
  * Returns a function that extracts search results from DuckDuckGo HTML page.
  * This wrapper ensures proper typing for Puppeteer's page.evaluate.
  */
-function createSearchExtractor() {
+function createSearchExtractor(): SearchExtractorFn {
   return function extractSearchResults(max: number): ExtractedSearchResult[] {
     const items: ExtractedSearchResult[] = [];
     const resultElements = document.querySelectorAll('.result');
@@ -617,7 +583,7 @@ function createSearchExtractor() {
     }
 
     return items;
-  } as (max: number) => ExtractedSearchResult[];
+  };
 }
 
 async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {

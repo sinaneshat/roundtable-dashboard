@@ -2,7 +2,7 @@ import { getShortRoleName } from '@roundtable/shared';
 import { Link } from '@tanstack/react-router';
 import type { PanInfo } from 'motion/react';
 import { Reorder, useDragControls } from 'motion/react';
-import { useState } from 'react';
+import { useCallback, useState } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -12,6 +12,9 @@ import { useTranslations } from '@/lib/i18n';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { cn } from '@/lib/ui/cn';
 import { getProviderIcon, getRoleBadgeStyle } from '@/lib/utils';
+
+/** Static style for Reorder.Item to prevent recreating object on every render */
+const REORDER_ITEM_STYLE = { position: 'relative', borderRadius: '0.75rem' } as const;
 
 type PendingRoleConfig = {
   role: string;
@@ -129,6 +132,17 @@ export function ModelItem({
   const isDisabledDueToFileIncompatibility = !isSelected && hasAnyFileIncompatibility;
   const isDisabled = isDisabledDueToTier || isDisabledDueToLimit || isDisabledDueToFileIncompatibility;
 
+  /** Keyboard handler for non-drag mode - extracted to useCallback to prevent recreation */
+  const handleKeyDown = useCallback(
+    (e: React.KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        onToggle();
+      }
+    },
+    [onToggle],
+  );
+
   const itemContent = (
     <div className="flex items-center gap-2 sm:gap-3 w-full min-w-0">
       {enableDrag && (
@@ -233,7 +247,7 @@ export function ModelItem({
         dragElastic={0}
         dragMomentum={false}
         layout
-        style={{ position: 'relative', borderRadius: '0.75rem' }}
+        style={REORDER_ITEM_STYLE}
         className={cn(
           'p-3 sm:p-4 w-full rounded-xl block touch-manipulation cursor-pointer',
           'transition-[background-color,backdrop-filter,box-shadow] duration-150',
@@ -270,16 +284,7 @@ export function ModelItem({
         isDisabled && 'opacity-50 cursor-not-allowed',
       )}
       onClick={isDisabled ? undefined : onToggle}
-      onKeyDown={
-        isDisabled
-          ? undefined
-          : (e) => {
-              if (e.key === 'Enter' || e.key === ' ') {
-                e.preventDefault();
-                onToggle();
-              }
-            }
-      }
+      onKeyDown={isDisabled ? undefined : handleKeyDown}
     >
       {itemContent}
     </div>
