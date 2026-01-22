@@ -8,6 +8,13 @@ import { getApiOriginUrl } from '@/lib/config/base-urls';
 import { PageViewTracker } from './pageview-tracker';
 import { PostHogIdentifyUser } from './posthog-identify-user';
 
+declare global {
+  // eslint-disable-next-line ts/consistent-type-definitions
+  interface Window {
+    posthog?: PostHog;
+  }
+}
+
 type PostHogProviderProps = {
   children: ReactNode;
   apiKey?: string;
@@ -169,11 +176,7 @@ export default function PostHogProvider({
       return;
     initStarted.current = true;
 
-    // Schedule PostHog initialization when browser is idle
-    // This ensures initial paint is not blocked
-    scheduleWhenIdle(() => {
-      // Dynamic import the library - this doesn't block initial paint
-      // because we're already past first paint when this runs
+    const initPostHog = () => {
       import('posthog-js')
         .then((module) => {
           const posthog = module.default;
@@ -262,8 +265,19 @@ export default function PostHogProvider({
             // Expose to window for toolbar + capture initial pageview
             loaded: (ph) => {
               if (typeof window !== 'undefined') {
-                // eslint-disable-next-line ts/no-explicit-any
-                (window as any).posthog = ph;
+                window.posthog = ph;
+
+                // Load toolbar if authorization hash present
+                const toolbarJSON = new URLSearchParams(
+                  window.location.hash.substring(1),
+                ).get('__posthog');
+                if (toolbarJSON) {
+                  try {
+                    ph.loadToolbar(JSON.parse(toolbarJSON));
+                  } catch (e) {
+                    console.error('[PostHog] Failed to load toolbar:', e);
+                  }
+                }
               }
               // Capture initial pageview that was deferred
               ph.capture('$pageview');
@@ -275,7 +289,16 @@ export default function PostHogProvider({
         .catch((error) => {
           console.error('[PostHog] Failed to load:', error);
         });
-    });
+    };
+
+    // Toolbar detected - load immediately (bypasses deferral)
+    if (window.location.hash.includes('__posthog')) {
+      initPostHog();
+      return;
+    }
+
+    // Normal flow: schedule PostHog init when browser idle
+    scheduleWhenIdle(initPostHog);
   }, [apiKey, environment]);
 
   // Render children immediately - PostHog loads in background after idle
