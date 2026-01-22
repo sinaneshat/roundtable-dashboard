@@ -256,7 +256,7 @@ export function useIncompleteRoundResumption(
     // - waitingToStartStreaming is true (from initializeThread)
     // - pendingMessage is null (prepareForNewMessage hasn't run yet - it runs AFTER initializeThread)
     // This looks like "stale state" but it's actually valid creation flow state
-    if (createdThreadId !== null) {
+    if (createdThreadId) {
       rlog.flow('stale-check', `EXIT: createdThreadId=${createdThreadId.slice(-8)} - thread creation flow`);
       return;
     }
