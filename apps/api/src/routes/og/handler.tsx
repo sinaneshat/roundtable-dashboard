@@ -3,12 +3,11 @@
  *
  * Generates dynamic Open Graph images for public threads.
  * Uses @cf-wasm/satori + @cf-wasm/resvg for Cloudflare Workers.
+ * These are dynamically imported to avoid loading 2.4MB+ WASM on every cold start.
  *
  * @see /docs/backend-patterns.md - Handler conventions
  */
 
-import { Resvg } from '@cf-wasm/resvg/workerd';
-import { satori } from '@cf-wasm/satori/workerd';
 import type { RouteHandler } from '@hono/zod-openapi';
 import { OgImageTypes, ThreadStatusSchema } from '@roundtable/shared/enums';
 import { eq, or } from 'drizzle-orm';
@@ -60,6 +59,9 @@ async function generateOgImage(params: {
     modelId,
     icon: getModelIconBase64Sync(modelId),
   }));
+
+  // Dynamic import to avoid loading 2.4MB+ WASM on every cold start
+  const { satori } = await import('@cf-wasm/satori/workerd');
 
   const svg = await satori(
     (
@@ -267,6 +269,9 @@ async function generateOgImage(params: {
       })),
     },
   );
+
+  // Dynamic import to avoid loading 2.4MB WASM on every cold start
+  const { Resvg } = await import('@cf-wasm/resvg/workerd');
 
   const resvg = await Resvg.async(svg, {
     fitTo: { mode: 'width', value: OG_WIDTH },
