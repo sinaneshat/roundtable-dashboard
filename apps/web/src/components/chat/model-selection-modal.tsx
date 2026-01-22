@@ -13,7 +13,6 @@ import {
 } from '@roundtable/shared';
 import { Link } from '@tanstack/react-router';
 import { AnimatePresence, motion, Reorder } from 'motion/react';
-import type { ReactNode } from 'react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import type { Icon } from '@/components/icons';
@@ -25,6 +24,7 @@ import {
   DialogBody,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
@@ -89,7 +89,6 @@ export type ModelSelectionModalProps = {
     can_upgrade: boolean;
   };
   className?: string;
-  children?: ReactNode;
   enableDrag?: boolean;
   visionIncompatibleModelIds?: Set<string>;
   fileIncompatibleModelIds?: Set<string>;
@@ -109,7 +108,6 @@ export function ModelSelectionModal({
   maxModels,
   userTierInfo,
   className,
-  children,
   enableDrag = true,
   visionIncompatibleModelIds,
   fileIncompatibleModelIds,
@@ -188,7 +186,6 @@ export function ModelSelectionModal({
   const filteredModels = useMemo(() => {
     let filtered = orderedModels;
 
-    // Filter by search query
     if (isSearching) {
       const query = searchQuery.toLowerCase();
       filtered = filtered.filter((om) => {
@@ -202,7 +199,6 @@ export function ModelSelectionModal({
       });
     }
 
-    // Filter by selected tags (model must have ALL selected tags)
     if (isTagFiltering) {
       filtered = filtered.filter((om) => {
         for (const tag of selectedTags) {
@@ -240,16 +236,11 @@ export function ModelSelectionModal({
 
   const handleRoleSelect = useCallback((roleName: string, customRoleId?: string) => {
     if (selectedModelForRole) {
-      // Check if model is currently selected (has participant)
       const modelData = orderedModels.find(om => om.model.id === selectedModelForRole);
       if (modelData?.participant) {
-        // Model is toggled on - update participant directly
         onRoleChange(selectedModelForRole, roleName, customRoleId);
       } else {
-        // Model is not toggled on - auto-select it and apply role
-        // First toggle the model ON
         onToggle(selectedModelForRole);
-        // Then apply the role after toggle completes (needs setTimeout for state update)
         const modelId = selectedModelForRole;
         setTimeout(() => {
           onRoleChange(modelId, roleName, customRoleId);
@@ -439,8 +430,6 @@ export function ModelSelectionModal({
     return orderedModels.map(om => om.model);
   }, [orderedModels]);
 
-  // User has Pro access if EITHER source confirms it
-  // This handles race conditions where one query loads before the other
   const userTier = (isPaidUser || userTierInfo?.current_tier === SubscriptionTiers.PRO)
     ? SubscriptionTiers.PRO
     : SubscriptionTiers.FREE;
@@ -449,7 +438,6 @@ export function ModelSelectionModal({
     return MODEL_PRESETS.some(preset => !canAccessPreset(preset, userTier));
   }, [userTier]);
 
-  // Sort presets: accessible (FREE) first, then locked (PRO)
   const sortedPresets = useMemo(() => {
     return [...MODEL_PRESETS].sort((a, b) => {
       const aAccessible = canAccessPreset(a, userTier);
@@ -613,8 +601,8 @@ export function ModelSelectionModal({
                     transition={{ duration: 0.15 }}
                     className="flex flex-col flex-1 min-h-0"
                   >
-                    <ScrollArea className="h-[min(420px,50vh)]">
-                      <div className="flex flex-col">
+                    <ScrollArea className="h-[min(420px,50vh)] -mr-4 sm:-mr-6">
+                      <div className="flex flex-col pr-4 sm:pr-6">
                         {PREDEFINED_ROLE_TEMPLATES.map((role: PredefinedRoleTemplate) => {
                           const Icon = getRoleIcon(role.iconName);
                           const currentRole = selectedModelData?.participant?.role
@@ -725,37 +713,6 @@ export function ModelSelectionModal({
                       </div>
                     </ScrollArea>
 
-                    <div className="shrink-0 py-3">
-                      {!canCreateCustomRoles
-                        ? (
-                            <div
-                              className={cn(
-                                'flex items-center gap-2 px-3 py-2 rounded-xl',
-                                'bg-destructive/10 border border-destructive/20',
-                                'text-xs text-destructive',
-                              )}
-                            >
-                              <Icons.alertCircle className="size-3 shrink-0" />
-                              <span className="flex-1">{t('customRolesPaidOnly')}</span>
-                              <Button
-                                variant="default"
-                                size="sm"
-                                className="h-6 rounded-full text-[10px] font-medium shrink-0"
-                                asChild
-                              >
-                                <Link to="/chat/pricing">
-                                  {t('upgrade')}
-                                </Link>
-                              </Button>
-                            </div>
-                          )
-                        : (
-                            <CustomRoleForm
-                              onSubmit={handleCustomRoleCreate}
-                              isPending={createRoleMutation.isPending}
-                            />
-                          )}
-                    </div>
                   </motion.div>
                 )
               : (
@@ -782,8 +739,8 @@ export function ModelSelectionModal({
                       </TabsList>
 
                       <TabsContent value={ModelSelectionTabs.PRESETS} className="mt-0 h-[min(520px,55vh)] flex flex-col">
-                        <ScrollArea className="flex-1 -mr-3">
-                          <div className="pr-3 pb-4 space-y-4">
+                        <ScrollArea className="flex-1 -mr-4 sm:-mr-6">
+                          <div className="pr-4 sm:pr-6 pb-4 space-y-4">
                             {isLoadingUserPresets && (
                               <div>
                                 <h4 className="text-xs font-medium text-muted-foreground mb-2 px-1">
@@ -905,7 +862,6 @@ export function ModelSelectionModal({
                             endIconClickable={!!searchQuery}
                           />
 
-                          {/* Capability tag filters - inline scrollable */}
                           <div className="flex items-center justify-center gap-2">
                             <ScrollArea orientation="horizontal" className="flex-1 -mx-1">
                               <div className="flex items-center gap-1.5 px-1 pb-1">
@@ -939,7 +895,6 @@ export function ModelSelectionModal({
                                 })}
                               </div>
                             </ScrollArea>
-                            {/* Clear button - sticky on right, vertically centered */}
                             {selectedTags.size > 0 && (
                               <button
                                 type="button"
@@ -973,10 +928,10 @@ export function ModelSelectionModal({
                           </div>
                         )}
 
-                        <div className="flex-1 min-h-0 -mr-3">
+                        <div className="flex-1 min-h-0 -mr-4 sm:-mr-6">
                           {sortedFilteredModels.length === 0
                             ? (
-                                <div className="flex flex-col items-center justify-center py-12 h-full pr-3">
+                                <div className="flex flex-col items-center justify-center py-12 h-full pr-4 sm:pr-6">
                                   <p className="text-sm text-muted-foreground">{t('chat.models.noModelsFound')}</p>
                                 </div>
                               )
@@ -987,7 +942,7 @@ export function ModelSelectionModal({
                                       axis="y"
                                       values={sortedFilteredModels}
                                       onReorder={handleReorder}
-                                      className="flex flex-col gap-2 pr-3 pb-4"
+                                      className="flex flex-col gap-2 pr-4 sm:pr-6 pb-4"
                                     >
                                       {sortedFilteredModels.map(orderedModel => (
                                         <ModelItem
@@ -1012,7 +967,7 @@ export function ModelSelectionModal({
                                 )
                               : (
                                   <ScrollArea className="h-full">
-                                    <div className="flex flex-col gap-2 pr-3 pb-4">
+                                    <div className="flex flex-col gap-2 pr-4 sm:pr-6 pb-4">
                                       {sortedFilteredModels.map(orderedModel => (
                                         <ModelItem
                                           key={orderedModel.model.id}
@@ -1040,99 +995,129 @@ export function ModelSelectionModal({
           </AnimatePresence>
         </DialogBody>
 
-        {!selectedModelForRole && (
-          <div className="-mx-6 -mb-6 border-t border-border">
-            <div className="flex items-center justify-between gap-3 px-4 sm:px-6 py-3 sm:py-4">
-              <div className="flex items-center gap-2 min-w-0">
-                {activeTab === ModelSelectionTabs.CUSTOM && (
-                  editingPresetId
-                    ? (
-                        <div className="flex items-center gap-2">
-                          <Button
-                            variant="outline"
-                            size="sm"
-                            onClick={handleUpdatePreset}
-                            loading={updatePresetMutation.isPending}
-                            className="text-xs sm:text-sm shrink-0"
-                          >
-                            <span className="truncate max-w-[100px] sm:max-w-none">
-                              {t('chat.models.presets.update')}
-                            </span>
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              if (!presetValidation.canSave) {
-                                toastManager.error(t('chat.models.presets.cannotSave'), presetValidation.errorMessage ?? '');
-                                return;
-                              }
-                              setEditingPresetId(null);
-                              isSavingPreset.onTrue();
-                            }}
-                            disabled={updatePresetMutation.isPending}
-                            className="text-xs sm:text-sm shrink-0"
-                          >
-                            {t('chat.models.presets.saveAsNew')}
-                          </Button>
-                        </div>
-                      )
-                    : isSavingPreset.value
-                      ? (
-                          <PresetNameForm
-                            onSubmit={handleSaveAsPreset}
-                            onCancel={isSavingPreset.onFalse}
-                            isPending={createPresetMutation.isPending}
-                          />
-                        )
-                      : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              if (!presetValidation.canSave) {
-                                toastManager.error(t('chat.models.presets.cannotSave'), presetValidation.errorMessage ?? '');
-                                return;
-                              }
-                              isSavingPreset.onTrue();
-                            }}
-                            className="text-xs sm:text-sm"
-                          >
-                            {t('chat.models.presets.saveAsPreset')}
-                          </Button>
-                        )
-                )}
-              </div>
-
-              <div className="flex items-center gap-2">
-                {hasLockedPresets && !isPaidUser && (
-                  <Button
-                    asChild
-                    variant="outline"
-                    size="sm"
-                    className="text-xs sm:text-sm border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+        {selectedModelForRole && (
+          <DialogFooter bordered bleed>
+            {!canCreateCustomRoles
+              ? (
+                  <div
+                    className={cn(
+                      'flex items-center gap-2 px-3 py-2 rounded-xl w-full',
+                      'bg-destructive/10 border border-destructive/20',
+                      'text-xs text-destructive',
+                    )}
                   >
-                    <Link to="/chat/pricing" className="flex items-center gap-1.5">
-                      <Icons.lockOpen className="size-3.5" />
-                      {t('chat.models.unlockAllModels')}
-                    </Link>
-                  </Button>
+                    <Icons.alertCircle className="size-3 shrink-0" />
+                    <span className="flex-1">{t('customRolesPaidOnly')}</span>
+                    <Button
+                      variant="default"
+                      size="sm"
+                      className="h-6 rounded-full text-[10px] font-medium shrink-0"
+                      asChild
+                    >
+                      <Link to="/chat/pricing">
+                        {t('upgrade')}
+                      </Link>
+                    </Button>
+                  </div>
+                )
+              : (
+                  <CustomRoleForm
+                    onSubmit={handleCustomRoleCreate}
+                    isPending={createRoleMutation.isPending}
+                  />
                 )}
-                <Button
-                  onClick={activeTab === ModelSelectionTabs.PRESETS ? handleApplyPreset : () => onOpenChange(false)}
-                  disabled={activeTab === ModelSelectionTabs.PRESETS && !selectedPreset}
-                  variant="white"
-                  size="sm"
-                  className="shrink-0 text-xs sm:text-sm"
-                >
-                  {activeTab === ModelSelectionTabs.PRESETS ? t('chat.models.presets.save') : t('chat.models.presets.done')}
-                </Button>
-              </div>
-            </div>
-          </div>
+          </DialogFooter>
         )}
 
-        {children}
+        {!selectedModelForRole && (
+          <DialogFooter bordered bleed justify="between">
+            <div className="flex items-center gap-2 min-w-0">
+              {activeTab === ModelSelectionTabs.CUSTOM && (
+                editingPresetId
+                  ? (
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          onClick={handleUpdatePreset}
+                          loading={updatePresetMutation.isPending}
+                          className="text-xs sm:text-sm shrink-0"
+                        >
+                          <span className="truncate max-w-[100px] sm:max-w-none">
+                            {t('chat.models.presets.update')}
+                          </span>
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (!presetValidation.canSave) {
+                              toastManager.error(t('chat.models.presets.cannotSave'), presetValidation.errorMessage ?? '');
+                              return;
+                            }
+                            setEditingPresetId(null);
+                            isSavingPreset.onTrue();
+                          }}
+                          disabled={updatePresetMutation.isPending}
+                          className="text-xs sm:text-sm shrink-0"
+                        >
+                          {t('chat.models.presets.saveAsNew')}
+                        </Button>
+                      </div>
+                    )
+                  : isSavingPreset.value
+                    ? (
+                        <PresetNameForm
+                          onSubmit={handleSaveAsPreset}
+                          onCancel={isSavingPreset.onFalse}
+                          isPending={createPresetMutation.isPending}
+                        />
+                      )
+                    : (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (!presetValidation.canSave) {
+                              toastManager.error(t('chat.models.presets.cannotSave'), presetValidation.errorMessage ?? '');
+                              return;
+                            }
+                            isSavingPreset.onTrue();
+                          }}
+                          className="text-xs sm:text-sm"
+                        >
+                          {t('chat.models.presets.saveAsPreset')}
+                        </Button>
+                      )
+              )}
+            </div>
+
+            <div className="flex items-center gap-2">
+              {hasLockedPresets && !isPaidUser && (
+                <Button
+                  asChild
+                  variant="outline"
+                  size="sm"
+                  className="text-xs sm:text-sm border-amber-500/30 text-amber-400 hover:bg-amber-500/10"
+                >
+                  <Link to="/chat/pricing" className="flex items-center gap-1.5">
+                    <Icons.lockOpen className="size-3.5" />
+                    {t('chat.models.unlockAllModels')}
+                  </Link>
+                </Button>
+              )}
+              <Button
+                onClick={activeTab === ModelSelectionTabs.PRESETS ? handleApplyPreset : () => onOpenChange(false)}
+                disabled={activeTab === ModelSelectionTabs.PRESETS && !selectedPreset}
+                variant="white"
+                size="sm"
+                className="shrink-0 text-xs sm:text-sm"
+              >
+                {activeTab === ModelSelectionTabs.PRESETS ? t('chat.models.presets.save') : t('chat.models.presets.done')}
+              </Button>
+            </div>
+          </DialogFooter>
+        )}
       </DialogContent>
     </Dialog>
   );

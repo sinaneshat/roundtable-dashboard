@@ -1,5 +1,5 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { memo, useEffect } from 'react';
+import { memo } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -37,13 +37,6 @@ export const CustomRoleForm = memo(({
     form.reset();
   };
 
-  // Focus input when mounted
-  useEffect(() => {
-    if (!disabled) {
-      form.setFocus('roleName');
-    }
-  }, [form, disabled]);
-
   return (
     <Form {...form}>
       <form
@@ -65,7 +58,6 @@ export const CustomRoleForm = memo(({
                   placeholder={t('chat.models.modal.customRolePlaceholder')}
                   aria-label={t('chat.models.modal.customRolePlaceholder')}
                   disabled={isPending || disabled}
-                  className="h-8 text-sm"
                 />
               </FormControl>
             </FormItem>
@@ -74,10 +66,9 @@ export const CustomRoleForm = memo(({
         <Button
           type="submit"
           variant="white"
-          size="sm"
           disabled={!form.formState.isValid || disabled}
           loading={isPending}
-          className="h-8 shrink-0"
+          className="shrink-0"
         >
           {t('chat.models.modal.saveRole')}
         </Button>

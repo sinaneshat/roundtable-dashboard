@@ -29,7 +29,6 @@ import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
 import { showApiErrorToast } from '@/lib/toast';
 import dynamic from '@/lib/utils/dynamic';
-import type { Subscription } from '@/services/api/billing/subscriptions';
 
 const CancelSubscriptionDialog = dynamic<CancelSubscriptionDialogProps>(
   () => import('@/components/chat/cancel-subscription-dialog').then(m => ({ default: m.CancelSubscriptionDialog })),
@@ -81,11 +80,12 @@ export function NavUser({ initialSession }: NavUserProps) {
 
   const displayName = user?.name || t('user.defaultName');
   const displayEmail = user?.email || '';
-  const subscriptions: Subscription[] = subscriptionsData?.success && subscriptionsData.data?.items
-    ? (subscriptionsData.data.items as Subscription[])
+  // Type narrowing: when success is true, data.items is correctly typed from API response
+  const subscriptions = subscriptionsData?.success && subscriptionsData.data?.items
+    ? subscriptionsData.data.items
     : [];
   const activeSubscription = subscriptions.find(
-    (sub: Subscription) => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
+    sub => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
   const handleSignOut = async () => {
     // Clear cached session before signing out to ensure fresh auth check on next login
@@ -184,6 +184,7 @@ export function NavUser({ initialSession }: NavUserProps) {
             <AvatarImage
               src={user?.image || undefined}
               alt={displayName}
+              loading="eager"
             />
             <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
           </Avatar>
@@ -207,6 +208,7 @@ export function NavUser({ initialSession }: NavUserProps) {
                 <AvatarImage
                   src={user?.image || undefined}
                   alt={displayName}
+                  loading="eager"
                 />
                 <AvatarFallback className="rounded-full">{userInitials}</AvatarFallback>
               </Avatar>

@@ -4,8 +4,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 import { z } from 'zod';
 
-const TRANSLATION_FILE = path.join(process.cwd(), 'src/i18n/locales/en/common.json');
-const SOURCE_DIRS = ['src/components', 'src/app', 'src/containers', 'src/lib'];
+const TRANSLATION_FILE = path.join(process.cwd(), 'apps/web/src/i18n/locales/en/common.json');
+const SOURCE_DIRS = ['apps/web/src/components', 'apps/web/src/routes', 'apps/web/src/containers', 'apps/web/src/lib'];
 
 const UnusedKeysResultSchema = z.object({
   totalKeys: z.number().int().nonnegative(),
@@ -60,7 +60,8 @@ async function getAllSourceFiles(): Promise<string[]> {
       cwd: process.cwd(),
       ignore: ['**/node_modules/**', '**/.next/**', '**/dist/**']
     });
-    files.push(...matches);
+    const matchArray = Array.isArray(matches) ? matches : Array.from(matches);
+    files.push(...matchArray);
   }
 
   return files;

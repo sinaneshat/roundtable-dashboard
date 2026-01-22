@@ -204,16 +204,6 @@ html,
   overflow-anchor: none;
 }
 
-/*
- * REMOVED: contain: strict and content-visibility: auto
- * These CSS properties conflict with TanStack Virtual's measurement system:
- * - contain: strict includes 'size' containment which prevents dynamic height updates
- * - content-visibility: auto is browser-level virtualization that conflicts with TanStack's item management
- *
- * TanStack Virtual handles its own containment and visibility - do not add CSS containment here.
- * See: https://tanstack.com/virtual/latest/docs/introduction
- */
-
 @keyframes collapsible-down {
   from {
     height: 0;
@@ -267,8 +257,6 @@ html,
 .custom-scrollbar::-webkit-scrollbar-thumb {
   background-color: hsl(var(--border));
   border-radius: 9999px;
-  border: 2px solid transparent;
-  background-clip: content-box;
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
@@ -310,5 +298,38 @@ html,
   .animate-blink {
     animation: none;
     opacity: 1;
+  }
+}
+
+/* === TAILWIND UTILITIES === */
+
+/* Safe area insets for notched devices (iPhone X+, Android punch-holes) */
+@utility pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0);
+}
+
+@utility pt-safe {
+  padding-top: env(safe-area-inset-top, 0);
+}
+
+/* Touch feedback for mobile - subtle press effect on touch devices */
+@utility touch-feedback {
+  @media (hover: none) and (pointer: coarse) {
+    &:active {
+      transform: scale(0.98);
+      transition: transform 0.1s ease-out;
+    }
+  }
+}
+
+/* Enhanced reduced motion - comprehensive animation disabling */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
 }

@@ -15,22 +15,10 @@ import { RHFSelect } from '@/components/forms/rhf-select';
 import { RHFTextarea } from '@/components/forms/rhf-textarea';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogBody,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useTranslations } from '@/lib/i18n';
 import type { FormOptions } from '@/lib/schemas';
 
-// PostHog survey configuration
-// Note: This is a custom survey implementation (not created in PostHog dashboard)
-// Using stable UUIDs for consistent tracking across deployments
-// To create a managed survey, use PostHog dashboard and replace this ID
 const POSTHOG_FEEDBACK_SURVEY_ID = '019432a1-feedback-0000-survey-roundtable';
 const POSTHOG_FEEDBACK_SURVEY_NAME = 'Roundtable User Feedback';
 const POSTHOG_FEEDBACK_MESSAGE_QUESTION_ID = 'd8462827-1575-4e1e-ab1d-b5fddd9f829c';
@@ -38,10 +26,9 @@ const POSTHOG_FEEDBACK_TYPE_QUESTION_ID = 'a3071551-d599-4eeb-9ffe-69e93dc647b6'
 
 const MIN_MESSAGE_LENGTH = 10;
 
-// Zod schema for feedback form
 const FeedbackFormSchema = z.object({
   feedbackType: UserFeedbackTypeSchema,
-  message: z.string().min(MIN_MESSAGE_LENGTH, 'Message must be at least 10 characters'),
+  message: z.string().min(MIN_MESSAGE_LENGTH),
 });
 
 type FeedbackFormValues = z.infer<typeof FeedbackFormSchema>;
@@ -69,15 +56,12 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
 
   const { handleSubmit, reset, formState: { isSubmitting } } = methods;
 
-  // Build feedback type options from enum
   const feedbackTypeOptions: FormOptions = useMemo(() =>
     USER_FEEDBACK_TYPES.map((type: UserFeedbackType) => ({
       label: t(`feedback.types.${type}`),
       value: type,
     })), [t]);
 
-  // Capture "survey shown" event when modal opens
-  // @see https://posthog.com/docs/surveys/implementing-custom-surveys
   useEffect(() => {
     if (open && posthog && !hasCapturedShownRef.current) {
       posthog.capture('survey shown', {
@@ -99,8 +83,6 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
 
     hasSubmittedRef.current = true;
 
-    // PostHog survey sent event with proper response format
-    // @see https://posthog.com/docs/surveys/implementing-custom-surveys
     posthog.capture('survey sent', {
       $survey_id: POSTHOG_FEEDBACK_SURVEY_ID,
       $survey_name: POSTHOG_FEEDBACK_SURVEY_NAME,
@@ -116,7 +98,6 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
           type: 'multiple_choice',
         },
       ],
-      // Response values keyed by question ID (required format)
       [`$survey_response_${POSTHOG_FEEDBACK_MESSAGE_QUESTION_ID}`]: values.message,
       [`$survey_response_${POSTHOG_FEEDBACK_TYPE_QUESTION_ID}`]: values.feedbackType,
     });
@@ -133,8 +114,6 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
     if (isSubmitting)
       return;
 
-    // Capture "survey dismissed" if closed without submitting
-    // @see https://posthog.com/docs/surveys/implementing-custom-surveys
     if (posthog && !hasSubmittedRef.current && !showSuccess) {
       posthog.capture('survey dismissed', {
         $survey_id: POSTHOG_FEEDBACK_SURVEY_ID,
@@ -196,7 +175,7 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
                   />
                 </DialogBody>
 
-                <DialogFooter className="border-t border-border pt-4">
+                <DialogFooter bordered bleed>
                   <Button
                     type="button"
                     variant="outline"

@@ -77,7 +77,7 @@ export const ModelPresetCard = memo(({
       )}
     >
       <div className="flex items-start justify-between gap-2 mb-3">
-        <h3 className="text-base font-semibold text-foreground leading-tight">
+        <h3 className="text-base font-semibold text-foreground leading-tight truncate min-w-0">
           {preset.name}
         </h3>
 
@@ -166,7 +166,7 @@ export const ModelPresetCard = memo(({
         })}
       </div>
 
-      <p className="text-xs text-muted-foreground leading-relaxed">
+      <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
         {preset.description}
       </p>
     </div>

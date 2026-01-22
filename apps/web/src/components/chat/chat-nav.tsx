@@ -48,7 +48,6 @@ const CommandSearch = dynamic<CommandSearchProps>(
 );
 
 type AppSidebarProps = React.ComponentProps<typeof Sidebar> & {
-  /** Server-side session for hydration - prevents mismatch */
   initialSession?: { session: Session; user: User } | null;
 };
 
@@ -64,18 +63,15 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const handleNavigationReset = useNavigationReset();
   const { data: threadsData, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading, isError, error } = useSidebarThreadsQuery();
 
-  // Share dialog state - exact same pattern as chat-thread-actions.tsx
   const [chatToShare, setChatToShare] = useState<ChatSidebarItem | null>(null);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const togglePublicMutation = useTogglePublicMutation();
 
-  // Read isPublic from thread detail cache (same pattern as chat-thread-actions.tsx)
   const { data: threadDetailData } = useThreadQuery(chatToShare?.id ?? '', !!chatToShare);
   const threadIsPublic = threadDetailData?.success && threadDetailData.data && typeof threadDetailData.data === 'object' && 'thread' in threadDetailData.data && threadDetailData.data.thread && typeof threadDetailData.data.thread === 'object' && 'isPublic' in threadDetailData.data.thread
     ? (threadDetailData.data.thread as { isPublic?: boolean }).isPublic
     : chatToShare?.isPublic ?? false;
 
-  // Derived value: use optimistic mutation value when pending, otherwise use cache
   const displayIsPublic = togglePublicMutation.isPending && togglePublicMutation.variables
     ? togglePublicMutation.variables.isPublic
     : threadIsPublic;
@@ -152,7 +148,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     prevPathnameRef.current = pathname;
   }, [pathname, isMobile, setOpenMobile]);
 
-  // Share dialog handlers (same pattern as chat-thread-actions.tsx)
   const handleShareClick = useCallback((chat: ChatSidebarItem) => {
     setChatToShare(chat);
     setIsShareDialogOpen(true);
@@ -186,7 +181,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
       <TooltipProvider>
         <Sidebar collapsible={SidebarCollapsibles.ICON} variant={SidebarVariants.FLOATING} {...props}>
           <SidebarHeader>
-            <div className="flex h-9 mb-2 items-center justify-between group-data-[collapsible=icon]:hidden">
+            <div className="flex h-9 mb-2 items-center justify-between pr-2 group-data-[collapsible=icon]:hidden">
               <Link
                 to="/chat"
                 preload="intent"
@@ -201,7 +196,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                   height={24}
                 />
               </Link>
-              <SidebarTrigger className="min-h-11 min-w-11 shrink-0" />
+              <SidebarTrigger className="shrink-0" />
             </div>
 
             <div className="hidden h-10 mb-2 group-data-[collapsible=icon]:flex items-center justify-center relative">
@@ -220,12 +215,12 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                 />
               </Link>
               <SidebarTrigger
-                className="min-h-11 min-w-11 absolute opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                className="absolute opacity-0 group-hover:opacity-100 transition-opacity duration-150"
                 iconClassName="size-4"
               />
             </div>
 
-            <SidebarMenu className="gap-1">
+            <SidebarMenu className="gap-1 px-0.5 pr-4 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:pr-0">
               <SidebarMenuItem className="group-data-[collapsible=icon]:hidden">
                 <SidebarMenuButton asChild isActive={pathname === '/chat'}>
                   <Link to="/chat" preload="intent" onClick={handleNavLinkClick}>
@@ -284,7 +279,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
           </SidebarHeader>
           <SidebarContent className="p-0 w-full min-w-0">
             <ScrollArea ref={sidebarContentRef} className="w-full h-full">
-              <div className="flex flex-col w-full px-0.5">
+              <div className="flex flex-col w-full px-0.5 pr-4">
                 {!isLoading && !isError && favorites.length > 0 && (
                   <SidebarGroup className="group/favorites pt-4 group-data-[collapsible=icon]:hidden">
                     <SidebarGroupLabel
@@ -307,8 +302,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                   </SidebarGroup>
                 )}
 
-                {/* Chats section - unified structure to prevent hydration mismatch */}
-                {/* SSR may render loading state while client has hydrated data */}
                 <SidebarGroup className="group/chats pt-4 group-data-[collapsible=icon]:hidden">
                   <SidebarGroupLabel
                     className={cn(
@@ -330,10 +323,8 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                     )}
                   </SidebarGroupLabel>
 
-                  {/* Loading state */}
                   {isLoading && <SidebarThreadSkeletons count={10} animated />}
 
-                  {/* Error state */}
                   {isError && (
                     <div className="py-6 text-center">
                       <p className="text-sm font-medium text-destructive mb-1">
@@ -345,7 +336,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                     </div>
                   )}
 
-                  {/* Empty state */}
                   {!isLoading && !isError && chats.length === 0 && (
                     <>
                       <div className="px-4 pb-3 pt-2">
@@ -360,7 +350,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                     </>
                   )}
 
-                  {/* Chat list */}
                   {!isLoading && !isError && nonFavoriteChats.length > 0 && !isChatsCollapsed && (
                     <>
                       <ChatList chats={nonFavoriteChats} onShareClick={handleShareClick} />
@@ -374,7 +363,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
             </ScrollArea>
           </SidebarContent>
           <SidebarFooter className="gap-2">
-            <SidebarMenu>
+            <SidebarMenu className="px-0.5 pr-4 group-data-[collapsible=icon]:px-0 group-data-[collapsible=icon]:pr-0">
               <SidebarMenuItem>
                 <NavUser initialSession={initialSession} />
               </SidebarMenuItem>
@@ -387,7 +376,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
         />
       </TooltipProvider>
 
-      {/* ShareDialog rendered outside conditional blocks to survive ChatList remounts */}
       <ShareDialog
         open={isShareDialogOpen}
         onOpenChange={handleShareDialogOpenChange}

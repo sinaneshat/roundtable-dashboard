@@ -10,7 +10,7 @@ import { glob } from 'glob';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const SOURCE_DIRS = ['src/components', 'src/app', 'src/containers'];
+const SOURCE_DIRS = ['apps/web/src/components', 'apps/web/src/routes', 'apps/web/src/containers'];
 
 interface HardcodedString {
   file: string;

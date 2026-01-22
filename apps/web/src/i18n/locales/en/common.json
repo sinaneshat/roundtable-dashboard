@@ -138,7 +138,8 @@
       "subtitle": "Get perspectives from multiple AI models working together to solve your toughest problems"
     },
     "magicLink": {
-      "emailSentMessage": "We've sent a magic link to {email}. Click the link to sign in.",
+      "emailSentTo": "We've sent a magic link to {email}.",
+      "clickToSignIn": "Click the link to sign in.",
       "error": "Error",
       "sendButton": "Send Magic Link",
       "title": "Check your email",
@@ -405,7 +406,7 @@
         "description": "Select at least {count} models to continue"
       },
       "modal": {
-        "customRolePlaceholder": "Enter custom role instructions...",
+        "customRolePlaceholder": "e.g., Technical Writer, Data Analyst...",
         "saveRole": "Save Role",
         "selectAtLeastOneModel": "Select at least one model"
       },
@@ -1009,6 +1010,7 @@
     "freeTrial": {
       "availableDescription": "Try 1 free round with 3 models. Upgrade for all 10+ models & unlimited chats.",
       "upgradeToPro": "Upgrade to Pro",
+      "upgradeToProShort": "Upgrade",
       "usedDescription": "Free trial complete. Go Pro for all 10+ models & unlimited conversations."
     },
     "gracePeriod": "You're on {currentPlan} until {date}. After that, you'll switch to {newPlan}.",

@@ -6,24 +6,24 @@ import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 function Dialog(props: ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />;
+  return <DialogPrimitive.Root {...props} />;
 }
 
 function DialogTrigger(props: ComponentProps<typeof DialogPrimitive.Trigger>) {
-  return <DialogPrimitive.Trigger data-slot="dialog-trigger" {...props} />;
+  return <DialogPrimitive.Trigger {...props} />;
 }
 
 function DialogPortal(props: ComponentProps<typeof DialogPrimitive.Portal>) {
-  return <DialogPrimitive.Portal data-slot="dialog-portal" {...props} />;
+  return <DialogPrimitive.Portal {...props} />;
 }
 
 function DialogClose(props: ComponentProps<typeof DialogPrimitive.Close>) {
-  return <DialogPrimitive.Close data-slot="dialog-close" {...props} />;
+  return <DialogPrimitive.Close {...props} />;
 }
 
-type DialogOverlayProps = {
+type DialogOverlayProps = ComponentProps<typeof DialogPrimitive.Overlay> & {
   glass?: boolean;
-} & ComponentProps<typeof DialogPrimitive.Overlay>;
+};
 
 function DialogOverlay({
   className,
@@ -32,7 +32,6 @@ function DialogOverlay({
 }: DialogOverlayProps) {
   return (
     <DialogPrimitive.Overlay
-      data-slot="dialog-overlay"
       className={cn(
         'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 fixed inset-0 z-50',
         glass ? 'bg-black/95' : 'bg-black/90',
@@ -43,10 +42,10 @@ function DialogOverlay({
   );
 }
 
-type DialogContentProps = {
+type DialogContentProps = ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean;
   glass?: boolean;
-} & ComponentProps<typeof DialogPrimitive.Content>;
+};
 
 function DialogContent({
   className,
@@ -58,10 +57,9 @@ function DialogContent({
   const t = useTranslations();
 
   return (
-    <DialogPortal data-slot="dialog-portal">
+    <DialogPortal>
       <DialogOverlay glass={glass} />
       <DialogPrimitive.Content
-        data-slot="dialog-content"
         className={cn(
           'fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-2rem)] sm:w-full max-w-lg translate-x-[-50%] translate-y-[-50%] duration-200',
           'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
@@ -75,7 +73,6 @@ function DialogContent({
         {children}
         {showCloseButton && (
           <DialogPrimitive.Close
-            data-slot="dialog-close"
             className="ring-offset-background focus-visible:ring-ring data-[state=open]:bg-accent data-[state=open]:text-muted-foreground absolute top-3 end-3 sm:top-4 sm:end-4 rounded-full opacity-70 transition-opacity hover:opacity-100 focus:outline-none focus-visible:ring-2 focus-visible:ring-offset-2 disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4 min-h-11 min-w-11 flex items-center justify-center"
           >
             <Icons.x />
@@ -87,14 +84,13 @@ function DialogContent({
   );
 }
 
-type DialogHeaderProps = {
+type DialogHeaderProps = ComponentProps<'div'> & {
   glass?: boolean;
-} & ComponentProps<'div'>;
+};
 
 function DialogHeader({ className, glass = false, ...props }: DialogHeaderProps) {
   return (
     <div
-      data-slot="dialog-header"
       className={cn(
         'flex flex-col space-y-1.5 text-left',
         glass && 'bg-card px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4',
@@ -105,18 +101,20 @@ function DialogHeader({ className, glass = false, ...props }: DialogHeaderProps)
   );
 }
 
-type DialogFooterProps = {
+type DialogFooterProps = ComponentProps<'div'> & {
   glass?: boolean;
-} & ComponentProps<'div'>;
+  justify?: 'end' | 'between';
+  bordered?: boolean;
+  bleed?: boolean;
+};
 
-type DialogBodyProps = {
+type DialogBodyProps = ComponentProps<'div'> & {
   glass?: boolean;
-} & ComponentProps<'div'>;
+};
 
 function DialogBody({ className, glass = false, ...props }: DialogBodyProps) {
   return (
     <div
-      data-slot="dialog-body"
       className={cn(
         glass && 'bg-background px-4 sm:px-6 py-4 sm:py-6',
         className,
@@ -126,13 +124,23 @@ function DialogBody({ className, glass = false, ...props }: DialogBodyProps) {
   );
 }
 
-function DialogFooter({ className, glass = false, ...props }: DialogFooterProps) {
+function DialogFooter({
+  className,
+  glass = false,
+  justify = 'end',
+  bordered = false,
+  bleed = false,
+  ...props
+}: DialogFooterProps) {
   return (
     <div
-      data-slot="dialog-footer"
       className={cn(
-        'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3',
-        glass && 'bg-background px-4 sm:px-6 pb-4 sm:pb-6 pt-3 sm:pt-4',
+        justify === 'between'
+          ? 'flex flex-row items-center justify-between gap-2 sm:gap-3'
+          : 'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3',
+        bordered && 'border-t border-border',
+        bleed && '-mx-4 -mb-4 sm:-mx-6 sm:-mb-6 px-4 sm:px-6 py-2.5 sm:py-3',
+        glass && !bleed && 'bg-background px-4 sm:px-6 pb-4 sm:pb-6 pt-3 sm:pt-4',
         className,
       )}
       {...props}
@@ -146,7 +154,6 @@ function DialogTitle({
 }: ComponentProps<typeof DialogPrimitive.Title>) {
   return (
     <DialogPrimitive.Title
-      data-slot="dialog-title"
       className={cn('text-lg leading-none font-semibold', className)}
       {...props}
     />
@@ -159,7 +166,6 @@ function DialogDescription({
 }: ComponentProps<typeof DialogPrimitive.Description>) {
   return (
     <DialogPrimitive.Description
-      data-slot="dialog-description"
       className={cn('text-muted-foreground text-sm', className)}
       {...props}
     />

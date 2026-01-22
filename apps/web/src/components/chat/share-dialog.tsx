@@ -3,14 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Input } from '@/components/ui/input';
 import { getApiBaseUrl, getAppBaseUrl } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
@@ -41,56 +34,54 @@ export function ShareDialog({
 
   const [copySuccess, setCopySuccess] = useState<string | null>(null);
   const copyTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  // Revision counter - incremented when we need a fresh OG image
   const [ogRevision, setOgRevision] = useState(0);
   const prevOpenRef = useRef(open);
   const prevIsPublicRef = useRef(isPublic);
   const prevIsLoadingRef = useRef(isLoading);
 
-  // Increment revision when:
-  // 1. Dialog opens with public thread (not loading)
-  // 2. Loading completes while thread is public (mutation finished)
-  // This is an intentional state synchronization from props - not a derived value
+  const incrementOgRevision = useCallback(() => {
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- OG image revision needs synchronous update on dialog state change
+    setOgRevision(prev => prev + 1);
+  }, []);
+
   useEffect(() => {
     const dialogJustOpened = open && !prevOpenRef.current;
     const loadingJustFinished = !isLoading && prevIsLoadingRef.current;
 
-    // Refresh when dialog opens with public thread or when loading finishes with public thread
     const shouldRefresh = isPublic && (
-      (dialogJustOpened && !isLoading) // Dialog opens with already-public thread
-      || loadingJustFinished // Mutation completed (thread is now public in DB)
+      (dialogJustOpened && !isLoading)
+      || loadingJustFinished
     );
-
-    if (shouldRefresh) {
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional cache bust on dialog/visibility state change
-      setOgRevision(prev => prev + 1);
-    }
 
     prevOpenRef.current = open;
     prevIsPublicRef.current = isPublic;
     prevIsLoadingRef.current = isLoading;
-  }, [open, isPublic, isLoading]);
+
+    if (shouldRefresh) {
+      incrementOgRevision();
+    }
+  }, [open, isPublic, isLoading, incrementOgRevision]);
 
   const baseUrl = getAppBaseUrl();
   const shareUrl = `${baseUrl}/public/chat/${slug}`;
-  // OG image from API endpoint - use proxy route for consistent behavior
   const ogImageUrl = useMemo(() => {
     const apiBase = getApiBaseUrl();
-    // Add cache busting param to ensure fresh OG image after making thread public
     return `${apiBase}/og/chat?slug=${slug}&v=${ogRevision}-${Date.now()}`;
   }, [slug, ogRevision]);
 
-  // Image loading state
   const [imageLoaded, setImageLoaded] = useState(false);
   const [imageError, setImageError] = useState(false);
 
-  // Reset image state when URL changes
-  useEffect(() => {
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional reset on URL change for cache busting
+  const resetImageState = useCallback(() => {
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Image state reset on URL change requires synchronous setState
     setImageLoaded(false);
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional reset on URL change for cache busting
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Image state reset on URL change requires synchronous setState
     setImageError(false);
-  }, [ogImageUrl]);
+  }, []);
+
+  useEffect(() => {
+    resetImageState();
+  }, [ogImageUrl, resetImageState]);
 
   const handleImageLoad = useCallback(() => {
     setImageLoaded(true);
@@ -172,9 +163,9 @@ export function ShareDialog({
               </DialogDescription>
             </DialogHeader>
 
-            <div className="flex flex-col gap-5">
-              <div className="space-y-2">
-                <label className="text-sm font-medium text-foreground/90">
+            <div className="flex flex-col gap-6">
+              <div>
+                <label className="text-sm font-medium text-foreground/90 mb-3 block">
                   {t('chat.shareDialog.copyLinkLabel')}
                 </label>
                 <div className="flex gap-2">
@@ -189,7 +180,7 @@ export function ShareDialog({
                       type="button"
                       onClick={() => handleCopy(shareUrl, 'link')}
                       className={cn(
-                        'absolute right-0 top-0 flex h-11 w-11 items-center justify-center rounded-r-md text-muted-foreground transition-all hover:text-foreground',
+                        'absolute right-0 inset-y-0 flex w-11 items-center justify-center rounded-r-md text-muted-foreground transition-all hover:text-foreground',
                         copySuccess === 'link' && 'text-emerald-500 hover:text-emerald-500',
                       )}
                       aria-label={copySuccess === 'link' ? t('chat.shareDialog.copied') : t('chat.shareDialog.copyLink')}
@@ -216,7 +207,6 @@ export function ShareDialog({
                   className="relative w-full"
                   style={{ aspectRatio: '1200/630' }}
                 >
-                  {/* Loading state */}
                   {(isLoading || (!imageLoaded && !imageError)) && (
                     <div className="absolute inset-0 flex items-center justify-center bg-muted/30 animate-pulse">
                       <div className="flex flex-col items-center gap-2 text-muted-foreground">
@@ -228,7 +218,6 @@ export function ShareDialog({
                     </div>
                   )}
 
-                  {/* Error state */}
                   {imageError && !isLoading && (
                     <div className="absolute inset-0 flex items-center justify-center bg-muted/30 text-muted-foreground">
                       <div className="flex flex-col items-center gap-2">
@@ -238,7 +227,6 @@ export function ShareDialog({
                     </div>
                   )}
 
-                  {/* Image - always render but hide when loading/error */}
                   {!isLoading && (
                     <img
                       key={ogImageUrl}
@@ -256,7 +244,7 @@ export function ShareDialog({
               </div>
             </div>
 
-            <DialogFooter className="mt-4 pt-4 border-t border-border/30">
+            <DialogFooter bordered bleed>
               <Button
                 onClick={onMakePrivate}
                 disabled={isLoading}

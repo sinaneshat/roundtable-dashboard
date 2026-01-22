@@ -118,6 +118,8 @@ self.addEventListener('fetch', (event) => {
             });
           }
           return response;
+        }).catch(() => {
+          return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
         });
       }),
     );
@@ -139,6 +141,8 @@ self.addEventListener('fetch', (event) => {
             });
           }
           return response;
+        }).catch(() => {
+          return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
         });
       }),
     );
@@ -156,9 +160,13 @@ self.addEventListener('fetch', (event) => {
               cache.put(request, response.clone());
             }
             return response;
-          }).catch(() => {
+          }).catch(async () => {
             // Network failed, return cached or fallback to root
-            return cached || cache.match('/');
+            if (cached) return cached;
+            const fallback = await cache.match('/');
+            if (fallback) return fallback;
+            // Last resort: return a basic offline response
+            return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
           });
 
           // Return cached immediately if available, otherwise wait for network
@@ -180,8 +188,11 @@ self.addEventListener('fetch', (event) => {
         });
       }
       return response;
-    }).catch(() => {
-      return caches.match(request);
+    }).catch(async () => {
+      const cached = await caches.match(request);
+      if (cached) return cached;
+      // Return 503 if no cache available
+      return new Response('Offline', { status: 503, statusText: 'Service Unavailable' });
     }),
   );
 });

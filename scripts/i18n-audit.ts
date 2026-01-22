@@ -236,7 +236,7 @@ function generateMarkdownReport(results: AuditResults): string {
   lines.push('');
   lines.push('### High Priority');
   if (results.missingKeys.count > 0) {
-    lines.push('- [ ] Add missing translation keys to `src/i18n/locales/en/common.json`');
+    lines.push('- [ ] Add missing translation keys to `apps/web/src/i18n/locales/en/common.json`');
   }
   if (results.validation.errors.length > 0) {
     lines.push('- [ ] Fix validation errors in translation file');

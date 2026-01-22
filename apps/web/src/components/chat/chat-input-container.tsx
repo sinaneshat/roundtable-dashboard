@@ -1,5 +1,5 @@
-import type { BorderVariant } from '@roundtable/shared';
-import { BorderVariants, ComponentSizes, ComponentVariants, PlanTypes } from '@roundtable/shared';
+import type { BorderVariant, CreditStatus } from '@roundtable/shared';
+import { BorderVariants, ComponentSizes, ComponentVariants, CreditStatuses, PlanTypes } from '@roundtable/shared';
 import { Link } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
 import type { ReactNode } from 'react';
@@ -8,7 +8,7 @@ import { memo, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { STRING_LIMITS } from '@/constants';
 import { useUsageStatsQuery } from '@/hooks/queries';
-import { useFreeTrialState } from '@/hooks/utils';
+import { useFreeTrialState, useIsMobile } from '@/hooks/utils';
 import { MAX_PARTICIPANTS_LIMIT, MIN_PARTICIPANTS_REQUIRED } from '@/lib/config';
 import { useTranslations } from '@/lib/i18n';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
@@ -64,12 +64,6 @@ const variantStyles: Record<BorderVariant, {
   },
 };
 
-/**
- * ChatInputContainer - Unified container wrapping alert + header + input
- *
- * Provides a single border around the entire chat input area.
- * When alerts are shown, they appear at the top with the border wrapping everything.
- */
 export const ChatInputContainer = memo(({
   participants = [],
   inputValue = '',
@@ -80,26 +74,25 @@ export const ChatInputContainer = memo(({
   autoMode = false,
 }: ChatInputContainerProps) => {
   const t = useTranslations();
+  const isMobile = useIsMobile();
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
   const { isFreeUser, hasUsedTrial, isWarningState } = useFreeTrialState();
 
   const isOverLimit = inputValue.length > STRING_LIMITS.MESSAGE_MAX;
   const participantCount = participants.length;
-  // In auto mode, don't show min models error - AI will select models based on prompt
   const showMinModelsError = !autoMode && participantCount < MIN_PARTICIPANTS_REQUIRED && !isHydrating && !isModelsLoading;
   const showMaxModelsError = participantCount > MAX_PARTICIPANTS_LIMIT && !isHydrating && !isModelsLoading;
 
-  // Credit estimation for paid users
-  const creditStatus = useMemo(() => {
+  const creditStatus = useMemo((): { status: CreditStatus; estimated: number; available: number; remaining: number } => {
     const validated = validateUsageStatsCache(statsData);
     if (!validated) {
-      return { status: 'ok' as const, estimated: 0, available: 0, remaining: 0 };
+      return { status: CreditStatuses.OK, estimated: 0, available: 0, remaining: 0 };
     }
 
     const { credits, plan } = validated;
 
     if (plan.type !== PlanTypes.PAID) {
-      return { status: 'ok' as const, estimated: 0, available: credits.available, remaining: 0 };
+      return { status: CreditStatuses.OK, estimated: 0, available: credits.available, remaining: 0 };
     }
 
     const count = participantCount || 1;
@@ -107,12 +100,12 @@ export const ChatInputContainer = memo(({
     const remaining = credits.available - estimated;
 
     if (credits.available < estimated) {
-      return { status: 'insufficient' as const, estimated, available: credits.available, remaining };
+      return { status: CreditStatuses.INSUFFICIENT, estimated, available: credits.available, remaining };
     }
     if (remaining < 500 && remaining >= 0) {
-      return { status: 'low' as const, estimated, available: credits.available, remaining };
+      return { status: CreditStatuses.LOW, estimated, available: credits.available, remaining };
     }
-    return { status: 'ok' as const, estimated, available: credits.available, remaining };
+    return { status: CreditStatuses.OK, estimated, available: credits.available, remaining };
   }, [statsData, participantCount]);
 
   const isQuotaExceeded = useMemo(() => {
@@ -122,9 +115,7 @@ export const ChatInputContainer = memo(({
     return validated.credits.available < creditStatus.estimated || validated.credits.available <= 0;
   }, [statsData, creditStatus.estimated]);
 
-  // Determine which alert to show (priority order)
   const alert: AlertConfig | null = useMemo(() => {
-    // Model count validation (highest priority)
     if (showMinModelsError) {
       return {
         message: t('chat.input.minModelsRequired', { min: MIN_PARTICIPANTS_REQUIRED }),
@@ -140,13 +131,13 @@ export const ChatInputContainer = memo(({
     if (isOverLimit) {
       return { message: t('chat.input.messageTooLong'), variant: BorderVariants.ERROR };
     }
-    if (!isFreeUser && creditStatus.status === 'insufficient' && participantCount > 0) {
+    if (!isFreeUser && creditStatus.status === CreditStatuses.INSUFFICIENT && participantCount > 0) {
       return {
         message: t('chat.input.insufficientCredits'),
         variant: BorderVariants.ERROR,
       };
     }
-    if (!isFreeUser && creditStatus.status === 'low' && participantCount > 0) {
+    if (!isFreeUser && creditStatus.status === CreditStatuses.LOW && participantCount > 0) {
       return {
         message: t('chat.input.lowCredits'),
         variant: BorderVariants.WARNING,
@@ -161,7 +152,9 @@ export const ChatInputContainer = memo(({
           ? t('usage.freeTrial.usedDescription')
           : t('usage.freeTrial.availableDescription'),
         variant: isWarningState ? BorderVariants.WARNING : BorderVariants.SUCCESS,
-        actionLabel: t('usage.freeTrial.upgradeToPro'),
+        actionLabel: isMobile
+          ? t('usage.freeTrial.upgradeToProShort')
+          : t('usage.freeTrial.upgradeToPro'),
         actionHref: '/chat/pricing',
       };
     }
@@ -177,6 +170,7 @@ export const ChatInputContainer = memo(({
     isLoadingStats,
     hasUsedTrial,
     isWarningState,
+    isMobile,
     t,
   ]);
 
@@ -189,12 +183,10 @@ export const ChatInputContainer = memo(({
         'rounded-2xl border shadow-lg',
         'bg-card',
         'transition-all duration-200',
-        // Default to border-border, override with alert variant border if present
         styles?.border ?? 'border-border',
         className,
       )}
     >
-      {/* Alert banner - inside the container, no separate border */}
       <AnimatePresence>
         {alert && (
           <motion.div
@@ -231,7 +223,6 @@ export const ChatInputContainer = memo(({
         )}
       </AnimatePresence>
 
-      {/* Children (header + input) - no borders, they're inside the container */}
       {children}
     </div>
   );

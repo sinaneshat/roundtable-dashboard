@@ -10,7 +10,6 @@
 import { Resvg } from '@cf-wasm/resvg/workerd';
 import { satori } from '@cf-wasm/satori/workerd';
 import type { RouteHandler } from '@hono/zod-openapi';
-import type { ChatMode } from '@roundtable/shared/enums';
 import { OgImageTypes, ThreadStatusSchema } from '@roundtable/shared/enums';
 import { eq, or } from 'drizzle-orm';
 
@@ -21,11 +20,10 @@ import { getDbAsync } from '@/db';
 import { PublicThreadCacheTags } from '@/db/cache/cache-tags';
 import {
   getLogoBase64Sync,
-  getModeIconBase64Sync,
   getModelIconBase64Sync,
   getOGFontsSync,
 } from '@/lib/ui/og-assets.generated';
-import { getModeColor, OG_COLORS, OG_HEIGHT, OG_WIDTH, truncateTitle } from '@/lib/ui/og-colors';
+import { OG_COLORS, OG_HEIGHT, OG_WIDTH, truncateTitle } from '@/lib/ui/og-colors';
 import {
   createCachedImageResponse,
   generateOgCacheKey,
@@ -48,19 +46,17 @@ const RAINBOW = BRAND.logoGradient;
  */
 async function generateOgImage(params: {
   title: string;
-  mode?: ChatMode;
-  participantCount: number;
-  messageCount: number;
   participantModelIds?: string[];
 }): Promise<ArrayBuffer> {
-  const { title, mode, participantCount, messageCount, participantModelIds = [] } = params;
-  const modeColor = mode ? getModeColor(mode) : OG_COLORS.primary;
+  const { title, participantModelIds = [] } = params;
   const logoBase64 = getLogoBase64Sync();
-  const modeIconBase64 = mode ? getModeIconBase64Sync(mode) : null;
   const fonts = getOGFontsSync();
 
-  // Get model icons for participants (max 6)
-  const modelIcons = participantModelIds.slice(0, 6).map(modelId => ({
+  // Filter out OpenRouter models and get icons (max 6)
+  const filteredModelIds = participantModelIds.filter(
+    id => !id.toLowerCase().startsWith('openrouter/'),
+  );
+  const modelIcons = filteredModelIds.slice(0, 6).map(modelId => ({
     modelId,
     icon: getModelIconBase64Sync(modelId),
   }));
@@ -162,39 +158,6 @@ async function generateOgImage(params: {
               paddingTop: 20,
             }}
           >
-            {/* Mode badge */}
-            {mode
-              ? (
-                  <div
-                    style={{
-                      display: 'flex',
-                      flexDirection: 'row',
-                      alignItems: 'center',
-                      marginBottom: 16,
-                      gap: 12,
-                    }}
-                  >
-                    {modeIconBase64
-                      ? (
-                          <img src={modeIconBase64} width={28} height={28} alt={mode} />
-                        )
-                      : (
-                          <div style={{ display: 'flex', width: 28, height: 28 }} />
-                        )}
-                    <span
-                      style={{
-                        fontSize: 20,
-                        fontWeight: 600,
-                        color: modeColor,
-                        textTransform: 'capitalize',
-                      }}
-                    >
-                      {mode}
-                    </span>
-                  </div>
-                )
-              : null}
-
             {/* Title - constrained to usable width with line clamping */}
             <div
               style={{
@@ -258,75 +221,36 @@ async function generateOgImage(params: {
                   </div>
                 )
               : null}
-
-            {/* Stats */}
-            <div style={{ display: 'flex', flexDirection: 'row', gap: 40, marginTop: 16 }}>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span
-                  style={{
-                    fontSize: 42,
-                    fontWeight: 700,
-                    color: modeColor,
-                    lineHeight: 1,
-                  }}
-                >
-                  {participantCount}
-                </span>
-                <span
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 500,
-                    color: OG_COLORS.textSecondary,
-                    marginTop: 8,
-                  }}
-                >
-                  {participantCount === 1 ? 'AI Model' : 'AI Models'}
-                </span>
-              </div>
-              <div style={{ display: 'flex', flexDirection: 'column' }}>
-                <span
-                  style={{
-                    fontSize: 42,
-                    fontWeight: 700,
-                    color: OG_COLORS.textPrimary,
-                    lineHeight: 1,
-                  }}
-                >
-                  {messageCount}
-                </span>
-                <span
-                  style={{
-                    fontSize: 16,
-                    fontWeight: 500,
-                    color: OG_COLORS.textSecondary,
-                    marginTop: 8,
-                  }}
-                >
-                  {messageCount === 1 ? 'Message' : 'Messages'}
-                </span>
-              </div>
-            </div>
           </div>
 
           {/* Footer with tagline */}
           <div
             style={{
               display: 'flex',
-              flexDirection: 'row',
-              alignItems: 'center',
-              marginTop: 32,
+              flexDirection: 'column',
+              marginTop: 'auto',
               paddingTop: 24,
               borderTop: `2px solid ${OG_COLORS.glassBorder}`,
+              gap: 8,
             }}
           >
             <span
               style={{
-                fontSize: 20,
+                fontSize: 26,
+                fontWeight: 700,
+                color: OG_COLORS.primary,
+              }}
+            >
+              Your AI Board of Directors
+            </span>
+            <span
+              style={{
+                fontSize: 18,
                 fontWeight: 500,
                 color: OG_COLORS.textSecondary,
               }}
             >
-              {BRAND.tagline}
+              Get perspectives from multiple AI models working together
             </span>
           </div>
         </div>
@@ -359,9 +283,6 @@ async function generateOgImage(params: {
 async function generateFallbackOgImage(): Promise<ArrayBuffer> {
   return generateOgImage({
     title: 'AI Conversation',
-    mode: undefined,
-    participantCount: 3,
-    messageCount: 10,
   });
 }
 
@@ -498,24 +419,17 @@ export const ogChatHandler: RouteHandler<typeof ogChatRoute, ApiEnv> = createHan
         }
       }
 
-      const [participants, messages] = await Promise.all([
-        db.select()
-          .from(tables.chatParticipant)
-          .where(eq(tables.chatParticipant.threadId, thread.id)),
-        db.select()
-          .from(tables.chatMessage)
-          .where(eq(tables.chatMessage.threadId, thread.id)),
-      ]);
+      const participants = await db.select()
+        .from(tables.chatParticipant)
+        .where(eq(tables.chatParticipant.threadId, thread.id));
 
-      const participantCount = participants.length;
-      const messageCount = messages.length;
       const participantModelIds = participants.map(p => p.modelId);
 
       const versionHash = versionParam ?? generateOgVersionHash({
         title: thread.title ?? undefined,
         mode: thread.mode,
-        participantCount,
-        messageCount,
+        participantCount: participants.length,
+        messageCount: 0,
         updatedAt: thread.updatedAt,
       });
 
@@ -532,9 +446,6 @@ export const ogChatHandler: RouteHandler<typeof ogChatRoute, ApiEnv> = createHan
 
       const pngData = await generateOgImage({
         title: thread.title ?? 'AI Conversation',
-        mode: thread.mode as ChatMode | undefined,
-        participantCount,
-        messageCount,
         participantModelIds,
       });
 

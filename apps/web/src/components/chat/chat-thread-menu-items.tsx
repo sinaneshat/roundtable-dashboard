@@ -29,12 +29,6 @@ export function ChatThreadMenuItems({
 
   return (
     <>
-      {onRename && (
-        <DropdownMenuItem onClick={onRename}>
-          <Icons.pencil className="size-4" />
-          {t('chat.rename')}
-        </DropdownMenuItem>
-      )}
       <DropdownMenuItem
         onClick={onPin}
         disabled={isPinPending}
@@ -47,6 +41,12 @@ export function ChatThreadMenuItems({
           ? t('chat.unpin')
           : t('chat.pin')}
       </DropdownMenuItem>
+      {onRename && (
+        <DropdownMenuItem onClick={onRename}>
+          <Icons.pencil className="size-4" />
+          {t('chat.rename')}
+        </DropdownMenuItem>
+      )}
       {onShare && (
         <DropdownMenuItem onClick={onShare}>
           <Icons.share className="size-4" />

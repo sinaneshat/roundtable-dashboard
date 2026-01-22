@@ -1,4 +1,3 @@
-import type { BorderVariant, TrialState } from '@roundtable/shared';
 import { BorderVariants, PlanTypes, TrialStates } from '@roundtable/shared';
 import { useMemo } from 'react';
 
@@ -6,38 +5,26 @@ import { useChatStore } from '@/components/providers/chat-store-provider/context
 import { useSidebarThreadsQuery, useUsageStatsQuery } from '@/hooks/queries';
 import { validateUsageStatsCache } from '@/stores/chat/actions/types';
 
-export type FreeTrialStateReturn = {
-  isFreeUser: boolean;
-  hasUsedTrial: boolean;
-  isWarningState: boolean;
-  isLoadingStats: boolean;
-  borderVariant: BorderVariant;
-  trialState: TrialState;
-};
-
 /**
  * Hook to determine free trial state for a user.
  *
  * Free users get ONE thread + ONE round upon signup.
  * Once they create a thread, they've used their quota.
- *
- * Returns:
- * - isFreeUser: User is on free tier (not paid)
- * - hasUsedTrial: User has created a thread or completed a round
- * - isWarningState: Same as hasUsedTrial (amber warning state)
- * - isLoadingStats: Usage stats are still loading
- * - borderVariant: Border styling variant for chat input
- * - trialState: Trial state enum value for component logic
  */
-export function useFreeTrialState(): FreeTrialStateReturn {
+export function useFreeTrialState() {
   const { data: statsData, isLoading: isLoadingStats } = useUsageStatsQuery();
   const { data: threadsData } = useSidebarThreadsQuery();
   const messages = useChatStore(state => state.messages);
 
-  const freeRoundUsedFromApi = useMemo(() => {
-    const validated = validateUsageStatsCache(statsData);
-    return validated?.plan.freeRoundUsed ?? false;
-  }, [statsData]);
+  const validated = useMemo(() => validateUsageStatsCache(statsData), [statsData]);
+
+  const isFreeUser = useMemo(() => {
+    if (!validated)
+      return false;
+    return validated.plan.type !== PlanTypes.PAID;
+  }, [validated]);
+
+  const freeRoundUsedFromApi = validated?.plan.freeRoundUsed ?? false;
 
   const hasExistingThread = useMemo(() => {
     if (!threadsData?.pages?.[0]?.success)
@@ -48,25 +35,15 @@ export function useFreeTrialState(): FreeTrialStateReturn {
 
   const hasLocalMessages = messages.length > 0;
   const hasUsedTrial = freeRoundUsedFromApi || hasExistingThread || hasLocalMessages;
-
-  const isFreeUser = useMemo(() => {
-    const validated = validateUsageStatsCache(statsData);
-    if (!validated)
-      return false;
-    return validated.plan.type !== PlanTypes.PAID;
-  }, [statsData]);
-
   const isWarningState = hasUsedTrial;
 
-  // Compute border variant: only free users get colored borders
-  const borderVariant: BorderVariant = useMemo(() => {
+  const borderVariant = useMemo(() => {
     if (!isFreeUser)
       return BorderVariants.DEFAULT;
     return hasUsedTrial ? BorderVariants.WARNING : BorderVariants.SUCCESS;
   }, [isFreeUser, hasUsedTrial]);
 
-  // Compute trial state enum
-  const trialState: TrialState = hasUsedTrial ? TrialStates.USED : TrialStates.AVAILABLE;
+  const trialState = hasUsedTrial ? TrialStates.USED : TrialStates.AVAILABLE;
 
   return {
     isFreeUser,

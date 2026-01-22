@@ -12,9 +12,9 @@ import { glob } from 'glob';
 import fs from 'node:fs';
 import path from 'node:path';
 
-const TRANSLATION_FILE = path.join(process.cwd(), 'src/i18n/locales/en/common.json');
-const BACKUP_FILE = path.join(process.cwd(), 'src/i18n/locales/en/common.json.backup');
-const SOURCE_DIRS = ['src/components', 'src/app', 'src/containers', 'src/lib'];
+const TRANSLATION_FILE = path.join(process.cwd(), 'apps/web/src/i18n/locales/en/common.json');
+const BACKUP_FILE = path.join(process.cwd(), 'apps/web/src/i18n/locales/en/common.json.backup');
+const SOURCE_DIRS = ['apps/web/src/components', 'apps/web/src/routes', 'apps/web/src/containers', 'apps/web/src/lib'];
 
 interface FixResults {
   removedKeys: string[];

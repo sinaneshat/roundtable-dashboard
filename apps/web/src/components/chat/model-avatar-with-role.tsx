@@ -49,7 +49,8 @@ export function ModelAvatarWithRole({
       </Avatar>
       {shortRole && (
         <span
-          className={cn(sizeMetadata.text, 'font-medium leading-none text-[var(--role-icon-color)]')}
+          className={cn(sizeMetadata.text, 'font-medium leading-none text-[var(--role-icon-color)] truncate max-w-[80px] text-center')}
+          title={shortRole}
         >
           {shortRole}
         </span>
