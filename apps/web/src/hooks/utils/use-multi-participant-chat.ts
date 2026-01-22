@@ -1230,13 +1230,15 @@ export function useMultiParticipantChat(
       }
 
       // ✅ Skip phantom resume completions (no active stream to resume)
+      // Use OR logic - skip if message ID is malformed OR completely empty
       const notOurMessageId = !data.message?.id?.includes('_r');
       const emptyParts = data.message?.parts?.length === 0;
       const noFinishReason = data.finishReason === undefined;
-      const noActiveRound = roundParticipantsRef.current.length === 0;
       const notStreaming = !isStreamingRef.current;
 
-      if (notOurMessageId && emptyParts && noFinishReason && noActiveRound && notStreaming) {
+      const isMalformedMessage = notOurMessageId || (emptyParts && noFinishReason);
+      if (isMalformedMessage && notStreaming) {
+        rlog.stream('end', `SKIP: phantom completion (malformed=${notOurMessageId} empty=${emptyParts} noReason=${noFinishReason})`);
         return;
       }
 

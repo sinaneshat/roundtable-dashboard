@@ -1291,8 +1291,8 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
               return aRound - bRound;
             if (a.role !== b.role)
               return a.role === MessageRoles.USER ? -1 : 1;
-            const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
-            const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
+            const aPIdx = getParticipantIndex(a.metadata) ?? 999;
+            const bPIdx = getParticipantIndex(b.metadata) ?? 999;
             return aPIdx - bPIdx;
           });
         } else {

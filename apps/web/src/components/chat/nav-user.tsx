@@ -24,7 +24,7 @@ import { useBoolean } from '@/hooks/utils';
 import { clearCachedSession } from '@/lib/auth';
 import { deleteUser, signOut, useSession } from '@/lib/auth/client';
 import type { Session, User } from '@/lib/auth/types';
-import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { getAppBaseUrl, getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
 import { showApiErrorToast } from '@/lib/toast';
 import dynamic from '@/lib/utils/dynamic';
@@ -62,7 +62,7 @@ export function NavUser({ initialSession }: NavUserProps) {
   const isDeleting = useBoolean(false);
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
   const cancelSubscriptionMutation = useCancelSubscriptionMutation();
-  const showDeleteAccountOption = getWebappEnv() !== WEBAPP_ENVS.PROD;
+  const showDeleteAccountOption = getWebappEnv() !== WebAppEnvs.PROD;
 
   const user = clientSession?.user ?? initialSession?.user;
 

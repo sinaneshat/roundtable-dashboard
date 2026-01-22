@@ -521,7 +521,7 @@ export async function zeroOutFreeUserCredits(userId: string): Promise<void> {
 
 async function provisionPaidUserCredits(userId: string): Promise<void> {
   const db = await getDbAsync();
-  const planConfig = getPlanConfig('paid');
+  const planConfig = getPlanConfig();
   const now = new Date();
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);
@@ -846,7 +846,7 @@ export async function processMonthlyRefill(userId: string): Promise<void> {
     return;
   }
 
-  const planConfig = getPlanConfig('paid');
+  const planConfig = getPlanConfig();
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);
 
@@ -895,7 +895,7 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
     return;
   }
 
-  const planConfig = getPlanConfig('paid');
+  const planConfig = getPlanConfig();
   const now = new Date();
   const nextRefill = new Date(now);
   nextRefill.setMonth(nextRefill.getMonth() + 1);

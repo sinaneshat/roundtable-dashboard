@@ -149,33 +149,36 @@ export function createMockDrizzleDb(): MockDrizzleDb {
 }
 
 export function createMockKV(): KVNamespace {
-  return {
+  const mockKV: Partial<KVNamespace> = {
     get: vi.fn().mockResolvedValue(null),
     put: vi.fn().mockResolvedValue(undefined),
     delete: vi.fn().mockResolvedValue(undefined),
     list: vi.fn().mockResolvedValue({ keys: [] }),
     getWithMetadata: vi.fn().mockResolvedValue({ value: null, metadata: null }),
-  } as unknown as KVNamespace;
+  };
+  return mockKV as KVNamespace;
 }
 
 export function createMockLogger(): TypedLogger {
-  return {
+  const mockLogger: TypedLogger = {
     info: vi.fn(),
     warn: vi.fn(),
     error: vi.fn(),
     debug: vi.fn(),
   };
+  return mockLogger;
 }
 
 export function createMockApiEnv(overrides?: Partial<CloudflareEnv>): Partial<CloudflareEnv> {
-  return {
-    DB: null as unknown as D1Database,
+  const mockEnv: Partial<CloudflareEnv> = {
     KV: createMockKV(),
-    UPLOADS_R2_BUCKET: null as unknown as R2Bucket,
     BETTER_AUTH_SECRET: 'test-secret',
     BETTER_AUTH_URL: 'http://localhost:8787',
     STRIPE_SECRET_KEY: 'sk_test_mock',
     STRIPE_WEBHOOK_SECRET: 'whsec_test_mock',
     ...overrides,
   };
+
+  // DB and R2 are intentionally omitted as they require proper mocking setup
+  return mockEnv;
 }

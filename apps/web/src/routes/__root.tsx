@@ -17,11 +17,14 @@ import { StructuredData } from '@/components/seo';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getCachedSession, setCachedSession } from '@/lib/auth/session-cache';
-import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { getAppBaseUrl, getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
 import { TurnstileProvider } from '@/lib/turnstile';
-import { IdleLazyProvider } from '@/lib/utils/lazy-provider';
+import { IdleLazyProvider, LazyProvider } from '@/lib/utils/lazy-provider';
 import type { RouterContext } from '@/router';
 import { getSession } from '@/server/auth';
+import { getPublicEnv } from '@/server/env';
+import type { PublicEnv } from '@/server/schemas';
+import { DEFAULT_PUBLIC_ENV } from '@/server/schemas';
 
 /**
  * Root route with QueryClient context
@@ -63,6 +66,13 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       console.error('[ROOT] Client session error:', error);
       return { session: null };
     }
+  },
+  // ✅ RUNTIME ENV VARS: Fetch from server and pass to client
+  // wrangler.jsonc vars are only available at server runtime (process.env)
+  // This loader makes them available to client components
+  loader: async () => {
+    const env = await getPublicEnv();
+    return { env };
   },
   head: () => {
     const siteUrl = getAppBaseUrl();
@@ -131,18 +141,15 @@ export const Route = createRootRouteWithContext<RouterContext>()({
 });
 
 function RootComponent() {
+  const { env } = Route.useLoaderData();
   return (
-    <RootDocument>
+    <RootDocument env={env}>
       <Outlet />
     </RootDocument>
   );
 }
 
-function RootDocument({ children }: { children: ReactNode }) {
-  // Get environment for provider configuration
-  const environment = typeof window !== 'undefined' ? getWebappEnv() : 'local';
-  const apiKey = typeof window !== 'undefined' ? import.meta.env.VITE_POSTHOG_API_KEY : undefined;
-
+function RootDocument({ children, env = DEFAULT_PUBLIC_ENV }: { children: ReactNode; env?: PublicEnv }) {
   return (
     <html lang="en" className="dark">
       <head>
@@ -150,21 +157,23 @@ function RootDocument({ children }: { children: ReactNode }) {
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
         <TurnstileProvider>
-          {/* Non-critical analytics and PWA providers - loaded after browser idle */}
+          {/* Non-critical analytics and PWA providers - loaded after first render */}
           <IdleLazyProvider<{ children: ReactNode }>
             loader={() => import('@/components/providers/service-worker-provider').then(m => ({ default: m.ServiceWorkerProvider }))}
             providerProps={{ children: null }}
           >
-            <IdleLazyProvider<{ apiKey?: string; environment?: string; children: ReactNode }>
+            {/* PostHog uses LazyProvider (not IdleLazy) because it has its own deferral logic */}
+            {/* Double-deferral would delay initialization by 15+ seconds */}
+            <LazyProvider<{ apiKey?: string; environment?: string; children: ReactNode }>
               loader={() => import('@/components/providers/posthog-provider')}
               providerProps={{
-                apiKey,
-                environment,
+                apiKey: env.VITE_POSTHOG_API_KEY,
+                environment: env.VITE_WEBAPP_ENV,
                 children: null,
               }}
             >
               {children}
-            </IdleLazyProvider>
+            </LazyProvider>
           </IdleLazyProvider>
         </TurnstileProvider>
         <StructuredData type="WebApplication" />
@@ -181,7 +190,7 @@ function RootDocument({ children }: { children: ReactNode }) {
 function isPostHogAvailable(): boolean {
   if (typeof window === 'undefined')
     return false;
-  return getWebappEnv() !== WEBAPP_ENVS.LOCAL;
+  return getWebappEnv() !== WebAppEnvs.LOCAL;
 }
 
 /**
@@ -205,7 +214,7 @@ async function trackErrorToPostHog(error: Error, context: { url: string; userAge
 }
 
 function RootErrorComponent({ error, reset }: ErrorComponentProps) {
-  const isProd = getWebappEnv() === WEBAPP_ENVS.PROD;
+  const isProd = getWebappEnv() === WebAppEnvs.PROD;
   const hasTracked = useRef(false);
 
   // Track error to PostHog once

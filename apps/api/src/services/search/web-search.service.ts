@@ -377,7 +377,8 @@ async function extractWithCloudflareBrowser(
       } catch {}
     }
 
-    const extracted = await (page.evaluate as (fn: unknown, arg: string) => Promise<ExtractedContent>)(createContentExtractor(), extractFormat);
+    const extractFn = createContentExtractor();
+    const extracted = await page.evaluate(extractFn, extractFormat);
     await page.close();
     return extracted;
   } catch {
@@ -401,7 +402,8 @@ async function searchWithCloudflareBrowser(
       timeout: 15000,
     });
 
-    const results = await (page.evaluate as (fn: unknown, arg: number) => Promise<ExtractedSearchResult[]>)(createSearchExtractor(), maxResults);
+    const searchFn = createSearchExtractor();
+    const results = await page.evaluate(searchFn, maxResults);
     await page.close();
     return results;
   } catch {
@@ -414,10 +416,10 @@ async function searchWithCloudflareBrowser(
  * Create content extractor function for page.evaluate
  *
  * Returns a function that can be serialized and executed in browser context.
- * This is called separately for each browser type to avoid union type conflicts.
+ * This wrapper ensures proper typing for Puppeteer's page.evaluate.
  */
-function createContentExtractor(): (extractFormat: string) => ExtractedContent {
-  return (extractFormat: string): ExtractedContent => {
+function createContentExtractor() {
+  return function extractContent(extractFormat: string): ExtractedContent {
     // Helper to clean text
     const cleanText = (text: string): string => {
       return text
@@ -567,16 +569,17 @@ function createContentExtractor(): (extractFormat: string) => ExtractedContent {
       },
       images: images.slice(0, 10),
     };
-  };
+  } as (extractFormat: string) => ExtractedContent;
 }
 
 /**
  * Create search extractor function for page.evaluate
  *
  * Returns a function that extracts search results from DuckDuckGo HTML page.
+ * This wrapper ensures proper typing for Puppeteer's page.evaluate.
  */
-function createSearchExtractor(): (max: number) => ExtractedSearchResult[] {
-  return (max: number): ExtractedSearchResult[] => {
+function createSearchExtractor() {
+  return function extractSearchResults(max: number): ExtractedSearchResult[] {
     const items: ExtractedSearchResult[] = [];
     const resultElements = document.querySelectorAll('.result');
 
@@ -614,7 +617,7 @@ function createSearchExtractor(): (max: number) => ExtractedSearchResult[] {
     }
 
     return items;
-  };
+  } as (max: number) => ExtractedSearchResult[];
 }
 
 async function initBrowser(env: ApiEnv['Bindings']): Promise<BrowserResult> {

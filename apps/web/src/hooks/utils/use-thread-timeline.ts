@@ -200,9 +200,9 @@ export function useThreadTimeline({
         return;
       }
 
-      // Only show changelog when round is actually starting (has messages or pre-search)
-      // Don't show changelog for "future" rounds where config changed but round hasn't started yet
-      const shouldShowChangelog = hasChangelog && (hasMessages || hasPreSearch);
+      // Show changelog if it exists for this round
+      // Changelogs are fetched per-round and tied to specific rounds, no need to guard
+      const shouldShowChangelog = hasChangelog;
 
       // Add changelog first (shows configuration changes before messages)
       if (shouldShowChangelog) {

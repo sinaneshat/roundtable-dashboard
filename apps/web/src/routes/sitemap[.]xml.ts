@@ -13,7 +13,7 @@
 
 import { createFileRoute } from '@tanstack/react-router';
 
-import { getAppBaseUrl, getWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { getAppBaseUrl, getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
 
 type SitemapRoute = {
   path: string;
@@ -61,7 +61,7 @@ export const Route = createFileRoute('/sitemap.xml')({
         const env = getWebappEnv();
 
         // Only serve sitemap in production
-        if (env !== WEBAPP_ENVS.PROD) {
+        if (env !== WebAppEnvs.PROD) {
           return new Response('Sitemap not available in non-production environments', {
             status: 404,
             headers: { 'Content-Type': 'text/plain' },

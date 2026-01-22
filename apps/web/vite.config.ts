@@ -84,15 +84,12 @@ export default defineConfig({
               if (id.includes('zod'))
                 return 'zod';
 
-              // React core - keep together for proper module resolution
-              if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/'))
+              // React core + React Query - keep together for proper module resolution
+              // React Query uses createContext from React, so must be in same chunk
+              if (id.includes('/react/') || id.includes('/react-dom/') || id.includes('/scheduler/') || id.includes('@tanstack/react-query') || id.includes('@tanstack/query'))
                 return 'react-vendor';
 
-              // TanStack Query - separate from Router
-              if (id.includes('@tanstack/react-query') || id.includes('@tanstack/query'))
-                return 'react-query';
-
-              // TanStack Router - separate from Query
+              // TanStack Router - separate chunk (also depends on React but loaded async)
               if (id.includes('@tanstack/react-router') || id.includes('@tanstack/router'))
                 return 'react-router';
 

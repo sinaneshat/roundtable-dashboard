@@ -32,3 +32,29 @@ export const serverFnErrorResponseSchema = z.object({
 });
 
 export type ServerFnErrorResponse = z.infer<typeof serverFnErrorResponseSchema>;
+
+/**
+ * Schema for public environment variables exposed to client.
+ * These are already public (in wrangler.jsonc vars) - just passing
+ * from server runtime to client.
+ */
+export const publicEnvSchema = z.object({
+  VITE_WEBAPP_ENV: z.string(),
+  VITE_POSTHOG_API_KEY: z.string(),
+  VITE_MAINTENANCE: z.string(),
+  VITE_TURNSTILE_SITE_KEY: z.string(),
+  VITE_STRIPE_PUBLISHABLE_KEY: z.string(),
+});
+
+export type PublicEnv = z.infer<typeof publicEnvSchema>;
+
+/**
+ * Default public env values for error boundaries where loader may not have run.
+ */
+export const DEFAULT_PUBLIC_ENV: PublicEnv = {
+  VITE_WEBAPP_ENV: 'local',
+  VITE_POSTHOG_API_KEY: '',
+  VITE_MAINTENANCE: 'false',
+  VITE_TURNSTILE_SITE_KEY: '',
+  VITE_STRIPE_PUBLISHABLE_KEY: '',
+};

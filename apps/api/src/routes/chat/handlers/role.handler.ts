@@ -119,10 +119,9 @@ export const getCustomRoleHandler: RouteHandler<typeof getCustomRoleRoute, ApiEn
     operationName: 'getCustomRole',
   },
   async (c) => {
-    const { user } = c.auth();
     const { id } = c.validated.params;
     const db = await getDbAsync();
-    const customRole = await verifyCustomRoleOwnership(id, user.id, db);
+    const customRole = await verifyCustomRoleOwnership(id, db);
     return Responses.ok(c, {
       customRole,
     });

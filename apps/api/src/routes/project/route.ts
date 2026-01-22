@@ -41,12 +41,10 @@ export const listProjectsRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: ListProjectsResponseSchema,
-        },
-      },
       description: 'Projects retrieved successfully',
+      content: {
+        'application/json': { schema: ListProjectsResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
@@ -64,12 +62,10 @@ export const getProjectRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: GetProjectResponseSchema,
-        },
-      },
       description: 'Project retrieved successfully',
+      content: {
+        'application/json': { schema: GetProjectResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.NOT_FOUND,
@@ -94,12 +90,10 @@ export const createProjectRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.CREATED]: {
-      content: {
-        'application/json': {
-          schema: GetProjectResponseSchema,
-        },
-      },
       description: 'Project created successfully',
+      content: {
+        'application/json': { schema: GetProjectResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.BAD_REQUEST,
@@ -125,12 +119,10 @@ export const updateProjectRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: GetProjectResponseSchema,
-        },
-      },
       description: 'Project updated successfully',
+      content: {
+        'application/json': { schema: GetProjectResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.BAD_REQUEST,
@@ -150,12 +142,10 @@ export const deleteProjectRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: DeleteResponseSchema,
-        },
-      },
       description: 'Project deleted successfully',
+      content: {
+        'application/json': { schema: DeleteResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.NOT_FOUND,
@@ -179,12 +169,10 @@ export const listProjectAttachmentsRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: ListProjectAttachmentsResponseSchema,
-        },
-      },
       description: 'Attachments retrieved successfully',
+      content: {
+        'application/json': { schema: ListProjectAttachmentsResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.NOT_FOUND,
@@ -210,12 +198,10 @@ export const addAttachmentToProjectRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.CREATED]: {
-      content: {
-        'application/json': {
-          schema: AddProjectAttachmentResponseSchema,
-        },
-      },
       description: 'Attachment added to project successfully',
+      content: {
+        'application/json': { schema: AddProjectAttachmentResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.BAD_REQUEST,
@@ -236,12 +222,10 @@ export const getProjectAttachmentRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: GetProjectAttachmentResponseSchema,
-        },
-      },
       description: 'Attachment retrieved successfully',
+      content: {
+        'application/json': { schema: GetProjectAttachmentResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.NOT_FOUND,
@@ -267,12 +251,10 @@ export const updateProjectAttachmentRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: GetProjectAttachmentResponseSchema,
-        },
-      },
       description: 'Attachment metadata updated successfully',
+      content: {
+        'application/json': { schema: GetProjectAttachmentResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.BAD_REQUEST,
@@ -292,12 +274,10 @@ export const removeAttachmentFromProjectRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: DeleteResponseSchema,
-        },
-      },
       description: 'Attachment removed from project successfully',
+      content: {
+        'application/json': { schema: DeleteResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.NOT_FOUND,
@@ -321,12 +301,10 @@ export const listProjectMemoriesRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: ListProjectMemoriesResponseSchema,
-        },
-      },
       description: 'Memories retrieved successfully',
+      content: {
+        'application/json': { schema: ListProjectMemoriesResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.NOT_FOUND,
@@ -352,12 +330,10 @@ export const createProjectMemoryRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.CREATED]: {
-      content: {
-        'application/json': {
-          schema: GetProjectMemoryResponseSchema,
-        },
-      },
       description: 'Memory created successfully',
+      content: {
+        'application/json': { schema: GetProjectMemoryResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.BAD_REQUEST,
@@ -377,12 +353,10 @@ export const getProjectMemoryRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: GetProjectMemoryResponseSchema,
-        },
-      },
       description: 'Memory retrieved successfully',
+      content: {
+        'application/json': { schema: GetProjectMemoryResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.NOT_FOUND,
@@ -408,12 +382,10 @@ export const updateProjectMemoryRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: GetProjectMemoryResponseSchema,
-        },
-      },
       description: 'Memory updated successfully',
+      content: {
+        'application/json': { schema: GetProjectMemoryResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.BAD_REQUEST,
@@ -433,12 +405,10 @@ export const deleteProjectMemoryRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: DeleteResponseSchema,
-        },
-      },
       description: 'Memory deleted successfully',
+      content: {
+        'application/json': { schema: DeleteResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.NOT_FOUND,
@@ -461,12 +431,10 @@ export const getProjectContextRoute = createRoute({
   },
   responses: {
     [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: ProjectContextResponseSchema,
-        },
-      },
       description: 'Project context retrieved successfully',
+      content: {
+        'application/json': { schema: ProjectContextResponseSchema },
+      },
     },
     ...StandardApiResponses.UNAUTHORIZED,
     ...StandardApiResponses.NOT_FOUND,

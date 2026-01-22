@@ -19,8 +19,7 @@ import type { UIMessage } from 'ai';
 import { describe, expect, it } from 'vitest';
 
 import { createTestUserMessage } from '@/lib/testing';
-
-import { createChatStore } from '../../stores/chat/store';
+import { createChatStore } from '@/stores/chat';
 
 // ============================================================================
 // Test Utilities

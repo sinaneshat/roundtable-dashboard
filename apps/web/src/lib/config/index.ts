@@ -11,7 +11,7 @@
 // Base URLs configuration (non-context-dependent utilities only)
 export type { WebappEnv } from './base-urls';
 export {
-  BASE_URLS,
+  BASE_URL_CONFIG,
   DEFAULT_WEBAPP_ENV,
   getApiBaseUrl,
   getApiUrlAsync,
@@ -21,8 +21,8 @@ export {
   getWebappEnv,
   getWebappEnvAsync,
   isWebappEnv,
-  WEBAPP_ENV_VALUES,
   WEBAPP_ENVS,
+  WebAppEnvs,
   WebappEnvSchema,
 } from './base-urls';
 

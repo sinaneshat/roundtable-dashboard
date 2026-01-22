@@ -542,7 +542,7 @@ describe('product Logic - Quota and Tier Configuration', () => {
 
   describe('plan Configuration', () => {
     it('getPlanConfig returns paid plan configuration', () => {
-      const config = getPlanConfig('paid');
+      const config = getPlanConfig();
 
       expect(config.monthlyCredits).toBe(2_000_000);
       expect(config.priceInCents).toBe(5900);

@@ -40,31 +40,8 @@ import {
   WebAppEnvSchema as WebappEnvSchema,
 } from '@roundtable/shared/enums';
 
-// Re-export for local usage with preferred naming
-export { DEFAULT_WEBAPP_ENV, isWebappEnv, type WebappEnv, WebappEnvSchema };
-// Export the constant object as WEBAPP_ENVS (LOCAL, PREVIEW, PROD properties)
-// and the array as WEBAPP_ENV_VALUES
-export { WEBAPP_ENVS as WEBAPP_ENV_VALUES, WebAppEnvs as WEBAPP_ENVS };
-// Re-export shared config for direct access
-export { BASE_URL_CONFIG, FALLBACK_URLS, resolveApiOriginFromHostname };
-
-/**
- * Legacy compatibility: BASE_URLS in old format
- */
-export const BASE_URLS: Record<WebappEnv, { app: string; api: string }> = {
-  [WebAppEnvs.LOCAL]: {
-    app: BASE_URL_CONFIG[WebAppEnvs.LOCAL].app,
-    api: BASE_URL_CONFIG[WebAppEnvs.LOCAL].api,
-  },
-  [WebAppEnvs.PREVIEW]: {
-    app: BASE_URL_CONFIG[WebAppEnvs.PREVIEW].app,
-    api: BASE_URL_CONFIG[WebAppEnvs.PREVIEW].api,
-  },
-  [WebAppEnvs.PROD]: {
-    app: BASE_URL_CONFIG[WebAppEnvs.PROD].app,
-    api: BASE_URL_CONFIG[WebAppEnvs.PROD].api,
-  },
-};
+// Re-export for local usage - no renames, single source of truth
+export { BASE_URL_CONFIG, DEFAULT_WEBAPP_ENV, FALLBACK_URLS, isWebappEnv, resolveApiOriginFromHostname, WEBAPP_ENVS, type WebappEnv, WebAppEnvs, WebappEnvSchema };
 
 /**
  * Check if we're in a prerender/SSG build context.

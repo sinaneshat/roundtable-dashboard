@@ -12,6 +12,7 @@ import * as tables from '@/db';
 import { PriceCacheTags, ProductCacheTags, STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
 import { revenueTracking } from '@/lib/analytics';
 import { BASE_URLS, getWebappEnvFromContext } from '@/lib/config/base-urls';
+import { STRIPE_WEBHOOK_EVENT_TYPES, StripeWebhookEventTypes } from '@/lib/enums';
 import { isObject } from '@/lib/utils';
 import { cacheCustomerId, getCustomerIdByUserId, getUserCreditBalance, hasSyncedSubscription, stripeService, syncStripeDataFromStripe } from '@/services/billing';
 import type { ApiEnv } from '@/types';
@@ -920,26 +921,7 @@ export const handleWebhookHandler: RouteHandler<typeof handleWebhookRoute, ApiEn
  * Tracked Webhook Events
  * All events trigger sync from Stripe API
  */
-const TRACKED_WEBHOOK_EVENTS: Stripe.Event.Type[] = [
-  'checkout.session.completed',
-  'customer.subscription.created',
-  'customer.subscription.updated',
-  'customer.subscription.deleted',
-  'customer.subscription.paused',
-  'customer.subscription.resumed',
-  'customer.subscription.pending_update_applied',
-  'customer.subscription.pending_update_expired',
-  'customer.subscription.trial_will_end',
-  'invoice.paid',
-  'invoice.payment_failed',
-  'invoice.payment_action_required',
-  'invoice.upcoming',
-  'invoice.marked_uncollectible',
-  'invoice.payment_succeeded',
-  'payment_intent.succeeded',
-  'payment_intent.payment_failed',
-  'payment_intent.canceled',
-];
+const TRACKED_WEBHOOK_EVENTS: Stripe.Event.Type[] = [...STRIPE_WEBHOOK_EVENT_TYPES];
 
 const StripeInvoiceSchema = z.object({
   id: z.string(),
@@ -981,7 +963,7 @@ async function trackRevenueFromWebhook(
 
   try {
     switch (event.type) {
-      case 'invoice.paid': {
+      case StripeWebhookEventTypes.INVOICE_PAID: {
         const invoiceResult = StripeInvoiceSchema.safeParse(obj);
         if (!invoiceResult.success)
           return;
@@ -1024,7 +1006,7 @@ async function trackRevenueFromWebhook(
         break;
       }
 
-      case 'invoice.payment_failed': {
+      case StripeWebhookEventTypes.INVOICE_PAYMENT_FAILED: {
         const invoiceResult = StripeInvoiceSchema.safeParse(obj);
         if (!invoiceResult.success)
           return;
@@ -1043,7 +1025,7 @@ async function trackRevenueFromWebhook(
         break;
       }
 
-      case 'customer.subscription.deleted': {
+      case StripeWebhookEventTypes.CUSTOMER_SUBSCRIPTION_DELETED: {
         const subscriptionResult = StripeSubscriptionSchema.safeParse(obj);
         if (!subscriptionResult.success)
           return;
@@ -1056,7 +1038,7 @@ async function trackRevenueFromWebhook(
         break;
       }
 
-      case 'customer.subscription.updated': {
+      case StripeWebhookEventTypes.CUSTOMER_SUBSCRIPTION_UPDATED: {
         const subscriptionResult = StripeSubscriptionSchema.safeParse(obj);
         if (!subscriptionResult.success)
           return;

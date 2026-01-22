@@ -23,5 +23,6 @@ export const SUBSCRIPTION_TIER_NAMES: Record<SubscriptionTier, string> = {
  * Get display name for a subscription tier
  */
 export function getTierDisplayName(tier: SubscriptionTier): string {
-  return SUBSCRIPTION_TIER_NAMES[tier] as string;
+  const name = SUBSCRIPTION_TIER_NAMES[tier];
+  return name;
 }

@@ -40,7 +40,7 @@ export const detailedHealthHandler: RouteHandler<typeof detailedHealthRoute, Api
 
     // ✅ OPTIMIZATION: Parallelize independent health checks
     const [dbCheck, envCheck] = await Promise.all([
-      checkDatabase({ env: c.env }),
+      checkDatabase(),
       Promise.resolve(checkEnvironment({ env: c.env })), // Wrap sync function for Promise.all
     ]);
 
@@ -66,7 +66,7 @@ export const detailedHealthHandler: RouteHandler<typeof detailedHealthRoute, Api
 /**
  * Check database connectivity
  */
-async function checkDatabase(_c: HealthCheckContext) {
+async function checkDatabase() {
   const startTime = Date.now();
 
   try {

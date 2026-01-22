@@ -30,9 +30,6 @@ export { createStoreWrapper, createTestChatStore, getStoreState, resetStoreToDef
 // Chat Test Factories (high-level factories with test-friendly defaults)
 export * from './chat-test-factories';
 
-// Chat V2 Testing Utilities
-export * from './chat-v2-helpers';
-
 // Testing Enums (5-part pattern enums for test utilities)
 export * from './enums';
 export * from './helpers';

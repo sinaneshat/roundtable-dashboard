@@ -8,7 +8,7 @@ import { BETTER_AUTH_SESSION_COOKIE_NAME, EMAIL_DOMAIN_CONFIG } from '@roundtabl
 import { APIError } from 'better-auth/api';
 import { z } from 'zod';
 
-import { isWebappEnv, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { isWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
 
 // ============================================================================
 // SCHEMAS
@@ -38,14 +38,14 @@ export function isRestrictedEnvironment(): boolean {
   const viteEnv = import.meta.env?.VITE_WEBAPP_ENV;
   if (viteEnv && isWebappEnv(viteEnv)) {
     // Only restrict PREVIEW - LOCAL/localhost should allow any email
-    return viteEnv === WEBAPP_ENVS.PREVIEW;
+    return viteEnv === WebAppEnvs.PREVIEW;
   }
 
   // Check process.env fallback
   const processEnv = process.env.WEBAPP_ENV;
   if (processEnv && isWebappEnv(processEnv)) {
     // Only restrict PREVIEW - LOCAL/localhost should allow any email
-    return processEnv === WEBAPP_ENVS.PREVIEW;
+    return processEnv === WebAppEnvs.PREVIEW;
   }
 
   // Default: no restriction for local development

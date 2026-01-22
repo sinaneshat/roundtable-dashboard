@@ -13,6 +13,16 @@
  * ```
  */
 
+// Analytics enums
+export {
+  DEFAULT_PROJECT_ANALYTICS_EVENT_TYPE,
+  getProjectAnalyticsEventTypeSchema,
+  isProjectAnalyticsEventType,
+  PROJECT_ANALYTICS_EVENT_TYPES,
+  type ProjectAnalyticsEventType,
+  ProjectAnalyticsEventTypes,
+} from './analytics';
+
 // Billing UI enums
 export {
   CREDIT_ESTIMATION_STATUS_LABELS,

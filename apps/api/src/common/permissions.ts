@@ -4,7 +4,7 @@ import { ErrorContextBuilders } from '@/common/error-contexts';
 import { createError } from '@/common/error-handling';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
-import type { ChatCustomRole, ChatParticipant, ChatProject, ChatThread, ChatUserPreset } from '@/db/validation';
+import type { ChatCustomRole, ChatParticipant, ChatThread } from '@/db/validation';
 
 import type { ParticipantWithThread, ThreadWithParticipants } from './permissions-schemas';
 
@@ -147,16 +147,14 @@ export async function verifyParticipantOwnership(
  * Verify custom role ownership
  *
  * @throws NotFoundError if custom role doesn't exist
- * @throws UnauthorizedError if user doesn't own the custom role
  *
  * @example
  * ```ts
- * const customRole = await verifyCustomRoleOwnership(roleId, userId, db);
+ * const customRole = await verifyCustomRoleOwnership(roleId, db);
  * ```
  */
 export async function verifyCustomRoleOwnership(
   customRoleId: string,
-  _userId: string,
   db: Awaited<ReturnType<typeof getDbAsync>>,
 ): Promise<ChatCustomRole> {
   const customRole = await db.query.chatCustomRole.findFirst({
@@ -171,82 +169,4 @@ export async function verifyCustomRoleOwnership(
   }
 
   return customRole;
-}
-
-// ============================================================================
-// USER PRESET OWNERSHIP VERIFICATION
-// ============================================================================
-
-/**
- * Verify user preset ownership
- *
- * @throws NotFoundError if user preset doesn't exist
- * @throws UnauthorizedError if user doesn't own the user preset
- *
- * @example
- * ```ts
- * const userPreset = await verifyUserPresetOwnership(presetId, userId, db);
- * ```
- */
-export async function verifyUserPresetOwnership(
-  userPresetId: string,
-  userId: string,
-  db: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ChatUserPreset> {
-  const userPreset = await db.query.chatUserPreset.findFirst({
-    where: (fields, { and, eq: eqOp }) => and(
-      eqOp(fields.id, userPresetId),
-      eqOp(fields.userId, userId),
-    ),
-  });
-
-  if (!userPreset) {
-    throw createError.notFound(
-      'User preset not found',
-      ErrorContextBuilders.resourceNotFound('user_preset', userPresetId),
-    );
-  }
-
-  return userPreset;
-}
-
-// ============================================================================
-// PROJECT OWNERSHIP VERIFICATION
-// ============================================================================
-
-/**
- * Verify project ownership
- *
- * @throws NotFoundError if project doesn't exist
- * @throws UnauthorizedError if user doesn't own the project
- *
- * @example
- * ```ts
- * const project = await verifyProjectOwnership(projectId, userId, db);
- * ```
- */
-export async function verifyProjectOwnership(
-  projectId: string,
-  userId: string,
-  db?: Awaited<ReturnType<typeof getDbAsync>>,
-): Promise<ChatProject> {
-  // Import getDbAsync here to avoid circular dependency
-  const { getDbAsync: getDb } = await import('@/db');
-  const database = db || await getDb();
-
-  const project = await database.query.chatProject.findFirst({
-    where: (fields, { and, eq: eqOp }) => and(
-      eqOp(fields.id, projectId),
-      eqOp(fields.userId, userId),
-    ),
-  });
-
-  if (!project) {
-    throw createError.notFound(
-      'Project not found',
-      ErrorContextBuilders.resourceNotFound('project', projectId),
-    );
-  }
-
-  return project;
 }

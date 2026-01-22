@@ -1,7 +1,7 @@
 import { apiKeyClient, magicLinkClient } from 'better-auth/client/plugins';
 import { createAuthClient } from 'better-auth/react';
 
-import { BASE_URLS, getApiBaseUrl, isPrerender, WEBAPP_ENVS } from '@/lib/config/base-urls';
+import { BASE_URL_CONFIG, getApiBaseUrl, isPrerender, WebAppEnvs } from '@/lib/config/base-urls';
 
 /**
  * Get base URL for auth client
@@ -20,7 +20,7 @@ export function getAuthBaseUrl(): string {
   // During prerender, use local env URL to avoid DNS failures for external domains
   // Static pages shouldn't make auth API calls anyway (handled by isStaticRoute check)
   if (isPrerender()) {
-    const localApiUrl = BASE_URLS[WEBAPP_ENVS.LOCAL].api;
+    const localApiUrl = BASE_URL_CONFIG[WebAppEnvs.LOCAL].api;
     return localApiUrl.replace('/api/v1', '');
   }
 

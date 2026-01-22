@@ -1,7 +1,7 @@
 import type { ChatMode, ScreenMode } from '@roundtable/shared';
 import { ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, RoundPhases, ScreenModes, SidebarStates } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
-import { useCallback, useEffect, useLayoutEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { ChatInput } from '@/components/chat/chat-input';
@@ -594,31 +594,12 @@ export function ChatView({
     ? ((hasInitiallyLoaded && messages.length > 0) || hasInitialDataFromProps || isInActiveCreationFlow)
     : true;
 
-  const { scrollToBottom } = useChatScroll({
+  // Chat scroll hook provides manual scrollToBottom for user-initiated actions only
+  // NO auto-scroll on page load - user controls their scroll position
+  useChatScroll({
     messages,
     enableNearBottomDetection: true,
   });
-
-  // ✅ SCROLL FIX: Auto-scroll to absolute bottom on initial thread load
-  // Uses useLayoutEffect to scroll BEFORE browser paint - no flicker
-  // Skip scroll for newly created threads (createdThreadId set) - user is already at top
-  const hasScrolledToBottomRef = useRef(false);
-  useLayoutEffect(() => {
-    // Only scroll on thread mode with ready data, and only once
-    // Skip when createdThreadId is set - means thread was just created from overview
-    if (
-      mode === ScreenModes.THREAD
-      && isStoreReady
-      && effectiveMessages.length > 0
-      && !hasScrolledToBottomRef.current
-      && !createdThreadId
-    ) {
-      hasScrolledToBottomRef.current = true;
-      // useLayoutEffect runs synchronously after DOM mutations but before paint
-      // This ensures scroll happens before user sees the page
-      scrollToBottom('instant');
-    }
-  }, [mode, isStoreReady, effectiveMessages.length, scrollToBottom, createdThreadId]);
 
   const isResumptionActive = preSearchResumption?.status === MessageStatuses.STREAMING
     || preSearchResumption?.status === MessageStatuses.PENDING
@@ -846,7 +827,7 @@ export function ChatView({
               completedRoundNumbers={completedRoundNumbers}
               isModeratorStreaming={isModeratorStreaming}
               getIsStreamingFromStore={getIsStreamingFromStore}
-              initialScrollToBottom={mode === ScreenModes.THREAD && !createdThreadId}
+              initialScrollToBottom={false}
             />
           </div>
 

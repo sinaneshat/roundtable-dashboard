@@ -159,7 +159,7 @@ export function calculateBaseCredits(inputTokens: number, outputTokens: number):
   return tokensToCredits(inputTokens + outputTokens);
 }
 
-export function getPlanConfig(_planType: 'paid'): { signupCredits: number; monthlyCredits: number; priceInCents: number } {
+export function getPlanConfig(): { signupCredits: number; monthlyCredits: number; priceInCents: number } {
   const config = _CREDIT_CONFIG.PLANS[PlanTypes.PAID];
   if (!config) {
     throw new Error('Paid plan configuration not found');

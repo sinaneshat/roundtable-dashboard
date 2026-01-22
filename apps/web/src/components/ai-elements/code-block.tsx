@@ -1,7 +1,7 @@
 import type { ComponentProps } from 'react';
 import { createContext, memo, use, useEffect, useMemo, useRef, useState } from 'react';
+import type { BundledLanguage } from 'shiki';
 
-import type { BundledLanguage } from '@/components/ai-elements/code-block-highlighter';
 import { highlightCode } from '@/components/ai-elements/code-block-highlighter';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';

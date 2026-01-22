@@ -186,6 +186,3 @@ async function highlightCode(
 }
 
 export { highlightCode };
-
-// Re-export type for consumers
-export type { BundledLanguage } from 'shiki';

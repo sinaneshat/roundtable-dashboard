@@ -34,9 +34,8 @@ import { MessageRoles, MessageStatuses, ScreenModes } from '@roundtable/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 
 import type { StoredPreSearch } from '@/services/api';
-
-import type { ChatStore } from '../../stores/chat/store';
-import { createChatStore } from '../../stores/chat/store';
+import type { ChatStore } from '@/stores/chat';
+import { createChatStore } from '@/stores/chat';
 
 // ============================================================================
 // TEST HELPERS
