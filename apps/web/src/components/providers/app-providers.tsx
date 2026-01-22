@@ -9,8 +9,6 @@ import dynamic from '@/lib/utils/dynamic';
 import { IdleLazyProvider } from '@/lib/utils/lazy-provider';
 import type { ModelPreferencesState } from '@/stores/preferences';
 
-import PostHogProvider from './posthog-provider';
-
 // Lazy-loaded - only shown when app version changes
 const VersionUpdateModal = dynamic(
   () => import('@/components/modals/version-update-modal').then(m => ({ default: m.VersionUpdateModal })),
@@ -41,7 +39,7 @@ type AppProvidersProps = {
  * Note: QueryClientProvider is in __root.tsx via router context
  * NuqsAdapter uses tanstack-router adapter for URL state sync
  *
- * PostHog loaded synchronously for toolbar authorization support
+ * PostHog loaded via IdleLazyProvider after browser idle for optimization
  */
 export function AppProviders({
   children,
@@ -66,7 +64,10 @@ export function AppProviders({
             loader={() => import('./service-worker-provider').then(m => ({ default: m.ServiceWorkerProvider }))}
             providerProps={{ children: null }}
           >
-            <PostHogProvider apiKey={env.VITE_POSTHOG_API_KEY}>
+            <IdleLazyProvider<{ children: ReactNode; apiKey?: string }>
+              loader={() => import('./posthog-provider').then(m => ({ default: m.default }))}
+              providerProps={{ children: null, apiKey: env.VITE_POSTHOG_API_KEY }}
+            >
               <IdleLazyProvider<{ initialState?: ModelPreferencesState | null; children: ReactNode }>
                 loader={() => import('./preferences-store-provider').then(m => ({ default: m.PreferencesStoreProvider }))}
                 providerProps={{
@@ -76,7 +77,7 @@ export function AppProviders({
               >
                 {env.VITE_MAINTENANCE === 'true' ? <MaintenanceMessage /> : children}
               </IdleLazyProvider>
-            </PostHogProvider>
+            </IdleLazyProvider>
           </IdleLazyProvider>
           <VersionUpdateModal />
           <Toaster />

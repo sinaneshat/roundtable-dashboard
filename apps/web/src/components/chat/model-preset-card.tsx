@@ -1,9 +1,10 @@
 import type { SubscriptionTier } from '@roundtable/shared';
+import { SUBSCRIPTION_TIER_NAMES } from '@roundtable/shared';
 import { memo, useMemo } from 'react';
 
 import { ModelAvatarWithRole } from '@/components/chat/model-avatar-with-role';
 import { Icons } from '@/components/icons';
-import { canAccessPreset, SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
+import { canAccessPreset } from '@/lib/config';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';
 import { cn } from '@/lib/ui/cn';
 import type { Model } from '@/services/api';

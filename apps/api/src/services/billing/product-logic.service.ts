@@ -5,6 +5,7 @@
  * All tier-specific values defined in TIER_CONFIG with compile-time type safety.
  */
 
+import { CREDIT_CONFIG, SUBSCRIPTION_TIER_NAMES } from '@roundtable/shared';
 import type { ChatMode, ModelCostCategory, ModelPricingTier, SubscriptionTier } from '@roundtable/shared/enums';
 import {
   ChatModes,
@@ -19,7 +20,6 @@ import {
 } from '@roundtable/shared/enums';
 import * as z from 'zod';
 
-import { CREDIT_CONFIG, SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 // Direct import to avoid barrel export pulling in server-only slug-generator.service.ts
 import { TITLE_GENERATION_PROMPT } from '@/services/prompts/prompts.service';
 

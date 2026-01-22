@@ -5,6 +5,7 @@
  * and tier access logic.
  */
 
+import { CREDIT_CONFIG, SUBSCRIPTION_TIER_NAMES } from '@roundtable/shared';
 import type { SubscriptionTier } from '@roundtable/shared/enums';
 import { SubscriptionTiers } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
@@ -15,7 +16,6 @@ import {
   canAccessByTier,
   canAccessModelByPricing,
   costPerMillion,
-  CREDIT_CONFIG,
   creditsToTokens,
   estimateStreamingCredits,
   estimateWeightedCredits,
@@ -34,7 +34,6 @@ import {
   MAX_MODELS_BY_TIER,
   MAX_OUTPUT_TOKENS_BY_TIER,
   parsePrice,
-  SUBSCRIPTION_TIER_NAMES,
   TIER_CONFIG,
   TIER_QUOTAS,
   tokensToCredits,

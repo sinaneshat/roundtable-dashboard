@@ -14,11 +14,11 @@
  * - Default/fallback plan behavior
  */
 
+import { CREDIT_CONFIG, PLAN_NAMES } from '@roundtable/shared';
 import type { PlanType, SubscriptionTier } from '@roundtable/shared/enums';
 import { PlanTypes, SubscriptionTiers } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
 
-import { CREDIT_CONFIG, PLAN_NAMES } from '@/lib/config';
 import type { TierConfiguration } from '@/services/billing';
 import {
   canAccessByTier,

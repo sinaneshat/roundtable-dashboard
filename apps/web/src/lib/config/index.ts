@@ -9,21 +9,18 @@
  */
 
 // Base URLs configuration (non-context-dependent utilities only)
-export type { WebappEnv } from './base-urls';
+// For WebAppEnv types/schemas, import directly from @roundtable/shared/enums
 export {
-  BASE_URL_CONFIG,
-  DEFAULT_WEBAPP_ENV,
   getApiBaseUrl,
+  getApiOriginUrl,
+  getApiOriginWithFallback,
   getApiUrlAsync,
   getAppBaseUrl,
   getBaseUrls,
   getProductionApiUrl,
   getWebappEnv,
   getWebappEnvAsync,
-  isWebappEnv,
-  WEBAPP_ENVS,
-  WebAppEnvs,
-  WebappEnvSchema,
+  isPrerender,
 } from './base-urls';
 
 // Chat modes UI configuration
@@ -95,11 +92,4 @@ export {
   PROMPT_POOL,
 } from './quick-start-config';
 
-// Role prompts, credit configuration, and tier names (re-exported from shared package)
-export {
-  createRoleSystemPrompt,
-  CREDIT_CONFIG,
-  getTierDisplayName,
-  PLAN_NAMES,
-  SUBSCRIPTION_TIER_NAMES,
-} from '@roundtable/shared';
+// Role prompts, credit configuration, and tier names: import directly from @roundtable/shared

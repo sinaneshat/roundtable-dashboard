@@ -5,11 +5,11 @@
  * Tests free tier limits, paid tier refills, upgrades, downgrades, and tier-specific features.
  */
 
+import { CREDIT_CONFIG } from '@roundtable/shared';
 import type { PlanType } from '@roundtable/shared/enums';
 import { PlanTypes, SubscriptionTiers } from '@roundtable/shared/enums';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { CREDIT_CONFIG } from '@/lib/config';
 import { TIER_CONFIG } from '@/services/billing';
 
 // ============================================================================

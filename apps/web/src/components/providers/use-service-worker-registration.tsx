@@ -1,6 +1,7 @@
+import { WebAppEnvs } from '@roundtable/shared/enums';
 import { useCallback, useEffect, useState } from 'react';
 
-import { getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
+import { getWebappEnv } from '@/lib/config/base-urls';
 
 export type ServiceWorkerRegistrationState = {
   updateAvailable: boolean;

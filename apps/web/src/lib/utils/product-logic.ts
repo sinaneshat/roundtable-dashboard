@@ -8,9 +8,7 @@
  */
 
 import type { SubscriptionTier } from '@roundtable/shared';
-import { SubscriptionTiers } from '@roundtable/shared';
-
-import { CREDIT_CONFIG } from '@/lib/config';
+import { CREDIT_CONFIG, SubscriptionTiers } from '@roundtable/shared';
 
 type TierConfiguration = {
   name: string;

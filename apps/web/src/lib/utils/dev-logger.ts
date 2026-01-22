@@ -1,7 +1,8 @@
 import type { DebugData, DevLogLevel, RlogCategory, RlogStreamAction } from '@roundtable/shared';
 import { DevLogLevels, RLOG_CATEGORY_STYLES, RlogCategories } from '@roundtable/shared';
+import { WebAppEnvs } from '@roundtable/shared/enums';
 
-import { getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
+import { getWebappEnv } from '@/lib/config/base-urls';
 
 import { safeStorageRemove, safeStorageSet } from './safe-storage';
 

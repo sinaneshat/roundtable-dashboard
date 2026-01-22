@@ -11,11 +11,11 @@
  * Pattern: Extract customerId → Sync from Stripe API → Update database
  */
 
+import { CREDIT_CONFIG } from '@roundtable/shared';
 import type { StripeSubscriptionStatus } from '@roundtable/shared/enums';
 import { StripeSubscriptionStatuses } from '@roundtable/shared/enums';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { CREDIT_CONFIG } from '@/lib/config';
 import type {
   MockStripeEvent,
   MockStripeInvoice,

@@ -1,8 +1,7 @@
+import { CREDIT_CONFIG } from '@roundtable/shared';
 import type { PlanType, StripeSubscriptionStatus } from '@roundtable/shared/enums';
 import { CreditActions, CreditTransactionTypes, StripeSubscriptionStatuses, SubscriptionTiers } from '@roundtable/shared/enums';
 import { beforeEach, describe, expect, it } from 'vitest';
-
-import { CREDIT_CONFIG } from '@/lib/config';
 
 type MockUserCreditBalance = {
   id: string;

@@ -1,4 +1,5 @@
 import type { RouteHandler } from '@hono/zod-openapi';
+import { SUBSCRIPTION_TIER_NAMES } from '@roundtable/shared';
 import type { ChatMode, ThreadStatus } from '@roundtable/shared/enums';
 import { ChangelogChangeTypes, ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, PlanTypes, SubscriptionTiers, ThreadStatusSchema } from '@roundtable/shared/enums';
 import type { SQL } from 'drizzle-orm';
@@ -31,7 +32,6 @@ import { isModeChange, isWebSearchChange, safeParseChangelogData } from '@/db/sc
 import type {
   ChatCustomRole,
 } from '@/db/validation';
-import { SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { sortByPriority } from '@/lib/utils';

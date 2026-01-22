@@ -23,25 +23,15 @@
  */
 
 import {
-  BASE_URL_CONFIG,
   FALLBACK_URLS,
-  getApiOrigin as sharedGetApiOrigin,
-  getApiUrl as sharedGetApiUrl,
-  getAppUrl as sharedGetAppUrl,
-  getUrlConfig as sharedGetUrlConfig,
-  resolveApiOriginFromHostname, // eslint-disable-line perfectionist/sort-named-imports -- keep with other getters
+  getApiOrigin,
+  getApiUrl,
+  getAppUrl,
+  getUrlConfig,
+  resolveApiOriginFromHostname,
 } from '@roundtable/shared';
-import type { WebAppEnv as WebappEnv } from '@roundtable/shared/enums';
-import {
-  DEFAULT_WEBAPP_ENV,
-  isWebAppEnv as isWebappEnv,
-  WEBAPP_ENVS,
-  WebAppEnvs,
-  WebAppEnvSchema as WebappEnvSchema,
-} from '@roundtable/shared/enums';
-
-// Re-export for local usage - no renames, single source of truth
-export { BASE_URL_CONFIG, DEFAULT_WEBAPP_ENV, FALLBACK_URLS, isWebappEnv, resolveApiOriginFromHostname, WEBAPP_ENVS, type WebappEnv, WebAppEnvs, WebappEnvSchema };
+import type { WebAppEnv } from '@roundtable/shared/enums';
+import { WebAppEnvs, WebAppEnvSchema } from '@roundtable/shared/enums';
 
 /**
  * Check if we're in a prerender/SSG build context.
@@ -49,8 +39,6 @@ export { BASE_URL_CONFIG, DEFAULT_WEBAPP_ENV, FALLBACK_URLS, isWebappEnv, resolv
  * can't resolve production DNS. We detect this and return localhost URLs instead.
  *
  * Detection: SSR context (no window) + NOT on Cloudflare Workers runtime
- *
- * ✅ TYPE-SAFE: Uses in-operator for globalThis property access
  */
 export function isPrerender(): boolean {
   // Client-side: never prerender
@@ -59,79 +47,47 @@ export function isPrerender(): boolean {
 
   // SSR during prerender: check if we're in a build context
   // Cloudflare Workers have globalThis.caches, Node.js build context doesn't
-  let isCloudflareWorkers = false;
-  if (typeof globalThis !== 'undefined' && 'caches' in globalThis) {
-    // After in-operator check, use indexed access for type-safe property access
-    const caches = (globalThis as { caches?: unknown }).caches;
-    isCloudflareWorkers = typeof caches === 'object' && caches !== null;
-  }
+  const hasGlobalCaches = typeof globalThis !== 'undefined'
+    && 'caches' in globalThis
+    && typeof globalThis.caches === 'object'
+    && globalThis.caches !== null;
 
   // If we're in SSR but NOT on Cloudflare Workers, we're likely in prerender/build
-  return !isCloudflareWorkers;
+  return !hasGlobalCaches;
 }
 
 /**
  * Detect current environment (async version for server functions)
  * Uses same logic as getWebappEnv() - see that function for priority docs.
  */
-export async function getWebappEnvAsync(): Promise<WebappEnv> {
-  // Delegate to sync version - same logic applies
+export async function getWebappEnvAsync(): Promise<WebAppEnv> {
   return getWebappEnv();
 }
 
 /**
- * Detect environment from hostname (client-side)
- * Most reliable detection method as it can't be misconfigured
+ * Detect current environment (synchronous)
+ *
+ * Uses official TanStack Start / Vite patterns:
+ * - Client: import.meta.env.VITE_WEBAPP_ENV (Vite build-time replacement)
+ * - Server: process.env.VITE_WEBAPP_ENV (from cloudflare:workers or Node.js)
+ *
+ * @see https://tanstack.com/start/latest/docs/framework/react/guide/environment-variables
+ * @see https://vite.dev/guide/env-and-mode
  */
-function detectEnvFromHostname(): WebappEnv {
-  if (typeof window === 'undefined')
-    return WebAppEnvs.PROD;
-
-  const hostname = window.location.hostname;
-  if (hostname === 'localhost' || hostname === '127.0.0.1') {
-    return WebAppEnvs.LOCAL;
-  }
-  if (hostname.includes('preview') || hostname.includes('-preview')) {
-    return WebAppEnvs.PREVIEW;
-  }
-  return WebAppEnvs.PROD;
-}
-
-/**
- * Detect current environment (synchronous - for client-side and non-async contexts)
- *
- * CLIENT-SIDE Priority (hostname is most reliable):
- * 1. Hostname detection (can't be misconfigured)
- *
- * SERVER-SIDE Priority:
- * 1. import.meta.env.VITE_WEBAPP_ENV (Vite build-time replacement)
- * 2. process.env.VITE_WEBAPP_ENV (SSR/CF Workers fallback)
- * 3. NODE_ENV detection (development = local, production = prod)
- *
- * NOTE: Build-time env vars can be incorrect if build env differs from deploy env.
- * Client-side hostname detection is always accurate.
- */
-export function getWebappEnv(): WebappEnv {
-  // CLIENT-SIDE: Use hostname detection (most reliable, can't be misconfigured)
-  if (typeof window !== 'undefined') {
-    return detectEnvFromHostname();
+export function getWebappEnv(): WebAppEnv {
+  // Check import.meta.env (Vite build-time replacement - works client & server)
+  const viteEnvResult = WebAppEnvSchema.safeParse(import.meta.env?.VITE_WEBAPP_ENV);
+  if (viteEnvResult.success) {
+    return viteEnvResult.data;
   }
 
-  // SERVER-SIDE: Try env vars, fall back to NODE_ENV detection
-
-  // 1. Check import.meta.env (Vite build-time replacement)
-  const viteEnv = import.meta.env?.VITE_WEBAPP_ENV;
-  if (viteEnv && isWebappEnv(viteEnv)) {
-    return viteEnv;
+  // Check process.env (server-side fallback)
+  const processEnvResult = WebAppEnvSchema.safeParse(process.env.VITE_WEBAPP_ENV);
+  if (processEnvResult.success) {
+    return processEnvResult.data;
   }
 
-  // 2. Check process.env (SSR/CF Workers fallback)
-  const processEnv = process.env.VITE_WEBAPP_ENV;
-  if (processEnv && isWebappEnv(processEnv)) {
-    return processEnv;
-  }
-
-  // 3. Fall back to NODE_ENV detection
+  // Fall back to NODE_ENV detection
   return import.meta.env.MODE === 'development'
     ? WebAppEnvs.LOCAL
     : WebAppEnvs.PROD;
@@ -143,7 +99,7 @@ export function getWebappEnv(): WebappEnv {
  */
 export function getBaseUrls() {
   const env = getWebappEnv();
-  return sharedGetUrlConfig(env);
+  return getUrlConfig(env);
 }
 
 /**
@@ -171,12 +127,12 @@ export function getApiBaseUrl(): string {
   // Prerender/SSG: use localhost to avoid DNS failures for external domains
   // Static pages shouldn't make API calls anyway (handled by isStaticRoute check)
   if (isPrerender()) {
-    return sharedGetApiUrl(WebAppEnvs.LOCAL);
+    return getApiUrl(WebAppEnvs.LOCAL);
   }
 
   // Server-side: use full backend URL for direct access
   const env = getWebappEnv();
-  return sharedGetApiUrl(env);
+  return getApiUrl(env);
 }
 
 /**
@@ -184,7 +140,7 @@ export function getApiBaseUrl(): string {
  */
 export function getAppBaseUrl(): string {
   const env = getWebappEnv();
-  return sharedGetAppUrl(env);
+  return getAppUrl(env);
 }
 
 /**
@@ -193,7 +149,7 @@ export function getAppBaseUrl(): string {
  */
 export function getApiOriginUrl(): string {
   const env = getWebappEnv();
-  return sharedGetApiOrigin(env);
+  return getApiOrigin(env);
 }
 
 /**
@@ -203,7 +159,7 @@ export function getApiOriginUrl(): string {
 export function getApiOriginWithFallback(requestHost?: string): string {
   try {
     const env = getWebappEnv();
-    const config = sharedGetUrlConfig(env);
+    const config = getUrlConfig(env);
     if (config?.apiOrigin) {
       return config.apiOrigin;
     }
@@ -231,10 +187,10 @@ export function getProductionApiUrl(): string {
 
   if (currentEnv === WebAppEnvs.LOCAL && import.meta.env.MODE === 'production') {
     // Building for production but env is local - use preview API
-    return sharedGetApiUrl(WebAppEnvs.PREVIEW);
+    return getApiUrl(WebAppEnvs.PREVIEW);
   }
 
-  return sharedGetApiUrl(currentEnv);
+  return getApiUrl(currentEnv);
 }
 
 /**
@@ -252,5 +208,5 @@ export async function getApiUrlAsync(): Promise<string> {
 
   // Server-side: use full backend URL
   const currentEnv = await getWebappEnvAsync();
-  return sharedGetApiUrl(currentEnv);
+  return getApiUrl(currentEnv);
 }

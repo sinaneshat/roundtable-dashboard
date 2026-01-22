@@ -1,10 +1,11 @@
+import { WebAppEnvs } from '@roundtable/shared/enums';
 import type { ErrorInfo, ReactNode } from 'react';
 import { Component } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
+import { getWebappEnv } from '@/lib/config/base-urls';
 
 /**
  * Check if PostHog is available for tracking

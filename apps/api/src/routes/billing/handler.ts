@@ -1,4 +1,5 @@
 import type { RouteHandler } from '@hono/zod-openapi';
+import { BASE_URL_CONFIG } from '@roundtable/shared';
 import { isActiveSubscriptionStatus, PlanTypes, PurchaseTypes, StripeBillingReasons, StripeProratioBehaviors, StripeSubscriptionStatuses, SubscriptionTiers } from '@roundtable/shared/enums';
 import { and, eq } from 'drizzle-orm';
 import type Stripe from 'stripe';
@@ -11,7 +12,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { PriceCacheTags, ProductCacheTags, STATIC_CACHE_TAGS } from '@/db/cache/cache-tags';
 import { revenueTracking } from '@/lib/analytics';
-import { BASE_URLS, getWebappEnvFromContext } from '@/lib/config/base-urls';
+import { getWebappEnvFromContext } from '@/lib/config/base-urls';
 import { STRIPE_WEBHOOK_EVENT_TYPES, StripeWebhookEventTypes } from '@/lib/enums';
 import { isObject } from '@/lib/utils';
 import { cacheCustomerId, getCustomerIdByUserId, getUserCreditBalance, hasSyncedSubscription, stripeService, syncStripeDataFromStripe } from '@/services/billing';
@@ -287,7 +288,7 @@ export const createCheckoutSessionHandler: RouteHandler<typeof createCheckoutSes
         customerId = cachedCustomerId;
       }
 
-      const urls = BASE_URLS[getWebappEnvFromContext(c)];
+      const urls = BASE_URL_CONFIG[getWebappEnvFromContext(c)];
       if (!urls) {
         throw createError.internal('Environment configuration not found', ErrorContextBuilders.validation('WEBAPP_ENV'));
       }
@@ -350,7 +351,7 @@ export const createCustomerPortalSessionHandler: RouteHandler<typeof createCusto
         throw createError.badRequest('No Stripe customer found for this user. Please create a subscription first.', ErrorContextBuilders.resourceNotFound('customer', undefined, user.id));
       }
 
-      const urls = BASE_URLS[getWebappEnvFromContext(c)];
+      const urls = BASE_URL_CONFIG[getWebappEnvFromContext(c)];
       if (!urls) {
         throw createError.internal('Environment configuration not found', ErrorContextBuilders.validation('WEBAPP_ENV'));
       }

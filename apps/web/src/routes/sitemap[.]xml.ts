@@ -11,9 +11,10 @@
  * - Easy to extend with dynamic routes from database
  */
 
+import { WebAppEnvs } from '@roundtable/shared/enums';
 import { createFileRoute } from '@tanstack/react-router';
 
-import { getAppBaseUrl, getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
+import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
 
 type SitemapRoute = {
   path: string;

@@ -14,10 +14,10 @@
  * - Downgrade to free preserves remaining credits but stops monthly refills
  */
 
+import { CREDIT_CONFIG } from '@roundtable/shared';
 import { PlanTypes, SubscriptionTiers } from '@roundtable/shared/enums';
 import { beforeEach, describe, expect, it } from 'vitest';
 
-import { CREDIT_CONFIG } from '@/lib/config';
 import { TIER_CONFIG } from '@/services/billing';
 
 // ============================================================================

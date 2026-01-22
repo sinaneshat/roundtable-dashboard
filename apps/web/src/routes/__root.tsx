@@ -1,6 +1,7 @@
 import '../styles/globals.css';
 
 import { BRAND } from '@roundtable/shared';
+import { WebAppEnvs } from '@roundtable/shared/enums';
 import type { ErrorComponentProps } from '@tanstack/react-router';
 import {
   createRootRouteWithContext,
@@ -13,12 +14,11 @@ import type { ReactNode } from 'react';
 import { useEffect, useRef } from 'react';
 
 import { Icons } from '@/components/icons';
-import PostHogProvider from '@/components/providers/posthog-provider';
 import { StructuredData } from '@/components/seo';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getCachedSession, setCachedSession } from '@/lib/auth/session-cache';
-import { getAppBaseUrl, getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
+import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
 import { TurnstileProvider } from '@/lib/turnstile';
 import { IdleLazyProvider } from '@/lib/utils/lazy-provider';
 import type { RouterContext } from '@/router';
@@ -167,14 +167,17 @@ function RootDocument({ children, env = DEFAULT_PUBLIC_ENV }: { children: ReactN
           Skip to main content
         </a>
         <TurnstileProvider>
-          {/* Non-critical analytics and PWA providers - loaded after first render */}
+          {/* Non-critical analytics and PWA providers - loaded after browser idle */}
           <IdleLazyProvider<{ children: ReactNode }>
             loader={() => import('@/components/providers/service-worker-provider').then(m => ({ default: m.ServiceWorkerProvider }))}
             providerProps={{ children: null }}
           >
-            <PostHogProvider apiKey={env.VITE_POSTHOG_API_KEY}>
+            <IdleLazyProvider<{ children: ReactNode; apiKey?: string }>
+              loader={() => import('@/components/providers/posthog-provider').then(m => ({ default: m.default }))}
+              providerProps={{ children: null, apiKey: env.VITE_POSTHOG_API_KEY }}
+            >
               {children}
-            </PostHogProvider>
+            </IdleLazyProvider>
           </IdleLazyProvider>
         </TurnstileProvider>
         <StructuredData type="WebApplication" />

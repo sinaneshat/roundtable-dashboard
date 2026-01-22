@@ -11,9 +11,10 @@
  * - CDN cacheable
  */
 
+import { WebAppEnvs } from '@roundtable/shared/enums';
 import { createFileRoute } from '@tanstack/react-router';
 
-import { getAppBaseUrl, getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
+import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
 
 function generateRobotsTxt(): string {
   const env = getWebappEnv();

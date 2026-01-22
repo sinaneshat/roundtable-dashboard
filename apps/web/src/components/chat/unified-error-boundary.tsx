@@ -1,12 +1,13 @@
 import type { ErrorBoundaryContext } from '@roundtable/shared';
 import { ErrorBoundaryContexts } from '@roundtable/shared';
+import { WebAppEnvs } from '@roundtable/shared/enums';
 import type { ErrorInfo, ReactNode } from 'react';
 import React, { Component } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
-import { getWebappEnv, WebAppEnvs } from '@/lib/config/base-urls';
+import { getWebappEnv } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
 
 /**

@@ -12,5 +12,4 @@ export * from './stripe-sync-schemas';
 export * from './stripe-sync.service';
 export * from './stripe.service';
 
-// Re-export billing-related config from lib/config
-export { CREDIT_CONFIG, SUBSCRIPTION_TIER_NAMES } from '@/lib/config';
+// For CREDIT_CONFIG, SUBSCRIPTION_TIER_NAMES, import directly from @roundtable/shared

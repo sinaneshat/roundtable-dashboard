@@ -13,10 +13,10 @@
  * 6. Rollback on failure (error handling)
  */
 
+import { CREDIT_CONFIG } from '@roundtable/shared';
 import { CreditActions, CreditTransactionTypes, ModelPricingTiers } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
 
-import { CREDIT_CONFIG } from '@/lib/config';
 import type { ModelForPricing } from '@/services/billing';
 import {
   calculateBaseCredits,
