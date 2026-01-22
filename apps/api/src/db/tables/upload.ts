@@ -17,7 +17,7 @@
  * - Clean separation of concerns
  */
 
-import { CHAT_ATTACHMENT_STATUSES } from '@roundtable/shared/enums';
+import { CHAT_ATTACHMENT_STATUSES, DEFAULT_CHAT_ATTACHMENT_STATUS } from '@roundtable/shared/enums';
 import { relations } from 'drizzle-orm';
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
@@ -52,7 +52,7 @@ export const upload = sqliteTable('upload', {
   mimeType: text('mime_type').notNull(), // MIME type: "application/pdf", "image/png"
   status: text('status', { enum: CHAT_ATTACHMENT_STATUSES })
     .notNull()
-    .default('uploaded'),
+    .default(DEFAULT_CHAT_ATTACHMENT_STATUS),
 
   // Processing metadata (for AI/extraction)
   metadata: text('metadata', { mode: 'json' }).$type<UploadMetadata>(),

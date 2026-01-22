@@ -9,6 +9,8 @@ import dynamic from '@/lib/utils/dynamic';
 import { IdleLazyProvider } from '@/lib/utils/lazy-provider';
 import type { ModelPreferencesState } from '@/stores/preferences';
 
+import PostHogProvider from './posthog-provider';
+
 // Lazy-loaded - only shown when app version changes
 const VersionUpdateModal = dynamic(
   () => import('@/components/modals/version-update-modal').then(m => ({ default: m.VersionUpdateModal })),
@@ -39,10 +41,7 @@ type AppProvidersProps = {
  * Note: QueryClientProvider is in __root.tsx via router context
  * NuqsAdapter uses tanstack-router adapter for URL state sync
  *
- * Performance Optimization:
- * - Critical providers (I18n, ErrorBoundary): Loaded synchronously
- * - Non-critical providers (PostHog, ServiceWorker, Preferences): Lazy-loaded after idle
- * - This reduces initial bundle size and improves Time to Interactive
+ * PostHog loaded synchronously for toolbar authorization support
  */
 export function AppProviders({
   children,
@@ -67,13 +66,9 @@ export function AppProviders({
             loader={() => import('./service-worker-provider').then(m => ({ default: m.ServiceWorkerProvider }))}
             providerProps={{ children: null }}
           >
-            <IdleLazyProvider<{ apiKey?: string; environment?: string; children: ReactNode }>
-              loader={() => import('./posthog-provider')}
-              providerProps={{
-                apiKey: env.VITE_POSTHOG_API_KEY,
-                environment: env.VITE_WEBAPP_ENV,
-                children: null,
-              }}
+            <PostHogProvider
+              apiKey={env.VITE_POSTHOG_API_KEY}
+              environment={env.VITE_WEBAPP_ENV}
             >
               <IdleLazyProvider<{ initialState?: ModelPreferencesState | null; children: ReactNode }>
                 loader={() => import('./preferences-store-provider').then(m => ({ default: m.PreferencesStoreProvider }))}
@@ -84,7 +79,7 @@ export function AppProviders({
               >
                 {env.VITE_MAINTENANCE === 'true' ? <MaintenanceMessage /> : children}
               </IdleLazyProvider>
-            </IdleLazyProvider>
+            </PostHogProvider>
           </IdleLazyProvider>
           <VersionUpdateModal />
           <Toaster />

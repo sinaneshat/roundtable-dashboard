@@ -5,6 +5,8 @@
  * Shows a blinking cursor during delete and type phases.
  */
 
+import { useShallow } from 'zustand/react/shallow';
+
 import { useChatStore } from '@/components/providers/chat-store-provider/context';
 
 type TypewriterTitleProps = {
@@ -13,9 +15,13 @@ type TypewriterTitleProps = {
 };
 
 export function TypewriterTitle({ threadId, currentTitle }: TypewriterTitleProps) {
-  const animatingThreadId = useChatStore(s => s.animatingThreadId);
-  const animationPhase = useChatStore(s => s.animationPhase);
-  const displayedTitle = useChatStore(s => s.displayedTitle);
+  const { animatingThreadId, animationPhase, displayedTitle } = useChatStore(
+    useShallow(s => ({
+      animatingThreadId: s.animatingThreadId,
+      animationPhase: s.animationPhase,
+      displayedTitle: s.displayedTitle,
+    })),
+  );
 
   // Not animating this thread - show current title
   if (animatingThreadId !== threadId) {

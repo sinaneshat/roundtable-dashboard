@@ -2,6 +2,8 @@ import {
   CHANGELOG_TYPES,
   CHAT_MODES,
   DEFAULT_CHAT_MODE,
+  DEFAULT_MESSAGE_STATUS,
+  DEFAULT_THREAD_STATUS,
   FEEDBACK_TYPES,
   MESSAGE_ROLES,
   MESSAGE_STATUSES,
@@ -50,7 +52,7 @@ export const chatThread = sqliteTable('chat_thread', {
     .default(DEFAULT_CHAT_MODE),
   status: text('status', { enum: THREAD_STATUSES })
     .notNull()
-    .default('active'),
+    .default(DEFAULT_THREAD_STATUS),
   isFavorite: integer('is_favorite', { mode: 'boolean' })
     .notNull()
     .default(false), // User can mark threads as favorites
@@ -349,7 +351,7 @@ export const chatPreSearch = sqliteTable('chat_pre_search', {
   // Uses MESSAGE_STATUSES for consistency (pending/streaming/completed/failed)
   status: text('status', { enum: MESSAGE_STATUSES })
     .notNull()
-    .default('pending'), // pending -> streaming -> completed/failed
+    .default(DEFAULT_MESSAGE_STATUS), // pending -> streaming -> completed/failed
   // Store the full search results as JSON
   // ✅ NULLABLE: Only populated once search completes successfully
   // ✅ TAVILY-ENHANCED: Includes images, auto-parameters, enhanced metadata

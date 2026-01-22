@@ -20,7 +20,6 @@ export { useCreditEstimation } from './use-credit-estimation';
 export { useCurrentPathname } from './use-current-pathname';
 export type { UseDebouncedValueReturn } from './use-debounced-value';
 export { useDebouncedValue } from './use-debounced-value';
-export { useDeferredSessionRecording } from './use-deferred-session-recording';
 export type { UseDragDropReturn } from './use-drag-drop';
 export { useDragDrop } from './use-drag-drop';
 export type { UseDragEdgeScrollOptions, UseDragEdgeScrollReturn } from './use-drag-edge-scroll';

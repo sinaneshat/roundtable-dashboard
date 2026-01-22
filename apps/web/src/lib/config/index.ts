@@ -95,11 +95,11 @@ export {
   PROMPT_POOL,
 } from './quick-start-config';
 
-// Tier names configuration
+// Role prompts, credit configuration, and tier names (re-exported from shared package)
 export {
+  createRoleSystemPrompt,
+  CREDIT_CONFIG,
   getTierDisplayName,
+  PLAN_NAMES,
   SUBSCRIPTION_TIER_NAMES,
-} from './tier-names';
-
-// Role prompts and credit configuration (re-exported from shared package)
-export { createRoleSystemPrompt, CREDIT_CONFIG, PLAN_NAMES } from '@roundtable/shared';
+} from '@roundtable/shared';

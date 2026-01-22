@@ -1,4 +1,4 @@
-import { SUBSCRIPTION_TIERS } from '@roundtable/shared/enums';
+import { DEFAULT_SUBSCRIPTION_TIER, SUBSCRIPTION_TIERS } from '@roundtable/shared/enums';
 import { relations, sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
@@ -52,7 +52,7 @@ export const userChatUsage = sqliteTable(
       enum: SUBSCRIPTION_TIERS,
     })
       .notNull()
-      .default('free'),
+      .default(DEFAULT_SUBSCRIPTION_TIER),
 
     // Billing frequency affects some quota calculations
     isAnnual: integer('is_annual', { mode: 'boolean' }).notNull().default(false),

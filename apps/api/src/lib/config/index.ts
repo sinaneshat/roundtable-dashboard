@@ -46,14 +46,13 @@ export {
   ParticipantSettingsSchema,
 } from './participant-settings';
 
-// Tier names configuration
-export {
-  getTierDisplayName,
-  SUBSCRIPTION_TIER_NAMES,
-} from './tier-names';
-
 // Credit configuration (re-exported from shared package)
-export { CREDIT_CONFIG, PLAN_NAMES } from '@roundtable/shared';
+export {
+  CREDIT_CONFIG,
+  getTierDisplayName,
+  PLAN_NAMES,
+  SUBSCRIPTION_TIER_NAMES,
+} from '@roundtable/shared';
 
 // Role prompts configuration (re-exported from shared package)
 export { createRoleSystemPrompt } from '@roundtable/shared';
