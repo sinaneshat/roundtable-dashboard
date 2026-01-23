@@ -7,6 +7,9 @@
   "upload_source_maps": true,
   "main": "@tanstack/react-start/server-entry",
   "workers_dev": false,
+  "placement": {
+    "mode": "smart"
+  },
   "observability": {
     "enabled": true
   },
@@ -27,6 +30,7 @@
     "preview": {
       "name": "roundtable-web-preview",
       "workers_dev": false,
+      "placement": { "mode": "smart" },
       "upload_source_maps": true,
       "observability": {
         "enabled": true,
@@ -52,6 +56,7 @@
     "production": {
       "name": "roundtable-web-prod",
       "workers_dev": false,
+      "placement": { "mode": "smart" },
       "upload_source_maps": false,
       "observability": {
         "enabled": true,

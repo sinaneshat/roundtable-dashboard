@@ -61,17 +61,20 @@ function ImpersonatePage() {
       return;
 
     isImpersonating.onTrue();
-    try {
-      await authClient.admin.impersonateUser({
-        userId: selectedUser.id,
-      });
-      // Full page refresh to clear all caches
-      const baseUrl = getAppBaseUrl();
-      window.location.href = `${baseUrl}/chat`;
-    } catch (error) {
-      showApiErrorToast('Impersonation Failed', error);
-      isImpersonating.onFalse();
-    }
+    const baseUrl = getAppBaseUrl();
+
+    await authClient.admin.impersonateUser({
+      userId: selectedUser.id,
+      fetchOptions: {
+        onSuccess: () => {
+          window.location.href = `${baseUrl}/chat`;
+        },
+        onError: (ctx) => {
+          showApiErrorToast('Impersonation Failed', ctx.error);
+          isImpersonating.onFalse();
+        },
+      },
+    });
   };
 
   const getUserInitials = (user: UserResult) => {
@@ -214,8 +217,8 @@ function ImpersonatePage() {
                 disabled={isImpersonating.value}
                 loading={isImpersonating.value}
               >
-                <Icons.userCheck className="size-4 mr-2" />
-                {t('admin.impersonate.impersonateButton')}
+                {!isImpersonating.value && <Icons.userCheck className="size-4 mr-2" />}
+                {isImpersonating.value ? t('admin.impersonate.switching') : t('admin.impersonate.impersonateButton')}
               </Button>
             </div>
           )}
