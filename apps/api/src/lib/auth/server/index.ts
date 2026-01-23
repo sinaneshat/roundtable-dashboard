@@ -373,6 +373,7 @@ function createAuth() {
         defaultRole: 'user',
         adminRole: 'admin',
         impersonationSessionDuration: 60 * 60, // 1 hour
+        allowImpersonatingAdmins: true, // Allow admins to impersonate other admins
       }),
     ],
   });
