@@ -24,6 +24,8 @@ export {
 // ============================================================================
 
 export {
+  type ClearOwnCacheResponse,
+  clearOwnCacheService,
   type CreateApiKeyRequest,
   type CreateApiKeyResponse,
   createApiKeyService,

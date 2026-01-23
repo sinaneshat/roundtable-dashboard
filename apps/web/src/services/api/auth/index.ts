@@ -25,3 +25,7 @@ export {
   type UpdateApiKeyResponse,
   updateApiKeyService,
 } from './api-keys';
+export {
+  type ClearOwnCacheResponse,
+  clearOwnCacheService,
+} from './clear-cache';

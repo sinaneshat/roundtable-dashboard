@@ -1,6 +1,7 @@
 import { StripeSubscriptionStatuses, SubscriptionTiers } from '@roundtable/shared';
 import { WebAppEnvs } from '@roundtable/shared/enums';
-import { Link, useNavigate } from '@tanstack/react-router';
+import { useQueryClient } from '@tanstack/react-query';
+import { Link } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
 
 import type { CancelSubscriptionDialogProps } from '@/components/chat/cancel-subscription-dialog';
@@ -23,13 +24,14 @@ import {
   useSubscriptionsQuery,
 } from '@/hooks';
 import { useBoolean } from '@/hooks/utils';
-import { clearCachedSession } from '@/lib/auth';
+import { clearAllAuthCaches, clearCachedSession } from '@/lib/auth';
 import { authClient, deleteUser, signOut, useSession } from '@/lib/auth/client';
 import type { Session, User } from '@/lib/auth/types';
 import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
 import { showApiErrorToast } from '@/lib/toast';
 import dynamic from '@/lib/utils/dynamic';
+import { clearOwnCacheService } from '@/services/api';
 import type { Subscription } from '@/services/api/billing/subscriptions';
 
 const CancelSubscriptionDialog = dynamic<CancelSubscriptionDialogProps>(
@@ -54,7 +56,7 @@ type NavUserProps = {
 
 export function NavUser({ initialSession }: NavUserProps) {
   const { data: clientSession } = useSession();
-  const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const t = useTranslations();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const { data: subscriptionsData } = useSubscriptionsQuery();
@@ -92,12 +94,23 @@ export function NavUser({ initialSession }: NavUserProps) {
     (sub: Subscription) => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
   const handleSignOut = async () => {
-    // Clear cached session before signing out to ensure fresh auth check on next login
+    // Clear server-side caches FIRST (while still authenticated)
+    try {
+      await clearOwnCacheService();
+    } catch {
+      // Ignore server cache clear errors - still proceed with sign out
+    }
+
+    // Clear client-side caches
     clearCachedSession();
+    clearAllAuthCaches(queryClient);
+
+    // Sign out and redirect
     await signOut({
       fetchOptions: {
         onSuccess: () => {
-          navigate({ to: '/auth/sign-in' });
+          // Full page navigation to clear any remaining state
+          window.location.href = '/auth/sign-in';
         },
       },
     });
@@ -138,16 +151,28 @@ export function NavUser({ initialSession }: NavUserProps) {
   const handleDeleteAccount = async () => {
     isDeleting.onTrue();
     try {
+      // Clear server-side caches FIRST (while still authenticated)
+      try {
+        await clearOwnCacheService();
+      } catch {
+        // Ignore server cache clear errors - still proceed with delete
+      }
+
       const appBaseUrl = getAppBaseUrl();
       await deleteUser({
         callbackURL: `${appBaseUrl}/auth/sign-in`,
       });
-      // Clear cached session before signing out
+
+      // Clear client-side caches
       clearCachedSession();
+      clearAllAuthCaches(queryClient);
+
+      // Sign out and redirect
       await signOut({
         fetchOptions: {
           onSuccess: () => {
-            navigate({ to: '/auth/sign-in' });
+            // Full page navigation to clear any remaining state
+            window.location.href = '/auth/sign-in';
           },
         },
       });
@@ -166,6 +191,7 @@ export function NavUser({ initialSession }: NavUserProps) {
     isStoppingImpersonation.onTrue();
     const baseUrl = getAppBaseUrl();
 
+    // Better Auth handles session restoration - reads admin_session cookie and restores it
     // First restore admin session, THEN clear cache (need admin perms for cache clear)
     authClient.admin.stopImpersonating({
       fetchOptions: {

@@ -1,4 +1,4 @@
-import type { z } from '@hono/zod-openapi';
+import { z } from '@hono/zod-openapi';
 
 import { userSelectSchema } from '@/db/validation/auth';
 
@@ -28,3 +28,16 @@ export const SecureMePayloadSchema = userSelectSchema
  * Note: Date objects are automatically serialized to ISO strings by Hono/JSON.stringify
  */
 export type SecureMePayload = z.infer<typeof SecureMePayloadSchema>;
+
+/**
+ * Clear own cache response schema
+ * For users to clear their own server-side caches on logout/session change
+ */
+export const ClearOwnCachePayloadSchema = z.object({
+  cleared: z.boolean().openapi({
+    example: true,
+    description: 'Whether cache was cleared successfully',
+  }),
+}).openapi('ClearOwnCachePayload');
+
+export type ClearOwnCachePayload = z.infer<typeof ClearOwnCachePayloadSchema>;

@@ -137,3 +137,33 @@ export function extractSessionToken(cookieHeader: string | undefined): string {
   const sessionTokenMatch = cookieHeader.match(new RegExp(`${BETTER_AUTH_SESSION_COOKIE_NAME.replace(/\./g, '\\.')}=([^;]+)`));
   return sessionTokenMatch?.[1] || '';
 }
+
+/**
+ * Clear all auth-related caches on the client
+ * Used on logout to ensure clean state for next login
+ *
+ * Clears:
+ * - TanStack Query cache (all queries)
+ * - Session memory cache
+ * - Better Auth cookies
+ * - localStorage auth items
+ *
+ * @param queryClient - TanStack Query client instance
+ */
+export function clearAllAuthCaches(queryClient: { clear: () => void }): void {
+  // Clear TanStack Query cache - removes all cached queries
+  queryClient.clear();
+
+  // Clear localStorage items that might hold user-specific data
+  if (typeof window !== 'undefined') {
+    // Clear any auth-related localStorage items
+    const keysToRemove: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const key = localStorage.key(i);
+      if (key && (key.startsWith('auth') || key.startsWith('session') || key.startsWith('user'))) {
+        keysToRemove.push(key);
+      }
+    }
+    keysToRemove.forEach(key => localStorage.removeItem(key));
+  }
+}

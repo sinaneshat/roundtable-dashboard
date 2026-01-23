@@ -67,7 +67,8 @@ function ImpersonatePage() {
     // Clear server-side cache for target user first
     clearCacheMutation.mutate(selectedUser.id, {
       onSuccess: () => {
-        // Then switch session - onSuccess fires only after session is established
+        // Better Auth handles session switching internally - saves admin session
+        // in admin_session cookie and creates new impersonated session
         authClient.admin.impersonateUser({
           userId: selectedUser.id,
           fetchOptions: {
