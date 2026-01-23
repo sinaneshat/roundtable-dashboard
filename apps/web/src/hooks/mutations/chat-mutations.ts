@@ -216,18 +216,37 @@ export function useUpdateThreadMutation() {
   });
 }
 
+/**
+ * Input type for delete thread mutation
+ * Extended with optional metadata for cache cleanup
+ */
+type DeleteThreadInput = Parameters<typeof deleteThreadService>[0] & {
+  slug?: string;
+  projectId?: string;
+};
+
 export function useDeleteThreadMutation() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: deleteThreadService,
+    mutationFn: (data: DeleteThreadInput) => deleteThreadService({ param: data.param }),
     onMutate: async (variables) => {
+      const threadId = variables.param.id;
+
       await queryClient.cancelQueries({ queryKey: queryKeys.threads.all });
       await queryClient.cancelQueries({ queryKey: queryKeys.usage.stats() });
+      await queryClient.cancelQueries({ queryKey: queryKeys.threads.detail(threadId) });
+      if (variables.slug) {
+        await queryClient.cancelQueries({ queryKey: queryKeys.threads.bySlug(variables.slug) });
+      }
+      if (variables.projectId) {
+        await queryClient.cancelQueries({ queryKey: queryKeys.projects.threads(variables.projectId) });
+      }
 
       const previousThreads = queryClient.getQueryData(queryKeys.threads.all);
       const previousUsage = queryClient.getQueryData(queryKeys.usage.stats());
 
+      // Optimistically remove from list/sidebar
       queryClient.setQueriesData(
         {
           queryKey: queryKeys.threads.all,
@@ -254,7 +273,7 @@ export function useDeleteThreadMutation() {
                   ...page.data,
                   items: page.data.items.filter((thread) => {
                     const threadData = ChatThreadCacheSchema.safeParse(thread);
-                    return threadData.success && threadData.data.id !== variables.param.id;
+                    return threadData.success && threadData.data.id !== threadId;
                   }),
                 },
               };
@@ -263,7 +282,67 @@ export function useDeleteThreadMutation() {
         },
       );
 
-      return { previousThreads, previousUsage };
+      // Optimistically remove from project threads if applicable
+      if (variables.projectId) {
+        queryClient.setQueriesData(
+          { queryKey: queryKeys.projects.threads(variables.projectId) },
+          (old) => {
+            const parsedQuery = validateInfiniteQueryCache(old);
+            if (!parsedQuery)
+              return old;
+
+            return {
+              ...parsedQuery,
+              pages: parsedQuery.pages.map((page) => {
+                if (!page.success || !page.data?.items)
+                  return page;
+
+                return {
+                  ...page,
+                  data: {
+                    ...page.data,
+                    items: page.data.items.filter((thread) => {
+                      const threadData = ChatThreadCacheSchema.safeParse(thread);
+                      return threadData.success && threadData.data.id !== threadId;
+                    }),
+                  },
+                };
+              }),
+            };
+          },
+        );
+      }
+
+      return { previousThreads, previousUsage, threadId, slug: variables.slug, projectId: variables.projectId };
+    },
+    onSuccess: (_data, _variables, context) => {
+      if (!context)
+        return;
+      const { threadId, slug, projectId } = context;
+
+      // Remove all thread-specific caches
+      queryClient.removeQueries({ queryKey: queryKeys.threads.detail(threadId) });
+      queryClient.removeQueries({ queryKey: queryKeys.threads.messages(threadId) });
+      queryClient.removeQueries({ queryKey: queryKeys.threads.feedback(threadId) });
+      queryClient.removeQueries({ queryKey: queryKeys.threads.changelog(threadId) });
+      queryClient.removeQueries({ queryKey: queryKeys.threads.preSearches(threadId) });
+      queryClient.removeQueries({ queryKey: queryKeys.threads.streamResumption(threadId) });
+      queryClient.removeQueries({ queryKey: queryKeys.threads.slugStatus(threadId) });
+
+      if (slug) {
+        queryClient.removeQueries({ queryKey: queryKeys.threads.bySlug(slug) });
+        queryClient.removeQueries({ queryKey: queryKeys.threads.public(slug) });
+      }
+
+      // Invalidate project-related caches
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.threads(projectId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.sidebar() });
+      }
+
+      // Invalidate usage stats
+      queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
     },
     onError: (_error, _variables, context) => {
       if (context?.previousThreads) {

@@ -17,9 +17,11 @@ import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 
 import { getModels } from '@/server/models';
 import { getProducts } from '@/server/products';
+import { getProjectAttachments, getProjectById, getProjectMemories } from '@/server/project';
+import { getSidebarProjects } from '@/server/sidebar-projects';
 import { getSidebarThreads } from '@/server/sidebar-threads';
 import { getSubscriptions } from '@/server/subscriptions';
-import { getStreamResumptionState, getThreadBySlug, getThreadChangelog, getThreadFeedback, getThreadPreSearches } from '@/server/thread';
+import { getStreamResumptionState, getThreadBySlug, getThreadChangelog, getThreadFeedback, getThreadPreSearches, getThreadsByProject } from '@/server/thread';
 import { getUsageStats } from '@/server/usage-stats';
 
 import { queryKeys } from './query-keys';
@@ -121,6 +123,32 @@ export const sidebarThreadsQueryOptions = infiniteQueryOptions({
     const result = await getSidebarThreads();
     if (!result.success) {
       throw new Error('Failed to fetch sidebar threads');
+    }
+    return result;
+  },
+  initialPageParam: undefined as string | undefined,
+  getNextPageParam: lastPage => lastPage.data?.pagination?.nextCursor,
+  staleTime: STALE_TIMES.threadsSidebar,
+  refetchOnWindowFocus: false,
+  refetchOnMount: false,
+});
+
+/**
+ * Sidebar projects infinite query options
+ *
+ * Used by:
+ * - _protected.tsx loader (ensureInfiniteQueryData)
+ * - useSidebarProjectsQuery hook (useInfiniteQuery)
+ *
+ * Returns first page of projects for SSR, client can fetch more pages.
+ * Throws on error to satisfy TanStack Query's type requirements.
+ */
+export const sidebarProjectsQueryOptions = infiniteQueryOptions({
+  queryKey: queryKeys.projects.sidebar(),
+  queryFn: async () => {
+    const result = await getSidebarProjects();
+    if (!result.success) {
+      throw new Error('Failed to fetch sidebar projects');
     }
     return result;
   },
@@ -254,5 +282,117 @@ export function threadPreSearchesQueryOptions(threadId: string) {
     refetchOnWindowFocus: false,
     refetchOnMount: false,
     retry: false,
+  });
+}
+
+/**
+ * Project query options factory
+ *
+ * Used by:
+ * - _protected/chat/projects/$projectId.tsx loader (ensureQueryData)
+ * - useProjectQuery hook (useQuery)
+ *
+ * Server function getProjectById() works both server-side and client-side:
+ * - Server: Runs directly, forwards cookies
+ * - Client: Makes RPC call to server function
+ */
+export function projectQueryOptions(projectId: string) {
+  return queryOptions({
+    queryKey: queryKeys.projects.detail(projectId),
+    queryFn: () => getProjectById({ data: projectId }),
+    staleTime: STALE_TIMES.threadDetail, // 10s
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+    retry: false,
+  });
+}
+
+/**
+ * Project attachments infinite query options factory
+ *
+ * Used by:
+ * - _protected/chat/projects/$projectId.tsx loader (ensureInfiniteQueryData)
+ * - useProjectAttachmentsQuery hook (useInfiniteQuery)
+ *
+ * Server function getProjectAttachments() works both server-side and client-side:
+ * - Server: Runs directly, forwards cookies
+ * - Client: Makes RPC call to server function
+ */
+export function projectAttachmentsQueryOptions(projectId: string) {
+  return infiniteQueryOptions({
+    queryKey: queryKeys.projects.attachments(projectId),
+    queryFn: async () => {
+      const result = await getProjectAttachments({ data: projectId });
+      if (!result.success) {
+        throw new Error('Failed to fetch project attachments');
+      }
+      return result;
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: lastPage => lastPage.data?.pagination?.nextCursor,
+    staleTime: STALE_TIMES.threadDetail,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+}
+
+/**
+ * Project memories infinite query options factory
+ *
+ * Used by:
+ * - _protected/chat/projects/$projectId.tsx loader (ensureInfiniteQueryData)
+ * - useProjectMemoriesQuery hook (useInfiniteQuery)
+ *
+ * Server function getProjectMemories() works both server-side and client-side:
+ * - Server: Runs directly, forwards cookies
+ * - Client: Makes RPC call to server function
+ */
+export function projectMemoriesQueryOptions(projectId: string) {
+  return infiniteQueryOptions({
+    queryKey: queryKeys.projects.memories(projectId),
+    queryFn: async () => {
+      const result = await getProjectMemories({ data: projectId });
+      if (!result.success) {
+        throw new Error('Failed to fetch project memories');
+      }
+      return result;
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: lastPage => lastPage.data?.pagination?.nextCursor,
+    staleTime: STALE_TIMES.threadDetail,
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
+  });
+}
+
+/**
+ * Project threads infinite query options factory
+ *
+ * Uses unified /chat/threads?projectId=X endpoint for consistent thread behavior.
+ *
+ * Used by:
+ * - _protected/chat/projects/$projectId.tsx loader (ensureInfiniteQueryData)
+ * - useProjectThreadsQuery hook (via useThreadsQuery)
+ *
+ * Server function getThreadsByProject() works both server-side and client-side:
+ * - Server: Runs directly, forwards cookies
+ * - Client: Makes RPC call to server function
+ */
+export function projectThreadsQueryOptions(projectId: string) {
+  return infiniteQueryOptions({
+    // Use unified query key pattern: ['threads', 'list', 'project', projectId]
+    queryKey: [...queryKeys.threads.lists(), 'project', projectId] as const,
+    queryFn: async () => {
+      const result = await getThreadsByProject({ data: projectId });
+      if (!result.success) {
+        throw new Error('Failed to fetch project threads');
+      }
+      return result;
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: lastPage => lastPage.data?.pagination?.nextCursor,
+    staleTime: STALE_TIMES.threads, // 1 minute - match useThreadsQuery
+    refetchOnWindowFocus: false,
+    refetchOnMount: false,
   });
 }

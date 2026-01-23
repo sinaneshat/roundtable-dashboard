@@ -24,19 +24,36 @@ import {
 } from '@/services/api';
 
 /**
+ * Options for useThreadsQuery hook
+ */
+type UseThreadsQueryOptions = {
+  /** Optional search query to filter threads by title */
+  search?: string;
+  /** Optional project ID to filter threads by project (excludes isFavorite from response) */
+  projectId?: string;
+  /** Optional control over whether to fetch */
+  enabled?: boolean;
+};
+
+/**
  * Hook to fetch chat threads with cursor-based infinite scrolling
  * Following TanStack Query v5 official patterns
  *
  * Initial page loads 50 items, subsequent pages load 20 items
  * Search queries load 10 items per page
  *
- * @param search - Optional search query to filter threads by title
+ * When projectId is provided, threads are filtered by project and isFavorite is excluded.
+ *
+ * @param options - Query options (search, projectId, enabled)
  */
-export function useThreadsQuery(search?: string) {
+export function useThreadsQuery(options?: UseThreadsQueryOptions) {
   const { isAuthenticated } = useAuthCheck();
+  const { search, projectId, enabled: explicitEnabled } = options ?? {};
 
   return useInfiniteQuery({
-    queryKey: queryKeys.threads.lists(search),
+    // ✅ QUERY KEY: Include all dependencies for proper cache separation
+    // Format: ['threads', 'list', search?, { projectId }?]
+    queryKey: ['threads', 'list', { search, projectId }] as const,
     queryFn: async ({ pageParam }) => {
       // ✅ Use centralized limits - clean semantic names
       const limit = search
@@ -45,13 +62,14 @@ export function useThreadsQuery(search?: string) {
           ? LIMITS.STANDARD_PAGE // 20 for subsequent pages
           : LIMITS.INITIAL_PAGE; // 50 for initial sidebar load
 
-      const params: { cursor?: string; search?: string; limit: number } = { limit };
-      if (pageParam)
-        params.cursor = pageParam;
-      if (search)
-        params.search = search;
-
-      return listThreadsService({ query: params });
+      return listThreadsService({
+        query: {
+          limit,
+          ...(pageParam && { cursor: pageParam }),
+          ...(search && { search }),
+          ...(projectId && { projectId }),
+        },
+      });
     },
     initialPageParam: undefined as string | undefined,
     getNextPageParam: (lastPage) => {
@@ -59,7 +77,7 @@ export function useThreadsQuery(search?: string) {
         return undefined;
       return lastPage.data.pagination.nextCursor;
     },
-    enabled: isAuthenticated,
+    enabled: explicitEnabled !== undefined ? explicitEnabled : isAuthenticated,
     staleTime: STALE_TIMES.threads, // 30 seconds - match server-side prefetch
     retry: false,
     throwOnError: false,

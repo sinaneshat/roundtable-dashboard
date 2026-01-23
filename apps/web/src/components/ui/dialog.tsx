@@ -61,11 +61,11 @@ function DialogContent({
       <DialogOverlay glass={glass} />
       <DialogPrimitive.Content
         className={cn(
-          'fixed left-[50%] top-[50%] z-50 grid w-[calc(100%-2rem)] sm:w-full max-w-lg translate-x-[-50%] translate-y-[-50%] duration-200',
+          'fixed left-[50%] top-[50%] z-50 flex flex-col w-[calc(100%-2rem)] sm:w-full max-w-lg max-h-[90vh] translate-x-[-50%] translate-y-[-50%] duration-200',
           'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
           glass
-            ? cn('gap-0 rounded-2xl border border-border bg-card p-0 shadow-lg overflow-hidden')
-            : 'gap-3 sm:gap-4 rounded-2xl border bg-background p-4 sm:p-6 shadow-lg overflow-hidden',
+            ? cn('gap-0 rounded-2xl border border-border bg-card p-0 shadow-lg')
+            : 'gap-3 sm:gap-4 rounded-2xl border bg-background p-4 sm:p-6 shadow-lg',
           className,
         )}
         {...props}
@@ -92,7 +92,7 @@ function DialogHeader({ className, glass = false, ...props }: DialogHeaderProps)
   return (
     <div
       className={cn(
-        'flex flex-col space-y-1.5 text-left',
+        'flex flex-col space-y-1.5 text-left flex-shrink-0 pb-2',
         glass && 'bg-card px-4 sm:px-6 pt-4 sm:pt-6 pb-3 sm:pb-4',
         className,
       )}
@@ -112,15 +112,23 @@ type DialogBodyProps = ComponentProps<'div'> & {
   glass?: boolean;
 };
 
-function DialogBody({ className, glass = false, ...props }: DialogBodyProps) {
+function DialogBody({ className, glass = false, children, ...props }: DialogBodyProps) {
   return (
     <div
       className={cn(
-        glass && 'bg-background px-4 sm:px-6 py-4 sm:py-6',
+        'flex-1 min-h-0 overflow-y-auto overflow-x-hidden -mx-4 sm:-mx-6 custom-scrollbar',
+        glass && 'bg-background',
         className,
       )}
       {...props}
-    />
+    >
+      <div className={cn(
+        'px-4 sm:px-6 py-3',
+        glass && 'py-4 sm:py-6',
+      )}>
+        {children}
+      </div>
+    </div>
   );
 }
 
@@ -128,17 +136,18 @@ function DialogFooter({
   className,
   glass = false,
   justify = 'end',
-  bordered = false,
+  bordered = true,
   bleed = false,
   ...props
 }: DialogFooterProps) {
   return (
     <div
       className={cn(
+        'flex-shrink-0 pt-4',
         justify === 'between'
           ? 'flex flex-row items-center justify-between gap-2 sm:gap-3'
           : 'flex flex-col-reverse gap-2 sm:flex-row sm:justify-end sm:gap-3',
-        bordered && 'border-t border-border',
+        bordered && 'border-t border-border pt-4',
         bleed && '-mx-4 -mb-4 sm:-mx-6 sm:-mb-6 px-4 sm:px-6 py-2.5 sm:py-3',
         glass && !bleed && 'bg-background px-4 sm:px-6 pb-4 sm:pb-6 pt-3 sm:pt-4',
         className,

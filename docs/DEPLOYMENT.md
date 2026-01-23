@@ -45,10 +45,10 @@ In the Cloudflare Dashboard, connect your repository to **4 Workers**.
 
 | Worker Name | Root Directory | Build Command | Deploy Command |
 |-------------|----------------|---------------|----------------|
-| `roundtable-api-preview` | `/` | `bun run install` | `npx turbo run deploy:preview --filter=@roundtable/api` |
-| `roundtable-api-production` | `/` | `bun run install` | `npx turbo run deploy:production --filter=@roundtable/api` |
-| `roundtable-web-preview` | `/` | `bun run install` | `npx turbo run deploy:preview --filter=@roundtable/web` |
-| `roundtable-web` | `/` | `bun run install` | `npx turbo run deploy:production --filter=@roundtable/web` |
+| `roundtable-api-preview` | `/` | `bun run install` | `bunx turbo run deploy:preview --filter=@roundtable/api` |
+| `roundtable-api-production` | `/` | `bun run install` | `bunx turbo run deploy:production --filter=@roundtable/api` |
+| `roundtable-web-preview` | `/` | `bun run install` | `bunx turbo run deploy:preview --filter=@roundtable/web` |
+| `roundtable-web` | `/` | `bun run install` | `bunx turbo run deploy:production --filter=@roundtable/web` |
 
 ### Custom Domains
 

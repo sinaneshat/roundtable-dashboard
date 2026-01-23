@@ -26,7 +26,7 @@ import {
  * 3. After the LAST participant responds, verify credits ARE zeroed
  * 4. Verify subsequent round is blocked (free user exhaustion)
  *
- * Run with: pnpm exec playwright test e2e/flows/multi-participant-round-completion.spec.ts --project=chromium
+ * Run with: bun run exec playwright test e2e/flows/multi-participant-round-completion.spec.ts --project=chromium
  *
  * @see src/api/routes/chat/handlers/streaming.handler.ts:1022-1032
  * @see src/api/services/credit.service.ts:241-301 (checkFreeUserHasCompletedRound)

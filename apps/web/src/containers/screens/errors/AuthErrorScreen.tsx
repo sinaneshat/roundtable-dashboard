@@ -1,7 +1,6 @@
 import type { AuthErrorType } from '@roundtable/shared';
 import { AuthErrorTypes, DEFAULT_AUTH_ERROR_TYPE, isValidAuthErrorType } from '@roundtable/shared';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { Suspense } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
@@ -99,26 +98,6 @@ function AuthErrorContent() {
   );
 }
 
-function AuthErrorFallback() {
-  const t = useTranslations();
-  return (
-    <Empty className="w-full max-w-sm border-none">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <Icons.alertCircle className="text-destructive" />
-        </EmptyMedia>
-        <EmptyTitle className="text-xl font-semibold">
-          {t('states.loading.default')}
-        </EmptyTitle>
-      </EmptyHeader>
-    </Empty>
-  );
-}
-
-export default function AuthErrorScreen() {
-  return (
-    <Suspense fallback={<AuthErrorFallback />}>
-      <AuthErrorContent />
-    </Suspense>
-  );
+export function AuthErrorScreen() {
+  return <AuthErrorContent />;
 }

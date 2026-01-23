@@ -5,7 +5,7 @@ import type { AuthStep } from '@roundtable/shared';
 import { AuthSteps, DEFAULT_AUTH_STEP, ErrorSeverities } from '@roundtable/shared';
 import { getRouteApi, useRouter } from '@tanstack/react-router';
 import { AnimatePresence, motion } from 'motion/react';
-import { Suspense, useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
@@ -218,16 +218,5 @@ function AuthFormContent() {
 }
 
 export function AuthForm() {
-  return (
-    <Suspense
-      fallback={(
-        <div className="flex flex-col gap-4">
-          <div className="h-14 w-full animate-pulse rounded-full bg-muted" />
-          <div className="h-14 w-full animate-pulse rounded-full bg-muted" />
-        </div>
-      )}
-    >
-      <AuthFormContent />
-    </Suspense>
-  );
+  return <AuthFormContent />;
 }

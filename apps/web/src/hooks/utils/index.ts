@@ -77,6 +77,7 @@ export { usePostHogIdentify } from './use-posthog-identify';
 export { useExecutePreSearchStream, useGetThreadPreSearchesForPolling } from './use-pre-search-stream';
 export type { ProjectAnalyticsHook } from './use-project-analytics';
 export { useProjectAnalytics } from './use-project-analytics';
+export { useSessionQuerySync } from './use-session-query-sync';
 export type { UseSpeechRecognitionOptions } from './use-speech-recognition';
 export { useSpeechRecognition } from './use-speech-recognition';
 export { useSyncedRefs } from './use-synced-refs';

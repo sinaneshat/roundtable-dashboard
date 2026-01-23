@@ -11,7 +11,7 @@ import {
  * These tests require Pro user access with billing setup.
  * The chromium-pro project automatically uses Pro user auth state.
  *
- * Run with: pnpm exec playwright test e2e/pro/ --project=chromium-pro
+ * Run with: bun run exec playwright test e2e/pro/ --project=chromium-pro
  *
  * @see docs/FLOW_DOCUMENTATION.md
  */

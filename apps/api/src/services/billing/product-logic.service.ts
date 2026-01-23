@@ -5,7 +5,7 @@
  * All tier-specific values defined in TIER_CONFIG with compile-time type safety.
  */
 
-import { CREDIT_CONFIG, SUBSCRIPTION_TIER_NAMES } from '@roundtable/shared';
+import { CREDIT_CONFIG, PROJECT_LIMITS, SUBSCRIPTION_TIER_NAMES } from '@roundtable/shared';
 import type { ChatMode, ModelCostCategory, ModelPricingTier, SubscriptionTier } from '@roundtable/shared/enums';
 import {
   ChatModes,
@@ -58,6 +58,8 @@ const _TierConfigurationSchema = z.object({
     messagesPerMonth: z.number(),
     customRolesPerMonth: z.number(),
     analysisPerMonth: z.number(),
+    projectsPerUser: z.number(),
+    threadsPerProject: z.number(),
   }),
   upgradeMessage: z.string(),
   monthlyCredits: z.number(),
@@ -76,6 +78,8 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfiguration> = {
       messagesPerMonth: 100,
       customRolesPerMonth: 0,
       analysisPerMonth: 10,
+      projectsPerUser: 0, // PRO-only
+      threadsPerProject: 0,
     },
     upgradeMessage: 'Upgrade to Pro for unlimited access to all models',
     monthlyCredits: 0,
@@ -90,6 +94,8 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfiguration> = {
       messagesPerMonth: 10000,
       customRolesPerMonth: 25,
       analysisPerMonth: 1000,
+      projectsPerUser: PROJECT_LIMITS.MAX_PROJECTS_PER_USER,
+      threadsPerProject: PROJECT_LIMITS.MAX_THREADS_PER_PROJECT,
     },
     upgradeMessage: 'You have access to all models',
     monthlyCredits: CREDIT_CONFIG.PLANS[PlanTypes.PAID]?.monthlyCredits ?? 10000,
@@ -126,6 +132,8 @@ export const TIER_QUOTAS: Record<
     messagesPerMonth: number;
     customRolesPerMonth: number;
     analysisPerMonth: number;
+    projectsPerUser: number;
+    threadsPerProject: number;
   }
 > = deriveTierRecord(config => config.quotas);
 
@@ -275,6 +283,16 @@ export function getMaxModelsForTier(tier: SubscriptionTier): number {
 export function getMonthlyCreditsForTier(tier: SubscriptionTier): number {
   const config = TIER_CONFIG[tier];
   return config?.monthlyCredits ?? 0;
+}
+
+export function getProjectsPerUserForTier(tier: SubscriptionTier): number {
+  const config = TIER_CONFIG[tier];
+  return config?.quotas.projectsPerUser ?? 0;
+}
+
+export function getThreadsPerProjectForTier(tier: SubscriptionTier): number {
+  const config = TIER_CONFIG[tier];
+  return config?.quotas.threadsPerProject ?? 0;
 }
 
 export function getTierFromProductId(productId: string): SubscriptionTier {

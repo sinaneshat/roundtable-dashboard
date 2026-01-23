@@ -11,6 +11,7 @@ import type { InferResponseType } from 'hono/client';
 
 import type { ApiClientType } from '@/lib/api/client';
 import { createApiClient, createPublicApiClient, ServiceFetchError } from '@/lib/api/client';
+import type { ServiceOptions } from '@/services/api/types';
 
 // ============================================================================
 // Type Inference - Endpoint definitions
@@ -28,14 +29,6 @@ export type ListModelsResponse = InferResponseType<ListModelsEndpoint, 200>;
 // Service Functions - List operations with auth/public variants
 // Using res.json() pattern for proper type inference (Hono RPC docs)
 // ============================================================================
-
-/**
- * Service options for SSR and cache control
- */
-type ServiceOptions = {
-  cookieHeader?: string;
-  bypassCache?: boolean;
-};
 
 /**
  * Get curated AI models with tier-based access control

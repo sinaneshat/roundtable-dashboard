@@ -21,6 +21,11 @@ import { useMemoizedReturn } from '@/lib/utils';
 
 import { useFlowController } from './flow-controller';
 
+export type UseOverviewActionsOptions = {
+  /** Project ID for project-scoped threads (updates URL to /chat/projects/{projectId}/{slug}) */
+  projectId?: string;
+};
+
 export type UseOverviewActionsReturn = {
   /** Handle suggestion click - sets input, mode, and participants */
   handleSuggestionClick: (prompt: string, mode: ChatMode, participants: ParticipantConfig[]) => void;
@@ -38,7 +43,8 @@ export type UseOverviewActionsReturn = {
  *
  * <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
  */
-export function useOverviewActions(): UseOverviewActionsReturn {
+export function useOverviewActions(options: UseOverviewActionsOptions = {}): UseOverviewActionsReturn {
+  const { projectId } = options;
   // Batch state and action selectors with useShallow for stable reference
   const { showInitialUI, ...actions } = useChatStore(useShallow(s => ({
     showInitialUI: s.showInitialUI,
@@ -49,7 +55,7 @@ export function useOverviewActions(): UseOverviewActionsReturn {
   })));
 
   // Delegate flow control to centralized controller
-  useFlowController({ enabled: !showInitialUI });
+  useFlowController({ enabled: !showInitialUI, projectId });
 
   /**
    * Handle suggestion click from quick start

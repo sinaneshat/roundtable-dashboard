@@ -51,10 +51,10 @@ import {
 import { validateModelForOperation } from '@/services/participants';
 import {
   buildAutoParameterDetectionPrompt,
+  buildWebSearchComplexityAnalysisPrompt,
   buildWebSearchQueryPrompt,
   getAnswerSummaryPrompt,
   IMAGE_DESCRIPTION_PROMPT,
-  WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
 } from '@/services/prompts';
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
@@ -73,10 +73,19 @@ type PuppeteerRequestHandler = {
   continue: () => void;
 };
 
+/**
+ * Project context for informed query generation
+ */
+type SearchProjectContext = {
+  instructions?: string | null;
+  ragContext?: string;
+};
+
 export async function streamSearchQuery(
   userMessage: string,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
+  projectContext?: SearchProjectContext,
 ): Promise<ReturnType<typeof streamText>> {
   try {
     validateModelForOperation(AIModels.WEB_SEARCH, 'web-search-query-generation', {
@@ -88,10 +97,23 @@ export async function streamSearchQuery(
     initializeOpenRouter(env);
     const client = await openRouterService.getClient();
 
+    // Build system prompt with optional project context
+    let systemPrompt = buildWebSearchComplexityAnalysisPrompt();
+    if (projectContext?.instructions || projectContext?.ragContext) {
+      const contextParts: string[] = [];
+      if (projectContext.instructions) {
+        contextParts.push(`## Project Guidelines\n${projectContext.instructions}`);
+      }
+      if (projectContext.ragContext) {
+        contextParts.push(`## Existing Knowledge\nThis info exists in project files - avoid redundant searches:\n${projectContext.ragContext}`);
+      }
+      systemPrompt = `${systemPrompt}\n\n${contextParts.join('\n\n')}`;
+    }
+
     return streamText({
       model: client.chat(AIModels.WEB_SEARCH),
       output: Output.object({ schema: MultiQueryGenerationSchema }),
-      system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
+      system: systemPrompt,
       prompt: buildWebSearchQueryPrompt(userMessage),
       maxRetries: 3,
       onError: (error) => {
@@ -137,6 +159,7 @@ export async function streamSearchQuery(
  * @param userMessage - User's question to generate query for
  * @param env - Cloudflare environment bindings
  * @param logger - Optional logger for error tracking
+ * @param projectContext - Optional project instructions and RAG context
  * @returns Generated query result
  * @throws HttpException with error context if query generation fails
  */
@@ -144,6 +167,7 @@ export async function generateSearchQuery(
   userMessage: string,
   env: ApiEnv['Bindings'],
   logger?: TypedLogger,
+  projectContext?: SearchProjectContext,
 ) {
   const modelId = AIModels.WEB_SEARCH;
 
@@ -156,10 +180,23 @@ export async function generateSearchQuery(
     initializeOpenRouter(env);
     const client = await openRouterService.getClient();
 
+    // Build system prompt with optional project context
+    let systemPrompt = buildWebSearchComplexityAnalysisPrompt();
+    if (projectContext?.instructions || projectContext?.ragContext) {
+      const contextParts: string[] = [];
+      if (projectContext.instructions) {
+        contextParts.push(`## Project Guidelines\n${projectContext.instructions}`);
+      }
+      if (projectContext.ragContext) {
+        contextParts.push(`## Existing Knowledge\nThis info exists in project files - avoid redundant searches:\n${projectContext.ragContext}`);
+      }
+      systemPrompt = `${systemPrompt}\n\n${contextParts.join('\n\n')}`;
+    }
+
     const result = await generateText({
       model: client.chat(modelId),
       output: Output.object({ schema: MultiQueryGenerationSchema }),
-      system: WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT,
+      system: systemPrompt,
       prompt: buildWebSearchQueryPrompt(userMessage),
       maxRetries: 3,
     });

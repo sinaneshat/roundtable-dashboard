@@ -18,9 +18,11 @@
 
 import {
   DEFAULT_PROJECT_COLOR,
+  DEFAULT_PROJECT_ICON,
   DEFAULT_PROJECT_INDEX_STATUS,
   DEFAULT_PROJECT_MEMORY_SOURCE,
   PROJECT_COLORS,
+  PROJECT_ICONS,
   PROJECT_INDEX_STATUSES,
   PROJECT_MEMORY_SOURCES,
 } from '@roundtable/shared/enums';
@@ -59,6 +61,7 @@ export const chatProject = sqliteTable('chat_project', {
   name: text('name').notNull(), // "Q1 Marketing Strategy"
   description: text('description'), // Optional project description
   color: text('color', { enum: PROJECT_COLORS }).default(DEFAULT_PROJECT_COLOR), // Visual identification color
+  icon: text('icon', { enum: PROJECT_ICONS }).default(DEFAULT_PROJECT_ICON), // Visual identification icon
 
   // Custom instructions (OpenAI Projects pattern)
   customInstructions: text('custom_instructions'), // Project-level instructions for all threads

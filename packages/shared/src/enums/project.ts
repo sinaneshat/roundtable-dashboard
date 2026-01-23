@@ -86,6 +86,85 @@ export const ProjectMemorySources = {
 } as const;
 
 // ============================================================================
+// PROJECT ICON (visual identification)
+// ============================================================================
+
+export const PROJECT_ICONS = [
+  'briefcase',
+  'code',
+  'book',
+  'globe',
+  'graduationCap',
+  'coins',
+  'pencil',
+  'image',
+  'gift',
+  'clock',
+  'lightbulb',
+  'fileText',
+  'layers',
+  'scale',
+  'wrench',
+  'users',
+  'target',
+  'zap',
+  'database',
+  'mail',
+  'lock',
+  'key',
+  'home',
+  'brain',
+  'sparkles',
+  'messageSquare',
+  'calendar',
+  'package',
+  'hammer',
+  'search',
+] as const;
+
+export const DEFAULT_PROJECT_ICON: ProjectIcon = 'briefcase';
+
+export const ProjectIconSchema = z.enum(PROJECT_ICONS).openapi({
+  description: 'Project icon for visual identification',
+  example: 'briefcase',
+});
+
+export type ProjectIcon = z.infer<typeof ProjectIconSchema>;
+
+export const ProjectIcons = {
+  BRIEFCASE: 'briefcase' as const,
+  CODE: 'code' as const,
+  BOOK: 'book' as const,
+  GLOBE: 'globe' as const,
+  GRADUATION_CAP: 'graduationCap' as const,
+  COINS: 'coins' as const,
+  PENCIL: 'pencil' as const,
+  IMAGE: 'image' as const,
+  GIFT: 'gift' as const,
+  CLOCK: 'clock' as const,
+  LIGHTBULB: 'lightbulb' as const,
+  FILE_TEXT: 'fileText' as const,
+  LAYERS: 'layers' as const,
+  SCALE: 'scale' as const,
+  WRENCH: 'wrench' as const,
+  USERS: 'users' as const,
+  TARGET: 'target' as const,
+  ZAP: 'zap' as const,
+  DATABASE: 'database' as const,
+  MAIL: 'mail' as const,
+  LOCK: 'lock' as const,
+  KEY: 'key' as const,
+  HOME: 'home' as const,
+  BRAIN: 'brain' as const,
+  SPARKLES: 'sparkles' as const,
+  MESSAGE_SQUARE: 'messageSquare' as const,
+  CALENDAR: 'calendar' as const,
+  PACKAGE: 'package' as const,
+  HAMMER: 'hammer' as const,
+  SEARCH: 'search' as const,
+} as const;
+
+// ============================================================================
 // PROJECT COLOR (visual identification)
 // ============================================================================
 

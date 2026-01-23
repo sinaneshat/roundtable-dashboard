@@ -153,7 +153,7 @@ function setupBillingForProUser(userId: string): void {
   let priceId = 'price_test_e2e';
   try {
     const priceResult = execSync(
-      `npx wrangler d1 execute DB --local --command="SELECT id FROM stripe_price LIMIT 1" --json`,
+      `bunx wrangler d1 execute DB --local --command="SELECT id FROM stripe_price LIMIT 1" --json`,
       { stdio: 'pipe', encoding: 'utf-8' },
     );
     const priceData = JSON.parse(priceResult);
@@ -171,26 +171,26 @@ function setupBillingForProUser(userId: string): void {
   try {
     // Create stripe_customer
     const customerSql = `INSERT OR REPLACE INTO stripe_customer (id, user_id, email, name, default_payment_method_id, metadata, created_at, updated_at) VALUES ('${customerId}', '${userId}', 'e2e-pro-test@roundtable.now', 'E2E Pro Test User', '${paymentMethodId}', NULL, ${now}, ${now});`;
-    execSync(`npx wrangler d1 execute DB --local --command="${customerSql}"`, { stdio: 'pipe' });
+    execSync(`bunx wrangler d1 execute DB --local --command="${customerSql}"`, { stdio: 'pipe' });
 
     // Create stripe_payment_method
     const paymentSql = `INSERT OR REPLACE INTO stripe_payment_method (id, customer_id, type, card_brand, card_last4, card_exp_month, card_exp_year, is_default, metadata, created_at, updated_at) VALUES ('${paymentMethodId}', '${customerId}', 'card', 'visa', '4242', 12, 2030, 1, NULL, ${now}, ${now});`;
-    execSync(`npx wrangler d1 execute DB --local --command="${paymentSql}"`, { stdio: 'pipe' });
+    execSync(`bunx wrangler d1 execute DB --local --command="${paymentSql}"`, { stdio: 'pipe' });
 
     // Create subscription with dynamically queried price
     const subscriptionSql = `INSERT OR REPLACE INTO stripe_subscription (id, customer_id, user_id, status, price_id, quantity, cancel_at_period_end, current_period_start, current_period_end, metadata, version, created_at, updated_at) VALUES ('${subscriptionId}', '${customerId}', '${userId}', 'active', '${priceId}', 1, 0, ${now}, ${futureDate}, NULL, 1, ${now}, ${now});`;
-    execSync(`npx wrangler d1 execute DB --local --command="${subscriptionSql}"`, { stdio: 'pipe' });
+    execSync(`bunx wrangler d1 execute DB --local --command="${subscriptionSql}"`, { stdio: 'pipe' });
 
     // Create credit balance
     const monthlyCredits = 50000;
     const creditBalanceSql = `INSERT OR REPLACE INTO user_credit_balance (id, user_id, balance, reserved_credits, plan_type, monthly_credits, pay_as_you_go_enabled, next_refill_at, version, created_at, updated_at) VALUES ('${creditBalanceId}', '${userId}', ${monthlyCredits}, 0, 'paid', ${monthlyCredits}, 0, ${futureDate}, 1, ${now}, ${now});`;
-    execSync(`npx wrangler d1 execute DB --local --command="${creditBalanceSql}"`, { stdio: 'pipe' });
+    execSync(`bunx wrangler d1 execute DB --local --command="${creditBalanceSql}"`, { stdio: 'pipe' });
 
     // Create user_chat_usage with Pro tier
     const periodStart = Math.floor(new Date(new Date().getFullYear(), new Date().getMonth(), 1).getTime() / 1000);
     const periodEnd = Math.floor(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59).getTime() / 1000);
     const usageSql = `INSERT OR REPLACE INTO user_chat_usage (id, user_id, current_period_start, current_period_end, threads_created, messages_created, custom_roles_created, analysis_generated, subscription_tier, is_annual, version, created_at, updated_at) VALUES ('${usageId}', '${userId}', ${periodStart}, ${periodEnd}, 0, 0, 0, 0, 'pro', 0, 1, ${now}, ${now});`;
-    execSync(`npx wrangler d1 execute DB --local --command="${usageSql}"`, { stdio: 'pipe' });
+    execSync(`bunx wrangler d1 execute DB --local --command="${usageSql}"`, { stdio: 'pipe' });
 
     console.log('  ✅ Billing data created successfully');
   } catch (error) {
@@ -217,7 +217,7 @@ async function main() {
     console.log(`✅ Server is running at ${BASE_URL}\n`);
   } catch (error) {
     console.error(`❌ Server not running at ${BASE_URL}`);
-    console.error('Please start the dev server with: pnpm dev');
+    console.error('Please start the dev server with: bun run dev');
     process.exit(1);
   }
 
@@ -240,7 +240,7 @@ async function main() {
   }
 
   console.log('\n✅ E2E Auth Setup Complete!\n');
-  console.log('You can now run: pnpm exec playwright test e2e/pro/ --project=chromium-pro');
+  console.log('You can now run: bun run exec playwright test e2e/pro/ --project=chromium-pro');
 }
 
 main().catch((error) => {

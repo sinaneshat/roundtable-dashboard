@@ -3,28 +3,29 @@
   "editor.tabSize": 2,
   "editor.detectIndentation": false,
   "search.exclude": {
-    "package-lock.json": true
+    "package-lock.json": true,
+    ".claude": true,
+    ".agents": true
   },
   // TypeScript
-  "typescript.tsdk": "node_modules/typescript/lib", // Use the workspace version of TypeScript
-  "typescript.enablePromptUseWorkspaceTsdk": true, // For security reasons it's require that users opt into using the workspace version of typescript
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
   "typescript.preferences.autoImportFileExcludePatterns": [
-    // useRouter should be imported from `next/navigation` instead of `next/router`
     "next/router.d.ts",
     "next/dist/client/router.d.ts",
-    // give priority for Link to next/link instead of lucide-react
-    "lucide-react"
+    "lucide-react",
+    ".claude/**/*",
+    ".agents/**/*"
   ],
-  "typescript.preferences.preferTypeOnlyAutoImports": true, // Prefer type-only imports
+  "typescript.preferences.preferTypeOnlyAutoImports": true,
   // Disable the default formatter, use ESLint instead
   "prettier.enable": false,
   "editor.formatOnSave": false,
-  // Auto fix with ESLint on save
+  // Auto fix with ESLint on save - EXCLUDE .claude and .agents
   "editor.codeActionsOnSave": [
     "source.addMissingImports",
     "source.fixAll.eslint",
-    "source.organizeImports",
-    "source.fixAll.eslint"
+    "source.organizeImports"
   ],
   // Enable eslint for all supported languages
   "eslint.format.enable": true,
@@ -50,5 +51,14 @@
     "pcss",
     "postcss",
     "github-actions-workflow"
-  ]
+  ],
+  // Exclude .claude and .agents from ESLint
+  "eslint.options": {
+    "ignorePattern": [".claude/**/*", ".agents/**/*"]
+  },
+  // Exclude from file watcher
+  "files.watcherExclude": {
+    ".claude/**": true,
+    ".agents/**": true
+  }
 }

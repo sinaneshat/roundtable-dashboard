@@ -196,10 +196,12 @@ import {
   getProjectAttachmentHandler,
   getProjectContextHandler,
   getProjectHandler,
+  getProjectLimitsHandler,
   getProjectMemoryHandler,
   listProjectAttachmentsHandler,
   listProjectMemoriesHandler,
   listProjectsHandler,
+  listProjectThreadsHandler,
   removeAttachmentFromProjectHandler,
   updateProjectAttachmentHandler,
   updateProjectHandler,
@@ -213,11 +215,13 @@ import {
   deleteProjectRoute,
   getProjectAttachmentRoute,
   getProjectContextRoute,
+  getProjectLimitsRoute,
   getProjectMemoryRoute,
   getProjectRoute,
   listProjectAttachmentsRoute,
   listProjectMemoriesRoute,
   listProjectsRoute,
+  listProjectThreadsRoute,
   removeAttachmentFromProjectRoute,
   updateProjectAttachmentRoute,
   updateProjectMemoryRoute,
@@ -621,10 +625,12 @@ const appRoutes = app
   .openapi(setRoundFeedbackRoute, setRoundFeedbackHandler)
   .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler)
   .openapi(listProjectsRoute, listProjectsHandler)
+  .openapi(getProjectLimitsRoute, getProjectLimitsHandler)
   .openapi(createProjectRoute, createProjectHandler)
   .openapi(getProjectRoute, getProjectHandler)
   .openapi(updateProjectRoute, updateProjectHandler)
   .openapi(deleteProjectRoute, deleteProjectHandler)
+  .openapi(listProjectThreadsRoute, listProjectThreadsHandler)
   .openapi(listProjectAttachmentsRoute, listProjectAttachmentsHandler)
   .openapi(addAttachmentToProjectRoute, addAttachmentToProjectHandler)
   .openapi(getProjectAttachmentRoute, getProjectAttachmentHandler)

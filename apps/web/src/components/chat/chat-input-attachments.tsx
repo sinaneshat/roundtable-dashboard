@@ -18,12 +18,12 @@ type ChatInputAttachmentsProps = {
   onDrop?: (files: File[]) => void;
 };
 
-type FileTypeIconProps = {
+export type FileTypeIconProps = {
   mimeType: string;
   className?: string;
 };
 
-function FileTypeIcon({ mimeType, className }: FileTypeIconProps) {
+export function FileTypeIcon({ mimeType, className }: FileTypeIconProps) {
   const iconName = getFileIconName(mimeType);
   const iconClass = cn('size-5 text-white', className);
 

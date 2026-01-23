@@ -1,18 +1,17 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ComponentVariants } from '@roundtable/shared';
-import { useCallback, useEffect, useRef } from 'react';
+import { ComponentVariants, STRING_LIMITS } from '@roundtable/shared';
+import { useCallback, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { FormProvider, RHFTextField } from '@/components/forms';
 import { Button } from '@/components/ui/button';
-import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { Label } from '@/components/ui/label';
+import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
 import { useTranslations } from '@/lib/i18n';
-import { cn } from '@/lib/ui/cn';
 
 const RenameFormSchema = z.object({
-  title: z.string().min(1).max(255).transform(val => val.trim()),
+  title: z.string().min(STRING_LIMITS.TITLE_MIN).max(STRING_LIMITS.TITLE_MAX).transform(val => val.trim()),
 });
 
 type RenameFormValues = z.infer<typeof RenameFormSchema>;
@@ -32,28 +31,22 @@ export function ChatRenameDialog({
 }: ChatRenameDialogProps) {
   const t = useTranslations();
   const updateThreadMutation = useUpdateThreadMutation();
-  const inputRef = useRef<HTMLInputElement>(null);
 
-  const {
-    register,
-    handleSubmit,
-    reset,
-    formState: { isDirty, isValid, isSubmitting },
-  } = useForm<RenameFormValues>({
+  const methods = useForm<RenameFormValues>({
     resolver: zodResolver(RenameFormSchema),
     defaultValues: { title: currentTitle },
     mode: 'onChange',
   });
 
-  const { ref: registerRef, ...registerProps } = register('title');
+  const {
+    handleSubmit,
+    reset,
+    formState: { isDirty, isValid, isSubmitting },
+  } = methods;
 
   useEffect(() => {
     if (open) {
       reset({ title: currentTitle });
-      requestAnimationFrame(() => {
-        inputRef.current?.focus();
-        inputRef.current?.select();
-      });
     }
   }, [open, currentTitle, reset]);
 
@@ -92,30 +85,19 @@ export function ChatRenameDialog({
   return (
     <Dialog open={open} onOpenChange={handleClose}>
       <DialogContent className="sm:max-w-md">
-        <form onSubmit={handleSubmit(onSubmit)}>
-          <DialogHeader>
-            <DialogTitle>{t('chat.renameConversation')}</DialogTitle>
-          </DialogHeader>
-          <div className="py-4">
-            <Label htmlFor="thread-title" className="sr-only">
-              {t('chat.rename')}
-            </Label>
-            <input
-              id="thread-title"
-              {...registerProps}
-              ref={(e) => {
-                registerRef(e);
-                inputRef.current = e;
-              }}
-              type="text"
+        <DialogHeader>
+          <DialogTitle>{t('chat.renameConversation')}</DialogTitle>
+        </DialogHeader>
+
+        <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+          <DialogBody>
+            <RHFTextField<RenameFormValues>
+              name="title"
               placeholder={t('chat.rename')}
               disabled={isPending}
-              className={cn(
-                'file:text-foreground placeholder:text-muted-foreground selection:bg-primary selection:text-primary-foreground dark:bg-input/30 border-input flex h-10 sm:h-9 w-full min-w-0 rounded-xl border bg-transparent px-3 py-1 text-base shadow-xs transition-[color,border-color] outline-none file:inline-flex file:h-7 file:border-0 file:bg-transparent file:text-sm file:font-medium disabled:pointer-events-none disabled:cursor-not-allowed disabled:opacity-50 md:text-sm',
-                'focus-visible:border-ring',
-              )}
             />
-          </div>
+          </DialogBody>
+
           <DialogFooter>
             <Button
               type="button"
@@ -133,7 +115,7 @@ export function ChatRenameDialog({
               {t('actions.save')}
             </Button>
           </DialogFooter>
-        </form>
+        </FormProvider>
       </DialogContent>
     </Dialog>
   );

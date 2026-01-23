@@ -19,7 +19,7 @@
  * - Network requests (PATCH, streaming) occur in correct order
  * - All participants respond in each round
  *
- * Run with: pnpm exec playwright test e2e/pro/comprehensive-multi-round-config.spec.ts --project=chromium-pro
+ * Run with: bun run exec playwright test e2e/pro/comprehensive-multi-round-config.spec.ts --project=chromium-pro
  */
 
 import { expect, test } from '@playwright/test';

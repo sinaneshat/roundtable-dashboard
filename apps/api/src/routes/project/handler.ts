@@ -1,9 +1,10 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import { WebAppEnvs } from '@roundtable/shared';
-import { DEFAULT_PROJECT_INDEX_STATUS } from '@roundtable/shared/enums';
+import { PROJECT_LIMITS, WebAppEnvs } from '@roundtable/shared';
+import { DEFAULT_PROJECT_INDEX_STATUS, SubscriptionTiers, ThreadStatuses } from '@roundtable/shared/enums';
 import { and, eq, like } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
+import { invalidatePublicThreadCache } from '@/common/cache-utils';
 import { createError } from '@/common/error-handling';
 import {
   applyCursorPagination,
@@ -21,6 +22,7 @@ import {
 } from '@/services/context';
 import { generateProjectFileR2Key } from '@/services/search';
 import { cancelUploadCleanup, copyFile, deleteFile, isCleanupSchedulerAvailable } from '@/services/uploads';
+import { getUserTier } from '@/services/usage';
 import type { ApiEnv } from '@/types';
 
 import type {
@@ -31,11 +33,13 @@ import type {
   deleteProjectRoute,
   getProjectAttachmentRoute,
   getProjectContextRoute,
+  getProjectLimitsRoute,
   getProjectMemoryRoute,
   getProjectRoute,
   listProjectAttachmentsRoute,
   listProjectMemoriesRoute,
   listProjectsRoute,
+  listProjectThreadsRoute,
   removeAttachmentFromProjectRoute,
   updateProjectAttachmentRoute,
   updateProjectMemoryRoute,
@@ -48,6 +52,7 @@ import {
   ListProjectAttachmentsQuerySchema,
   ListProjectMemoriesQuerySchema,
   ListProjectsQuerySchema,
+  ListProjectThreadsQuerySchema,
   ProjectAttachmentParamSchema,
   ProjectMemoryParamSchema,
   UpdateProjectAttachmentRequestSchema,
@@ -101,16 +106,14 @@ export const listProjectsHandler: RouteHandler<typeof listProjectsRoute, ApiEnv>
     });
 
     // Transform to include counts
-    const projectsWithCounts = projects.map(project => ({
-      id: project.id,
-      userId: project.userId,
-      name: project.name,
-      description: project.description,
-      createdAt: project.createdAt,
-      updatedAt: project.updatedAt,
-      attachmentCount: project.attachments?.length ?? 0,
-      threadCount: project.threads?.length ?? 0,
-    }));
+    const projectsWithCounts = projects.map((project) => {
+      const { attachments, threads, ...projectData } = project;
+      return {
+        ...projectData,
+        attachmentCount: attachments?.length ?? 0,
+        threadCount: threads?.length ?? 0,
+      };
+    });
 
     // Apply pagination
     const { items, pagination } = applyCursorPagination(
@@ -120,6 +123,40 @@ export const listProjectsHandler: RouteHandler<typeof listProjectsRoute, ApiEnv>
     );
 
     return Responses.cursorPaginated(c, items, pagination);
+  },
+);
+
+/**
+ * Get project limits for current user based on subscription tier
+ */
+export const getProjectLimitsHandler: RouteHandler<typeof getProjectLimitsRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    operationName: 'getProjectLimits',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const db = await getDbAsync();
+
+    const tier = await getUserTier(user.id);
+
+    // Get current project count
+    const existingProjects = await db.query.chatProject.findMany({
+      where: eq(tables.chatProject.userId, user.id),
+      columns: { id: true },
+    });
+
+    const currentProjects = existingProjects.length;
+    const maxProjects = tier === SubscriptionTiers.PRO ? PROJECT_LIMITS.MAX_PROJECTS_PER_USER : 0;
+    const maxThreadsPerProject = tier === SubscriptionTiers.PRO ? PROJECT_LIMITS.MAX_THREADS_PER_PROJECT : 0;
+
+    return Responses.ok(c, {
+      tier,
+      maxProjects,
+      currentProjects,
+      maxThreadsPerProject,
+      canCreateProject: tier === SubscriptionTiers.PRO && currentProjects < maxProjects,
+    });
   },
 );
 
@@ -185,6 +222,28 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
     const body = c.validated.body;
     const db = await getDbAsync();
 
+    // Check PRO tier - projects are PRO-only
+    const tier = await getUserTier(user.id);
+    if (tier === SubscriptionTiers.FREE) {
+      throw createError.unauthorized('Projects require Pro subscription', {
+        errorType: 'subscription',
+        resource: 'project',
+      });
+    }
+
+    // Check project count limit
+    const existingProjects = await db.query.chatProject.findMany({
+      where: eq(tables.chatProject.userId, user.id),
+      columns: { id: true },
+    });
+
+    if (existingProjects.length >= PROJECT_LIMITS.MAX_PROJECTS_PER_USER) {
+      throw createError.unauthorized(`Project limit reached (max ${PROJECT_LIMITS.MAX_PROJECTS_PER_USER})`, {
+        errorType: 'quota',
+        resource: 'project',
+      });
+    }
+
     const projectId = ulid();
     const r2FolderPrefix = `projects/${projectId}/`;
 
@@ -205,6 +264,7 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
         name: body.name,
         description: body.description,
         color: body.color || 'blue',
+        icon: body.icon || 'briefcase',
         customInstructions: body.customInstructions,
         autoragInstanceId,
         r2FolderPrefix,
@@ -260,6 +320,7 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
       name?: string;
       description?: string | null;
       color?: typeof body.color;
+      icon?: typeof body.icon;
       customInstructions?: string | null;
       autoragInstanceId?: string | null;
       settings?: typeof body.settings;
@@ -267,11 +328,13 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
     } = { updatedAt: new Date() };
 
     if (body.name !== undefined)
-      updateData.name = String(body.name);
+      updateData.name = body.name;
     if (body.description !== undefined)
-      updateData.description = body.description ? String(body.description) : null;
+      updateData.description = body.description || null;
     if (body.color !== undefined)
       updateData.color = body.color ?? undefined;
+    if (body.icon !== undefined)
+      updateData.icon = body.icon ?? undefined;
     if (body.customInstructions !== undefined)
       updateData.customInstructions = body.customInstructions || null;
     if (body.autoragInstanceId !== undefined)
@@ -303,7 +366,7 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
 );
 
 /**
- * Delete a project (cascades to attachments and updates threads)
+ * Delete a project (cascades to attachments and soft-deletes threads)
  */
 export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEnv> = createHandler(
   {
@@ -333,6 +396,36 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
       });
     }
 
+    // Get all threads in this project for cache invalidation
+    const threads = await db.query.chatThread.findMany({
+      where: eq(tables.chatThread.projectId, id),
+      columns: { id: true, slug: true, isPublic: true, previousSlug: true },
+    });
+
+    // Soft-delete all threads (matches deleteThreadHandler behavior)
+    if (threads.length > 0) {
+      await db.update(tables.chatThread)
+        .set({ status: ThreadStatuses.DELETED, updatedAt: new Date() })
+        .where(eq(tables.chatThread.projectId, id));
+
+      // Invalidate caches for public threads (non-blocking)
+      const cacheInvalidationTasks = threads
+        .filter((thread): thread is typeof thread & { slug: string } => thread.isPublic && !!thread.slug)
+        .flatMap((thread) => {
+          const tasks = [
+            invalidatePublicThreadCache(db, thread.slug, thread.id, c.env.UPLOADS_R2_BUCKET),
+          ];
+          if (thread.previousSlug) {
+            tasks.push(invalidatePublicThreadCache(db, thread.previousSlug, thread.id, c.env.UPLOADS_R2_BUCKET));
+          }
+          return tasks;
+        });
+
+      if (cacheInvalidationTasks.length > 0 && c.executionCtx) {
+        c.executionCtx.waitUntil(Promise.all(cacheInvalidationTasks).catch(() => {}));
+      }
+    }
+
     // Delete project from DB (cascade will handle projectAttachment and projectMemory)
     // Note: We don't delete R2 files here since they're managed via the upload table
     await db.delete(tables.chatProject).where(eq(tables.chatProject.id, id));
@@ -340,7 +433,78 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
     return Responses.ok(c, {
       id,
       deleted: true,
+      deletedThreadCount: threads.length,
     });
+  },
+);
+
+// ============================================================================
+// PROJECT THREADS HANDLERS
+// ============================================================================
+
+// TODO: DEPRECATE - Remove after frontend migrates to /chat/threads?projectId=X
+// See route.ts for full action plan
+/**
+ * List threads for a project
+ */
+export const listProjectThreadsHandler: RouteHandler<typeof listProjectThreadsRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: IdParamSchema,
+    validateQuery: ListProjectThreadsQuerySchema,
+    operationName: 'listProjectThreads',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { id: projectId } = c.validated.params;
+    const query = c.validated.query;
+    const db = await getDbAsync();
+
+    // Verify project ownership
+    const project = await db.query.chatProject.findFirst({
+      where: and(
+        eq(tables.chatProject.id, projectId),
+        eq(tables.chatProject.userId, user.id),
+      ),
+    });
+
+    if (!project) {
+      throw createError.notFound(`Project not found: ${projectId}`, {
+        errorType: 'resource',
+        resource: 'project',
+        resourceId: projectId,
+      });
+    }
+
+    // Get threads for this project using query API (consistent with other handlers)
+    // Note: isFavorite/pin is NOT supported for project threads
+    const threads = await db.query.chatThread.findMany({
+      where: eq(tables.chatThread.projectId, projectId),
+      columns: {
+        id: true,
+        title: true,
+        slug: true,
+        createdAt: true,
+        updatedAt: true,
+      },
+      orderBy: (thread, { desc }) => [desc(thread.updatedAt)],
+      limit: query.limit + 1,
+      offset: query.cursor ? 1 : 0,
+    });
+
+    const { items, pagination } = applyCursorPagination(
+      threads,
+      query.limit,
+      thread => createTimestampCursor(thread.updatedAt),
+    );
+
+    return Responses.cursorPaginated(c, items.map(t => ({
+      id: t.id,
+      title: t.title,
+      slug: t.slug,
+      createdAt: t.createdAt.toISOString(),
+      updatedAt: t.updatedAt.toISOString(),
+    })), pagination);
   },
 );
 

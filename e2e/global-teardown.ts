@@ -84,7 +84,7 @@ function cleanupTestData(): void {
 
     for (const sql of cleanupQueries) {
       try {
-        execSync(`npx wrangler d1 execute DB --local --command="${sql}"`, {
+        execSync(`bunx wrangler d1 execute DB --local --command="${sql}"`, {
           stdio: 'pipe',
           encoding: 'utf-8',
         });

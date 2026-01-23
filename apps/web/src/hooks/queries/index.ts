@@ -26,9 +26,12 @@ export { useProductsQuery } from './products';
 export {
   useProjectAttachmentsQuery,
   useProjectContextQuery,
+  useProjectLimitsQuery,
   useProjectMemoriesQuery,
   useProjectQuery,
   useProjectsQuery,
+  useProjectThreadsQuery,
+  useSidebarProjectsQuery,
 } from './projects';
 export {
   useSubscriptionQuery,

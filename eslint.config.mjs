@@ -17,6 +17,7 @@ export default antfu(
       '**/cloudflare-env.d.ts',
       '**/*.md',
       '.claude/**/*',
+      '.agents/**/*',
       '.turbo/**/*',
       'scripts/**/*',
       '**/scripts/**/*',

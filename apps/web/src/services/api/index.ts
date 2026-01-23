@@ -6,7 +6,7 @@
  */
 
 // ============================================================================
-// Admin Domain Services
+// Shared Types
 // ============================================================================
 
 export {
@@ -20,7 +20,7 @@ export {
 } from './admin';
 
 // ============================================================================
-// Auth Domain Services
+// Admin Domain Services
 // ============================================================================
 
 export {
@@ -44,7 +44,7 @@ export {
 } from './auth';
 
 // ============================================================================
-// Billing Domain Services
+// Auth Domain Services
 // ============================================================================
 
 export {
@@ -79,7 +79,7 @@ export {
 } from './billing';
 
 // ============================================================================
-// Chat Domain Services
+// Billing Domain Services
 // ============================================================================
 
 export {
@@ -223,7 +223,7 @@ export {
 } from './chat';
 
 // ============================================================================
-// Presets Domain Services
+// Chat Domain Services
 // ============================================================================
 
 // Pre-search validation schema from chat service
@@ -233,7 +233,7 @@ export {
 } from './chat/pre-search';
 
 // ============================================================================
-// Projects Domain Services
+// Presets Domain Services
 // ============================================================================
 
 export {
@@ -244,7 +244,7 @@ export {
 } from './models';
 
 // ============================================================================
-// User Presets Domain Services
+// Projects Domain Services
 // ============================================================================
 
 export {
@@ -267,7 +267,7 @@ export {
 } from './presets';
 
 // ============================================================================
-// Usage Domain Services
+// User Presets Domain Services
 // ============================================================================
 
 export {
@@ -292,6 +292,8 @@ export {
   type GetProjectContextRequest,
   type GetProjectContextResponse,
   getProjectContextService,
+  type GetProjectLimitsResponse,
+  getProjectLimitsService,
   type GetProjectMemoryRequest,
   type GetProjectMemoryResponse,
   getProjectMemoryService,
@@ -309,6 +311,7 @@ export {
   type ListProjectsRequest,
   type ListProjectsResponse,
   listProjectsService,
+  type ProjectLimits,
   type RemoveAttachmentFromProjectRequest,
   type RemoveAttachmentFromProjectResponse,
   removeAttachmentFromProjectService,
@@ -322,6 +325,12 @@ export {
   type UpdateProjectResponse,
   updateProjectService,
 } from './projects';
+
+// ============================================================================
+// Usage Domain Services
+// ============================================================================
+
+export type { ServiceOptions } from './types';
 
 // ============================================================================
 // Feedback Domain Services

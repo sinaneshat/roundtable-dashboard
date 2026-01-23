@@ -2,7 +2,7 @@
  * Generate Static OG Image
  *
  * Creates the default static OG image matching roundtable.now style.
- * Run with: npx tsx scripts/generate-static-og-image.ts
+ * Run with: bunx tsx scripts/generate-static-og-image.ts
  *
  * Output: ../apps/web/public/static/og-image.png
  */

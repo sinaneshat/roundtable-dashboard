@@ -100,6 +100,8 @@ export type UseChatAttachmentsReturn = z.infer<typeof _UseChatAttachmentsReturnS
   clearAttachments: () => void;
   /** Retry a failed upload */
   retryUpload: (id: string) => void;
+  /** Cancel an in-progress upload */
+  cancelUpload: (id: string) => Promise<void>;
 };
 
 /**
@@ -146,6 +148,7 @@ export function useChatAttachments(): UseChatAttachmentsReturn {
     removeItem,
     clearAll,
     retryUpload: retryUploadItem,
+    cancelUpload: cancelUploadItem,
     state,
     validation,
   } = useFileUpload({
@@ -226,6 +229,10 @@ export function useChatAttachments(): UseChatAttachmentsReturn {
     retryUploadItem(id);
   }, [retryUploadItem]);
 
+  const cancelUpload = useCallback((id: string) => {
+    return cancelUploadItem(id);
+  }, [cancelUploadItem]);
+
   return {
     attachments,
     hasAttachments: items.length > 0,
@@ -236,6 +243,7 @@ export function useChatAttachments(): UseChatAttachmentsReturn {
     removeAttachment,
     clearAttachments,
     retryUpload,
+    cancelUpload,
     uploadState: {
       total: state.total,
       pending: state.pending,

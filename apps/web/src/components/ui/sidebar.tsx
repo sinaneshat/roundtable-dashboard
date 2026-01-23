@@ -667,7 +667,7 @@ function SidebarMenuSub({ className, ...props }: ComponentProps<'ul'>) {
     <ul
       data-sidebar="menu-sub"
       className={cn(
-        'border-sidebar-border mx-2 flex min-w-0 translate-x-px flex-col gap-0.5 border-s px-2 py-0.5',
+        'border-sidebar-border mx-2 flex min-w-0 translate-x-px flex-col gap-1 border-s px-2 py-1',
         'group-data-[collapsible=icon]:hidden',
         className,
       )}

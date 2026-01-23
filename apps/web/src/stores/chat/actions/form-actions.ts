@@ -1,7 +1,6 @@
 import type { ChatMode } from '@roundtable/shared';
 import { MessagePartTypes, MessageRoles } from '@roundtable/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useNavigate } from '@tanstack/react-router';
 import { useCallback } from 'react';
 import { z } from 'zod';
 import { useShallow } from 'zustand/react/shallow';
@@ -39,7 +38,7 @@ export type AttachmentInfo = z.infer<typeof AttachmentInfoSchema>;
  * Return type for useChatFormActions hook
  */
 export type UseChatFormActionsReturn = {
-  handleCreateThread: (attachmentIds?: string[], attachmentInfos?: AttachmentInfo[]) => Promise<void>;
+  handleCreateThread: (attachmentIds?: string[], attachmentInfos?: AttachmentInfo[], projectId?: string) => Promise<void>;
   handleUpdateThreadAndSend: (threadId: string, attachmentIds?: string[], attachmentInfos?: AttachmentInfo[]) => Promise<void>;
   handleResetForm: () => void;
   handleModeChange: (mode: ChatMode) => void;
@@ -60,7 +59,6 @@ export type UseChatFormActionsReturn = {
  */
 export function useChatFormActions(): UseChatFormActionsReturn {
   const queryClient = useQueryClient();
-  const navigate = useNavigate();
   const storeApi = useChatStoreApi();
 
   const formState = useChatStore(useShallow(s => ({
@@ -116,7 +114,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     && formState.selectedMode,
   );
 
-  const handleCreateThread = useCallback(async (attachmentIds?: string[], _attachmentInfos?: AttachmentInfo[]) => {
+  const handleCreateThread = useCallback(async (attachmentIds?: string[], _attachmentInfos?: AttachmentInfo[], projectId?: string) => {
     // ✅ CRITICAL FIX: Use fresh state from storeApi instead of stale formState closure
     // After auto mode analysis updates the store, formState still has old values
     // This was causing enableWebSearch and participants from auto mode to be ignored
@@ -138,7 +136,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         mode: freshSelectedMode,
         participants: freshSelectedParticipants,
         enableWebSearch: freshEnableWebSearch,
-      }, attachmentIds);
+      }, attachmentIds, projectId);
 
       const apiResponse = await createThreadMutation.mutateAsync({
         json: createThreadRequest,
@@ -170,48 +168,108 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
       actions.setSelectedParticipants(syncedParticipantConfigs);
 
-      queryClient.setQueriesData(
-        {
-          queryKey: queryKeys.threads.all,
-          predicate: isListOrSidebarQuery,
-        },
-        (old: unknown) => {
-          const parsedQuery = validateInfiniteQueryCache(old);
-          if (!parsedQuery)
-            return old;
+      // Thread item for cache updates
+      const threadItem = {
+        id: thread.id,
+        title: thread.title,
+        slug: thread.slug,
+        mode: thread.mode,
+        status: thread.status,
+        isFavorite: thread.isFavorite,
+        isPublic: thread.isPublic,
+        isAiGeneratedTitle: thread.isAiGeneratedTitle,
+        enableWebSearch: thread.enableWebSearch,
+        createdAt: thread.createdAt,
+        updatedAt: thread.updatedAt,
+        lastMessageAt: thread.lastMessageAt,
+      };
 
-          const threadItem = {
-            id: thread.id,
-            title: thread.title,
-            slug: thread.slug,
-            mode: thread.mode,
-            status: thread.status,
-            isFavorite: thread.isFavorite,
-            isPublic: thread.isPublic,
-            isAiGeneratedTitle: thread.isAiGeneratedTitle,
-            enableWebSearch: thread.enableWebSearch,
-            createdAt: thread.createdAt,
-            updatedAt: thread.updatedAt,
-            lastMessageAt: thread.lastMessageAt,
-          };
+      if (projectId) {
+        // Update project threads cache
+        queryClient.setQueriesData(
+          { queryKey: queryKeys.projects.threads(projectId) },
+          (old: unknown) => {
+            const parsedQuery = validateInfiniteQueryCache(old);
+            if (!parsedQuery)
+              return old;
 
-          return {
-            ...parsedQuery,
-            pages: parsedQuery.pages.map((page, index) => {
-              if (index !== 0 || !page.success || !page.data?.items)
-                return page;
+            return {
+              ...parsedQuery,
+              pages: parsedQuery.pages.map((page, index) => {
+                if (index !== 0 || !page.success || !page.data?.items)
+                  return page;
 
-              return {
-                ...page,
-                data: {
-                  ...page.data,
-                  items: [threadItem, ...page.data.items],
-                },
-              };
-            }),
-          };
-        },
-      );
+                return {
+                  ...page,
+                  data: {
+                    ...page.data,
+                    items: [threadItem, ...page.data.items],
+                  },
+                };
+              }),
+            };
+          },
+        );
+
+        // Increment thread count in sidebar projects cache
+        queryClient.setQueriesData(
+          { queryKey: queryKeys.projects.sidebar() },
+          (old: unknown) => {
+            const parsedQuery = validateInfiniteQueryCache(old);
+            if (!parsedQuery)
+              return old;
+
+            return {
+              ...parsedQuery,
+              pages: parsedQuery.pages.map((page) => {
+                if (!page.success || !page.data?.items)
+                  return page;
+
+                return {
+                  ...page,
+                  data: {
+                    ...page.data,
+                    items: page.data.items.map((item: { id: string; threadCount?: number }) =>
+                      item.id === projectId
+                        ? { ...item, threadCount: (item.threadCount ?? 0) + 1 }
+                        : item,
+                    ),
+                  },
+                };
+              }),
+            };
+          },
+        );
+      } else {
+        // Update general threads cache (existing behavior)
+        queryClient.setQueriesData(
+          {
+            queryKey: queryKeys.threads.all,
+            predicate: isListOrSidebarQuery,
+          },
+          (old: unknown) => {
+            const parsedQuery = validateInfiniteQueryCache(old);
+            if (!parsedQuery)
+              return old;
+
+            return {
+              ...parsedQuery,
+              pages: parsedQuery.pages.map((page, index) => {
+                if (index !== 0 || !page.success || !page.data?.items)
+                  return page;
+
+                return {
+                  ...page,
+                  data: {
+                    ...page.data,
+                    items: [threadItem, ...page.data.items],
+                  },
+                };
+              }),
+            };
+          },
+        );
+      }
 
       // ✅ FIX: Pre-populate thread-by-slug cache BEFORE URL update
       // This prevents skeleton flash when navigating to /chat/{slug} later
@@ -255,17 +313,26 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         meta: createPrefetchMeta(),
       });
 
-      // ✅ FIX v8: Use TanStack Router navigate with replace instead of window.history.replaceState
-      // window.history.replaceState triggers route loader re-runs and state resets
-      // TanStack Router's navigate with replace: true does a client-side URL update only
-      rlog.flow('create', `3-queueMicrotask navigate slug=${thread.slug}`);
+      // ✅ FIX v9: Use window.history.replaceState for URL updates
+      // ChatView is already rendering - full navigation is unnecessary and causes context loss
+      // This matches the pattern in flow-controller.ts (line 218-228)
+      rlog.flow('create', `3-queueMicrotask replaceState slug=${thread.slug} projectId=${projectId ?? 'none'}`);
       queueMicrotask(() => {
-        rlog.flow('create', `4-MICROTASK-FIRE navigate to /chat/${thread.slug}`);
-        navigate({
-          to: '/chat/$slug',
-          params: { slug: thread.slug },
-          replace: true,
-        });
+        if (projectId) {
+          rlog.flow('create', `4-MICROTASK-FIRE replaceState /chat/projects/${projectId}/${thread.slug}`);
+          window.history.replaceState(
+            window.history.state,
+            '',
+            `/chat/projects/${projectId}/${thread.slug}`,
+          );
+        } else {
+          rlog.flow('create', `4-MICROTASK-FIRE replaceState /chat/${thread.slug}`);
+          window.history.replaceState(
+            window.history.state,
+            '',
+            `/chat/${thread.slug}`,
+          );
+        }
       });
 
       actions.setInputValue('');
@@ -307,7 +374,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     createThreadMutation,
     actions,
     queryClient,
-    navigate,
   ]);
 
   const handleUpdateThreadAndSend = useCallback(async (threadId: string, attachmentIds?: string[], attachmentInfos?: AttachmentInfo[]) => {

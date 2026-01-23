@@ -10,6 +10,7 @@ import { parseResponse } from 'hono/client';
 
 import type { ApiClientType } from '@/lib/api/client';
 import { createApiClient } from '@/lib/api/client';
+import type { ServiceOptions } from '@/services/api/types';
 
 // ============================================================================
 // Type Inference - Project Operations
@@ -92,6 +93,14 @@ export type GetProjectContextResponse = InferResponseType<GetProjectContextEndpo
 export type GetProjectContextRequest = InferRequestType<GetProjectContextEndpoint>;
 
 // ============================================================================
+// Type Inference - Project Limits
+// ============================================================================
+
+type GetProjectLimitsEndpoint = ApiClientType['projects']['limits']['$get'];
+export type GetProjectLimitsResponse = InferResponseType<GetProjectLimitsEndpoint, 200>;
+export type ProjectLimits = GetProjectLimitsResponse extends { success: true; data: infer D } ? D : never;
+
+// ============================================================================
 // Service Functions - Project CRUD
 // ============================================================================
 
@@ -99,8 +108,8 @@ export type GetProjectContextRequest = InferRequestType<GetProjectContextEndpoin
  * List projects with cursor pagination
  * Protected endpoint - requires authentication
  */
-export async function listProjectsService(data?: ListProjectsRequest) {
-  const client = createApiClient();
+export async function listProjectsService(data?: ListProjectsRequest, options?: ServiceOptions) {
+  const client = createApiClient({ cookieHeader: options?.cookieHeader });
   return parseResponse(client.projects.$get(data ?? { query: {} }));
 }
 
@@ -117,8 +126,8 @@ export async function createProjectService(data: CreateProjectRequest) {
  * Get a specific project by ID
  * Protected endpoint - requires authentication (ownership check)
  */
-export async function getProjectService(data: GetProjectRequest) {
-  const client = createApiClient();
+export async function getProjectService(data: GetProjectRequest, options?: ServiceOptions) {
+  const client = createApiClient({ cookieHeader: options?.cookieHeader });
   return parseResponse(client.projects[':id'].$get(data));
 }
 
@@ -148,8 +157,8 @@ export async function deleteProjectService(data: DeleteProjectRequest) {
  * List attachments for a project
  * Protected endpoint - requires authentication
  */
-export async function listProjectAttachmentsService(data: ListProjectAttachmentsRequest) {
-  const client = createApiClient();
+export async function listProjectAttachmentsService(data: ListProjectAttachmentsRequest, options?: ServiceOptions) {
+  const client = createApiClient({ cookieHeader: options?.cookieHeader });
   return parseResponse(client.projects[':id'].attachments.$get(data));
 }
 
@@ -197,8 +206,8 @@ export async function removeAttachmentFromProjectService(data: RemoveAttachmentF
  * List memories for a project
  * Protected endpoint - requires authentication
  */
-export async function listProjectMemoriesService(data: ListProjectMemoriesRequest) {
-  const client = createApiClient();
+export async function listProjectMemoriesService(data: ListProjectMemoriesRequest, options?: ServiceOptions) {
+  const client = createApiClient({ cookieHeader: options?.cookieHeader });
   return parseResponse(client.projects[':id'].memories.$get(data));
 }
 
@@ -249,6 +258,19 @@ export async function deleteProjectMemoryService(data: DeleteProjectMemoryReques
 export async function getProjectContextService(data: GetProjectContextRequest) {
   const client = createApiClient();
   return parseResponse(client.projects[':id'].context.$get(data));
+}
+
+// ============================================================================
+// Service Functions - Project Limits
+// ============================================================================
+
+/**
+ * Get project limits based on user subscription tier
+ * Protected endpoint - requires authentication
+ */
+export async function getProjectLimitsService(options?: ServiceOptions) {
+  const client = createApiClient({ cookieHeader: options?.cookieHeader });
+  return parseResponse(client.projects.limits.$get());
 }
 
 // ============================================================================

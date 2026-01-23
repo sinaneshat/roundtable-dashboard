@@ -38,7 +38,7 @@ import {
  * - All participant responses are persisted
  * - Moderator summary is generated (for 2+ participants)
  *
- * Run with: pnpm exec playwright test e2e/flows/comprehensive-background-completion.spec.ts --project=chromium
+ * Run with: bun run exec playwright test e2e/flows/comprehensive-background-completion.spec.ts --project=chromium
  */
 
 test.describe('Comprehensive Background Completion Tests', () => {

@@ -1,8 +1,10 @@
+import type { InfiniteData } from '@tanstack/react-query';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { shouldRetryMutation } from '@/hooks/utils';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
-import type { ListProjectsResponse } from '@/services/api';
+import { toastManager } from '@/lib/toast';
+import type { GetProjectResponse, ListProjectAttachmentsResponse, ListProjectsResponse } from '@/services/api';
 import {
   addUploadToProjectService,
   createProjectMemoryService,
@@ -32,7 +34,9 @@ export function useCreateProjectMutation() {
   return useMutation<CreateProjectResult, Error, Parameters<typeof createProjectService>[0]>({
     mutationFn: createProjectService,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      invalidationPatterns.projects.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
     },
     retry: false,
     throwOnError: false,
@@ -48,27 +52,57 @@ export function useUpdateProjectMutation() {
       if (response.success && response.data) {
         const updatedProject = response.data;
 
-        queryClient.setQueryData<ListProjectsResponse>(
-          queryKeys.projects.list(),
-          (oldData: ListProjectsResponse | undefined) => {
-            if (!oldData?.success || !oldData.data?.items)
-              return oldData;
+        // 1. Update infinite query caches (sidebar and list use useInfiniteQuery with pages structure)
+        queryClient.setQueriesData<InfiniteData<ListProjectsResponse>>(
+          {
+            queryKey: queryKeys.projects.all,
+            predicate: (query) => {
+              if (!Array.isArray(query.queryKey) || query.queryKey.length < 2)
+                return false;
+              return query.queryKey[1] === 'list' || query.queryKey[1] === 'sidebar';
+            },
+          },
+          (old) => {
+            if (!old?.pages)
+              return old;
 
             return {
-              ...oldData,
-              data: {
-                ...oldData.data,
-                items: oldData.data.items.map(
-                  (project: typeof oldData.data.items[number]) => (project.id === updatedProject.id ? updatedProject : project),
-                ),
-              },
+              ...old,
+              pages: old.pages.map((page) => {
+                if (!page.success || !page.data?.items)
+                  return page;
+
+                return {
+                  ...page,
+                  data: {
+                    ...page.data,
+                    items: page.data.items.map(
+                      project => (project.id === updatedProject.id ? updatedProject : project),
+                    ),
+                  },
+                };
+              }),
             };
+          },
+        );
+
+        // 2. Update detail query directly (optimistic)
+        queryClient.setQueryData(
+          queryKeys.projects.detail(variables.param.id),
+          (old: GetProjectResponse | undefined) => {
+            if (!old?.success || !old.data)
+              return old;
+            return { ...old, data: updatedProject };
           },
         );
       }
 
+      // 3. Invalidate and force refetch for active observers
       invalidationPatterns.projectDetail(variables.param.id).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
+        queryClient.invalidateQueries({
+          queryKey: key,
+          refetchType: 'active',
+        });
       });
     },
     retry: shouldRetryMutation,
@@ -117,10 +151,16 @@ export function useDeleteProjectMutation() {
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.projects.all,
-        refetchType: 'active',
+      // Invalidate all project queries including sidebar
+      invalidationPatterns.projects.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
       });
+
+      // Invalidate thread queries since threads were soft-deleted
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.all });
+
+      // Invalidate usage stats to reflect deleted threads
+      queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
     },
     retry: shouldRetryMutation,
     throwOnError: false,
@@ -132,12 +172,61 @@ export function useAddAttachmentToProjectMutation() {
 
   return useMutation<AddUploadToProjectResult, Error, Parameters<typeof addUploadToProjectService>[0]>({
     mutationFn: addUploadToProjectService,
-    onSuccess: (_data, variables) => {
-      const projectId = variables.param.id;
+    onSuccess: (data, variables) => {
+      if (!data.success || !data.data)
+        return;
 
+      const projectId = variables.param.id;
+      const newAttachment = data.data;
+
+      // Direct cache update - insert at top of infinite query
+      // Use setQueriesData with predicate to match all queries starting with attachments key
+      // (the actual query key includes indexStatus param which varies)
+      queryClient.setQueriesData<InfiniteData<ListProjectAttachmentsResponse>>(
+        {
+          queryKey: queryKeys.projects.attachments(projectId),
+          predicate: (query) => {
+            const key = query.queryKey;
+            if (!Array.isArray(key) || key.length < 3)
+              return false;
+            return key[0] === 'projects' && key[1] === 'attachments' && key[2] === projectId;
+          },
+        },
+        (oldData) => {
+          if (!oldData?.pages)
+            return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page, index) => {
+              if (index !== 0 || !page.success || !page.data)
+                return page;
+              return {
+                ...page,
+                data: {
+                  ...page.data,
+                  items: [newAttachment, ...page.data.items],
+                },
+              };
+            }),
+          };
+        },
+      );
+
+      // Only invalidate project detail for attachment count
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.detail(projectId),
+        refetchType: 'none',
+      });
+      queryClient.refetchQueries({ queryKey: queryKeys.projects.detail(projectId) });
+    },
+    onError: (_error, variables) => {
+      // On error, invalidate to get fresh state
+      const projectId = variables.param.id;
       invalidationPatterns.projectAttachments(projectId).forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
+      // Notify user of failure
+      toastManager.error('Failed to add file to project');
     },
     retry: false,
     throwOnError: false,
@@ -152,7 +241,15 @@ export function useUpdateProjectAttachmentMutation() {
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
 
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.attachments(projectId) });
+      // Use predicate to match all attachment queries (key includes indexStatus param)
+      queryClient.invalidateQueries({
+        predicate: (query) => {
+          const key = query.queryKey;
+          if (!Array.isArray(key) || key.length < 3)
+            return false;
+          return key[0] === 'projects' && key[1] === 'attachments' && key[2] === projectId;
+        },
+      });
     },
     retry: shouldRetryMutation,
     throwOnError: false,
@@ -166,9 +263,43 @@ export function useRemoveAttachmentFromProjectMutation() {
     mutationFn: removeAttachmentFromProjectService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
+      const attachmentId = variables.param.attachmentId;
 
-      invalidationPatterns.projectAttachments(projectId).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
+      // Optimistically remove attachment from cache using predicate
+      // (actual query key includes indexStatus param which varies)
+      queryClient.setQueriesData<InfiniteData<ListProjectAttachmentsResponse>>(
+        {
+          queryKey: queryKeys.projects.attachments(projectId),
+          predicate: (query) => {
+            const key = query.queryKey;
+            if (!Array.isArray(key) || key.length < 3)
+              return false;
+            return key[0] === 'projects' && key[1] === 'attachments' && key[2] === projectId;
+          },
+        },
+        (oldData) => {
+          if (!oldData?.pages)
+            return oldData;
+          return {
+            ...oldData,
+            pages: oldData.pages.map((page) => {
+              if (!page.success || !page.data)
+                return page;
+              return {
+                ...page,
+                data: {
+                  ...page.data,
+                  items: page.data.items.filter(item => item.id !== attachmentId),
+                },
+              };
+            }),
+          };
+        },
+      );
+
+      // Also invalidate project detail to update attachment count
+      queryClient.invalidateQueries({
+        queryKey: queryKeys.projects.detail(projectId),
       });
     },
     retry: shouldRetryMutation,

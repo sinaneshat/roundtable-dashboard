@@ -1,4 +1,5 @@
-import { SidebarCollapsibles, SidebarVariants } from '@roundtable/shared';
+import type { ProjectColor, ProjectIcon } from '@roundtable/shared';
+import { PROJECT_LIMITS, SidebarCollapsibles, SidebarVariants } from '@roundtable/shared';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
@@ -11,6 +12,14 @@ import type { CommandSearchProps } from '@/components/chat/command-search';
 import { NavUser } from '@/components/chat/nav-user';
 import type { ShareDialogProps } from '@/components/chat/share-dialog';
 import { Icons } from '@/components/icons';
+import type { ProjectListItemData } from '@/components/projects';
+import {
+  ProjectCreateDialog,
+  ProjectDeleteDialog,
+  ProjectList,
+  ProjectListSkeleton,
+} from '@/components/projects';
+import { Button } from '@/components/ui/button';
 import Image from '@/components/ui/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -26,16 +35,18 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { TooltipProvider } from '@/components/ui/tooltip';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants';
 import { useTogglePublicMutation } from '@/hooks/mutations';
-import { useSidebarThreadsQuery, useThreadQuery } from '@/hooks/queries';
+import { useProjectLimitsQuery, useSidebarProjectsQuery, useSidebarThreadsQuery, useThreadQuery } from '@/hooks/queries';
 import type { Session, User } from '@/lib/auth/types';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import dynamic from '@/lib/utils/dynamic';
-import type { ChatSidebarItem } from '@/services/api';
+import type { ChatSidebarItem, ListProjectsResponse } from '@/services/api';
 import { useNavigationReset } from '@/stores/chat';
+
+type ProjectItem = NonNullable<ListProjectsResponse['data']>['items'][number];
 
 const ShareDialog = dynamic<ShareDialogProps>(
   () => import('@/components/chat/share-dialog').then(m => ({ default: m.ShareDialog })),
@@ -56,8 +67,10 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const { pathname } = useLocation();
   const t = useTranslations();
   const [isSearchOpen, setIsSearchOpen] = useState(false);
+  const [isProjectsCollapsed, setIsProjectsCollapsed] = useState(false);
   const [isFavoritesCollapsed, setIsFavoritesCollapsed] = useState(false);
   const [isChatsCollapsed, setIsChatsCollapsed] = useState(false);
+  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
   const sidebarContentRef = useRef<HTMLDivElement>(null);
   const { isMobile, setOpenMobile } = useSidebar();
   const handleNavigationReset = useNavigationReset();
@@ -66,6 +79,37 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const [chatToShare, setChatToShare] = useState<ChatSidebarItem | null>(null);
   const [isShareDialogOpen, setIsShareDialogOpen] = useState(false);
   const togglePublicMutation = useTogglePublicMutation();
+
+  // Projects state
+  const {
+    data: projectsData,
+    isLoading: isProjectsLoading,
+    fetchNextPage: fetchNextProjectsPage,
+    hasNextPage: hasNextProjectsPage,
+    isFetchingNextPage: isFetchingNextProjectsPage,
+  } = useSidebarProjectsQuery();
+  const { data: projectLimits } = useProjectLimitsQuery();
+
+  // Project limits for PRO-only check
+  const canCreateProject = projectLimits?.success
+    ? projectLimits.data.canCreateProject
+    : false;
+  const maxThreadsPerProject = projectLimits?.success
+    ? projectLimits.data.maxThreadsPerProject
+    : PROJECT_LIMITS.MAX_THREADS_PER_PROJECT;
+  const tier = projectLimits?.success ? projectLimits.data.tier : 'free';
+  const maxProjects = projectLimits?.success ? projectLimits.data.maxProjects : 0;
+
+  const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
+  const [projectToEdit, setProjectToEdit] = useState<{
+    id: string;
+    name: string;
+    description?: string | null;
+    color?: ProjectColor | null;
+    icon?: ProjectIcon | null;
+    customInstructions?: string | null;
+  } | undefined>(undefined);
+  const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const { data: threadDetailData } = useThreadQuery(chatToShare?.id ?? '', !!chatToShare);
   const threadIsPublic = threadDetailData?.success && threadDetailData.data && typeof threadDetailData.data === 'object' && 'thread' in threadDetailData.data && threadDetailData.data.thread && typeof threadDetailData.data.thread === 'object' && 'isPublic' in threadDetailData.data.thread
@@ -95,6 +139,63 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     }));
   }, [threadsData]);
 
+  const projects: ProjectListItemData[] = useMemo(() => {
+    if (!projectsData?.pages)
+      return [];
+    return projectsData.pages.flatMap((page) => {
+      if (!page.success || !page.data?.items)
+        return [];
+      return page.data.items.map((project: ProjectItem): ProjectListItemData => ({
+        id: project.id,
+        name: project.name,
+        color: project.color ?? null,
+        icon: project.icon ?? null,
+        threadCount: project.threadCount ?? 0,
+      }));
+    });
+  }, [projectsData]);
+
+  const handleEditProject = useCallback((project: ProjectListItemData) => {
+    const fullProject = projectsData?.pages
+      .flatMap(page => page.success && page.data?.items ? page.data.items : [])
+      .find(p => p.id === project.id);
+
+    if (fullProject) {
+      setProjectToEdit({
+        id: fullProject.id,
+        name: fullProject.name,
+        description: fullProject.description,
+        color: fullProject.color,
+        icon: fullProject.icon,
+        customInstructions: fullProject.customInstructions,
+      });
+      setIsProjectDialogOpen(true);
+    }
+  }, [projectsData]);
+
+  const handleDeleteProject = useCallback((project: ProjectListItemData) => {
+    setProjectToDelete({ id: project.id, name: project.name });
+  }, []);
+
+  const handleCreateProject = useCallback(() => {
+    setProjectToEdit(undefined);
+    setIsProjectDialogOpen(true);
+  }, []);
+
+  const handleToggleProjectExpand = useCallback((projectId: string) => {
+    setExpandedProjects(prev => ({
+      ...prev,
+      [projectId]: !prev[projectId],
+    }));
+  }, []);
+
+  const handleNewThreadInProject = useCallback((projectId: string) => {
+    navigate({ to: '/chat/projects/$projectId/new', params: { projectId } });
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  }, [navigate, isMobile, setOpenMobile]);
+
   const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
       e.preventDefault();
@@ -123,14 +224,22 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const nonFavoriteChats = useMemo(() => chats.filter(chat => !chat.isFavorite), [chats]);
 
   const handleScroll = useCallback(() => {
-    if (!sidebarContentRef.current || !hasNextPage || isFetchingNextPage)
+    if (!sidebarContentRef.current)
       return;
     const { scrollTop, scrollHeight, clientHeight } = sidebarContentRef.current;
     const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
+
     if (scrollPercentage > 0.8) {
-      fetchNextPage();
+      // Fetch next page for threads
+      if (hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
+      }
+      // Fetch next page for projects
+      if (hasNextProjectsPage && !isFetchingNextProjectsPage) {
+        fetchNextProjectsPage();
+      }
     }
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [hasNextPage, isFetchingNextPage, fetchNextPage, hasNextProjectsPage, isFetchingNextProjectsPage, fetchNextProjectsPage]);
 
   useEffect(() => {
     const viewport = sidebarContentRef.current;
@@ -257,7 +366,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
               <SidebarMenuItem className="hidden group-data-[collapsible=icon]:flex">
                 <SidebarMenuButton asChild tooltip={t('navigation.newChat')} isActive={pathname === '/chat'}>
                   <Link to="/chat" preload="intent" onClick={handleNavLinkClick}>
-                    <Icons.plus />
+                    <Icons.plus className="size-4" />
                   </Link>
                 </SidebarMenuButton>
               </SidebarMenuItem>
@@ -280,6 +389,81 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
           <SidebarContent className="p-0 w-full min-w-0">
             <ScrollArea ref={sidebarContentRef} className="w-full h-full">
               <div className="flex flex-col w-full px-0.5 pr-4">
+                {/* Projects Section */}
+                <SidebarGroup className="group/projects pt-4 group-data-[collapsible=icon]:hidden">
+                  <SidebarGroupLabel className="flex items-center justify-between gap-0.5 px-4">
+                    <button
+                      type="button"
+                      className={cn(
+                        'flex items-center gap-0.5 text-left',
+                        projects.length > 0 && 'cursor-pointer',
+                      )}
+                      onClick={projects.length > 0 ? () => setIsProjectsCollapsed(!isProjectsCollapsed) : undefined}
+                      disabled={projects.length === 0}
+                    >
+                      <span className="text-sm font-medium truncate">
+                        {t('navigation.projects')}
+                      </span>
+                      {projects.length > 0 && (
+                        <Icons.chevronRight className={cn(
+                          'size-3 shrink-0 transition-all duration-200',
+                          !isProjectsCollapsed && 'rotate-90',
+                          !isProjectsCollapsed && 'opacity-0 group-hover/projects:opacity-100',
+                        )}
+                        />
+                      )}
+                    </button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="size-5 hover:bg-sidebar-accent"
+                          onClick={handleCreateProject}
+                          disabled={!canCreateProject}
+                        >
+                          <Icons.plus className="size-3.5" />
+                          <span className="sr-only">{t('projects.create')}</span>
+                        </Button>
+                      </TooltipTrigger>
+                      {!canCreateProject && (
+                        <TooltipContent>
+                          {tier === 'free'
+                            ? t('projects.proOnly')
+                            : t('projects.limitReached', { max: maxProjects })}
+                        </TooltipContent>
+                      )}
+                    </Tooltip>
+                  </SidebarGroupLabel>
+
+                  {isProjectsLoading && <ProjectListSkeleton count={3} />}
+
+                  {!isProjectsLoading && projects.length === 0 && (
+                    <div className="px-4 py-2">
+                      <p className="text-xs text-muted-foreground">
+                        {t('projects.empty')}
+                      </p>
+                    </div>
+                  )}
+
+                  {!isProjectsLoading && projects.length > 0 && !isProjectsCollapsed && (
+                    <>
+                      <ProjectList
+                        projects={projects}
+                        expandedProjects={expandedProjects}
+                        onToggleExpand={handleToggleProjectExpand}
+                        onEditProject={handleEditProject}
+                        onDeleteProject={handleDeleteProject}
+                        maxThreadsPerProject={maxThreadsPerProject}
+                        onNewThreadInProject={handleNewThreadInProject}
+                      />
+                      {isFetchingNextProjectsPage && (
+                        <ProjectListSkeleton count={3} />
+                      )}
+                    </>
+                  )}
+                </SidebarGroup>
+
                 {!isLoading && !isError && favorites.length > 0 && (
                   <SidebarGroup className="group/favorites pt-4 group-data-[collapsible=icon]:hidden">
                     <SidebarGroupLabel
@@ -385,6 +569,18 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
         isLoading={togglePublicMutation.isPending}
         onMakePublic={handleMakePublic}
         onMakePrivate={handleMakePrivate}
+      />
+
+      <ProjectCreateDialog
+        open={isProjectDialogOpen}
+        onOpenChange={setIsProjectDialogOpen}
+        editProject={projectToEdit}
+      />
+
+      <ProjectDeleteDialog
+        open={!!projectToDelete}
+        onOpenChange={open => !open && setProjectToDelete(null)}
+        project={projectToDelete}
       />
     </>
   );

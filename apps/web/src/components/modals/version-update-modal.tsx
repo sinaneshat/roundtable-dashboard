@@ -5,6 +5,7 @@ import { useServiceWorker } from '@/components/providers';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
+  DialogBody,
   DialogContent,
   DialogDescription,
   DialogFooter,
@@ -79,11 +80,11 @@ export function VersionUpdateModal() {
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-4 bg-black/50 backdrop-blur-lg p-6">
+        <DialogBody glass>
           <p className="text-sm text-muted-foreground">
             {t('version.updateDescription')}
           </p>
-        </div>
+        </DialogBody>
 
         <DialogFooter>
           <Button onClick={handleUpdate} className="w-full">

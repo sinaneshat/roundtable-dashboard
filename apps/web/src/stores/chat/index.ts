@@ -14,7 +14,7 @@ export { useFlowStateMachine } from './actions/flow-state-machine';
 export type { AttachmentInfo, UseChatFormActionsReturn } from './actions/form-actions';
 export { useChatFormActions } from './actions/form-actions';
 export { useNavigationReset } from './actions/navigation-reset';
-export type { UseOverviewActionsReturn } from './actions/overview-actions';
+export type { UseOverviewActionsOptions, UseOverviewActionsReturn } from './actions/overview-actions';
 export { useOverviewActions } from './actions/overview-actions';
 export type { UseScreenInitializationOptions } from './actions/screen-initialization';
 export { useScreenInitialization } from './actions/screen-initialization';

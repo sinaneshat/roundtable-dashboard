@@ -42,7 +42,17 @@ export const LIMITS = {
 } as const;
 
 // ============================================================================
+// PROJECT LIMITS - PRO-only feature constraints
+// ============================================================================
+
+export const PROJECT_LIMITS = {
+  MAX_PROJECTS_PER_USER: 5,
+  MAX_THREADS_PER_PROJECT: 10,
+} as const;
+
+// ============================================================================
 // TYPE EXPORT
 // ============================================================================
 
 export type Limits = typeof LIMITS;
+export type ProjectLimits = typeof PROJECT_LIMITS;

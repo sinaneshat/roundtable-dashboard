@@ -3,9 +3,11 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
 import { ChatLayoutProviders } from '@/components/providers/chat-layout-providers';
 import { PreferencesStoreProvider } from '@/components/providers/preferences-store-provider';
+import { useSessionQuerySync } from '@/hooks/utils';
 import { useSession } from '@/lib/auth/client';
 import {
   modelsQueryOptions,
+  sidebarProjectsQueryOptions,
   sidebarThreadsQueryOptions,
   subscriptionsQueryOptions,
   usageQueryOptions,
@@ -49,6 +51,7 @@ export const Route = createFileRoute('/_protected')({
         queryClient.ensureQueryData(subscriptionsQueryOptions),
         queryClient.ensureQueryData(usageQueryOptions),
         queryClient.ensureInfiniteQueryData(sidebarThreadsQueryOptions),
+        queryClient.ensureInfiniteQueryData(sidebarProjectsQueryOptions),
       ]);
     } catch (error) {
       console.error('[PROTECTED] Loader prefetch error:', error);
@@ -80,6 +83,9 @@ function ProtectedLayout() {
   // Falls back to route context for SSR hydration
   const { data: clientSession } = useSession();
   const activeSession = clientSession ?? routeContext.session;
+
+  // Auto-invalidate query cache when userId changes (logout->login, impersonation, etc.)
+  useSessionQuerySync();
 
   // Single render path - always render layout shell
   // If no session on server, shell renders with null (minimal UI)

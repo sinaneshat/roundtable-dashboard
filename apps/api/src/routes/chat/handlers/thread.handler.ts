@@ -1,5 +1,5 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import { SUBSCRIPTION_TIER_NAMES } from '@roundtable/shared';
+import { PROJECT_LIMITS, SUBSCRIPTION_TIER_NAMES } from '@roundtable/shared';
 import type { ChatMode, ThreadStatus } from '@roundtable/shared/enums';
 import { ChangelogChangeTypes, ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, PlanTypes, SubscriptionTiers, ThreadStatusSchema } from '@roundtable/shared/enums';
 import type { SQL } from 'drizzle-orm';
@@ -49,6 +49,7 @@ import {
 import type { ModelForPricing } from '@/services/billing/product-logic.service';
 import { trackThreadCreated } from '@/services/errors';
 import { getModelById } from '@/services/models';
+import { autoLinkUploadsToProject } from '@/services/projects';
 import { generateTitleFromMessage, generateUniqueSlug, updateThreadTitleAndSlug } from '@/services/prompts';
 import { logModeChange, logWebSearchToggle } from '@/services/threads';
 import { cancelUploadCleanup, generateBatchSignedPaths, isCleanupSchedulerAvailable } from '@/services/uploads';
@@ -108,6 +109,26 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
       eq(tables.chatThread.userId, user.id),
       ne(tables.chatThread.status, ThreadStatusSchema.enum.deleted),
     ];
+
+    // ✅ PROJECT FILTER: If projectId provided, verify ownership and filter by project
+    if (query.projectId) {
+      const project = await db.query.chatProject.findFirst({
+        where: and(
+          eq(tables.chatProject.id, query.projectId),
+          eq(tables.chatProject.userId, user.id),
+        ),
+        columns: { id: true },
+      });
+      if (!project) {
+        throw createError.notFound(`Project not found: ${query.projectId}`, {
+          errorType: 'resource',
+          resource: 'project',
+          resourceId: query.projectId,
+        });
+      }
+      filters.push(eq(tables.chatThread.projectId, query.projectId));
+    }
+
     const fetchLimit = query.search ? 200 : (query.limit + 1);
 
     // ✅ DB-LEVEL CACHING: Cache thread list queries for faster subsequent loads
@@ -126,7 +147,7 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
       .limit(fetchLimit)
       .$withCache({
         config: { ex: STALE_TIMES.threadListKV }, // 2 minutes cache
-        tag: ThreadCacheTags.list(user.id),
+        tag: query.projectId ? `project-threads-${query.projectId}` : ThreadCacheTags.list(user.id),
       });
 
     let threads = allThreads;
@@ -148,12 +169,17 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
       thread => createTimestampCursor(thread.updatedAt),
     );
 
+    // ✅ PROJECT THREADS: Omit isFavorite for project threads (not supported)
+    const transformedItems = query.projectId
+      ? items.map(({ isFavorite: _isFavorite, ...rest }) => rest)
+      : items;
+
     // ✅ PERF: Cache sidebar thread list for faster navigation
     // CDN-Cache-Control: no-store prevents Cloudflare edge caching for mutable user data
     c.header('Cache-Control', 'private, no-cache, must-revalidate');
     c.header('CDN-Cache-Control', 'no-store');
 
-    return Responses.cursorPaginated(c, items, pagination);
+    return Responses.cursorPaginated(c, transformedItems, pagination);
   },
 );
 
@@ -172,6 +198,26 @@ export const listSidebarThreadsHandler: RouteHandler<typeof listSidebarThreadsRo
       eq(tables.chatThread.userId, user.id),
       ne(tables.chatThread.status, ThreadStatusSchema.enum.deleted),
     ];
+
+    // ✅ PROJECT FILTER: If projectId provided, verify ownership and filter by project
+    if (query.projectId) {
+      const project = await db.query.chatProject.findFirst({
+        where: and(
+          eq(tables.chatProject.id, query.projectId),
+          eq(tables.chatProject.userId, user.id),
+        ),
+        columns: { id: true },
+      });
+      if (!project) {
+        throw createError.notFound(`Project not found: ${query.projectId}`, {
+          errorType: 'resource',
+          resource: 'project',
+          resourceId: query.projectId,
+        });
+      }
+      filters.push(eq(tables.chatThread.projectId, query.projectId));
+    }
+
     const fetchLimit = query.search ? 200 : (query.limit + 1);
 
     const allThreadsRaw = await db
@@ -187,20 +233,31 @@ export const listSidebarThreadsHandler: RouteHandler<typeof listSidebarThreadsRo
       .limit(fetchLimit)
       .$withCache({
         config: { ex: STALE_TIMES.threadSidebarKV },
-        tag: ThreadCacheTags.sidebar(user.id),
+        tag: query.projectId ? `project-sidebar-${query.projectId}` : ThreadCacheTags.sidebar(user.id),
       });
 
     // Map to lightweight sidebar schema
-    const allThreads = allThreadsRaw.map(t => ({
-      id: t.id,
-      title: t.title,
-      slug: t.slug,
-      previousSlug: t.previousSlug,
-      isFavorite: t.isFavorite,
-      isPublic: t.isPublic,
-      createdAt: t.createdAt,
-      updatedAt: t.updatedAt,
-    }));
+    // ✅ PROJECT THREADS: Conditionally omit isFavorite for project threads
+    const allThreads = allThreadsRaw.map(t => query.projectId
+      ? {
+          id: t.id,
+          title: t.title,
+          slug: t.slug,
+          previousSlug: t.previousSlug,
+          isPublic: t.isPublic,
+          createdAt: t.createdAt,
+          updatedAt: t.updatedAt,
+        }
+      : {
+          id: t.id,
+          title: t.title,
+          slug: t.slug,
+          previousSlug: t.previousSlug,
+          isFavorite: t.isFavorite,
+          isPublic: t.isPublic,
+          createdAt: t.createdAt,
+          updatedAt: t.updatedAt,
+        });
 
     let threads = allThreads;
     if (query.search?.trim()) {
@@ -284,6 +341,25 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       console.error('[CREATE-THREAD-DEBUG] User tier:', { userTier });
     }
 
+    // ✅ PROJECT THREAD LIMIT: Check thread count if creating thread in a project
+    if (body.projectId) {
+      const existingThreads = await db.query.chatThread.findMany({
+        where: eq(tables.chatThread.projectId, body.projectId),
+        columns: { id: true },
+      });
+
+      if (existingThreads.length >= PROJECT_LIMITS.MAX_THREADS_PER_PROJECT) {
+        throw createError.unauthorized(
+          `Thread limit reached for project (max ${PROJECT_LIMITS.MAX_THREADS_PER_PROJECT})`,
+          {
+            errorType: 'quota',
+            resource: 'thread',
+            resourceId: body.projectId,
+          },
+        );
+      }
+    }
+
     // ✅ FREE ROUND BYPASS: Free users who haven't completed their free round
     // can use ANY models (within 3-model limit) for their first experience.
     // Model pricing restrictions only apply after free round is used.
@@ -352,6 +428,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         isFavorite: false,
         isPublic: false,
         enableWebSearch: body.enableWebSearch ?? false,
+        projectId: body.projectId ?? null,
         metadata: body.metadata,
         createdAt: now,
         updatedAt: now,
@@ -542,6 +619,18 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
         } else {
           Promise.all(cancelCleanupTasks).catch(() => {});
         }
+      }
+
+      // ✅ Auto-link uploads to project if thread belongs to a project
+      if (body.projectId) {
+        await autoLinkUploadsToProject({
+          db,
+          projectId: body.projectId,
+          uploadIds: body.attachmentIds,
+          userId: user.id,
+          r2Bucket: c.env.UPLOADS_R2_BUCKET,
+          executionCtx: c.executionCtx,
+        });
       }
 
       // ✅ FIX: Construct file parts and add to message for immediate UI display
@@ -837,6 +926,22 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     const db = await getDbAsync();
     const thread = await verifyThreadOwnership(id, user.id, db);
     const now = new Date();
+
+    // ✅ BUSINESS RULE: Project threads cannot be favorited
+    // If setting isFavorite=true AND thread already has projectId → throw 400 error
+    if (body.isFavorite === true && thread.projectId) {
+      throw createError.badRequest(
+        'Project threads cannot be favorited',
+        { errorType: 'validation', field: 'isFavorite' },
+      );
+    }
+
+    // ✅ BUSINESS RULE: Clear isFavorite when assigning thread to a project
+    // If setting projectId on thread that has isFavorite=true → clear isFavorite
+    if (body.projectId !== undefined && body.projectId !== null && thread.isFavorite === true) {
+      body.isFavorite = false;
+    }
+
     if (body.participants !== undefined) {
       const currentParticipants = await db.query.chatParticipant.findMany({
         where: eq(tables.chatParticipant.threadId, id),
@@ -1250,6 +1355,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       isPublic?: boolean;
       enableWebSearch?: boolean;
       metadata?: DbThreadMetadata;
+      projectId?: string | null;
       updatedAt: Date;
     } = {
       updatedAt: now,
@@ -1269,6 +1375,25 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       updateData.enableWebSearch = body.enableWebSearch;
     if (body.metadata !== undefined)
       updateData.metadata = body.metadata ?? undefined;
+    // ✅ PROJECT ASSIGNMENT: Validate user owns target project before assignment
+    if (body.projectId !== undefined) {
+      if (body.projectId === null) {
+        // Explicitly removing from project
+        updateData.projectId = null;
+      } else {
+        // Validate user owns the target project
+        const project = await db.query.chatProject.findFirst({
+          where: and(
+            eq(tables.chatProject.id, body.projectId),
+            eq(tables.chatProject.userId, user.id),
+          ),
+        });
+        if (!project) {
+          throw createError.notFound('Project not found', ErrorContextBuilders.resourceNotFound('project', body.projectId, user.id));
+        }
+        updateData.projectId = body.projectId;
+      }
+    }
     await db.update(tables.chatThread)
       .set(updateData)
       .where(eq(tables.chatThread.id, id));
@@ -1414,6 +1539,18 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           } else {
             Promise.all(cancelCleanupTasks).catch(() => {});
           }
+        }
+
+        // ✅ Auto-link uploads to project if thread belongs to a project
+        if (thread.projectId) {
+          await autoLinkUploadsToProject({
+            db,
+            projectId: thread.projectId,
+            uploadIds: body.newMessage.attachmentIds,
+            userId: user.id,
+            r2Bucket: c.env.UPLOADS_R2_BUCKET,
+            executionCtx: c.executionCtx,
+          });
         }
       }
 

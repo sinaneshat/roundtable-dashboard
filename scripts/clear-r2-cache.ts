@@ -6,7 +6,7 @@
  * - Uploads bucket (roundtable-dashboard-r2-uploads-{env})
  *
  * Usage:
- *   npx tsx scripts/clear-r2-cache.ts [preview|prod] [--cache-only|--uploads-only]
+ *   bunx tsx scripts/clear-r2-cache.ts [preview|prod] [--cache-only|--uploads-only]
  *
  * Environment:
  *   CLOUDFLARE_API_TOKEN - Required. Create at https://dash.cloudflare.com/profile/api-tokens

@@ -13,7 +13,7 @@ import { ALL_TEST_USERS } from './fixtures/test-users';
  * Authenticates test users via Better Auth API and saves auth state
  *
  * IMPORTANT: Test users must be created first using the seed script:
- *   pnpm test:e2e:seed
+ *   bun run test:e2e:seed
  *
  * This setup only signs in existing users and sets up billing data.
  * It does NOT create new users - run the seed script first.
@@ -28,7 +28,7 @@ const userIds: Map<string, string> = new Map();
 
 /**
  * Authenticate a single user via Better Auth API and save their auth state
- * Signs in existing users - users must be created first via pnpm test:e2e:seed
+ * Signs in existing users - users must be created first via bun run test:e2e:seed
  * Returns the user ID for billing data setup
  */
 async function authenticateUser(
@@ -156,7 +156,7 @@ function setupBillingData(): void {
   let priceId = 'price_test_e2e';
   try {
     const priceResult = execSync(
-      `npx wrangler d1 execute DB --local --command="SELECT id FROM stripe_price LIMIT 1" --json`,
+      `bunx wrangler d1 execute DB --local --command="SELECT id FROM stripe_price LIMIT 1" --json`,
       { stdio: 'pipe', encoding: 'utf-8' },
     );
     const priceData = JSON.parse(priceResult);
@@ -168,7 +168,7 @@ function setupBillingData(): void {
       // Create a test price if none exists
       console.error('📋 No prices found, creating test price...');
       execSync(
-        `npx wrangler d1 execute DB --local --command="INSERT OR IGNORE INTO stripe_price (id, product_id, currency, unit_amount, interval_count, type, lookup_key, active, created_at, updated_at) VALUES ('${priceId}', 'prod_test_e2e', 'usd', 5900, 1, 'recurring', 'pro_monthly', 1, ${now}, ${now});"`,
+        `bunx wrangler d1 execute DB --local --command="INSERT OR IGNORE INTO stripe_price (id, product_id, currency, unit_amount, interval_count, type, lookup_key, active, created_at, updated_at) VALUES ('${priceId}', 'prod_test_e2e', 'usd', 5900, 1, 'recurring', 'pro_monthly', 1, ${now}, ${now});"`,
         { stdio: 'pipe', encoding: 'utf-8' },
       );
     }
@@ -192,7 +192,7 @@ function setupBillingData(): void {
       // Create stripe_customer - use INSERT OR IGNORE to skip if exists
       const customerSql = `INSERT OR IGNORE INTO stripe_customer (id, user_id, email, name, default_payment_method_id, metadata, created_at, updated_at) VALUES ('${customerId}', '${userId}', '${user.email}', '${user.name}', '${paymentMethodId}', NULL, ${now}, ${now});`;
 
-      execSync(`npx wrangler d1 execute DB --local --command="${customerSql}"`, {
+      execSync(`bunx wrangler d1 execute DB --local --command="${customerSql}"`, {
         stdio: 'pipe',
         encoding: 'utf-8',
       });
@@ -200,7 +200,7 @@ function setupBillingData(): void {
       // Create stripe_payment_method - use INSERT OR IGNORE
       const paymentSql = `INSERT OR IGNORE INTO stripe_payment_method (id, customer_id, type, card_brand, card_last4, card_exp_month, card_exp_year, is_default, metadata, created_at, updated_at) VALUES ('${paymentMethodId}', '${customerId}', 'card', 'visa', '4242', 12, 2030, 1, NULL, ${now}, ${now});`;
 
-      execSync(`npx wrangler d1 execute DB --local --command="${paymentSql}"`, {
+      execSync(`bunx wrangler d1 execute DB --local --command="${paymentSql}"`, {
         stdio: 'pipe',
         encoding: 'utf-8',
       });
@@ -211,7 +211,7 @@ function setupBillingData(): void {
         // ✅ FIX: Use dynamic priceId (queried from DB) to satisfy FK constraint
         const subscriptionSql = `INSERT OR IGNORE INTO stripe_subscription (id, customer_id, user_id, status, price_id, quantity, cancel_at_period_end, current_period_start, current_period_end, metadata, version, created_at, updated_at) VALUES ('${subscriptionId}', '${customerId}', '${userId}', 'active', '${priceId}', 1, 0, ${now}, ${futureDate}, NULL, 1, ${now}, ${now});`;
 
-        execSync(`npx wrangler d1 execute DB --local --command="${subscriptionSql}"`, {
+        execSync(`bunx wrangler d1 execute DB --local --command="${subscriptionSql}"`, {
           stdio: 'pipe',
           encoding: 'utf-8',
         });
@@ -222,7 +222,7 @@ function setupBillingData(): void {
         // ✅ FIX: Removed pay_as_you_go_enabled column (doesn't exist in schema)
         const creditBalanceSql = `INSERT OR IGNORE INTO user_credit_balance (id, user_id, balance, reserved_credits, plan_type, monthly_credits, next_refill_at, version, created_at, updated_at) VALUES ('${creditBalanceId}', '${userId}', ${monthlyCredits}, 0, 'paid', ${monthlyCredits}, ${futureDate}, 1, ${now}, ${now});`;
 
-        execSync(`npx wrangler d1 execute DB --local --command="${creditBalanceSql}"`, {
+        execSync(`bunx wrangler d1 execute DB --local --command="${creditBalanceSql}"`, {
           stdio: 'pipe',
           encoding: 'utf-8',
         });
@@ -230,7 +230,7 @@ function setupBillingData(): void {
         // ✅ FIX: ALWAYS reset credit balance to full on each test run
         // INSERT OR IGNORE doesn't update existing records, so credits get exhausted across runs
         const resetCreditsSql = `UPDATE user_credit_balance SET balance = ${monthlyCredits}, reserved_credits = 0, updated_at = ${now} WHERE user_id = '${userId}';`;
-        execSync(`npx wrangler d1 execute DB --local --command="${resetCreditsSql}"`, {
+        execSync(`bunx wrangler d1 execute DB --local --command="${resetCreditsSql}"`, {
           stdio: 'pipe',
           encoding: 'utf-8',
         });
@@ -242,7 +242,7 @@ function setupBillingData(): void {
         const periodEnd = Math.floor(new Date(new Date().getFullYear(), new Date().getMonth() + 1, 0, 23, 59, 59).getTime() / 1000);
         const usageSql = `INSERT OR IGNORE INTO user_chat_usage (id, user_id, current_period_start, current_period_end, threads_created, messages_created, custom_roles_created, analysis_generated, subscription_tier, is_annual, version, created_at, updated_at) VALUES ('${usageId}', '${userId}', ${periodStart}, ${periodEnd}, 0, 0, 0, 0, 'pro', 0, 1, ${now}, ${now});`;
 
-        execSync(`npx wrangler d1 execute DB --local --command="${usageSql}"`, {
+        execSync(`bunx wrangler d1 execute DB --local --command="${usageSql}"`, {
           stdio: 'pipe',
           encoding: 'utf-8',
         });
@@ -250,7 +250,7 @@ function setupBillingData(): void {
         // ✅ FIX: ALWAYS reset usage counters on each test run
         // INSERT OR IGNORE doesn't update existing records, so counters accumulate across runs
         const resetUsageSql = `UPDATE user_chat_usage SET threads_created = 0, messages_created = 0, custom_roles_created = 0, analysis_generated = 0, subscription_tier = 'pro', updated_at = ${now} WHERE user_id = '${userId}';`;
-        execSync(`npx wrangler d1 execute DB --local --command="${resetUsageSql}"`, {
+        execSync(`bunx wrangler d1 execute DB --local --command="${resetUsageSql}"`, {
           stdio: 'pipe',
           encoding: 'utf-8',
         });
@@ -274,7 +274,7 @@ async function ensureBillingDataFromExistingUsers(_baseURL: string): Promise<voi
     try {
       // Fetch user ID from database by email
       const result = execSync(
-        `npx wrangler d1 execute DB --local --command="SELECT id FROM user WHERE email = '${user.email}'" --json`,
+        `bunx wrangler d1 execute DB --local --command="SELECT id FROM user WHERE email = '${user.email}'" --json`,
         { stdio: 'pipe', encoding: 'utf-8' },
       );
 
@@ -338,7 +338,7 @@ async function globalSetup(config: FullConfig): Promise<void> {
 
   if (allAuthFilesValid) {
     console.error('✅ Valid auth files found - skipping re-authentication');
-    console.error('   Run `pnpm test:e2e:seed` if you need to refresh auth state\n');
+    console.error('   Run `bun run test:e2e:seed` if you need to refresh auth state\n');
     // ✅ FIX: Still ensure billing data exists (INSERT OR IGNORE is safe for re-runs)
     // User IDs need to be fetched from DB since we're not authenticating
     await ensureBillingDataFromExistingUsers(baseURL);
@@ -365,8 +365,8 @@ async function globalSetup(config: FullConfig): Promise<void> {
     throw new Error(
       'No valid auth files and server not running.\n'
       + 'Either:\n'
-      + '  1. Start the server: pnpm dev\n'
-      + '  2. Run seed script: pnpm test:e2e:seed\n'
+      + '  1. Start the server: bun run dev\n'
+      + '  2. Run seed script: bun run test:e2e:seed\n'
       + 'Then run tests again.',
     );
   }

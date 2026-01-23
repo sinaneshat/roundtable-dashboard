@@ -5,9 +5,8 @@
 > **The application now uses English-only translation keys** via dynamic `useTranslations()` hooks.
 >
 > **For current translation key patterns, refer to:**
-> - **i18n Agent**: `.claude/agents/i18n-translation-manager.md` - Translation key management
 > - **Frontend patterns**: `/docs/frontend-patterns.md` - Component implementation
-> - **Translation keys**: `/src/i18n/locales/en/common.json` - All English keys
+> - **Translation keys**: `/apps/web/src/i18n/locales/en/common.json` - All English keys
 
 ## Current Status (English-Only with Dynamic Keys)
 

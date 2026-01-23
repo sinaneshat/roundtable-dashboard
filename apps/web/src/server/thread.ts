@@ -1,12 +1,14 @@
 import { createServerFn } from '@tanstack/react-start';
 import { zodValidator } from '@tanstack/zod-adapter';
 
+import { LIMITS } from '@/constants';
 import type {
   GetThreadBySlugResponse,
   GetThreadChangelogResponse,
   GetThreadFeedbackResponse,
   GetThreadPreSearchesResponse,
   GetThreadStreamResumptionStateResponse,
+  ListThreadsResponse,
 } from '@/services/api';
 import {
   getThreadBySlugService,
@@ -14,6 +16,7 @@ import {
   getThreadFeedbackService,
   getThreadPreSearchesService,
   getThreadStreamResumptionStateService,
+  listThreadsService,
 } from '@/services/api';
 
 import type { ServerFnErrorResponse } from './schemas';
@@ -24,6 +27,7 @@ type GetStreamResumptionStateResult = GetThreadStreamResumptionStateResponse | S
 type GetThreadChangelogResult = GetThreadChangelogResponse | ServerFnErrorResponse;
 type GetThreadFeedbackResult = GetThreadFeedbackResponse | ServerFnErrorResponse;
 type GetThreadPreSearchesResult = GetThreadPreSearchesResponse | ServerFnErrorResponse;
+type GetThreadsByProjectResult = ListThreadsResponse | ServerFnErrorResponse;
 
 export const getThreadBySlug = createServerFn({ method: 'GET' })
   .inputValidator(zodValidator(slugSchema))
@@ -66,6 +70,22 @@ export const getThreadPreSearches = createServerFn({ method: 'GET' })
   .handler(async ({ data, context }): Promise<GetThreadPreSearchesResult> => {
     return await getThreadPreSearchesService(
       { param: { id: data } },
+      { cookieHeader: context.cookieHeader },
+    );
+  });
+
+/**
+ * Get threads for a project using the unified /chat/threads endpoint
+ * Uses projectId query param for filtering
+ *
+ * NOTE: Type assertion used because Hono client type inference may be stale.
+ * The API schema (ThreadListQuerySchema) definitely supports projectId.
+ */
+export const getThreadsByProject = createServerFn({ method: 'GET' })
+  .inputValidator(zodValidator(idSchema))
+  .handler(async ({ data: projectId, context }): Promise<GetThreadsByProjectResult> => {
+    return await listThreadsService(
+      { query: { projectId, limit: LIMITS.INITIAL_PAGE } as { projectId: string; limit: number } },
       { cookieHeader: context.cookieHeader },
     );
   });

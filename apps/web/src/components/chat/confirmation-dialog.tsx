@@ -35,6 +35,8 @@ type ConfirmationDialogProps = {
   onConfirm: () => void;
   /** Optional callback when user cancels */
   onCancel?: () => void;
+  /** Optional custom content to render in the dialog body */
+  children?: ReactNode;
 };
 
 const variantStyles: Record<ConfirmationDialogVariant, string> = {
@@ -56,6 +58,7 @@ export function ConfirmationDialog({
   variant = 'default',
   onConfirm,
   onCancel,
+  children,
 }: ConfirmationDialogProps) {
   const handleCancel = () => {
     if (isLoading)
@@ -76,7 +79,7 @@ export function ConfirmationDialog({
         <DialogHeader>
           {icon
             ? (
-                <div className="flex items-center gap-3">
+                <div className="flex items-start gap-3">
                   {icon}
                   <div className="flex-1">
                     <DialogTitle>{title}</DialogTitle>
@@ -95,6 +98,7 @@ export function ConfirmationDialog({
                 </>
               )}
         </DialogHeader>
+        {children}
         <DialogFooter>
           <Button variant="outline" onClick={handleCancel} disabled={isLoading}>
             {cancelText}

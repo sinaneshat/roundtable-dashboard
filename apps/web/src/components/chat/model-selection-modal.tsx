@@ -726,7 +726,7 @@ export function ModelSelectionModal({
               )}
         </DialogHeader>
 
-        <DialogBody className="flex flex-col py-0 max-h-[min(600px,70vh)] overflow-hidden">
+        <DialogBody className="flex flex-col py-0">
           <AnimatePresence mode="wait">
             {selectedModelForRole
               ? (

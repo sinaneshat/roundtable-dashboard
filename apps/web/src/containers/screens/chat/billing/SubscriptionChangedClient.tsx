@@ -1,7 +1,7 @@
 import type { SubscriptionChangeType, SubscriptionTier } from '@roundtable/shared';
 import { StripeSubscriptionStatuses, SUBSCRIPTION_TIER_NAMES, SubscriptionChangeTypes, SubscriptionChangeTypeSchema, SubscriptionTiers, SubscriptionTierSchema } from '@roundtable/shared';
 import { getRouteApi, Link } from '@tanstack/react-router';
-import { Suspense, useMemo } from 'react';
+import { useMemo } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
@@ -434,26 +434,6 @@ function SubscriptionChangedContent() {
   );
 }
 
-function SubscriptionChangedFallback() {
-  const t = useTranslations();
-  return (
-    <div className="flex flex-1 w-full flex-col items-center justify-center px-4 py-8">
-      <div className="flex flex-col items-center gap-6 text-center max-w-md mx-auto">
-        <div className="flex size-20 items-center justify-center rounded-full bg-primary/10 ring-4 ring-primary/20 md:size-24">
-          <Icons.checkCircle className="size-10 text-primary md:size-12 animate-pulse" strokeWidth={2} />
-        </div>
-        <h1 className="text-2xl font-bold tracking-tight md:text-3xl">
-          {t('common.loading')}
-        </h1>
-      </div>
-    </div>
-  );
-}
-
 export function SubscriptionChangedClient() {
-  return (
-    <Suspense fallback={<SubscriptionChangedFallback />}>
-      <SubscriptionChangedContent />
-    </Suspense>
-  );
+  return <SubscriptionChangedContent />;
 }

@@ -72,7 +72,7 @@ async function initLocalDb() {
 
   if (!fs.existsSync(dbPath)) {
     throw new Error(
-      `Local database not found at ${dbPath}. Run 'pnpm db:migrate:local' to create it.`,
+      `Local database not found at ${dbPath}. Run 'bun run db:migrate:local' to create it.`,
     );
   }
 

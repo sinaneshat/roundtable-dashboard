@@ -31,7 +31,7 @@ import {
  * 4. Return to the thread and verify all participants responded
  * 5. Verify moderator message exists (for 2+ participants)
  *
- * Run with: pnpm exec playwright test e2e/flows/background-round-completion.spec.ts --project=chromium
+ * Run with: bun run exec playwright test e2e/flows/background-round-completion.spec.ts --project=chromium
  *
  * @see src/api/routes/chat/handlers/streaming.handler.ts - Server-side continuation in onFinish
  * @see src/api/services/round-orchestration - Round state tracking in KV

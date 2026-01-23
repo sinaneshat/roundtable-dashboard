@@ -33,6 +33,7 @@ import {
   getUserCreditBalance,
   zeroOutFreeUserCredits,
 } from '@/services/billing';
+import { getProjectRagContext } from '@/services/context';
 import {
   generateTraceId,
   trackLLMError,
@@ -101,6 +102,14 @@ type MinimalExecutionContext = {
 };
 
 /**
+ * Project context for moderator synthesis
+ */
+type ModeratorProjectContext = {
+  instructions?: string | null;
+  ragContext?: string;
+};
+
+/**
  * Extended config for council moderator generation
  * Combines schema-validated prompt config with runtime context
  */
@@ -111,6 +120,7 @@ type ModeratorGenerationConfig = {
   userId: string;
   sessionId?: string;
   executionCtx?: MinimalExecutionContext;
+  projectContext?: ModeratorProjectContext;
 } & ModeratorPromptConfig;
 
 /**
@@ -128,7 +138,7 @@ async function generateCouncilModerator(
   // ✅ LAZY LOAD AI SDK: Load at invocation, not module startup
   const { streamText } = await getAiSdk();
 
-  const { roundNumber, mode, userQuestion, participantResponses, env, messageId, threadId, userId, sessionId, executionCtx } = config;
+  const { roundNumber, mode, userQuestion, participantResponses, env, messageId, threadId, userId, sessionId, executionCtx, projectContext } = config;
 
   const llmTraceId = generateTraceId();
   const llmStartTime = performance.now();
@@ -139,11 +149,13 @@ async function generateCouncilModerator(
   const moderatorModelName = extractModeratorModelName(moderatorModelId);
 
   // ✅ SINGLE SOURCE: Uses buildCouncilModeratorSystemPrompt from prompts.service.ts
+  // ✅ PROJECT CONTEXT: Pass instructions and RAG context if available
   const systemPrompt = buildCouncilModeratorSystemPrompt(
     roundNumber,
     mode,
     userQuestion,
     participantResponses,
+    projectContext,
   );
 
   // Build initial moderator metadata (streaming state)
@@ -661,6 +673,24 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
 
     const { session } = c.auth();
 
+    // ✅ PROJECT CONTEXT: Fetch project instructions and RAG context for moderator synthesis
+    let projectContext: ModeratorProjectContext | undefined;
+    if (thread.projectId) {
+      const ragResult = await getProjectRagContext({
+        projectId: thread.projectId,
+        query: userQuestion,
+        ai: c.env.AI,
+        db,
+        maxResults: 5,
+      });
+      if (ragResult.instructions || ragResult.ragContext) {
+        projectContext = {
+          instructions: ragResult.instructions,
+          ragContext: ragResult.ragContext,
+        };
+      }
+    }
+
     // Generate and return streaming response
     // ✅ SINGLE SOURCE: Mode validated via ChatModeSchema in prompts.service.ts
     return await generateCouncilModerator(
@@ -675,6 +705,7 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
         userId: user.id,
         executionCtx: c.executionCtx,
         sessionId: session?.id,
+        projectContext,
       },
       c,
     );

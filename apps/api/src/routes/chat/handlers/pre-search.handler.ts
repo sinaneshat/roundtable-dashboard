@@ -32,6 +32,7 @@ import {
   enforceCredits,
   finalizeCredits,
 } from '@/services/billing';
+import { getProjectRagContext } from '@/services/context';
 import type { PreSearchTrackingContext } from '@/services/errors';
 import { buildEmptyResponseError, extractErrorMetadata, initializePreSearchTracking, trackPreSearchComplete, trackQueryGeneration, trackWebSearchExecution } from '@/services/errors';
 import { loadAttachmentContent, loadAttachmentContentUrl } from '@/services/messages';
@@ -269,11 +270,11 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
       throw createError.badRequest('Invalid round number', ErrorContextBuilders.validation('round_number'));
     }
 
-    // Verify thread ownership
+    // Verify thread ownership and get thread data (need projectId for context)
     // ✅ FIX: Removed thread.enableWebSearch check - users can enable web search mid-conversation
     // The act of calling this endpoint IS the user's intent to use web search for this round
     // The thread's enableWebSearch is now a default/preference, not a hard restriction
-    await verifyThreadOwnership(threadId, user.id, db);
+    const thread = await verifyThreadOwnership(threadId, user.id, db);
 
     // ✅ CREDITS: Enforce credits for web search (1 credit minimum for web search)
     // Skip round completion check - pre-search is PART of the round, not a new round
@@ -426,6 +427,24 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
         userTier,
       };
 
+      // ✅ PROJECT CONTEXT: Fetch instructions and RAG context to inform query generation
+      let projectContext: { instructions?: string | null; ragContext?: string } | undefined;
+      if (thread.projectId) {
+        const ragResult = await getProjectRagContext({
+          projectId: thread.projectId,
+          query: body.userQuery,
+          ai: c.env.AI,
+          db,
+          maxResults: 3, // Fewer results for pre-search (focus on query generation)
+        });
+        if (ragResult.instructions || ragResult.ragContext) {
+          projectContext = {
+            instructions: ragResult.instructions,
+            ragContext: ragResult.ragContext,
+          };
+        }
+      }
+
       // ✅ Define startTime outside try for error tracking access
       const startTime = performance.now();
 
@@ -500,7 +519,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
           // ✅ NORMAL FLOW: Attempt AI generation for searchable queries
           try {
-            const queryStream = await streamSearchQuery(queryMessage, c.env);
+            const queryStream = await streamSearchQuery(queryMessage, c.env, undefined, projectContext);
 
             // ✅ INCREMENTAL STREAMING: Stream each query update as it's generated
             // Track best partial result for graceful fallback if final validation fails
@@ -671,7 +690,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           } catch {
           // ✅ FALLBACK LEVEL 1: Try non-streaming generation (streaming failed completely)
             try {
-              const queryGenResult = await generateSearchQuery(body.userQuery, c.env);
+              const queryGenResult = await generateSearchQuery(body.userQuery, c.env, undefined, projectContext);
               multiQueryResult = queryGenResult.output;
 
               // Validate generation succeeded

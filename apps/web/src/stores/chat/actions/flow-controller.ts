@@ -19,10 +19,12 @@ import { getModeratorMessageForRound } from '../utils/participant-completion-gat
 
 export type UseFlowControllerOptions = {
   enabled?: boolean;
+  /** Project ID for project-scoped threads (updates URL to /chat/projects/{projectId}/{slug}) */
+  projectId?: string;
 };
 
 export function useFlowController(options: UseFlowControllerOptions = {}) {
-  const { enabled = true } = options;
+  const { enabled = true, projectId } = options;
   const queryClient = useQueryClient();
   const { data: session } = useSession();
 
@@ -220,10 +222,13 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     // Full navigation is unnecessary and causes duplicate loader fetches
     // URL update is sufficient for bookmarking/sharing
     queueMicrotask(() => {
+      const targetUrl = projectId
+        ? `/chat/projects/${projectId}/${slug}`
+        : `/chat/${slug}`;
       window.history.replaceState(
         window.history.state,
         '',
-        `/chat/${slug}`,
+        targetUrl,
       );
     });
   }, [
@@ -233,6 +238,7 @@ export function useFlowController(options: UseFlowControllerOptions = {}) {
     threadState.createdThreadId,
     prepopulateQueryCache,
     session,
+    projectId,
   ]);
 
   // ============================================================================

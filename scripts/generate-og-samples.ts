@@ -6,7 +6,7 @@
  * - Proper spacing and layout
  * - Color orbs in corners matching mode color
  *
- * Run with: npx tsx scripts/generate-og-samples.ts
+ * Run with: bunx tsx scripts/generate-og-samples.ts
  */
 
 import * as fs from 'node:fs';

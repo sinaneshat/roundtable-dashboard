@@ -10,10 +10,10 @@ import { cn } from '@/lib/ui/cn';
 
 type ChatThreadMenuItemsProps = {
   onRename?: () => void;
-  onPin: () => void;
+  onPin?: () => void;
   onShare?: () => void;
   onDelete?: () => void;
-  isFavorite: boolean;
+  isFavorite?: boolean;
   isPinPending?: boolean;
 };
 
@@ -29,18 +29,20 @@ export function ChatThreadMenuItems({
 
   return (
     <>
-      <DropdownMenuItem
-        onClick={onPin}
-        disabled={isPinPending}
-        className={cn(isFavorite && 'text-primary')}
-      >
-        {isPinPending
-          ? <Icons.loader className="size-4 animate-spin" />
-          : <Icons.pin className={cn('size-4', isFavorite && 'fill-current')} />}
-        {isFavorite
-          ? t('chat.unpin')
-          : t('chat.pin')}
-      </DropdownMenuItem>
+      {onPin && (
+        <DropdownMenuItem
+          onClick={onPin}
+          disabled={isPinPending}
+          className={cn(isFavorite && 'text-primary')}
+        >
+          {isPinPending
+            ? <Icons.loader className="size-4 animate-spin" />
+            : <Icons.pin className={cn('size-4', isFavorite && 'fill-current')} />}
+          {isFavorite
+            ? t('chat.unpin')
+            : t('chat.pin')}
+        </DropdownMenuItem>
+      )}
       {onRename && (
         <DropdownMenuItem onClick={onRename}>
           <Icons.pencil className="size-4" />

@@ -212,9 +212,10 @@ export const CreateThreadRequestSchema = chatThreadInsertSchema
     mode: true,
     enableWebSearch: true,
     metadata: true,
+    projectId: true,
   })
   .extend({
-    title: z.string().min(1).max(200).optional().default('New Chat').openapi({
+    title: z.string().min(STRING_LIMITS.TITLE_MIN).max(STRING_LIMITS.TITLE_MAX).optional().default('New Chat').openapi({
       description: 'Thread title (auto-generated from first message if "New Chat")',
       example: 'Product strategy brainstorm',
     }),
@@ -255,6 +256,7 @@ export const UpdateThreadRequestSchema = chatThreadUpdateSchema
     isPublic: true,
     enableWebSearch: true,
     metadata: true,
+    projectId: true,
   })
   .extend({
     participants: z.array(UpdateParticipantSchema)
@@ -280,11 +282,26 @@ export const UpdateThreadRequestSchema = chatThreadUpdateSchema
     },
     { message: uniqueModelIdsRefinement.message, path: ['participants'] },
   )
+  .refine(
+    (data) => {
+      // Prevent setting isFavorite=true when also setting projectId
+      // Project threads cannot be favorited
+      if (data.isFavorite === true && data.projectId !== undefined && data.projectId !== null) {
+        return false;
+      }
+      return true;
+    },
+    { message: 'Project threads cannot be favorited', path: ['isFavorite'] },
+  )
   .openapi('UpdateThreadRequest');
 export const ThreadListQuerySchema = CursorPaginationQuerySchema.extend({
   search: z.string().optional().openapi({
     description: 'Search query to filter threads by title',
     example: 'product strategy',
+  }),
+  projectId: z.string().optional().openapi({
+    description: 'Filter threads by project ID (excludes isFavorite from response)',
+    example: '01HXYZ123ABC',
   }),
 }).openapi('ThreadListQuery');
 export const ThreadDetailPayloadSchema = z.object({

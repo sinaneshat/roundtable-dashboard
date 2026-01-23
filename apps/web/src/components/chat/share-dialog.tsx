@@ -173,7 +173,7 @@ export function ShareDialog({
                     <Input
                       readOnly
                       value={shareUrl}
-                      className="h-11 w-full pr-11 font-mono text-sm bg-muted/30 border-border/50 focus-visible:border-border"
+                      className="w-full pr-11 font-mono"
                       onClick={e => e.currentTarget.select()}
                     />
                     <button

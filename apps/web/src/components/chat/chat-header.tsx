@@ -20,7 +20,7 @@ import { Separator } from '@/components/ui/separator';
 import { useSidebarOptional } from '@/components/ui/sidebar';
 import { Skeleton } from '@/components/ui/skeleton';
 import { BRAND } from '@/constants';
-import { useThreadQuery } from '@/hooks/queries';
+import { useProjectQuery, useThreadQuery } from '@/hooks/queries';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { useNavigationReset } from '@/stores/chat';
@@ -60,6 +60,20 @@ const ThreadLoaderDataSchema = z.object({
 const RouteParamsSchema = z.object({
   slug: z.string(),
 });
+
+// Project route schemas
+const ProjectLoaderDataSchema = z.object({
+  projectName: z.string().nullish(),
+  project: z.object({ name: z.string() }).nullish(),
+});
+
+function extractProjectName(loaderData: unknown): string | null {
+  const result = ProjectLoaderDataSchema.safeParse(loaderData);
+  if (!result.success)
+    return null;
+  // Prefer explicit projectName, fall back to project.name
+  return result.data.projectName ?? result.data.project?.name ?? null;
+}
 
 function extractThreadFromLoaderData(loaderData: unknown): RouteThread | null {
   const result = ThreadLoaderDataSchema.safeParse(loaderData);
@@ -125,6 +139,32 @@ function NavigationHeaderComponent({
   const routeThread = extractThreadFromLoaderData(threadMatch?.loaderData);
   const routeSlug = extractSlugFromParams(threadMatch?.params);
 
+  // Project route detection - use pathname as primary indicator
+  const isProjectPath = pathname?.includes('/chat/projects/');
+
+  // Extract project ID from pathname for query fallback
+  const projectIdFromPath = isProjectPath
+    ? pathname?.match(/\/chat\/projects\/([^/]+)/)?.[1]
+    : null;
+
+  // Find route match for loader data
+  const projectMatch = matches.find(m =>
+    m.routeId === '/_protected/chat/projects/$projectId'
+    || m.routeId?.startsWith('/_protected/chat/projects/$projectId/')
+    || (isProjectPath && m.loaderData && ('projectName' in (m.loaderData as object) || 'project' in (m.loaderData as object))),
+  );
+
+  // Always fetch project query when on project page - this ensures header updates after settings changes
+  // Query is cached so this doesn't cause extra network requests
+  const { data: projectQueryData } = useProjectQuery(projectIdFromPath ?? '', !!projectIdFromPath);
+  const queryProjectName = projectQueryData?.success ? projectQueryData.data?.name : null;
+
+  // Use query data (reactive to changes) over loader data (static)
+  const routeProjectName = queryProjectName ?? extractProjectName(projectMatch?.loaderData);
+  const isOnProjectPage = !!isProjectPath;
+  // Detect if on project thread (has slug after projectId)
+  const isOnProjectThreadPage = isOnProjectPage && !!pathname?.match(/\/chat\/projects\/[^/]+\/[^/]+/);
+
   const context = useThreadHeaderOptional();
   const navigate = useNavigate();
   const handleNavigationReset = useNavigationReset();
@@ -158,14 +198,22 @@ function NavigationHeaderComponent({
   const threadActions = threadActionsProp ?? contextThreadActions ?? ssrThreadActions;
 
   const isThreadPage = (
-    (pathname?.startsWith('/chat/') && pathname !== '/chat' && !isStaticRoute)
+    (pathname?.startsWith('/chat/') && pathname !== '/chat' && !isStaticRoute && !isOnProjectPage)
     || pathname?.startsWith('/public/chat/')
+    || isOnProjectThreadPage
   );
   const isOverviewPage = pathname === '/chat' && !hasActiveThread;
   const showThreadBreadcrumb = (isThreadPage || hasActiveThread) && threadTitle;
-  const currentPage = showThreadBreadcrumb
-    ? { titleKey: threadTitle, isDynamic: true as const }
-    : pathname ? BREADCRUMB_MAP[pathname as keyof typeof BREADCRUMB_MAP] : undefined;
+  const showProjectBreadcrumb = isOnProjectPage && routeProjectName;
+
+  // Priority: Project thread > Project index > Thread page > Static routes
+  const currentPage = isOnProjectThreadPage
+    ? { titleKey: threadTitle ?? '', isDynamic: true as const }
+    : showProjectBreadcrumb
+      ? { titleKey: routeProjectName, isDynamic: true as const }
+      : showThreadBreadcrumb
+        ? { titleKey: threadTitle, isDynamic: true as const }
+        : pathname ? BREADCRUMB_MAP[pathname as keyof typeof BREADCRUMB_MAP] : undefined;
   return (
     <header
       className={cn(
@@ -216,6 +264,50 @@ function NavigationHeaderComponent({
                   </BreadcrumbLink>
                 </BreadcrumbItem>
                 <BreadcrumbSeparator />
+                {/* Project thread: Projects > Project link > Thread */}
+                {isOnProjectThreadPage && (
+                  <>
+                    <BreadcrumbItem className="shrink-0">
+                      <BreadcrumbLink asChild>
+                        <Link
+                          to="/chat"
+                          className="text-muted-foreground hover:text-foreground transition-colors text-sm sm:text-base"
+                        >
+                          {t('projects.title')}
+                        </Link>
+                      </BreadcrumbLink>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator />
+                    <BreadcrumbItem className="shrink-0">
+                      <BreadcrumbLink asChild>
+                        <Link
+                          to="/chat/projects/$projectId"
+                          params={{ projectId: projectIdFromPath ?? '' }}
+                          className="text-muted-foreground hover:text-foreground transition-colors text-sm sm:text-base"
+                        >
+                          {routeProjectName}
+                        </Link>
+                      </BreadcrumbLink>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator />
+                  </>
+                )}
+                {/* Project index: Projects > Project name (current) */}
+                {showProjectBreadcrumb && !isOnProjectThreadPage && (
+                  <>
+                    <BreadcrumbItem className="shrink-0">
+                      <BreadcrumbLink asChild>
+                        <Link
+                          to="/chat"
+                          className="text-muted-foreground hover:text-foreground transition-colors text-sm sm:text-base"
+                        >
+                          {t('projects.title')}
+                        </Link>
+                      </BreadcrumbLink>
+                    </BreadcrumbItem>
+                    <BreadcrumbSeparator />
+                  </>
+                )}
                 <BreadcrumbItem className="min-w-0 overflow-hidden max-w-32 sm:max-w-48 md:max-w-64">
                   <BreadcrumbPage
                     className="line-clamp-1 truncate overflow-hidden text-ellipsis whitespace-nowrap text-sm sm:text-base max-w-32 sm:max-w-48 md:max-w-64"

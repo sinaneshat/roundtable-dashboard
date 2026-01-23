@@ -10,6 +10,7 @@ import { parseResponse } from 'hono/client';
 
 import type { ApiClientType } from '@/lib/api/client';
 import { createApiClient, createPublicApiClient } from '@/lib/api/client';
+import type { ServiceOptions } from '@/services/api/types';
 
 // ============================================================================
 // Type Inference - Thread Operations
@@ -83,8 +84,8 @@ export type AnalyzePromptResponse = InferResponseType<AnalyzePromptEndpoint, 200
 // Service Functions - Thread CRUD
 // ============================================================================
 
-export async function listThreadsService(data?: ListThreadsRequest) {
-  const client = createApiClient();
+export async function listThreadsService(data?: ListThreadsRequest, options?: ServiceOptions) {
+  const client = createApiClient({ cookieHeader: options?.cookieHeader });
   return parseResponse(client.chat.threads.$get(data ?? { query: {} }));
 }
 
@@ -107,17 +108,6 @@ export async function deleteThreadService(data: DeleteThreadRequest) {
   const client = createApiClient();
   return parseResponse(client.chat.threads[':id'].$delete(data));
 }
-
-// ============================================================================
-// Service Options
-// ============================================================================
-
-/**
- * Service options for SSR cookie forwarding
- */
-type ServiceOptions = {
-  cookieHeader?: string;
-};
 
 // ============================================================================
 // Service Functions - Sidebar Threads

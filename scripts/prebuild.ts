@@ -23,7 +23,7 @@ try {
 // Generate OG assets (fonts + images embedded as base64 for edge compatibility)
 try {
   console.log('Generating OG assets (fonts + images)...');
-  execSync('npx tsx scripts/generate-og-assets.ts', { cwd: ROOT_DIR, stdio: 'inherit' });
+  execSync('bunx tsx scripts/generate-og-assets.ts', { cwd: ROOT_DIR, stdio: 'inherit' });
 } catch (error) {
   console.error('Failed to generate OG assets:', error);
 }
@@ -32,7 +32,7 @@ try {
 // This ensures users get fresh assets after each deploy
 try {
   console.log('Generating service worker with cache version...');
-  execSync('npx tsx scripts/generate-sw.ts', { cwd: ROOT_DIR, stdio: 'inherit' });
+  execSync('bunx tsx scripts/generate-sw.ts', { cwd: ROOT_DIR, stdio: 'inherit' });
 } catch (error) {
   console.error('Failed to generate service worker:', error);
 }

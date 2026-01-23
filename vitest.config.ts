@@ -8,8 +8,8 @@ import { defineConfig } from 'vitest/config';
  * This config is for root-level test utilities only.
  * Each app (apps/api, apps/web) has its own vitest.config.ts.
  *
- * Use `pnpm test` with turbo to run tests in all packages,
- * or use `pnpm --filter @roundtable/api test` for specific packages.
+ * Use `bun run test` with turbo to run tests in all packages,
+ * or use `bun run --filter @roundtable/api test` for specific packages.
  */
 export default defineConfig({
   plugins: [tsconfigPaths()],

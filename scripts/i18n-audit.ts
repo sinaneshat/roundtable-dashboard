@@ -208,7 +208,7 @@ function generateMarkdownReport(results: AuditResults): string {
   } else {
     lines.push(`⚠️  Found ${results.hardcodedStrings.count} hardcoded strings in ${results.hardcodedStrings.filesAffected} files`);
     lines.push('');
-    lines.push('Run `pnpm i18n:find-hardcoded` for detailed list');
+    lines.push('Run `bun run i18n:find-hardcoded` for detailed list');
   }
   lines.push('');
   
@@ -260,13 +260,13 @@ function generateMarkdownReport(results: AuditResults): string {
   lines.push('');
   lines.push('```bash');
   lines.push('# Run full audit');
-  lines.push('pnpm i18n:audit');
+  lines.push('bun run i18n:audit');
   lines.push('');
   lines.push('# Individual checks');
-  lines.push('pnpm i18n:validate');
-  lines.push('pnpm i18n:check-unused');
-  lines.push('pnpm i18n:find-hardcoded');
-  lines.push('pnpm i18n:check-missing');
+  lines.push('bun run i18n:validate');
+  lines.push('bun run i18n:check-unused');
+  lines.push('bun run i18n:find-hardcoded');
+  lines.push('bun run i18n:check-missing');
   lines.push('```');
   lines.push('');
   

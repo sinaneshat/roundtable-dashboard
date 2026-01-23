@@ -1,9 +1,12 @@
 import { z } from '@hono/zod-openapi';
+import { PROJECT_LIMITS, STRING_LIMITS } from '@roundtable/shared';
 import {
   BooleanStringSchema,
   ProjectColorSchema,
+  ProjectIconSchema,
   ProjectIndexStatusSchema,
   ProjectMemorySourceSchema,
+  SubscriptionTierSchema,
 } from '@roundtable/shared/enums';
 
 import { CursorPaginationQuerySchema } from '@/core/pagination';
@@ -21,11 +24,11 @@ import { uploadSelectSchema } from '@/db/validation/upload';
  * Create Project Request Schema
  */
 export const CreateProjectRequestSchema = z.object({
-  name: z.string().min(1).max(200).openapi({
+  name: z.string().min(STRING_LIMITS.PROJECT_NAME_MIN).max(STRING_LIMITS.PROJECT_NAME_MAX).openapi({
     description: 'Project name',
     example: 'Q1 Marketing Strategy',
   }),
-  description: z.string().max(1000).optional().openapi({
+  description: z.string().max(STRING_LIMITS.PROJECT_DESCRIPTION_MAX).optional().openapi({
     description: 'Optional project description',
     example: 'Knowledge base for Q1 2025 marketing planning',
   }),
@@ -33,7 +36,11 @@ export const CreateProjectRequestSchema = z.object({
     description: 'Project color for visual identification',
     example: 'blue',
   }),
-  customInstructions: z.string().max(4000).optional().openapi({
+  icon: ProjectIconSchema.optional().default('briefcase').openapi({
+    description: 'Project icon for visual identification',
+    example: 'briefcase',
+  }),
+  customInstructions: z.string().max(STRING_LIMITS.CUSTOM_INSTRUCTIONS_MAX).optional().openapi({
     description: 'Custom instructions for all threads in this project (OpenAI Projects pattern)',
     example: 'Always format responses in markdown. Focus on actionable insights.',
   }),
@@ -58,6 +65,7 @@ export const UpdateProjectRequestSchema = chatProjectUpdateSchema
     name: true,
     description: true,
     color: true,
+    icon: true,
     customInstructions: true,
     autoragInstanceId: true,
     settings: true,
@@ -252,6 +260,28 @@ export const ListProjectAttachmentsResponseSchema = createCursorPaginatedRespons
 export const ListProjectMemoriesResponseSchema = createCursorPaginatedResponseSchema(ProjectMemoryResponseSchema);
 
 /**
+ * Project Thread Response Schema - lightweight thread data for project listing
+ * Note: isFavorite/pin is NOT supported for project threads (only standalone threads)
+ */
+export const ProjectThreadResponseSchema = z.object({
+  id: CoreSchemas.id(),
+  title: z.string(),
+  slug: z.string(),
+  createdAt: z.string().datetime(),
+  updatedAt: z.string().datetime(),
+}).openapi('ProjectThread');
+
+/**
+ * List Project Threads Query
+ */
+export const ListProjectThreadsQuerySchema = CursorPaginationQuerySchema.openapi('ListProjectThreadsQuery');
+
+/**
+ * List Project Threads Response
+ */
+export const ListProjectThreadsResponseSchema = createCursorPaginatedResponseSchema(ProjectThreadResponseSchema);
+
+/**
  * Single Project Memory Response
  */
 export const GetProjectMemoryResponseSchema = createApiResponseSchema(ProjectMemoryResponseSchema);
@@ -263,6 +293,19 @@ export const DeleteResponseSchema = createApiResponseSchema(
   z.object({
     id: CoreSchemas.id(),
     deleted: z.boolean(),
+  }),
+);
+
+/**
+ * Delete Project Response - includes count of deleted threads
+ */
+export const DeleteProjectResponseSchema = createApiResponseSchema(
+  z.object({
+    id: CoreSchemas.id(),
+    deleted: z.boolean(),
+    deletedThreadCount: z.number().int().nonnegative().openapi({
+      description: 'Number of threads that were soft-deleted with this project',
+    }),
   }),
 );
 
@@ -293,6 +336,41 @@ export const ProjectMemoryParamSchema = z.object({
     description: 'Memory entry identifier',
   }),
 }).openapi('ProjectMemoryParam');
+
+// ============================================================================
+// PROJECT LIMITS SCHEMAS
+// ============================================================================
+
+/**
+ * Project Limits Response Schema
+ * Returns user's tier and project limits
+ */
+export const ProjectLimitsSchema = z.object({
+  tier: SubscriptionTierSchema.openapi({
+    description: 'User subscription tier',
+    example: 'pro',
+  }),
+  maxProjects: z.number().int().openapi({
+    description: 'Maximum projects allowed for tier',
+    example: PROJECT_LIMITS.MAX_PROJECTS_PER_USER,
+  }),
+  currentProjects: z.number().int().openapi({
+    description: 'Current number of projects',
+    example: 2,
+  }),
+  maxThreadsPerProject: z.number().int().openapi({
+    description: 'Maximum threads per project',
+    example: PROJECT_LIMITS.MAX_THREADS_PER_PROJECT,
+  }),
+  canCreateProject: z.boolean().openapi({
+    description: 'Whether user can create more projects',
+    example: true,
+  }),
+}).openapi('ProjectLimits');
+
+export const ProjectLimitsResponseSchema = createApiResponseSchema(ProjectLimitsSchema);
+
+export type ProjectLimits = z.infer<typeof ProjectLimitsSchema>;
 
 // ============================================================================
 // PROJECT CONTEXT SCHEMAS
@@ -326,15 +404,15 @@ export const ProjectContextResponseSchema = createApiResponseSchema(
       items: z.array(z.object({
         threadTitle: z.string(),
         userQuery: z.string(),
-        analysis: z.string().nullable(),
+        summary: z.string().nullable(),
       })),
       totalCount: z.number(),
     }),
-    analyses: z.object({
+    moderators: z.object({
       items: z.array(z.object({
         threadTitle: z.string(),
         userQuestion: z.string(),
-        summary: z.string(),
+        moderator: z.string(),
       })),
       totalCount: z.number(),
     }),
@@ -351,6 +429,7 @@ export const ProjectContextResponseSchema = createApiResponseSchema(
 export type ListProjectsQuery = z.infer<typeof ListProjectsQuerySchema>;
 export type ListProjectAttachmentsQuery = z.infer<typeof ListProjectAttachmentsQuerySchema>;
 export type ListProjectMemoriesQuery = z.infer<typeof ListProjectMemoriesQuerySchema>;
+export type ListProjectThreadsQuery = z.infer<typeof ListProjectThreadsQuerySchema>;
 export type CreateProjectRequest = z.infer<typeof CreateProjectRequestSchema>;
 export type UpdateProjectRequest = z.infer<typeof UpdateProjectRequestSchema>;
 export type AddUploadToProjectRequest = z.infer<typeof AddUploadToProjectRequestSchema>;

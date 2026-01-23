@@ -9,6 +9,7 @@ import type { InferRequestType, InferResponseType } from 'hono/client';
 
 import type { ApiClientType } from '@/lib/api/client';
 import { createApiClient, ServiceFetchError } from '@/lib/api/client';
+import type { ServiceOptions } from '@/services/api/types';
 
 // ============================================================================
 // Type Inference - Endpoint definitions
@@ -24,18 +25,6 @@ type GetSubscriptionEndpoint = ApiClientType['billing']['subscriptions'][':id'][
 export type ListSubscriptionsResponse = InferResponseType<ListSubscriptionsEndpoint, 200>;
 export type GetSubscriptionRequest = InferRequestType<GetSubscriptionEndpoint>;
 export type GetSubscriptionResponse = InferResponseType<GetSubscriptionEndpoint, 200>;
-
-// ============================================================================
-// Service Options
-// ============================================================================
-
-/**
- * Service options for SSR and cache control
- */
-type ServiceOptions = {
-  cookieHeader?: string;
-  bypassCache?: boolean;
-};
 
 // ============================================================================
 // Service Functions

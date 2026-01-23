@@ -90,7 +90,12 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
 
   const shareUrl = `${getAppBaseUrl()}/public/chat/${slug}`;
 
+  // ✅ PROJECT THREADS: Project threads cannot be favorited (no pin support)
+  const isProjectThread = 'projectId' in thread && thread.projectId !== null;
+
   const handleToggleFavorite = () => {
+    if (isProjectThread)
+      return;
     toggleFavoriteMutation.mutate({
       threadId: thread.id,
       isFavorite: !displayIsFavorite,
@@ -191,7 +196,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
             <DropdownMenuContent side="bottom" align="end">
               <ChatThreadMenuItems
                 onRename={handleOpenRenameDialog}
-                onPin={handleToggleFavorite}
+                onPin={isProjectThread ? undefined : handleToggleFavorite}
                 onDelete={onDeleteClick}
                 isFavorite={displayIsFavorite}
                 isPinPending={toggleFavoriteMutation.isPending}
@@ -245,7 +250,7 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
           <DropdownMenuContent side="bottom" align="end">
             <ChatThreadMenuItems
               onRename={handleOpenRenameDialog}
-              onPin={handleToggleFavorite}
+              onPin={isProjectThread ? undefined : handleToggleFavorite}
               onShare={handleOpenShareDialog}
               onDelete={onDeleteClick}
               isFavorite={displayIsFavorite}

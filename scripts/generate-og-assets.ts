@@ -1,6 +1,6 @@
 /**
  * Script to generate base64-encoded assets for OG images
- * Run: npx tsx scripts/generate-og-assets.ts
+ * Run: bunx tsx scripts/generate-og-assets.ts
  *
  * Generates:
  * - Fonts (Geist family)

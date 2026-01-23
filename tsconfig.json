@@ -25,6 +25,8 @@
     "packages",
     "dist",
     "out",
-    ".wrangler"
+    ".wrangler",
+    ".claude",
+    ".agents"
   ]
 }

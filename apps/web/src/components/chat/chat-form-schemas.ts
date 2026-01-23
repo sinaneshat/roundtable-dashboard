@@ -22,6 +22,7 @@ type CreateThreadPayload = {
   participants: CreateParticipantPayload[];
   firstMessage: string;
   attachmentIds?: string[];
+  projectId?: string;
 };
 
 // ============================================================================
@@ -42,6 +43,7 @@ export type ThreadInputFormData = z.infer<typeof ThreadInputFormSchema>;
 export function toCreateThreadRequest(
   data: ChatInputFormData,
   attachmentIds?: string[],
+  projectId?: string,
 ): CreateThreadPayload {
   return {
     title: 'New Chat',
@@ -57,5 +59,6 @@ export function toCreateThreadRequest(
     })),
     firstMessage: data.message,
     attachmentIds: attachmentIds && attachmentIds.length > 0 ? attachmentIds : undefined,
+    projectId,
   };
 }

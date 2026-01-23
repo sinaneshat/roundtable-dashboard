@@ -280,9 +280,9 @@ export const ResourceReadResultSchema = z.object({
  * Create Project Input
  */
 export const CreateProjectInputSchema = z.object({
-  name: z.string().min(1).max(200),
-  description: z.string().max(1000).optional(),
-  customInstructions: z.string().max(4000).optional(),
+  name: z.string().min(STRING_LIMITS.PROJECT_NAME_MIN).max(STRING_LIMITS.PROJECT_NAME_MAX),
+  description: z.string().max(STRING_LIMITS.PROJECT_DESCRIPTION_MAX).optional(),
+  customInstructions: z.string().max(STRING_LIMITS.CUSTOM_INSTRUCTIONS_MAX).optional(),
   settings: z.object({
     autoIndexing: z.boolean().optional(),
     maxFileSize: z.number().int().positive().optional(),
@@ -311,9 +311,9 @@ export const ListProjectsInputSchema = z.object({
  */
 export const UpdateProjectInputSchema = z.object({
   projectId: CoreSchemas.id(),
-  name: z.string().min(1).max(200).optional(),
-  description: z.string().max(1000).optional(),
-  customInstructions: z.string().max(4000).optional(),
+  name: z.string().min(STRING_LIMITS.PROJECT_NAME_MIN).max(STRING_LIMITS.PROJECT_NAME_MAX).optional(),
+  description: z.string().max(STRING_LIMITS.PROJECT_DESCRIPTION_MAX).optional(),
+  customInstructions: z.string().max(STRING_LIMITS.CUSTOM_INSTRUCTIONS_MAX).optional(),
   settings: z.object({
     autoIndexing: z.boolean().optional(),
     maxFileSize: z.number().int().positive().optional(),

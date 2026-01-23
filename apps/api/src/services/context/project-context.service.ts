@@ -17,7 +17,7 @@
  * - Moderator context: Past moderator analyses provide insights
  */
 
-import { MessagePartTypes, MessageRoles, PreSearchStatuses } from '@roundtable/shared/enums';
+import { CitationSourcePrefixes, CitationSourceTypes, MessagePartTypes, MessageRoles, PreSearchStatuses } from '@roundtable/shared/enums';
 import { and, desc, eq, inArray, ne } from 'drizzle-orm';
 import * as z from 'zod';
 
@@ -25,6 +25,7 @@ import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { PreSearchDataPayloadSchema } from '@/routes/chat/schema';
+import type { CitableSource, CitationSourceMap } from '@/types/citations';
 
 // ============================================================================
 // ZOD SCHEMAS - SINGLE SOURCE OF TRUTH
@@ -557,4 +558,165 @@ export function formatProjectContextForPrompt(
   }
 
   return `\n\n## Project Context\n\nThe following context is from other conversations, research, and moderator analyses within this project. Use this information to provide more informed and coherent responses.\n\n${sections.join('\n\n')}`;
+}
+
+// ============================================================================
+// Project RAG Context for Moderator/Pre-search
+// ============================================================================
+
+/**
+ * RAG search result item from Cloudflare AutoRAG
+ */
+type RagSearchResultItem = {
+  file_id: string;
+  filename: string;
+  score: number;
+  content: Array<{ type: string; text: string }>;
+};
+
+/**
+ * Project RAG context result
+ */
+export type ProjectRagContextResult = {
+  instructions: string | null;
+  ragContext: string;
+  citableSources: CitableSource[];
+  citationSourceMap: CitationSourceMap;
+};
+
+export const ProjectRagContextParamsSchema = z.object({
+  projectId: z.string().min(1),
+  query: z.string().min(1),
+  ai: z.custom<Ai | undefined>(),
+  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+  maxResults: z.number().int().positive().optional(),
+});
+
+export type ProjectRagContextParams = z.infer<typeof ProjectRagContextParamsSchema>;
+
+/**
+ * Get project RAG context for moderator/pre-search
+ *
+ * Centralized helper that:
+ * - Fetches project with customInstructions, autoragInstanceId, r2FolderPrefix
+ * - Queries AutoRAG with folder filtering for multitenancy
+ * - Returns formatted context with citation support
+ *
+ * Used by:
+ * - moderator.handler.ts - Council moderator synthesis
+ * - pre-search.handler.ts - Web search query generation
+ *
+ * @param params - Project ID, query, AI binding, database, optional max results
+ * @returns Project instructions, RAG context, and citation mappings
+ */
+export async function getProjectRagContext(
+  params: ProjectRagContextParams,
+): Promise<ProjectRagContextResult> {
+  const { projectId, query, ai, db, maxResults = 5 } = params;
+
+  const emptyResult: ProjectRagContextResult = {
+    instructions: null,
+    ragContext: '',
+    citableSources: [],
+    citationSourceMap: new Map(),
+  };
+
+  // Fetch project with RAG config
+  const project = await db.query.chatProject.findFirst({
+    where: eq(tables.chatProject.id, projectId),
+    columns: {
+      id: true,
+      customInstructions: true,
+      autoragInstanceId: true,
+      r2FolderPrefix: true,
+    },
+  });
+
+  if (!project) {
+    return emptyResult;
+  }
+
+  const citableSources: CitableSource[] = [];
+  const citationSourceMap: CitationSourceMap = new Map();
+  let ragContext = '';
+
+  // Include custom instructions if present
+  const instructions = project.customInstructions || null;
+
+  // Query AutoRAG if configured
+  if (project.autoragInstanceId && ai) {
+    try {
+      const ragResponse = await ai.autorag(project.autoragInstanceId).aiSearch({
+        query,
+        max_num_results: maxResults,
+        rewrite_query: true,
+        stream: false,
+        reranking: {
+          enabled: true,
+          model: '@cf/baai/bge-reranker-base',
+        },
+        ranking_options: {
+          score_threshold: 0.3,
+        },
+        filters: {
+          type: 'and',
+          filters: [
+            {
+              key: 'folder',
+              type: 'gt',
+              value: `${project.r2FolderPrefix}//`,
+            },
+            {
+              key: 'folder',
+              type: 'lte',
+              value: `${project.r2FolderPrefix}/z`,
+            },
+          ],
+        },
+      });
+
+      if (ragResponse.data && ragResponse.data.length > 0) {
+        const sourceFiles = ragResponse.data
+          .map((result: RagSearchResultItem) => {
+            const contentText = result.content
+              .filter(c => c.type === 'text')
+              .map(c => c.text)
+              .join('\n');
+            const score = (result.score * 100).toFixed(1);
+            const citationId = `${CitationSourcePrefixes[CitationSourceTypes.RAG]}_${result.file_id.slice(0, 8)}`;
+
+            const ragSource: CitableSource = {
+              id: citationId,
+              type: CitationSourceTypes.RAG,
+              sourceId: result.file_id,
+              title: result.filename,
+              content: contentText.slice(0, 500) + (contentText.length > 500 ? '...' : ''),
+              metadata: {
+                filename: result.filename,
+              },
+            };
+            citableSources.push(ragSource);
+            citationSourceMap.set(citationId, ragSource);
+
+            return `[${citationId}] **${result.filename}** (${score}% match):\n${contentText}`;
+          })
+          .join('\n\n---\n\n');
+
+        ragContext = ragResponse.response
+          ? `### AI Analysis\n${ragResponse.response}\n\n### Source Files\n${sourceFiles}`
+          : `### Relevant Files\n${sourceFiles}`;
+      } else if (ragResponse.response) {
+        ragContext = ragResponse.response;
+      }
+    } catch {
+      // AutoRAG retrieval failed - continue without RAG context
+    }
+  }
+
+  return {
+    instructions,
+    ragContext,
+    citableSources,
+    citationSourceMap,
+  };
 }

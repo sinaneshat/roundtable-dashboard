@@ -160,19 +160,21 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
               </DialogBody>
             )
           : (
-              <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)}>
-                <DialogBody className="space-y-4 py-4">
-                  <RHFSelect
-                    name="feedbackType"
-                    title={t('feedback.typeLabel')}
-                    options={feedbackTypeOptions}
-                  />
-                  <RHFTextarea
-                    name="message"
-                    title={t('feedback.messageLabel')}
-                    placeholder={t('feedback.messagePlaceholder')}
-                    rows={5}
-                  />
+              <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+                <DialogBody>
+                  <div className="space-y-4">
+                    <RHFSelect
+                      name="feedbackType"
+                      title={t('feedback.typeLabel')}
+                      options={feedbackTypeOptions}
+                    />
+                    <RHFTextarea
+                      name="message"
+                      title={t('feedback.messageLabel')}
+                      placeholder={t('feedback.messagePlaceholder')}
+                      rows={5}
+                    />
+                  </div>
                 </DialogBody>
 
                 <DialogFooter bordered bleed>

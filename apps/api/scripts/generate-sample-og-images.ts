@@ -2,7 +2,7 @@
  * Generate Sample OG Images
  *
  * Creates sample OG images locally for visual inspection using embedded assets.
- * Run with: npx tsx scripts/generate-sample-og-images.ts
+ * Run with: bunx tsx scripts/generate-sample-og-images.ts
  *
  * Output: ./og-samples/ directory with PNG files
  */

@@ -58,7 +58,7 @@
     "check-types": "turbo run check-types",
     "cf-typegen": "cd apps/api && bun run cf-typegen && cd ../web && bun run cf-typegen",
     "cf-typegen:check": "cd apps/api && bun run cf-typegen && git diff --exit-code cloudflare-env.d.ts || (echo '⚠️  cloudflare-env.d.ts is out of date. Run bun run cf-typegen and commit.' && exit 1)",
-    "generate:icons": "npx @svgr/cli --memo --ref --typescript --jsx-runtime automatic --prettier-config .prettierrc --out-dir apps/web/src/icons/component --icon --replace-attr-values -- apps/web/src/icons/svg --ignore-existing",
+    "generate:icons": "bunx @svgr/cli --memo --ref --typescript --jsx-runtime automatic --prettier-config .prettierrc --out-dir apps/web/src/icons/component --icon --replace-attr-values -- apps/web/src/icons/svg --ignore-existing",
     "preview": "turbo run preview",
     "deploy:preview": "turbo run deploy:preview",
     "deploy:production": "turbo run deploy:production",

@@ -145,11 +145,14 @@ export const queryKeys = {
       cursor
         ? QueryKeyFactory.action('projects', 'list', cursor)
         : QueryKeyFactory.list('projects'),
+    sidebar: () => [...queryKeys.projects.all, 'sidebar'] as const,
     details: () => [...queryKeys.projects.all, 'detail'] as const,
     detail: (id: string) => QueryKeyFactory.detail('projects', id),
     attachments: (id: string) => QueryKeyFactory.action('projects', 'attachments', id),
     memories: (id: string) => QueryKeyFactory.action('projects', 'memories', id),
+    threads: (id: string) => QueryKeyFactory.action('projects', 'threads', id),
     context: (id: string) => QueryKeyFactory.action('projects', 'context', id),
+    limits: () => QueryKeyFactory.action('projects', 'limits'),
   },
 
   // Uploads (Centralized file storage)
@@ -272,11 +275,14 @@ export const invalidationPatterns = {
   // Project operations
   projects: [
     queryKeys.projects.lists(),
+    queryKeys.projects.sidebar(),
+    queryKeys.projects.limits(),
   ],
 
   projectDetail: (projectId: string) => [
     queryKeys.projects.detail(projectId),
     queryKeys.projects.lists(),
+    queryKeys.projects.sidebar(),
     queryKeys.projects.attachments(projectId),
     queryKeys.projects.memories(projectId),
   ],

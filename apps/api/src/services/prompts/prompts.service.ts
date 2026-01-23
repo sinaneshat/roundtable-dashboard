@@ -307,14 +307,57 @@ export function analyzeQueryComplexity(userMessage: string): QueryAnalysisResult
 }
 
 /**
- * Web search complexity analysis system prompt
+ * Build web search complexity analysis system prompt with current date
  * ✅ SINGLE SOURCE: Used by web-search.service.ts for query generation with complexity analysis
- * ✅ REPLACES: Inline QUERY_GENERATION_SYSTEM_PROMPT in web-search.service.ts:87-113
+ * ✅ DYNAMIC DATE: Includes current year for time-relevant searches
+ * ✅ SMART DATE HANDLING: Only adds year to time-sensitive queries
  *
  * Used by:
- * - /src/api/services/web-search.service.ts - streamSearchQuery()
+ * - /src/api/services/web-search.service.ts - streamSearchQuery(), generateSearchQuery()
+ *
+ * @returns System prompt with current date context
  */
-export const WEB_SEARCH_COMPLEXITY_ANALYSIS_PROMPT = `You are an expert search query optimizer. Your job is to analyze user questions and break them down into multiple strategic search queries that will gather comprehensive information from different angles.
+export function buildWebSearchComplexityAnalysisPrompt(): string {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.toLocaleString('en-US', { month: 'long' });
+  const currentDay = now.getDate();
+
+  return `You are an expert search query optimizer like ChatGPT or Claude. Your job is to analyze user questions and generate OPTIMAL KEYWORD SEARCHES that will retrieve the most relevant, current information.
+
+📅 **TODAY'S DATE: ${currentMonth} ${currentDay}, ${currentYear}**
+
+## KEYWORD EXTRACTION STRATEGY (Like ChatGPT/Claude)
+
+**Your goal is to extract the BEST search keywords**, not rephrase questions. Think like a search engine expert:
+
+1. **Extract core concepts** - Identify the main nouns, technologies, actions
+2. **Remove filler words** - Strip "how do I", "what is the", "can you tell me"
+3. **Add specificity** - Include version numbers, frameworks, specific terms
+4. **Prioritize recent info** - Use timeRange or year when content evolves
+
+## TIME-SENSITIVITY DETECTION
+
+**ADD YEAR (${currentYear}) to queries when topic is TIME-SENSITIVE:**
+- ✅ Technology tutorials/docs (versions change): "React hooks tutorial ${currentYear}"
+- ✅ Best practices (evolve): "Docker security best practices ${currentYear}"
+- ✅ Comparisons of evolving tech: "PostgreSQL vs MongoDB performance ${currentYear}"
+- ✅ News, events, trends: "AI regulations ${currentYear}"
+- ✅ Pricing, availability: "AWS Lambda pricing ${currentYear}"
+- ✅ Library/framework updates: "Next.js 15 features ${currentYear}"
+
+**DO NOT ADD YEAR when topic is TIMELESS:**
+- ❌ Math/science fundamentals: "Pythagorean theorem proof"
+- ❌ Historical facts: "when was Python created"
+- ❌ Language basics: "JavaScript array methods"
+- ❌ Definitions: "what is recursion"
+- ❌ Universal concepts: "design patterns singleton"
+
+**USE timeRange field for RECENCY-CRITICAL queries:**
+- "day": Breaking news, outages, live events
+- "week": Recent updates, current prices
+- "month": New releases, recent changes
+- "year": Annual trends, yearly reports
 
 🚨 **CRITICAL: INTERPRET UPLOADED CONTENT FIRST**
 When the user's message includes <file-context> or [Image Content Analysis], you MUST:
@@ -325,64 +368,68 @@ When the user's message includes <file-context> or [Image Content Analysis], you
 Example:
 - User says: "What is this?" with an image showing a circuit board
 - Image analysis: "[Image Content Analysis] A green PCB circuit board with capacitors and an Arduino microcontroller"
-- CORRECT search: "Arduino microcontroller circuit board tutorial"
+- CORRECT search: "Arduino microcontroller getting started guide"
 - WRONG search: "what is this" (ignoring the image content!)
 
 🚨 **CRITICAL RULE**: Generate MULTIPLE DIFFERENT queries that explore DIFFERENT aspects - NEVER just rephrase the user's question into a single query!
 
-**MULTI-QUERY STRATEGY** (Your primary decision):
+## MULTI-QUERY STRATEGY
 
-Analyze the question complexity and break it down (MAXIMUM 3 QUERIES):
-- **1 query**: ONLY for ultra-simple fact lookups (e.g., "What year was X founded?")
+Analyze complexity and break it down (MAXIMUM 3 QUERIES):
+- **1 query**: Ultra-simple fact lookups (e.g., "What year was X founded?")
 - **2 queries**: Comparisons (A vs B) - search each separately for balanced view
-- **3 queries**: Multi-faceted or complex topics - break into distinct components (THIS IS THE MAX)
+- **3 queries**: Multi-faceted or complex topics - break into distinct components
 
-**QUERY DECOMPOSITION RULES**:
-🔑 **Each query MUST target a DIFFERENT aspect** - Don't repeat the same search!
-- Remove question words (what/how/why/when/where/who)
-- Extract core concepts and break into components
-- Use keywords not sentences (3-8 words max)
-- Add year (2025) ONLY for current/recent topics
+## QUERY DECOMPOSITION RULES
+🔑 **Each query MUST target a DIFFERENT aspect**
+- Use 3-8 keywords (not sentences, not questions)
+- Extract core concepts, remove question words
+- Include year ${currentYear} ONLY for time-sensitive topics (see rules above)
+- Set appropriate timeRange for recency-critical searches
 - Each query should uncover UNIQUE information
 
-**EXAMPLES OF GOOD MULTI-QUERY DECOMPOSITION**:
+## EXAMPLES
 
-❌ BAD (Single query just rephrasing):
+❌ BAD - Just rephrasing:
 Q: "How do I set up Docker for production?"
 Bad: {"totalQueries":1,"queries":[{"query":"Docker production setup"}]}
-👆 This is WRONG - only one query that's just the user's question!
 
-✅ GOOD (Multiple distinct angles):
+✅ GOOD - Multiple angles with smart date handling:
 Q: "How do I set up Docker for production?"
 Good: {"totalQueries":3,"queries":[
-  {"query":"Docker production configuration best practices","rationale":"Production-specific setup"},
-  {"query":"Docker security hardening 2025","rationale":"Security considerations"},
-  {"query":"Docker monitoring tools production","rationale":"Observability setup"}
+  {"query":"Docker production configuration best practices ${currentYear}","rationale":"Current best practices (evolving)","searchDepth":"advanced"},
+  {"query":"Docker security hardening production ${currentYear}","rationale":"Security (evolving threats)","searchDepth":"advanced"},
+  {"query":"Docker container monitoring observability","rationale":"Monitoring concepts (stable)","searchDepth":"advanced"}
 ]}
-👆 This is RIGHT - three different aspects of production Docker!
 
-✅ GOOD (Comparison with separate searches):
-Q: "React vs Vue for startups"
-Good: {"totalQueries":2,"queries":[
-  {"query":"React framework benefits startups 2025","rationale":"React advantages"},
-  {"query":"Vue framework benefits startups 2025","rationale":"Vue advantages"}
+✅ GOOD - Timeless topic (no year needed):
+Q: "Explain the singleton design pattern"
+Good: {"totalQueries":1,"queries":[
+  {"query":"singleton design pattern implementation examples","rationale":"Classic pattern, timeless","searchDepth":"basic","complexity":"basic"}
 ]}
-👆 Each framework searched independently for balanced comparison!
 
-✅ GOOD (Complex topic breakdown - MAX 3 queries):
-Q: "Best practices for microservices architecture"
+✅ GOOD - Mixed time-sensitivity:
+Q: "Best database for a startup in 2026"
 Good: {"totalQueries":3,"queries":[
-  {"query":"microservices design patterns","rationale":"Architecture patterns"},
-  {"query":"microservices communication protocols","rationale":"Service interaction"},
-  {"query":"microservices deployment monitoring","rationale":"Deployment & observability"}
+  {"query":"best database startups ${currentYear}","rationale":"Current recommendations","searchDepth":"advanced","timeRange":"year"},
+  {"query":"PostgreSQL vs MongoDB startup comparison ${currentYear}","rationale":"Current comparison","searchDepth":"advanced"},
+  {"query":"database scaling strategies startups","rationale":"Timeless architecture concepts","searchDepth":"advanced"}
 ]}
-👆 Three distinct aspects of microservices (maximum allowed)!
 
-**SEARCH DEPTH PER QUERY** (MAX 3 sources per query):
+✅ GOOD - News/current events:
+Q: "Latest developments in AI regulation"
+Good: {"totalQueries":2,"queries":[
+  {"query":"AI regulation news ${currentYear}","rationale":"Current developments","searchDepth":"advanced","timeRange":"month","topic":"news"},
+  {"query":"AI governance policy updates ${currentMonth} ${currentYear}","rationale":"Most recent policy","searchDepth":"advanced","timeRange":"week","topic":"news"}
+]}
+
+## OUTPUT REQUIREMENTS
+
+**SEARCH DEPTH** (MAX 3 sources per query):
 - "basic": Quick facts, definitions → 1-2 sources
 - "advanced": How-tos, tutorials, comparisons → 3 sources (MAX)
 
-**COMPLEXITY LEVELS** (use lowercase, MAX 3 sources per query):
+**COMPLEXITY LEVELS** (lowercase):
 - "basic": Simple facts → 1-2 sources, "basic" depth
 - "moderate": How-tos, guides → 2-3 sources
 - "deep": Research, analysis → 3 sources (MAX), "advanced" depth
@@ -391,12 +438,14 @@ Good: {"totalQueries":3,"queries":[
 - includeImages: true for visual queries (UI/UX, design, diagrams, architecture)
 - includeImageDescriptions: true if images need AI analysis
 
-Return ONLY valid JSON. Think strategically about breaking complex questions into multiple search angles!`;
+Return ONLY valid JSON. Extract optimal keywords and strategically decide when to add dates!`;
+}
 
 /**
  * Web search query generation user prompt template
  * ✅ SINGLE SOURCE: Used by web-search.service.ts for creating search queries
- * ✅ REPLACES: Inline prompt in web-search.service.ts:114-119
+ * ✅ DYNAMIC DATE: Includes current year for time-relevant searches
+ * ✅ SMART DATE HANDLING: Only adds year to time-sensitive queries
  *
  * Used by:
  * - /src/api/services/web-search.service.ts - streamSearchQuery()
@@ -405,6 +454,10 @@ Return ONLY valid JSON. Think strategically about breaking complex questions int
  * @returns Formatted prompt for query generation
  */
 export function buildWebSearchQueryPrompt(userMessage: string): string {
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.toLocaleString('en-US', { month: 'long' });
+
   // Check if message contains file context
   const hasFileContext = userMessage.includes('<file-context>') || userMessage.includes('[Image Content Analysis]');
 
@@ -422,44 +475,67 @@ The user has uploaded content. You MUST:
 
   return `${contextInstruction}USER INPUT: "${userMessage}"
 
-🎯 **YOUR TASK**: ${hasFileContext ? 'Interpret the uploaded content AND the user\'s question together, then generate' : 'Break this question into'} strategic search queries that explore DIFFERENT aspects. DO NOT just rephrase the literal text!
+📅 **TODAY: ${currentMonth} ${currentYear}**
+
+🎯 **YOUR TASK**: ${hasFileContext ? 'Interpret the uploaded content AND the user\'s question together, then' : ''} Extract OPTIMAL SEARCH KEYWORDS that will retrieve the most relevant results. Think like ChatGPT or Claude search.
+
+**KEYWORD EXTRACTION** (Not rephrasing!):
+- Extract core nouns, technologies, actions
+- Remove question words ("how do I", "what is")
+- Add specificity (versions, frameworks, specific terms)
+- Use 3-8 keywords per query
+
+**DATE HANDLING** (Be smart about this):
+- ADD ${currentYear} for: tutorials, best practices, comparisons, evolving tech, news, pricing
+- SKIP year for: math/science fundamentals, definitions, historical facts, timeless concepts
+- Use timeRange ("day"/"week"/"month"/"year") for recency-critical queries
 
 **REQUIRED JSON STRUCTURE**:
 {
   "totalQueries": <1-3 based on complexity - MAXIMUM 3>,
-  "analysisRationale": "<explain WHY you chose this many queries and WHAT different aspects each covers>",
+  "analysisRationale": "<explain your keyword extraction strategy and time-sensitivity decisions>",
   "queries": [<array of DISTINCT query objects - MAX 3>]
 }
 
 **EACH QUERY OBJECT MUST HAVE**:
-- query: Keyword search targeting ONE specific aspect (3-8 words, NO question words)
-- rationale: What UNIQUE aspect/angle this query explores (1 sentence)
+- query: 3-8 keywords targeting ONE specific aspect (add ${currentYear} ONLY if time-sensitive)
+- rationale: What UNIQUE aspect this explores + why you did/didn't add year
 - searchDepth: "basic" or "advanced"
 - complexity: "basic" | "moderate" | "deep" (lowercase)
-- sourceCount: Number of sources (basic:1-2, moderate:2-3, deep:3) - MAX 3 PER QUERY
+- sourceCount: Number of sources (1-3, based on complexity)
 
-**OPTIONAL FIELDS** (per query - ONLY include if clearly relevant):
-- topic: "general" | "news" | "finance" | "health" | "scientific" | "travel" (OMIT if unsure)
-- timeRange: "day" | "week" | "month" | "year" (ONLY for time-sensitive queries)
-- needsAnswer: "basic" | "advanced" (ONLY if synthesis is needed)
-- includeImages: true (ONLY for visual/design questions)
-- includeImageDescriptions: true (ONLY if images need AI analysis)
+**OPTIONAL FIELDS** (include when relevant):
+- topic: "general" | "news" | "finance" | "health" | "scientific" | "travel"
+- timeRange: "day" | "week" | "month" | "year" (for recency-critical)
+- needsAnswer: "basic" | "advanced" (if synthesis needed)
+- includeImages: true (for visual queries)
+- includeImageDescriptions: true (if images need AI analysis)
 
-**DECOMPOSITION STRATEGY EXAMPLES**:
+**EXAMPLES**:
 
 Q: "What is GraphQL?"
-→ 1 query (simple fact): {"totalQueries":1,"analysisRationale":"Simple definition - one focused search sufficient","queries":[{"query":"GraphQL definition overview","rationale":"Core concept","searchDepth":"basic","complexity":"basic","sourceCount":2}]}
+→ Timeless definition, no year needed:
+{"totalQueries":1,"analysisRationale":"Basic definition - timeless concept","queries":[{"query":"GraphQL API query language overview","rationale":"Fundamental concept, no year needed","searchDepth":"basic","complexity":"basic","sourceCount":2}]}
 
-Q: "GraphQL vs REST API performance"
-→ 2 queries (comparison): {"totalQueries":2,"analysisRationale":"Comparison requires separate searches for balanced view","queries":[{"query":"GraphQL performance benefits 2025","rationale":"GraphQL strengths","searchDepth":"advanced","complexity":"moderate","sourceCount":3},{"query":"REST API performance characteristics","rationale":"REST strengths","searchDepth":"advanced","complexity":"moderate","sourceCount":3}]}
+Q: "Best React state management library"
+→ Evolving landscape, add year:
+{"totalQueries":2,"analysisRationale":"Library recommendations evolve - need current info","queries":[
+  {"query":"React state management comparison ${currentYear}","rationale":"Current library landscape","searchDepth":"advanced","complexity":"moderate","sourceCount":3,"timeRange":"year"},
+  {"query":"Zustand Redux Jotai React comparison","rationale":"Specific popular options","searchDepth":"advanced","complexity":"moderate","sourceCount":3}
+]}
 
-Q: "How to implement authentication in Next.js?"
-→ 3 queries (multi-faceted - MAXIMUM): {"totalQueries":3,"analysisRationale":"Authentication requires setup, security, and session management - three distinct aspects","queries":[{"query":"Next.js authentication setup guide 2025","rationale":"Initial setup process","searchDepth":"advanced","complexity":"moderate","sourceCount":3},{"query":"Next.js JWT session management","rationale":"Session handling","searchDepth":"advanced","complexity":"moderate","sourceCount":3},{"query":"Next.js authentication security best practices","rationale":"Security hardening","searchDepth":"advanced","complexity":"moderate","sourceCount":3}]}
+Q: "Explain the Pythagorean theorem"
+→ Timeless math, no year:
+{"totalQueries":1,"analysisRationale":"Mathematical theorem - completely timeless","queries":[{"query":"Pythagorean theorem proof explanation examples","rationale":"Timeless math concept","searchDepth":"basic","complexity":"basic","sourceCount":2}]}
 
-Q: "Best practices for React state management"
-→ 3 queries (MAXIMUM - consolidate related aspects): {"totalQueries":3,"analysisRationale":"State management consolidated into three key aspects","queries":[{"query":"React useState useContext patterns 2025","rationale":"Built-in hooks patterns","searchDepth":"advanced","complexity":"moderate","sourceCount":3},{"query":"Redux Zustand state management comparison","rationale":"External libraries","searchDepth":"advanced","complexity":"moderate","sourceCount":3},{"query":"React state management performance best practices","rationale":"Performance and best practices","searchDepth":"advanced","complexity":"deep","sourceCount":3}]}
+Q: "Latest Next.js 15 features"
+→ Very time-sensitive, add year and timeRange:
+{"totalQueries":2,"analysisRationale":"New release - very time-sensitive","queries":[
+  {"query":"Next.js 15 new features ${currentYear}","rationale":"Latest release info","searchDepth":"advanced","complexity":"moderate","sourceCount":3,"timeRange":"month"},
+  {"query":"Next.js 15 migration guide ${currentYear}","rationale":"Current upgrade path","searchDepth":"advanced","complexity":"moderate","sourceCount":3,"timeRange":"month"}
+]}
 
-🚨 **REMEMBER**: Each query should explore a DIFFERENT angle - don't just repeat the same search with different wording!
+🚨 **REMEMBER**: Extract optimal keywords, decide intelligently about dates based on time-sensitivity!
 
 Return ONLY valid JSON, no other text.`;
 }
@@ -1033,6 +1109,7 @@ export function buildModeratorTranscript(participantResponses: ParticipantRespon
  * @param mode - Conversation mode (analyzing, brainstorming, debating, solving)
  * @param userQuestion - The user's original question
  * @param participantResponses - Array of participant responses
+ * @param projectContext - Optional project instructions and RAG context
  * @returns System prompt for council moderator synthesis
  */
 export function buildCouncilModeratorSystemPrompt(
@@ -1040,10 +1117,24 @@ export function buildCouncilModeratorSystemPrompt(
   mode: ChatMode,
   userQuestion: string,
   participantResponses: ParticipantResponse[],
+  projectContext?: { instructions?: string | null; ragContext?: string },
 ): string {
   const participantList = buildModeratorParticipantList(participantResponses);
   const participantCount = participantResponses.length;
   const transcript = buildModeratorTranscript(participantResponses);
+
+  // Build project context section if available
+  let projectContextSection = '';
+  if (projectContext?.instructions || projectContext?.ragContext) {
+    const parts: string[] = [];
+    if (projectContext.instructions) {
+      parts.push(`### Project Instructions\n${projectContext.instructions}`);
+    }
+    if (projectContext.ragContext) {
+      parts.push(`### Relevant Project Knowledge\n${projectContext.ragContext}\n\nYou may cite these sources using [source_id] format when synthesizing.`);
+    }
+    projectContextSection = `\n\n## Project Context\n\n${parts.join('\n\n')}\n`;
+  }
 
   return `# Council Moderator
 
@@ -1109,7 +1200,7 @@ What would a follow-up need to address? What remains unresolved?
 - **No meta-commentary** — Don't explain what you're doing, just do it
 - **Prose over bullets** — This is a synthesis, not a checklist (bullets okay for listing options)
 - **Faithful to the discussion** — Do not introduce new arguments or external knowledge
-
+${projectContextSection}
 ---
 
 ## Context
@@ -1210,4 +1301,72 @@ ${fileEntries.join('\n\n')}
 
 ---
 **Remember: NO citation = INCOMPLETE RESPONSE. Always cite your sources from the uploaded files.**`;
+}
+
+// ============================================================================
+// Memory Extraction Prompts - Auto-extract memories from conversations
+// ============================================================================
+
+/**
+ * Build prompt for memory extraction from conversations
+ * ✅ SINGLE SOURCE: Used by memory-extraction.service.ts for AI-powered extraction
+ *
+ * Extracts:
+ * - User preferences/instructions (e.g., "always use markdown")
+ * - Important facts (names, dates, project details)
+ * - Decisions made that affect future conversations
+ *
+ * @param userQuestion - The user's question from this round
+ * @param moderatorSummary - The moderator's synthesis of the discussion
+ * @param existingMemories - Summaries of existing memories to avoid duplicates
+ * @returns Formatted prompt for memory extraction
+ */
+export function buildMemoryExtractionPrompt(
+  userQuestion: string,
+  moderatorSummary: string,
+  existingMemories: string[],
+): string {
+  const existingList = existingMemories.length > 0
+    ? existingMemories.map((m, i) => `${i + 1}. ${m}`).join('\n')
+    : 'None';
+
+  return `Extract important information to remember for future conversations in this project.
+
+## What to Extract:
+1. **User preferences/instructions** - Explicit requests about how to respond (e.g., "always use TypeScript", "prefer concise answers")
+2. **Important facts** - Names, dates, project details, technical constraints mentioned
+3. **Decisions made** - Choices that should persist (e.g., "we decided to use PostgreSQL", "the deadline is March 15")
+4. **Context** - Background information that helps understand future questions
+
+## What NOT to Extract:
+- Generic questions without lasting importance
+- Information already in existing memories (avoid duplicates)
+- Transient details (temporary issues, one-time queries)
+- Anything with importance below 5/10
+
+## User's Question:
+${userQuestion}
+
+## Discussion Summary:
+${moderatorSummary}
+
+## Existing Memories (avoid duplicates):
+${existingList}
+
+## Output Format:
+Return a JSON array. If nothing is worth extracting, return an empty array [].
+
+Each memory object must have:
+- "content": The full memory text (1-3 sentences, max 200 chars)
+- "summary": Ultra-short label for display (max 10 words)
+- "importance": Score 1-10 (only include if >= 5)
+- "category": One of "preference" | "fact" | "decision" | "context"
+
+Example output:
+[
+  {"content": "User prefers TypeScript with strict mode enabled for all code examples.", "summary": "TypeScript strict mode", "importance": 8, "category": "preference"},
+  {"content": "Project deadline is March 15, 2025.", "summary": "March 15 deadline", "importance": 7, "category": "fact"}
+]
+
+Return ONLY valid JSON array, no other text.`;
 }

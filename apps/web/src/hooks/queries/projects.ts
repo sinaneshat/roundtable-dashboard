@@ -13,18 +13,22 @@ import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 import { LIMITS } from '@/constants';
 import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
+import { projectQueryOptions, sidebarProjectsQueryOptions } from '@/lib/data/query-options';
 import { GC_TIMES, STALE_TIMES } from '@/lib/data/stale-times';
+import { getSidebarProjects } from '@/server/sidebar-projects';
 import type {
   ListProjectAttachmentsQuery,
   ListProjectMemoriesQuery,
 } from '@/services/api';
 import {
   getProjectContextService,
-  getProjectService,
+  getProjectLimitsService,
   listProjectAttachmentsService,
   listProjectMemoriesService,
   listProjectsService,
 } from '@/services/api';
+
+import { useThreadsQuery } from './chat/threads';
 
 /**
  * Hook to fetch projects with cursor-based infinite scrolling
@@ -37,6 +41,7 @@ import {
  */
 export function useProjectsQuery(search?: string) {
   const { isAuthenticated } = useAuthCheck();
+  const isSearchQuery = Boolean(search);
 
   return useInfiniteQuery({
     queryKey: queryKeys.projects.lists(search),
@@ -62,7 +67,8 @@ export function useProjectsQuery(search?: string) {
         return undefined;
       return lastPage.data.pagination.nextCursor;
     },
-    enabled: isAuthenticated,
+    // Only gate search queries - non-search are SSR prefetched
+    enabled: isSearchQuery ? isAuthenticated : undefined,
     staleTime: STALE_TIMES.threads, // 30 seconds - match threads pattern
     gcTime: GC_TIMES.STANDARD, // 5 minutes
     retry: false,
@@ -71,22 +77,67 @@ export function useProjectsQuery(search?: string) {
 }
 
 /**
+ * Hook to fetch sidebar projects with SSR support
+ * Uses server function for initial data, API service for pagination
+ *
+ * This hook matches the pattern of useSidebarThreadsQuery:
+ * - Initial page: Uses server function (SSR hydration)
+ * - Subsequent pages: Uses API service directly
+ */
+export function useSidebarProjectsQuery() {
+  return useInfiniteQuery({
+    ...sidebarProjectsQueryOptions,
+    queryFn: async ({ pageParam }) => {
+      if (pageParam) {
+        // Subsequent pages - use API directly
+        const result = await listProjectsService({
+          query: { cursor: pageParam, limit: LIMITS.STANDARD_PAGE },
+        });
+        if (!result.success) {
+          throw new Error('Failed to fetch sidebar projects');
+        }
+        return result;
+      }
+      // Initial page - use server function (SSR hydration)
+      const result = await getSidebarProjects();
+      if (!result.success) {
+        throw new Error('Failed to fetch sidebar projects');
+      }
+      return result;
+    },
+    // NO enabled gate - SSR prefetched on protected route (matches useSidebarThreadsQuery)
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+type UseProjectQueryOptions = {
+  enabled?: boolean;
+  initialData?: { success: true; data: NonNullable<import('@/services/api').GetProjectResponse['data']> };
+};
+
+/**
  * Hook to fetch a specific project by ID with attachment and thread counts
  * Returns project details including attachmentCount and threadCount
  * Protected endpoint - requires authentication
  *
+ * Uses projectQueryOptions factory for SSR consistency with loader
+ *
  * @param projectId - Project ID
- * @param enabled - Optional control over whether to fetch (default: based on projectId and auth)
+ * @param options - Optional query options (enabled, initialData)
  */
-export function useProjectQuery(projectId: string, enabled?: boolean) {
+export function useProjectQuery(projectId: string, options?: UseProjectQueryOptions | boolean) {
   const { isAuthenticated } = useAuthCheck();
 
+  // Support both old signature (boolean enabled) and new options object
+  const opts = typeof options === 'boolean' ? { enabled: options } : (options ?? {});
+  const { enabled, initialData } = opts;
+
   return useQuery({
-    queryKey: queryKeys.projects.detail(projectId),
-    queryFn: () => getProjectService({ param: { id: projectId } }),
-    staleTime: STALE_TIMES.threadDetail, // 10 seconds - match threads pattern
+    ...projectQueryOptions(projectId),
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
-    retry: false,
+    initialData,
+    staleTime: initialData ? 10_000 : projectQueryOptions(projectId).staleTime,
     throwOnError: false,
   });
 }
@@ -186,6 +237,26 @@ export function useProjectMemoriesQuery(
 }
 
 /**
+ * Hook to fetch threads for a project
+ * Protected endpoint - requires authentication (ownership check)
+ *
+ * Uses unified /chat/threads?projectId=X endpoint for consistent thread behavior.
+ * Note: Project threads exclude isFavorite from response (favoriting not supported).
+ *
+ * @param projectId - Project ID
+ * @param enabled - Optional control over whether to fetch (default: based on projectId)
+ */
+export function useProjectThreadsQuery(
+  projectId: string,
+  enabled?: boolean,
+) {
+  return useThreadsQuery({
+    projectId,
+    enabled: enabled !== undefined ? enabled : !!projectId,
+  });
+}
+
+/**
  * Hook to fetch aggregated project context (for RAG)
  * Includes memories, cross-chat history, search results, and moderator
  * Protected endpoint - requires authentication
@@ -204,6 +275,25 @@ export function useProjectContextQuery(
     queryFn: () => getProjectContextService({ param: { id: projectId } }),
     staleTime: STALE_TIMES.threadDetail, // 10 seconds
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
+    retry: false,
+    throwOnError: false,
+  });
+}
+
+/**
+ * Hook to fetch project limits based on user subscription tier
+ * Returns tier, max projects, current projects, max threads per project, canCreateProject
+ * Protected endpoint - requires authentication
+ */
+export function useProjectLimitsQuery() {
+  const { isAuthenticated } = useAuthCheck();
+
+  return useQuery({
+    queryKey: queryKeys.projects.limits(),
+    queryFn: () => getProjectLimitsService(),
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    gcTime: GC_TIMES.STANDARD,
+    enabled: isAuthenticated,
     retry: false,
     throwOnError: false,
   });

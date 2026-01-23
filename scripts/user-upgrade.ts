@@ -1,4 +1,4 @@
-#!/usr/bin/env npx tsx
+#!/usr/bin/env bunx tsx
 /**
  * User Upgrade Script
  *
@@ -20,8 +20,8 @@
  * - Metadata includes {"manualGrant":"true"} for tracking
  *
  * Usage:
- *   Interactive:  npx tsx scripts/user-upgrade.ts
- *   CLI args:     npx tsx scripts/user-upgrade.ts --env prod --email user@example.com
+ *   Interactive:  bunx tsx scripts/user-upgrade.ts
+ *   CLI args:     bunx tsx scripts/user-upgrade.ts --env prod --email user@example.com
  *
  * Prerequisites:
  *   - Seed data must be applied (product/price records must exist)
@@ -381,7 +381,7 @@ async function main() {
 
     if (existingProducts.length === 0) {
       console.error(`❌ Stripe product ${stripeIds.productId} not found in database.`);
-      console.error('   Run the seed migration first: pnpm db:migrate:preview or pnpm db:migrate:prod');
+      console.error('   Run the seed migration first: bun run db:migrate:preview or bun run db:migrate:prod');
       process.exit(1);
     }
 
@@ -392,7 +392,7 @@ async function main() {
 
     if (existingPrices.length === 0) {
       console.error(`❌ Stripe price ${stripeIds.priceId} not found in database.`);
-      console.error('   Run the seed migration first: pnpm db:migrate:preview or pnpm db:migrate:prod');
+      console.error('   Run the seed migration first: bun run db:migrate:preview or bun run db:migrate:prod');
       process.exit(1);
     }
 

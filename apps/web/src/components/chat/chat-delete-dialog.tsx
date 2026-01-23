@@ -10,6 +10,7 @@ type ChatDeleteDialogProps = {
   onOpenChange: (open: boolean) => void;
   threadId: string;
   threadSlug?: string;
+  projectId?: string;
   redirectIfCurrent?: boolean;
 };
 
@@ -18,6 +19,7 @@ export function ChatDeleteDialog({
   onOpenChange,
   threadId,
   threadSlug,
+  projectId,
   redirectIfCurrent = false,
 }: ChatDeleteDialogProps) {
   const t = useTranslations();
@@ -26,7 +28,7 @@ export function ChatDeleteDialog({
   const deleteThreadMutation = useDeleteThreadMutation();
 
   const handleDelete = () => {
-    deleteThreadMutation.mutate({ param: { id: threadId } }, {
+    deleteThreadMutation.mutate({ param: { id: threadId }, slug: threadSlug, projectId }, {
       onSuccess: () => {
         toastManager.success(
           t('chat.threadDeleted'),

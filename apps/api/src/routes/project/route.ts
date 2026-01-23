@@ -8,6 +8,7 @@ import {
   AddUploadToProjectRequestSchema,
   CreateProjectMemoryRequestSchema,
   CreateProjectRequestSchema,
+  DeleteProjectResponseSchema,
   DeleteResponseSchema,
   GetProjectAttachmentResponseSchema,
   GetProjectMemoryResponseSchema,
@@ -18,8 +19,11 @@ import {
   ListProjectMemoriesResponseSchema,
   ListProjectsQuerySchema,
   ListProjectsResponseSchema,
+  ListProjectThreadsQuerySchema,
+  ListProjectThreadsResponseSchema,
   ProjectAttachmentParamSchema,
   ProjectContextResponseSchema,
+  ProjectLimitsResponseSchema,
   ProjectMemoryParamSchema,
   UpdateProjectAttachmentRequestSchema,
   UpdateProjectMemoryRequestSchema,
@@ -44,6 +48,24 @@ export const listProjectsRoute = createRoute({
       description: 'Projects retrieved successfully',
       content: {
         'application/json': { schema: ListProjectsResponseSchema },
+      },
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+  },
+});
+
+export const getProjectLimitsRoute = createRoute({
+  method: 'get',
+  path: '/projects/limits',
+  tags: ['Projects'],
+  summary: 'Get project limits',
+  description: 'Get current user project limits based on subscription tier',
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Project limits retrieved successfully',
+      content: {
+        'application/json': { schema: ProjectLimitsResponseSchema },
       },
     },
     ...StandardApiResponses.UNAUTHORIZED,
@@ -136,7 +158,7 @@ export const deleteProjectRoute = createRoute({
   path: '/projects/:id',
   tags: ['Projects'],
   summary: 'Delete project',
-  description: 'Delete project and all associated attachments (CASCADE)',
+  description: 'Delete project and all associated attachments (CASCADE). Also soft-deletes all threads in the project.',
   request: {
     params: IdParamSchema,
   },
@@ -144,7 +166,40 @@ export const deleteProjectRoute = createRoute({
     [HttpStatusCodes.OK]: {
       description: 'Project deleted successfully',
       content: {
-        'application/json': { schema: DeleteResponseSchema },
+        'application/json': { schema: DeleteProjectResponseSchema },
+      },
+    },
+    ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.NOT_FOUND,
+    ...StandardApiResponses.INTERNAL_SERVER_ERROR,
+  },
+});
+
+// ============================================================================
+// PROJECT THREADS ROUTES
+// ============================================================================
+
+// TODO: DEPRECATE - Migrate frontend to /chat/threads?projectId=X then remove
+// Action plan:
+// 1. Update apps/web/src/hooks/queries/projects.ts to use chatThreadsQueryOptions with projectId filter
+// 2. Update apps/web/src/services/api/projects/projects.ts to remove listProjectThreadsService
+// 3. Remove this route, handler, and schema after frontend migration
+// See: apps/api/src/routes/chat/handlers/thread.handler.ts listThreadsHandler (supports projectId query param)
+export const listProjectThreadsRoute = createRoute({
+  method: 'get',
+  path: '/projects/:id/threads',
+  tags: ['Projects'],
+  summary: 'List project threads',
+  description: 'Get all threads associated with a project',
+  request: {
+    params: IdParamSchema,
+    query: ListProjectThreadsQuerySchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Project threads retrieved successfully',
+      content: {
+        'application/json': { schema: ListProjectThreadsResponseSchema },
       },
     },
     ...StandardApiResponses.UNAUTHORIZED,

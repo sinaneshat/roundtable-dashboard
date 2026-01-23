@@ -77,6 +77,16 @@ export const STRING_LIMITS = {
 
   // URLs
   URL_MAX: 2048,
+
+  // Thread/Project Title limits (unified)
+  TITLE_MIN: 1,
+  TITLE_MAX: 200,
+
+  // Project-specific fields
+  PROJECT_NAME_MIN: 1,
+  PROJECT_NAME_MAX: 200,
+  PROJECT_DESCRIPTION_MAX: 400,
+  CUSTOM_INSTRUCTIONS_MAX: 4000,
 };
 
 // =============================================================================

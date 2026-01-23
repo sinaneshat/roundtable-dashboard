@@ -1,13 +1,9 @@
 import { createFileRoute, redirect } from '@tanstack/react-router';
-import { lazy } from 'react';
 import z from 'zod';
 
+import { AuthForm } from '@/components/auth/auth-form';
 import { AuthShowcaseLayout } from '@/components/auth/auth-showcase-layout';
-import { AuthLoadingSkeleton } from '@/components/loading';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
-
-// Lazy-load AuthForm to defer Zod validation bundle (95KB gzipped)
-const AuthForm = lazy(() => import('@/components/auth/auth-form').then(m => ({ default: m.AuthForm })));
 
 const pageTitle = 'Sign In - Roundtable';
 const pageDescription = 'Sign in to Roundtable - the collaborative AI brainstorming platform where multiple AI models work together to solve problems and generate ideas.';
@@ -37,7 +33,6 @@ export const Route = createFileRoute('/auth/sign-in')({
   },
   validateSearch: signInSearchSchema,
   component: SignInPage,
-  pendingComponent: AuthLoadingSkeleton,
   // ✅ ISR: Static shell - cache for 1h at CDN, serve stale for 24h
   // beforeLoad runs server-side so redirects work, but HTML shell is cacheable
   headers: () => ({

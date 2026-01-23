@@ -2,8 +2,7 @@ import { createFileRoute } from '@tanstack/react-router';
 import { z } from 'zod';
 
 import { AuthShowcaseLayout } from '@/components/auth/auth-showcase-layout';
-import { AuthLoadingSkeleton } from '@/components/loading';
-import AuthErrorScreen from '@/containers/screens/errors/AuthErrorScreen';
+import { AuthErrorScreen } from '@/containers/screens/errors/AuthErrorScreen';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 
 const pageTitle = 'Authentication Error - Roundtable';
@@ -18,7 +17,6 @@ const authErrorSearchSchema = z.object({
 export const Route = createFileRoute('/auth/error')({
   validateSearch: authErrorSearchSchema,
   component: AuthErrorPage,
-  pendingComponent: AuthLoadingSkeleton,
   // Static error page - cache at Edge for fast delivery
   headers: () => ({
     'Cache-Control': 'public, max-age=3600, s-maxage=86400, stale-while-revalidate=86400',
