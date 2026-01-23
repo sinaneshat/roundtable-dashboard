@@ -24,7 +24,7 @@ import {
   useSubscriptionsQuery,
 } from '@/hooks';
 import { useBoolean } from '@/hooks/utils';
-import { clearAllAuthCaches, clearCachedSession } from '@/lib/auth';
+import { clearAllAuthCaches, clearCachedSession, clearServiceWorkerCache } from '@/lib/auth';
 import { authClient, deleteUser, signOut, useSession } from '@/lib/auth/client';
 import type { Session, User } from '@/lib/auth/types';
 import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
@@ -109,6 +109,8 @@ export function NavUser({ initialSession }: NavUserProps) {
     await signOut({
       fetchOptions: {
         onSuccess: () => {
+          // Clear service worker cache to prevent stale pages on next login
+          clearServiceWorkerCache();
           // Full page navigation to clear any remaining state
           window.location.href = '/auth/sign-in';
         },
@@ -171,6 +173,8 @@ export function NavUser({ initialSession }: NavUserProps) {
       await signOut({
         fetchOptions: {
           onSuccess: () => {
+            // Clear service worker cache to prevent stale pages on next login
+            clearServiceWorkerCache();
             // Full page navigation to clear any remaining state
             window.location.href = '/auth/sign-in';
           },
@@ -196,13 +200,15 @@ export function NavUser({ initialSession }: NavUserProps) {
     authClient.admin.stopImpersonating({
       fetchOptions: {
         onSuccess: () => {
-          // Now we're back as admin - clear cache before redirect
+          // Now we're back as admin - clear caches before redirect
           clearCacheMutation.mutate(adminUserId, {
             onSuccess: () => {
+              clearServiceWorkerCache();
               window.location.href = `${baseUrl}/admin/impersonate`;
             },
             onError: () => {
               // Cache clear failed but session restored - still redirect
+              clearServiceWorkerCache();
               window.location.href = `${baseUrl}/admin/impersonate`;
             },
           });

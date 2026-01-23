@@ -110,6 +110,11 @@ self.addEventListener('fetch', (event) => {
   if (url.pathname.startsWith('/auth/'))
     return;
 
+  // Skip authenticated routes - these are user-specific and should not be cached
+  // Caching these causes stale data issues during impersonation/logout
+  if (url.pathname.startsWith('/chat/') || url.pathname.startsWith('/admin/'))
+    return;
+
   // Strategy 1: IMMUTABLE ASSETS - Cache-first, never revalidate
   // These have content hashes in filenames, so they're immutable
   if (isImmutableAsset(url)) {
@@ -266,6 +271,17 @@ self.addEventListener('notificationclick', (event) => {
 self.addEventListener('message', (event) => {
   if (event.data && event.data.type === 'SKIP_WAITING') {
     self.skipWaiting();
+  }
+
+  // Clear document cache on auth state change (login, logout, impersonation)
+  // This ensures users don't see stale pages from previous sessions
+  if (event.data && event.data.type === 'CLEAR_AUTH_CACHE') {
+    event.waitUntil(
+      caches.delete(DOCUMENT_CACHE).then(() => {
+        // Re-open cache so it's ready for new requests
+        return caches.open(DOCUMENT_CACHE);
+      }),
+    );
   }
 
   // Proactive route caching - warm up cache when browser is idle
