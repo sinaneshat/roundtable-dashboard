@@ -27,6 +27,12 @@ const QueryKeyFactory = {
  * Billing domain query keys
  */
 export const queryKeys = {
+  // Session (auth state)
+  session: {
+    all: QueryKeyFactory.base('session'),
+    current: () => QueryKeyFactory.current('session'),
+  },
+
   // Products
   products: {
     all: QueryKeyFactory.base('products'),
@@ -312,6 +318,20 @@ export const invalidationPatterns = {
     queryKeys.threads.streamResumption(threadId),
     queryKeys.threads.changelog(threadId),
     queryKeys.threads.detail(threadId),
+  ],
+
+  // Auth state change - invalidate ALL user-specific data
+  // Used on logout, impersonation start/stop to ensure fresh data
+  sessionChange: [
+    queryKeys.threads.all,
+    queryKeys.subscriptions.all,
+    queryKeys.usage.all,
+    queryKeys.models.all,
+    queryKeys.customRoles.all,
+    queryKeys.userPresets.all,
+    queryKeys.apiKeys.all,
+    queryKeys.projects.all,
+    queryKeys.uploads.all,
   ],
 } as const;
 

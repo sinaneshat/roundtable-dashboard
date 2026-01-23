@@ -1,5 +1,6 @@
 'use client';
 
+import { useQueryClient } from '@tanstack/react-query';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
 
@@ -18,7 +19,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAdminClearUserCacheMutation, useAdminSearchUsers } from '@/hooks';
 import { useBoolean, useDebouncedValue } from '@/hooks/utils';
-import { clearServiceWorkerCache } from '@/lib/auth';
+import { clearServiceWorkerCache, invalidateUserQueries } from '@/lib/auth';
 import { authClient } from '@/lib/auth/client';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
@@ -39,6 +40,7 @@ export const Route = createFileRoute('/_protected/admin/impersonate')({
 
 function ImpersonatePage() {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const isImpersonating = useBoolean(false);
   const isOpen = useBoolean(false);
   const [searchQuery, setSearchQuery] = useState('');
@@ -65,29 +67,26 @@ function ImpersonatePage() {
     isImpersonating.onTrue();
     const baseUrl = getAppBaseUrl();
 
-    // Clear server-side cache for target user first
-    clearCacheMutation.mutate(selectedUser.id, {
-      onSuccess: () => {
-        // Better Auth handles session switching internally - saves admin session
-        // in admin_session cookie and creates new impersonated session
-        authClient.admin.impersonateUser({
-          userId: selectedUser.id,
-          fetchOptions: {
-            onSuccess: () => {
-              // Clear service worker cache before redirect to prevent stale pages
+    // Impersonate FIRST, then clear caches (correct order)
+    // Better Auth handles session switching - saves admin session in admin_session cookie
+    authClient.admin.impersonateUser({
+      userId: selectedUser.id,
+      fetchOptions: {
+        onSuccess: () => {
+          // Session changed - now clear server cache for target user
+          clearCacheMutation.mutate(selectedUser.id, {
+            onSettled: () => {
+              // Invalidate all client queries and redirect
+              invalidateUserQueries(queryClient);
               clearServiceWorkerCache();
               window.location.href = `${baseUrl}/chat`;
             },
-            onError: (ctx) => {
-              showApiErrorToast('Impersonation Failed', ctx.error);
-              isImpersonating.onFalse();
-            },
-          },
-        });
-      },
-      onError: (error) => {
-        showApiErrorToast('Cache Clear Failed', error);
-        isImpersonating.onFalse();
+          });
+        },
+        onError: (ctx) => {
+          showApiErrorToast('Impersonation Failed', ctx.error);
+          isImpersonating.onFalse();
+        },
       },
     });
   };
