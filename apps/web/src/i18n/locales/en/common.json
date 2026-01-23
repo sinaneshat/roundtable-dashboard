@@ -21,6 +21,7 @@
       "searchLabel": "Search User",
       "searchPlaceholder": "Search by name or email...",
       "success": "Impersonation Started",
+      "switching": "Switching user...",
       "title": "Impersonate User"
     }
   },

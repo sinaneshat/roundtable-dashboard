@@ -905,6 +905,12 @@ rootApp.all('/api/auth/*', async (c) => {
   }
 });
 
+// Early health check - bypasses ALL middleware for fast cold starts
+rootApp.get('/api/v1/health', (c) => {
+  c.header('Cache-Control', 'public, max-age=5');
+  return c.json({ status: 'healthy', timestamp: Date.now() });
+});
+
 // Mount API routes
 rootApp.route('/api/v1', finalRoutes);
 

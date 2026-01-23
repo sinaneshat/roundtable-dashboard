@@ -18,6 +18,9 @@
     "port": 8787
   },
   "workers_dev": false,
+  "placement": {
+    "mode": "smart"
+  },
   "observability": {
     "enabled": true,
     "head_sampling_rate": 1
@@ -114,6 +117,7 @@
     "preview": {
       "name": "roundtable-api-preview",
       "workers_dev": false,
+      "placement": { "mode": "smart" },
       "upload_source_maps": false,
       "observability": { "enabled": true, "head_sampling_rate": 0.1 },
       "limits": { "cpu_ms": 300000 },
@@ -175,6 +179,7 @@
     "production": {
       "name": "roundtable-api-prod",
       "workers_dev": false,
+      "placement": { "mode": "smart" },
       "upload_source_maps": false,
       "observability": { "enabled": true, "head_sampling_rate": 0.1 },
       "limits": { "cpu_ms": 300000 },

@@ -158,15 +158,19 @@ export function NavUser({ initialSession }: NavUserProps) {
 
   const handleStopImpersonating = async () => {
     isStoppingImpersonation.onTrue();
-    try {
-      await authClient.admin.stopImpersonating();
-      // Full page refresh to clear all caches
-      const baseUrl = getAppBaseUrl();
-      window.location.href = `${baseUrl}/admin/impersonate`;
-    } catch (error) {
-      showApiErrorToast('Failed to Stop Impersonation', error);
-      isStoppingImpersonation.onFalse();
-    }
+    const baseUrl = getAppBaseUrl();
+
+    await authClient.admin.stopImpersonating({
+      fetchOptions: {
+        onSuccess: () => {
+          window.location.href = `${baseUrl}/admin/impersonate`;
+        },
+        onError: (ctx) => {
+          showApiErrorToast('Failed to Stop Impersonation', ctx.error);
+          isStoppingImpersonation.onFalse();
+        },
+      },
+    });
   };
 
   const isImpersonating = !!clientSession?.session?.impersonatedBy;
