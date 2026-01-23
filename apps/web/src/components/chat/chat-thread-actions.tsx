@@ -57,9 +57,13 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
 
   const { data: cachedThreadData } = useThreadQuery(thread.id, !isPublicMode && !skipFetch);
 
-  const threadIsPublic = cachedThreadData?.success && cachedThreadData.data && typeof cachedThreadData.data === 'object' && 'thread' in cachedThreadData.data && cachedThreadData.data.thread && typeof cachedThreadData.data.thread === 'object' && 'isPublic' in cachedThreadData.data.thread
-    ? (cachedThreadData.data.thread as { isPublic?: boolean }).isPublic
-    : thread.isPublic;
+  // Extract thread metadata from cache (source of truth after mutations)
+  const cachedThread = cachedThreadData?.success && cachedThreadData.data && typeof cachedThreadData.data === 'object' && 'thread' in cachedThreadData.data && cachedThreadData.data.thread && typeof cachedThreadData.data.thread === 'object'
+    ? (cachedThreadData.data.thread as { isPublic?: boolean; isFavorite?: boolean })
+    : null;
+
+  const threadIsPublic = cachedThread?.isPublic ?? thread.isPublic;
+  const threadIsFavorite = cachedThread?.isFavorite ?? thread.isFavorite ?? false;
 
   const { storeThreadId, storeThreadTitle, isBusy } = useChatStore(useShallow(s => ({
     storeThreadId: s.thread?.id,
@@ -74,18 +78,11 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
     ? storeThreadTitle
     : (thread.title ?? '');
 
-  const displayIsFavorite = (() => {
-    if (toggleFavoriteMutation.isSuccess && toggleFavoriteMutation.data) {
-      const { data } = toggleFavoriteMutation;
-      if (data.success && data.data?.thread?.isFavorite !== undefined) {
-        return data.data.thread.isFavorite;
-      }
-    }
-    if (toggleFavoriteMutation.isPending && toggleFavoriteMutation.variables) {
-      return toggleFavoriteMutation.variables.isFavorite;
-    }
-    return thread.isFavorite ?? false;
-  })();
+  // Use cached value as source of truth - mutations update cache optimistically
+  // Only override with pending state for immediate feedback during this component's mutation
+  const displayIsFavorite = toggleFavoriteMutation.isPending && toggleFavoriteMutation.variables
+    ? toggleFavoriteMutation.variables.isFavorite
+    : threadIsFavorite;
 
   const displayIsPublic = togglePublicMutation.isPending && togglePublicMutation.variables
     ? togglePublicMutation.variables.isPublic

@@ -77,12 +77,23 @@ export function RHFComboBox<
               <PopoverContent className="w-[calc(100vw-2rem)] p-0 sm:w-full">
                 <Command>
                   <CommandInput placeholder={t('forms.searchPlaceholder', { field: title })} />
-                  <CommandEmpty>
-                    {t('forms.noResultsFound', { item: title })}
-                  </CommandEmpty>
-                  <CommandGroup>
-                    <CommandList>
-                      {!loading && options.length > 0 && options.map(option => (
+                  <CommandList>
+                    <CommandEmpty>
+                      {loading ? t('forms.loading') : t('forms.noResultsFound', { item: title })}
+                    </CommandEmpty>
+                    <CommandGroup>
+                      {loading && (
+                        <CommandItem value="loading" disabled>
+                          <Icons.loader className="me-2 h-4 w-4 animate-spin" />
+                          {t('forms.loading')}
+                        </CommandItem>
+                      )}
+                      {!loading && options.length === 0 && (
+                        <CommandItem value="empty" disabled>
+                          {t('forms.noOptionsAvailable')}
+                        </CommandItem>
+                      )}
+                      {!loading && options.map(option => (
                         <CommandItem
                           data-testid={field.name}
                           value={option.label}
@@ -102,20 +113,8 @@ export function RHFComboBox<
                           <p>{option.label}</p>
                         </CommandItem>
                       ))}
-                      {!loading && options.length === 0 && (
-                        <CommandItem value="empty" disabled>
-                          <Icons.check className="me-2 h-4 w-4" />
-                          {t('forms.noOptionsAvailable')}
-                        </CommandItem>
-                      )}
-                      {loading && (
-                        <CommandItem value="loading" disabled>
-                          <Icons.loader className="me-2 h-4 w-4 animate-spin" />
-                          {t('forms.loading')}
-                        </CommandItem>
-                      )}
-                    </CommandList>
-                  </CommandGroup>
+                    </CommandGroup>
+                  </CommandList>
                 </Command>
               </PopoverContent>
             </Popover>

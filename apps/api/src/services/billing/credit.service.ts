@@ -508,6 +508,7 @@ export async function zeroOutFreeUserCredits(userId: string): Promise<void> {
     .where(eq(tables.userCreditBalance.userId, userId));
 
   if (previousBalance > 0) {
+    // recordTransaction() now includes cache invalidation
     await recordTransaction({
       userId,
       type: CreditTransactionTypes.DEDUCTION,
@@ -516,6 +517,9 @@ export async function zeroOutFreeUserCredits(userId: string): Promise<void> {
       balanceAfter: 0,
       description: 'Free round completed - credits exhausted',
     });
+  } else {
+    // Balance was already 0, but still invalidate cache for consistency
+    await invalidateCreditBalanceCache(db, userId);
   }
 }
 
@@ -985,6 +989,10 @@ async function recordTransaction(record: RecordTransactionParams): Promise<void>
     description: record.description,
     createdAt: new Date(),
   });
+
+  // Invalidate credit balance cache after every credit mutation
+  // Prevents stale balance reads that could cause double-spending
+  await invalidateCreditBalanceCache(db, record.userId);
 }
 
 export type CreditTransactionSelect = typeof tables.creditTransaction.$inferSelect;

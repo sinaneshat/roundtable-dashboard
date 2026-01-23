@@ -2,7 +2,7 @@
  * Admin User Search Service
  *
  * 100% type-safe RPC service for admin user search operations
- * All types automatically inferred from backend Hono routes
+ * Types fully inferred from backend via Hono RPC - no hardcoded types
  */
 
 import type { InferRequestType, InferResponseType } from 'hono/client';
@@ -11,26 +11,36 @@ import type { ApiClientType } from '@/lib/api/client';
 import { createApiClient, ServiceFetchError } from '@/lib/api/client';
 
 // ============================================================================
-// Type Inference - Automatically derived from backend routes
+// Type Inference - Endpoint definitions
 // ============================================================================
 
-type AdminSearchUserEndpoint = ApiClientType['admin']['users']['search']['$get'];
-export type AdminSearchUserRequest = InferRequestType<AdminSearchUserEndpoint>;
-export type AdminSearchUserResponse = InferResponseType<AdminSearchUserEndpoint, 200>;
+type AdminSearchUsersEndpoint = ApiClientType['admin']['users']['search']['$get'];
+
+// ============================================================================
+// Type Exports - Request/Response types inferred from backend
+// ============================================================================
+
+export type AdminSearchUsersParams = InferRequestType<AdminSearchUsersEndpoint>;
+export type AdminSearchUsersResponse = InferResponseType<AdminSearchUsersEndpoint, 200>;
+
+// Derive user result type from response
+type SuccessResponse = Extract<AdminSearchUsersResponse, { success: true }>;
+type SearchData = SuccessResponse['data'];
+export type AdminSearchUserResult = SearchData['users'][number];
 
 // ============================================================================
 // Service Functions
 // ============================================================================
 
 /**
- * Search for a user by email (admin only)
+ * Search for users by name or email (admin only)
  * Protected endpoint - requires admin role
  */
-export async function adminSearchUserService(data: AdminSearchUserRequest): Promise<AdminSearchUserResponse> {
+export async function adminSearchUserService(data: AdminSearchUsersParams) {
   const client = createApiClient();
   const res = await client.admin.users.search.$get(data);
   if (!res.ok) {
-    throw new ServiceFetchError(`Failed to search user: ${res.statusText}`, res.status, res.statusText);
+    throw new ServiceFetchError(`Failed to search users: ${res.statusText}`, res.status, res.statusText);
   }
   return res.json();
 }

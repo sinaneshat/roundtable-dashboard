@@ -1,5 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { use } from 'react';
 
+import { ChatStoreContext } from '@/components/providers/chat-store-provider/context';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import type { AddParticipantResponse, UpdateThreadResponse } from '@/services/api';
 import {
@@ -84,6 +86,8 @@ export function useCreateThreadMutation() {
 
 export function useUpdateThreadMutation() {
   const queryClient = useQueryClient();
+  // Optional store access - may be undefined outside ChatStoreProvider
+  const chatStore = use(ChatStoreContext);
 
   return useMutation({
     mutationFn: updateThreadService,
@@ -92,6 +96,18 @@ export function useUpdateThreadMutation() {
       if (!data.success)
         return;
       const updatedThread = data.data;
+
+      // Sync title to Zustand store so breadcrumb updates immediately
+      if (chatStore && 'title' in variables.json) {
+        const currentThread = chatStore.getState().thread;
+        if (currentThread?.id === threadId) {
+          chatStore.setState(
+            { thread: { ...currentThread, title: variables.json.title as string } },
+            false,
+            'thread/updateTitle',
+          );
+        }
+      }
 
       // Immediately update sidebar/list caches with the new title from the response
       // This prevents waiting for a refetch and shows the update instantly
@@ -312,6 +328,7 @@ export function useToggleFavoriteMutation() {
         },
       );
 
+      // Update bySlug cache if slug provided
       if (variables.slug) {
         queryClient.setQueryData(
           queryKeys.threads.bySlug(variables.slug),
@@ -334,7 +351,29 @@ export function useToggleFavoriteMutation() {
         );
       }
 
-      return { previousThreads, previousBySlug, slug: variables.slug };
+      // Update detail cache - ensures ChatThreadActions sees updated state
+      const previousDetail = queryClient.getQueryData(queryKeys.threads.detail(variables.threadId));
+      queryClient.setQueryData(
+        queryKeys.threads.detail(variables.threadId),
+        (old) => {
+          const parsedData = validateThreadDetailPayloadCache(old);
+          if (!parsedData)
+            return old;
+
+          return {
+            success: true,
+            data: {
+              ...parsedData,
+              thread: {
+                ...parsedData.thread,
+                isFavorite: variables.isFavorite,
+              },
+            },
+          };
+        },
+      );
+
+      return { previousThreads, previousBySlug, previousDetail, slug: variables.slug, threadId: variables.threadId };
     },
     onError: (_error, _variables, context) => {
       if (context?.previousThreads) {
@@ -342,6 +381,9 @@ export function useToggleFavoriteMutation() {
       }
       if (context?.slug && context?.previousBySlug) {
         queryClient.setQueryData(queryKeys.threads.bySlug(context.slug), context.previousBySlug);
+      }
+      if (context?.threadId && context?.previousDetail) {
+        queryClient.setQueryData(queryKeys.threads.detail(context.threadId), context.previousDetail);
       }
     },
     retry: false,

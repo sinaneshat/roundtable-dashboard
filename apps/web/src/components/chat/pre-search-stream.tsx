@@ -27,16 +27,12 @@ type PreSearchStreamProps = {
   threadId: string;
   preSearch: StoredPreSearch;
   onStreamComplete?: (completedSearchData?: PreSearchDataPayload) => void;
-  onStreamStart?: () => void;
 };
 
 function PreSearchStreamComponent({
   threadId,
   preSearch,
   onStreamComplete,
-  // onStreamStart is kept in props for API compatibility but no longer used
-  // since streaming initiation moved to use-streaming-trigger.ts
-  onStreamStart: _onStreamStart,
 }: PreSearchStreamProps) {
   const t = useTranslations('chat.preSearch');
   const tErrors = useTranslations('errors');
@@ -437,7 +433,6 @@ export const PreSearchStream = memo(PreSearchStreamComponent, (prevProps, nextPr
     && prevProps.preSearch.searchData === nextProps.preSearch.searchData
     && prevProps.threadId === nextProps.threadId
     && prevProps.onStreamComplete === nextProps.onStreamComplete
-    && prevProps.onStreamStart === nextProps.onStreamStart
   );
 });
 

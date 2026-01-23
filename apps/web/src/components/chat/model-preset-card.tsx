@@ -4,6 +4,7 @@ import { memo, useMemo } from 'react';
 
 import { ModelAvatarWithRole } from '@/components/chat/model-avatar-with-role';
 import { Icons } from '@/components/icons';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { canAccessPreset } from '@/lib/config';
 import type { ModelPreset, PresetSelectionResult } from '@/lib/config/model-presets';
 import { useTranslations } from '@/lib/i18n';
@@ -148,25 +149,28 @@ export const ModelPresetCard = memo(({
         </div>
       </div>
 
-      <div className="flex items-start gap-4 mb-3">
-        {preset.modelRoles.slice(0, 5).map((modelRole) => {
-          const model = allModels.find(m => m.id === modelRole.modelId);
-          if (!model)
-            return null;
+      <ScrollArea orientation="horizontal" className="-mx-1 mb-3">
+        <div className="flex items-start gap-3 px-1 pb-1">
+          {preset.modelRoles.map((modelRole) => {
+            const model = allModels.find(m => m.id === modelRole.modelId);
+            if (!model)
+              return null;
 
-          const isModelIncompatible = incompatibleModelIds?.has(modelRole.modelId) ?? false;
+            const isModelIncompatible = incompatibleModelIds?.has(modelRole.modelId) ?? false;
 
-          return (
-            <ModelAvatarWithRole
-              key={modelRole.modelId}
-              model={model}
-              role={modelRole.role}
-              size="base"
-              isIncompatible={isModelIncompatible}
-            />
-          );
-        })}
-      </div>
+            return (
+              <div key={modelRole.modelId} className="shrink-0">
+                <ModelAvatarWithRole
+                  model={model}
+                  role={modelRole.role}
+                  size="base"
+                  isIncompatible={isModelIncompatible}
+                />
+              </div>
+            );
+          })}
+        </div>
+      </ScrollArea>
 
       <p className="text-xs text-muted-foreground leading-relaxed line-clamp-2">
         {preset.description}

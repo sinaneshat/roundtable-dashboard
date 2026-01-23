@@ -96,10 +96,6 @@ export function PreSearchCard({
     return undefined;
   }, [preSearch.status, completeAnimation]);
 
-  const handleStreamStart = useCallback(() => {
-    updatePreSearchStatus(preSearch.roundNumber, MessageStatuses.STREAMING);
-  }, [preSearch.roundNumber, updatePreSearchStatus]);
-
   const handleStreamComplete = useCallback((completedData?: PreSearchDataPayload) => {
     if (!completedData)
       return;
@@ -188,7 +184,6 @@ export function PreSearchCard({
                   <PreSearchStream
                     threadId={threadId}
                     preSearch={preSearch}
-                    onStreamStart={handleStreamStart}
                     onStreamComplete={handleStreamComplete}
                   />
                 )}

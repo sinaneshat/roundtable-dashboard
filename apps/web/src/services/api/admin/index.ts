@@ -1,5 +1,1 @@
-export {
-  type AdminSearchUserRequest,
-  type AdminSearchUserResponse,
-  adminSearchUserService,
-} from './user-search';
+export { type AdminSearchUserResult, adminSearchUserService, type AdminSearchUsersParams, type AdminSearchUsersResponse } from './user-search';

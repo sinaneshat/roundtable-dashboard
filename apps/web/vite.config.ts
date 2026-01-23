@@ -17,8 +17,6 @@ export default defineConfig({
     // Official order per Cloudflare + TanStack docs
     cloudflare({ viteEnvironment: { name: 'ssr' } }),
     tanstackStart({
-      // Enable automatic code splitting for routes - dramatically reduces initial bundle
-      autoCodeSplitting: true,
       prerender: {
         enabled: true,
         crawlLinks: false,

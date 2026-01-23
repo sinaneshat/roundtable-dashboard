@@ -1,5 +1,5 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import { eq } from 'drizzle-orm';
+import { and, like, ne, or, sql } from 'drizzle-orm';
 
 import { createError } from '@/common/error-handling';
 import { createHandler, Responses } from '@/core';
@@ -12,7 +12,7 @@ import { AdminSearchUserQuerySchema } from './schema';
 
 /**
  * Handler for admin user search endpoint
- * Searches for a user by email address (admin only)
+ * Searches for users by partial name or email match (admin only)
  */
 export const adminSearchUserHandler: RouteHandler<typeof adminSearchUserRoute, ApiEnv> = createHandler(
   {
@@ -22,7 +22,7 @@ export const adminSearchUserHandler: RouteHandler<typeof adminSearchUserRoute, A
   },
   async (c) => {
     const { user } = c.auth();
-    const { email } = c.validated.query;
+    const { q, limit = 5 } = c.validated.query;
 
     // Check admin role
     if (user.role !== 'admin') {
@@ -34,26 +34,30 @@ export const adminSearchUserHandler: RouteHandler<typeof adminSearchUserRoute, A
     }
 
     const db = await getDbAsync();
+    const searchPattern = `%${q.toLowerCase()}%`;
 
-    const foundUser = await db.query.user.findFirst({
-      where: eq(tables.user.email, email),
+    // Search by name or email (case-insensitive partial match), excluding current user
+    const users = await db.query.user.findMany({
+      where: and(
+        ne(tables.user.id, user.id),
+        or(
+          like(sql`lower(${tables.user.email})`, searchPattern),
+          like(sql`lower(${tables.user.name})`, searchPattern),
+        ),
+      ),
       columns: {
         id: true,
         email: true,
         name: true,
         image: true,
       },
+      limit,
+      orderBy: (user, { asc }) => [asc(user.name)],
     });
 
-    if (!foundUser) {
-      return Responses.notFound(c, 'User not found');
-    }
-
     return Responses.ok(c, {
-      id: foundUser.id,
-      email: foundUser.email,
-      name: foundUser.name,
-      image: foundUser.image,
+      users,
+      total: users.length,
     });
   },
 );

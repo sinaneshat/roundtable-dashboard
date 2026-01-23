@@ -226,6 +226,7 @@ export function ModelSelectionModal({
     if (isFiltering) {
       return;
     }
+    initialSortOrderRef.current = reorderedItems.map(om => om.model.id);
     onReorder(reorderedItems);
   }, [isFiltering, onReorder]);
 
@@ -646,6 +647,33 @@ export function ModelSelectionModal({
     });
   }, [filteredModels, activeTab]);
 
+  // Stable callback maps to prevent unnecessary re-renders of ModelItem
+  const noop = useCallback(() => {}, []);
+
+  const handleToggleMap = useMemo(() => {
+    const map = new Map<string, () => void>();
+    for (const om of sortedFilteredModels) {
+      map.set(om.model.id, () => handleToggleWithPendingRole(om.model.id));
+    }
+    return map;
+  }, [sortedFilteredModels, handleToggleWithPendingRole]);
+
+  const handleClearRoleMap = useMemo(() => {
+    const map = new Map<string, () => void>();
+    for (const om of sortedFilteredModels) {
+      map.set(om.model.id, () => handleClearRoleInternal(om.model.id));
+    }
+    return map;
+  }, [sortedFilteredModels, handleClearRoleInternal]);
+
+  const handleOpenRolePanelMap = useMemo(() => {
+    const map = new Map<string, () => void>();
+    for (const om of sortedFilteredModels) {
+      map.set(om.model.id, () => handleOpenRoleSelection(om.model.id));
+    }
+    return map;
+  }, [sortedFilteredModels, handleOpenRoleSelection]);
+
   const handleApplyPreset = useCallback(() => {
     if (!selectedPreset || !onPresetSelect)
       return;
@@ -1057,12 +1085,12 @@ export function ModelSelectionModal({
                                         <ModelItem
                                           key={orderedModel.model.id}
                                           orderedModel={orderedModel}
-                                          onToggle={() => handleToggleWithPendingRole(orderedModel.model.id)}
-                                          onClearRole={() => handleClearRoleInternal(orderedModel.model.id)}
+                                          onToggle={handleToggleMap.get(orderedModel.model.id) ?? noop}
+                                          onClearRole={handleClearRoleMap.get(orderedModel.model.id) ?? noop}
                                           selectedCount={selectedCount}
                                           maxModels={maxModels}
                                           enableDrag
-                                          onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
+                                          onOpenRolePanel={handleOpenRolePanelMap.get(orderedModel.model.id)}
                                           isVisionIncompatible={visionIncompatibleModelIds?.has(orderedModel.model.id)}
                                           isFileIncompatible={fileIncompatibleModelIds?.has(orderedModel.model.id)}
                                           pendingRole={pendingRoles[orderedModel.model.id]}
@@ -1081,12 +1109,12 @@ export function ModelSelectionModal({
                                         <ModelItem
                                           key={orderedModel.model.id}
                                           orderedModel={orderedModel}
-                                          onToggle={() => handleToggleWithPendingRole(orderedModel.model.id)}
-                                          onClearRole={() => handleClearRoleInternal(orderedModel.model.id)}
+                                          onToggle={handleToggleMap.get(orderedModel.model.id) ?? noop}
+                                          onClearRole={handleClearRoleMap.get(orderedModel.model.id) ?? noop}
                                           selectedCount={selectedCount}
                                           maxModels={maxModels}
                                           enableDrag={false}
-                                          onOpenRolePanel={() => handleOpenRoleSelection(orderedModel.model.id)}
+                                          onOpenRolePanel={handleOpenRolePanelMap.get(orderedModel.model.id)}
                                           isVisionIncompatible={visionIncompatibleModelIds?.has(orderedModel.model.id)}
                                           isFileIncompatible={fileIncompatibleModelIds?.has(orderedModel.model.id)}
                                           pendingRole={pendingRoles[orderedModel.model.id]}

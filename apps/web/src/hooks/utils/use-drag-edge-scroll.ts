@@ -36,6 +36,8 @@ export function useDragEdgeScroll({
   const scrollDirectionRef = useRef<ScrollDirection>(null);
   const scrollSpeedRef = useRef(0);
   const isInScrollZoneRef = useRef(false);
+  // Cache container rect to avoid getBoundingClientRect() on every pointer move
+  const containerRectRef = useRef<DOMRect | null>(null);
 
   /**
    * Calculate scroll speed using quadratic easing.
@@ -92,16 +94,12 @@ export function useDragEdgeScroll({
    * Handle drag movement - calculate scroll direction and speed based on pointer position
    */
   const onDrag = useCallback((event: PointerEvent, _info: PanInfo) => {
-    if (!enabled || !isDraggingRef.current) {
+    if (!enabled || !isDraggingRef.current || !containerRectRef.current) {
       return;
     }
 
-    const container = scrollContainerRef.current;
-    if (!container) {
-      return;
-    }
-
-    const rect = container.getBoundingClientRect();
+    // Use cached rect to avoid layout thrashing
+    const rect = containerRectRef.current;
     const pointerY = event.clientY;
 
     // Distance from edges
@@ -125,20 +123,25 @@ export function useDragEdgeScroll({
       // Not in scroll zone
       stopScrollLoop();
     }
-  }, [enabled, scrollContainerRef, edgeThreshold, calculateScrollSpeed, startScrollLoop, stopScrollLoop]);
+  }, [enabled, edgeThreshold, calculateScrollSpeed, startScrollLoop, stopScrollLoop]);
 
   /**
-   * Handle drag start
+   * Handle drag start - cache container rect for the drag session
    */
   const onDragStart = useCallback(() => {
     isDraggingRef.current = true;
-  }, []);
+    // Cache rect at drag start to avoid getBoundingClientRect() on every pointer move
+    if (scrollContainerRef.current) {
+      containerRectRef.current = scrollContainerRef.current.getBoundingClientRect();
+    }
+  }, [scrollContainerRef]);
 
   /**
    * Handle drag end - cleanup
    */
   const onDragEnd = useCallback(() => {
     isDraggingRef.current = false;
+    containerRectRef.current = null;
     stopScrollLoop();
   }, [stopScrollLoop]);
 

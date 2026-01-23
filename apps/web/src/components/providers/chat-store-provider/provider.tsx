@@ -334,8 +334,6 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     onResumedStreamComplete: (roundNumber, participantIndex) => {
       store.getState().handleResumedStreamComplete(roundNumber, participantIndex);
     },
-    // ✅ PERF FIX: Disable resume for newly created threads - nothing to resume
-    isNewlyCreatedThread: Boolean(createdThreadId),
     // ✅ SMART STALE DETECTION: Pass prefilled state for stream validation
     resumptionRoundNumber,
     nextParticipantToTrigger,

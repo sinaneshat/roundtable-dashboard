@@ -2,7 +2,7 @@ import { getShortRoleName } from '@roundtable/shared';
 import { Link } from '@tanstack/react-router';
 import type { PanInfo } from 'motion/react';
 import { Reorder, useDragControls } from 'motion/react';
-import { useCallback, useRef, useState } from 'react';
+import { memo, useCallback, useRef, useState } from 'react';
 
 import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
@@ -101,7 +101,7 @@ type ModelItemProps = {
   onDragEndCustom?: () => void;
 };
 
-export function ModelItem({
+export const ModelItem = memo(({
   orderedModel,
   onToggle,
   onClearRole,
@@ -115,7 +115,7 @@ export function ModelItem({
   onDragMove,
   onDragStartCustom,
   onDragEndCustom,
-}: ModelItemProps) {
+}: ModelItemProps) => {
   const t = useTranslations();
   const dragControls = useDragControls();
   const [isDragging, setIsDragging] = useState(false);
@@ -243,7 +243,6 @@ export function ModelItem({
         dragListener={false}
         dragElastic={0}
         dragMomentum={false}
-        layout
         style={REORDER_ITEM_STYLE}
         className={cn(
           'p-3 sm:p-4 w-full rounded-xl block touch-manipulation cursor-pointer',
@@ -300,4 +299,21 @@ export function ModelItem({
       {itemContent}
     </div>
   );
-}
+}, (prevProps, nextProps) => {
+  // Custom comparison - only re-render if these change
+  return (
+    prevProps.orderedModel.model.id === nextProps.orderedModel.model.id
+    && prevProps.orderedModel.order === nextProps.orderedModel.order
+    && prevProps.orderedModel.participant?.role === nextProps.orderedModel.participant?.role
+    && (prevProps.orderedModel.participant !== null) === (nextProps.orderedModel.participant !== null)
+    && prevProps.selectedCount === nextProps.selectedCount
+    && prevProps.maxModels === nextProps.maxModels
+    && prevProps.enableDrag === nextProps.enableDrag
+    && prevProps.isVisionIncompatible === nextProps.isVisionIncompatible
+    && prevProps.isFileIncompatible === nextProps.isFileIncompatible
+    && prevProps.pendingRole?.role === nextProps.pendingRole?.role
+    && prevProps.onToggle === nextProps.onToggle
+    && prevProps.onClearRole === nextProps.onClearRole
+    && prevProps.onOpenRolePanel === nextProps.onOpenRolePanel
+  );
+});
