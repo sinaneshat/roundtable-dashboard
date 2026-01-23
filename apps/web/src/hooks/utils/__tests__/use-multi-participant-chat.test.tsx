@@ -556,7 +556,6 @@ describe('useMultiParticipantChat', () => {
           threadId: mockThreadId,
           participants: mockParticipants,
           messages: [],
-          isNewlyCreatedThread: true,
         }),
       );
 

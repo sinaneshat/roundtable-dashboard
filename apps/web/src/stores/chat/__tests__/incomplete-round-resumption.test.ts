@@ -698,13 +698,15 @@ describe('useIncompleteRoundResumption', () => {
   // STATE FLAG MANAGEMENT TESTS
   // ==========================================================================
   describe('state Flag Management', () => {
-    it('should clear stale isStreaming after timeout', async () => {
-      // SCENARIO: isStreaming stuck true after refresh
+    it('should clear stale isStreaming when streamFinishAcknowledged is true', async () => {
+      // SCENARIO: isStreaming stuck true after refresh, but stream finished
+      // ✅ EVENT-DRIVEN: Uses streamFinishAcknowledged flag instead of timeout
       setupMockStore({
         isStreaming: true,
         waitingToStartStreaming: false,
         pendingMessage: null,
         hasEarlyOptimisticMessage: false,
+        streamFinishAcknowledged: true, // Event-driven signal that stream finished
         messages: [
           createTestUserMessage({
             id: 'thread-123_r0_user',
@@ -722,13 +724,46 @@ describe('useIncompleteRoundResumption', () => {
         }),
       );
 
-      // Wait for the 2 second timeout
+      // Event-driven: effect runs immediately when streamFinishAcknowledged is true
+      await waitFor(() => {
+        const setStreamingFn = mockStore.getState().setIsStreaming;
+        expect(setStreamingFn).toHaveBeenCalledWith(false);
+      });
+    });
+
+    it('should NOT clear isStreaming when streamFinishAcknowledged is false', async () => {
+      // SCENARIO: isStreaming true but stream might still be active
+      // ✅ EVENT-DRIVEN: Wait for streamFinishAcknowledged signal
+      setupMockStore({
+        isStreaming: true,
+        waitingToStartStreaming: false,
+        pendingMessage: null,
+        hasEarlyOptimisticMessage: false,
+        streamFinishAcknowledged: false, // Stream not yet finished
+        messages: [
+          createTestUserMessage({
+            id: 'thread-123_r0_user',
+            content: 'Test',
+            roundNumber: 0,
+          }),
+        ],
+        participants: createMockParticipants(2),
+      });
+
+      renderHook(() =>
+        useIncompleteRoundResumption({
+          threadId: 'thread-123',
+          enabled: true,
+        }),
+      );
+
+      // Give it time - should NOT call setIsStreaming
       await act(async () => {
-        vi.advanceTimersByTime(2100);
+        vi.advanceTimersByTime(100);
       });
 
       const setStreamingFn = mockStore.getState().setIsStreaming;
-      expect(setStreamingFn).toHaveBeenCalledWith(false);
+      expect(setStreamingFn).not.toHaveBeenCalled();
     });
 
     it('should set both nextParticipantToTrigger AND waitingToStartStreaming', async () => {

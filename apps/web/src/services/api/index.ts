@@ -10,9 +10,10 @@
 // ============================================================================
 
 export {
-  type AdminSearchUserRequest,
-  type AdminSearchUserResponse,
+  type AdminSearchUserResult,
   adminSearchUserService,
+  type AdminSearchUsersParams,
+  type AdminSearchUsersResponse,
 } from './admin';
 
 // ============================================================================

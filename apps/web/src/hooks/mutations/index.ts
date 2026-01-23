@@ -1,5 +1,5 @@
 export {
-  useAdminSearchUserMutation,
+  useAdminSearchUsers,
 } from './admin-mutations';
 export {
   useCreateApiKeyMutation,

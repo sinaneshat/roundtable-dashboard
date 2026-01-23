@@ -28,6 +28,9 @@ import type { ApiEnv } from '@/types';
 
 import { createOpenApiApp } from './core/app';
 import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, performanceTracking, RateLimiterFactory, requestLogger } from './middleware';
+// Admin routes
+import { adminSearchUserHandler } from './routes/admin/handler';
+import { adminSearchUserRoute } from './routes/admin/route';
 // API Keys routes
 import {
   createApiKeyHandler,
@@ -631,7 +634,8 @@ const appRoutes = app
   .openapi(getUserUsageStatsRoute, getUserUsageStatsHandler)
   .openapi(getCreditBalanceRoute, getCreditBalanceHandler)
   .openapi(getCreditTransactionsRoute, getCreditTransactionsHandler)
-  .openapi(estimateCreditCostRoute, estimateCreditCostHandler);
+  .openapi(estimateCreditCostRoute, estimateCreditCostHandler)
+  .openapi(adminSearchUserRoute, adminSearchUserHandler);
 
 let creditsChain = appRoutes;
 if (IS_DEV_ENVIRONMENT) {

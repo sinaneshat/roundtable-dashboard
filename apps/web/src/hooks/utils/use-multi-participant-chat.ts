@@ -120,12 +120,6 @@ type UseMultiParticipantChatOptions = {
    */
   onResumedStreamComplete?: (roundNumber: number, participantIndex: number) => void;
   /**
-   * ✅ PERF FIX: Flag indicating thread was just created in this session
-   * When true, disables automatic stream resume since there's nothing to resume for new threads
-   * This prevents wasteful GET /stream calls on thread creation
-   */
-  isNewlyCreatedThread?: boolean;
-  /**
    * ✅ SMART STALE DETECTION: Round number from server prefill state
    * Used to validate if an auto-resumed stream is from the expected round
    */
@@ -322,9 +316,6 @@ export function useMultiParticipantChat(
     hasEarlyOptimisticMessage = false,
     streamResumptionPrefilled = false,
     onResumedStreamComplete,
-    // Note: isNewlyCreatedThread kept in type for API compatibility but no longer used
-    // since AI SDK resume is disabled (custom resumption handles all cases)
-    isNewlyCreatedThread: _isNewlyCreatedThread = false,
     // ✅ SMART STALE DETECTION: Prefilled state for stream validation
     resumptionRoundNumber = null,
     nextParticipantToTrigger: nextParticipantToTriggerProp = null,

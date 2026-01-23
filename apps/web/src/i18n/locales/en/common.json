@@ -14,14 +14,14 @@
       "stopButton": "Stop Impersonating"
     },
     "impersonate": {
-      "description": "Search for a user by email to impersonate their session",
-      "emailLabel": "User Email",
-      "emailPlaceholder": "user@example.com",
+      "description": "Search for a user by name or email to impersonate their session",
       "impersonateButton": "Impersonate User",
-      "searchButton": "Search User",
+      "minCharsHint": "Type at least 3 characters to search",
+      "noUsersFound": "No users found",
+      "searchLabel": "Search User",
+      "searchPlaceholder": "Search by name or email...",
       "success": "Impersonation Started",
-      "title": "Impersonate User",
-      "userNotFound": "No user found with that email"
+      "title": "Impersonate User"
     }
   },
   "actions": {

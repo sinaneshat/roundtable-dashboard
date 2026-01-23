@@ -1,83 +1,69 @@
 'use client';
 
-import { zodResolver } from '@hookform/resolvers/zod';
 import { createFileRoute } from '@tanstack/react-router';
 import { useState } from 'react';
-import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 
-import { RHFTextField } from '@/components/forms/rhf-text-field';
 import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
-import { Form } from '@/components/ui/form';
-import { useAdminSearchUserMutation } from '@/hooks';
-import { useBoolean } from '@/hooks/utils';
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+  CommandList,
+} from '@/components/ui/command';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { useAdminSearchUsers } from '@/hooks';
+import { useBoolean, useDebouncedValue } from '@/hooks/utils';
 import { authClient } from '@/lib/auth/client';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
 import { showApiErrorToast } from '@/lib/toast';
+import { cn } from '@/lib/ui/cn';
 
-export const Route = createFileRoute('/_protected/admin/impersonate')({
-  component: ImpersonatePage,
-});
-
-const searchSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-});
-
-type SearchFormData = z.infer<typeof searchSchema>;
-
-type FoundUser = {
+// User result type matching backend schema
+type UserResult = {
   id: string;
   email: string;
   name: string;
   image: string | null;
 };
 
+export const Route = createFileRoute('/_protected/admin/impersonate')({
+  component: ImpersonatePage,
+});
+
 function ImpersonatePage() {
   const t = useTranslations();
-  const searchMutation = useAdminSearchUserMutation();
   const isImpersonating = useBoolean(false);
-  const [foundUser, setFoundUser] = useState<FoundUser | null>(null);
+  const isOpen = useBoolean(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [selectedUser, setSelectedUser] = useState<UserResult | null>(null);
 
-  const form = useForm<SearchFormData>({
-    resolver: zodResolver(searchSchema),
-    defaultValues: { email: '' },
-  });
+  // Debounce search query by 300ms
+  const debouncedQuery = useDebouncedValue(searchQuery, 300);
 
-  const handleSearch = async (data: SearchFormData) => {
-    setFoundUser(null);
-    try {
-      const result = await searchMutation.mutateAsync({
-        query: { email: data.email },
-      });
+  // Fetch users when debounced query has 3+ chars
+  const { data, isFetching } = useAdminSearchUsers(debouncedQuery, 5);
+  const users = data?.data?.users ?? [];
 
-      if (result?.success && result.data) {
-        setFoundUser(result.data);
-      } else {
-        form.setError('email', {
-          type: 'manual',
-          message: t('admin.impersonate.userNotFound'),
-        });
-      }
-    } catch {
-      form.setError('email', {
-        type: 'manual',
-        message: t('admin.impersonate.userNotFound'),
-      });
-    }
+  const handleSelectUser = (user: UserResult) => {
+    setSelectedUser(user);
+    setSearchQuery('');
+    isOpen.onFalse();
   };
 
   const handleImpersonate = async () => {
-    if (!foundUser)
+    if (!selectedUser)
       return;
 
     isImpersonating.onTrue();
     try {
       await authClient.admin.impersonateUser({
-        userId: foundUser.id,
+        userId: selectedUser.id,
       });
       // Full page refresh to clear all caches
       const baseUrl = getAppBaseUrl();
@@ -88,13 +74,17 @@ function ImpersonatePage() {
     }
   };
 
-  const userInitials = foundUser?.name
-    ? foundUser.name
+  const getUserInitials = (user: UserResult) => {
+    if (user.name) {
+      return user.name
         .split(' ')
-        .map(n => n[0])
+        .map((n: string) => n[0])
         .join('')
         .toUpperCase()
-    : foundUser?.email?.[0]?.toUpperCase() || 'U';
+        .slice(0, 2);
+    }
+    return user.email.charAt(0).toUpperCase() || '?';
+  };
 
   return (
     <div className="flex flex-1 items-center justify-center p-4">
@@ -109,41 +99,113 @@ function ImpersonatePage() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-6">
-          <Form {...form}>
-            <form
-              onSubmit={form.handleSubmit(handleSearch)}
-              className="flex flex-col gap-4"
-            >
-              <RHFTextField
-                name="email"
-                title={t('admin.impersonate.emailLabel')}
-                placeholder={t('admin.impersonate.emailPlaceholder')}
-                fieldType="email"
-                required
-                disabled={searchMutation.isPending}
-              />
-              <Button
-                type="submit"
-                disabled={searchMutation.isPending}
-                loading={searchMutation.isPending}
-              >
-                <Icons.search className="size-4 mr-2" />
-                {t('admin.impersonate.searchButton')}
-              </Button>
-            </form>
-          </Form>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">
+              {t('admin.impersonate.searchLabel')}
+            </label>
+            <Popover open={isOpen.value} onOpenChange={isOpen.setValue}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="outline"
+                  role="combobox"
+                  aria-expanded={isOpen.value}
+                  className={cn(
+                    'flex w-full [&>span]:flex [&>span]:w-full [&>span]:justify-between',
+                    !selectedUser && 'text-muted-foreground',
+                  )}
+                >
+                  {selectedUser
+                    ? (
+                        <span className="flex items-center gap-2 truncate">
+                          <Avatar className="size-5">
+                            <AvatarImage src={selectedUser.image || undefined} />
+                            <AvatarFallback className="text-xs">
+                              {getUserInitials(selectedUser)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <span className="truncate">{selectedUser.name || selectedUser.email}</span>
+                        </span>
+                      )
+                    : (
+                        t('admin.impersonate.searchPlaceholder')
+                      )}
+                  <Icons.chevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
+                <Command shouldFilter={false}>
+                  <CommandInput
+                    placeholder={t('admin.impersonate.searchPlaceholder')}
+                    value={searchQuery}
+                    onValueChange={setSearchQuery}
+                  />
+                  <CommandList>
+                    {searchQuery.length < 3
+                      ? (
+                          <CommandEmpty>
+                            {t('admin.impersonate.minCharsHint')}
+                          </CommandEmpty>
+                        )
+                      : isFetching
+                        ? (
+                            <CommandEmpty>
+                              <Icons.loader className="mx-auto size-4 animate-spin" />
+                            </CommandEmpty>
+                          )
+                        : users.length === 0
+                          ? (
+                              <CommandEmpty>
+                                {t('admin.impersonate.noUsersFound')}
+                              </CommandEmpty>
+                            )
+                          : (
+                              <CommandGroup className="p-1.5">
+                                {users.map(user => (
+                                  <CommandItem
+                                    key={user.id}
+                                    value={user.id}
+                                    onSelect={() => handleSelectUser(user)}
+                                    className="flex w-full items-center gap-3 px-3 py-2.5 cursor-pointer"
+                                  >
+                                    <Avatar className="size-9 shrink-0">
+                                      <AvatarImage src={user.image || undefined} />
+                                      <AvatarFallback className="text-xs">
+                                        {getUserInitials(user)}
+                                      </AvatarFallback>
+                                    </Avatar>
+                                    <div className="flex-1 min-w-0">
+                                      <p className="font-medium truncate text-sm">{user.name}</p>
+                                      <p className="text-xs text-muted-foreground truncate">{user.email}</p>
+                                    </div>
+                                  </CommandItem>
+                                ))}
+                              </CommandGroup>
+                            )}
+                  </CommandList>
+                </Command>
+              </PopoverContent>
+            </Popover>
+          </div>
 
-          {foundUser && (
+          {selectedUser && (
             <div className="space-y-4 pt-4 border-t">
               <div className="flex items-center gap-3">
                 <Avatar className="h-12 w-12">
-                  <AvatarImage src={foundUser.image || undefined} alt={foundUser.name} />
-                  <AvatarFallback>{userInitials}</AvatarFallback>
+                  <AvatarImage src={selectedUser.image || undefined} alt={selectedUser.name} />
+                  <AvatarFallback>{getUserInitials(selectedUser)}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
-                  <p className="font-medium truncate">{foundUser.name}</p>
-                  <p className="text-sm text-muted-foreground truncate">{foundUser.email}</p>
+                  <p className="font-medium truncate">{selectedUser.name}</p>
+                  <p className="text-sm text-muted-foreground truncate">{selectedUser.email}</p>
                 </div>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSelectedUser(null)}
+                  className="shrink-0"
+                >
+                  <Icons.x className="size-4" />
+                </Button>
               </div>
               <Button
                 className="w-full"

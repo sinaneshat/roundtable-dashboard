@@ -795,33 +795,24 @@ describe('animation State Management', () => {
     });
   });
 
-  describe('waitForAllAnimations Timeout', () => {
-    it('should timeout after 5s if animations never complete', async () => {
-      const { registerAnimation, waitForAllAnimations } = getStoreState(store);
+  describe('waitForAllAnimations Completion', () => {
+    // ✅ UPDATED: Timeout-based tests removed - implementation now uses event-driven approach
+    // The 5s timeout was removed because it caused premature animation clearing
+    // Now animations complete via explicit completeAnimation() calls
 
-      // Register animations but never complete them
-      registerAnimation(0);
-      registerAnimation(1);
-      registerAnimation(2);
+    it('should resolve immediately when no animations pending', async () => {
+      const { waitForAllAnimations, pendingAnimations } = getStoreState(store);
 
-      const promise = waitForAllAnimations();
-
-      // Not resolved immediately
-      vi.advanceTimersByTime(1000);
-      // Promise still pending
-
-      // After 5s timeout
-      vi.advanceTimersByTime(4000);
-
-      await promise;
-
-      // Animations cleared by timeout
-      const { pendingAnimations, animationResolvers } = getStoreState(store);
       expect(pendingAnimations.size).toBe(0);
-      expect(animationResolvers.size).toBe(0);
+
+      // Should resolve immediately when no animations
+      await waitForAllAnimations();
+
+      // Still no animations
+      expect(getStoreState(store).pendingAnimations.size).toBe(0);
     });
 
-    it('should resolve early if all animations complete', async () => {
+    it('should resolve when all animations complete', async () => {
       const { registerAnimation, completeAnimation, waitForAllAnimations } = getStoreState(store);
 
       registerAnimation(0);
@@ -829,38 +820,45 @@ describe('animation State Management', () => {
 
       const promise = waitForAllAnimations();
 
-      // Complete animations before timeout
+      // Complete all animations
       completeAnimation(0);
       completeAnimation(1);
 
-      // Should resolve immediately
+      // Should resolve now that all are complete
       await promise;
 
       const { pendingAnimations } = getStoreState(store);
       expect(pendingAnimations.size).toBe(0);
     });
 
-    it('should race between completion and timeout', async () => {
+    it('should wait for all animations before resolving', async () => {
       const { registerAnimation, completeAnimation, waitForAllAnimations } = getStoreState(store);
 
       registerAnimation(0);
       registerAnimation(1);
       registerAnimation(2);
 
-      const promise = waitForAllAnimations();
+      let resolved = false;
+      const promise = waitForAllAnimations().then(() => {
+        resolved = true;
+      });
 
-      // Complete some animations
+      // Complete some but not all
       completeAnimation(0);
       completeAnimation(1);
 
-      // Advance time but not to timeout
-      vi.advanceTimersByTime(3000);
+      // Allow microtasks to flush
+      await Promise.resolve();
 
-      // Third animation never completes, but we advance to timeout
-      vi.advanceTimersByTime(2000);
+      // Should NOT be resolved yet (one animation still pending)
+      expect(resolved).toBe(false);
 
-      // Should resolve via timeout
+      // Complete last animation
+      completeAnimation(2);
+
+      // Now it should resolve
       await promise;
+      expect(resolved).toBe(true);
     });
   });
 
