@@ -18,6 +18,7 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { useAdminClearUserCacheMutation, useAdminSearchUsers } from '@/hooks';
 import { useBoolean, useDebouncedValue } from '@/hooks/utils';
+import { clearServiceWorkerCache } from '@/lib/auth';
 import { authClient } from '@/lib/auth/client';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
@@ -73,6 +74,8 @@ function ImpersonatePage() {
           userId: selectedUser.id,
           fetchOptions: {
             onSuccess: () => {
+              // Clear service worker cache before redirect to prevent stale pages
+              clearServiceWorkerCache();
               window.location.href = `${baseUrl}/chat`;
             },
             onError: (ctx) => {

@@ -21,4 +21,4 @@ export type {
 } from './types';
 
 // Utility exports
-export { clearAllAuthCaches, extractSessionToken } from './utils';
+export { clearAllAuthCaches, clearServiceWorkerCache, extractSessionToken } from './utils';

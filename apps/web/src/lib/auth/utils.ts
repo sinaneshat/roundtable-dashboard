@@ -167,3 +167,15 @@ export function clearAllAuthCaches(queryClient: { clear: () => void }): void {
     keysToRemove.forEach(key => localStorage.removeItem(key));
   }
 }
+
+/**
+ * Clear service worker document cache on auth state change
+ * Prevents stale HTML from being served after login/logout/impersonation
+ */
+export function clearServiceWorkerCache(): void {
+  if (typeof window === 'undefined' || !('serviceWorker' in navigator)) {
+    return;
+  }
+
+  navigator.serviceWorker.controller?.postMessage({ type: 'CLEAR_AUTH_CACHE' });
+}
