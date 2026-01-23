@@ -2,17 +2,18 @@
  * File Validation Hook Tests
  *
  * Tests verify that file validation correctly enforces size limits
- * and type restrictions for visual files (images + PDFs).
+ * and type restrictions matching ChatGPT's limits (2026).
  *
- * SIZE LIMITS (URL-based delivery to AI providers):
+ * SIZE LIMITS (enum-based, centralized):
  * - Images: 20MB max (MAX_IMAGE_FILE_SIZE)
- * - PDFs: 100MB max (MAX_PDF_FILE_SIZE)
- * - Other files: 100MB single upload / 5GB multipart
+ * - PDFs: 512MB max (MAX_PDF_FILE_SIZE)
+ * - Spreadsheets: 50MB max (MAX_SPREADSHEET_FILE_SIZE)
+ * - General: 512MB single upload / 5GB multipart
  *
  * Test Scenarios:
  * 1. Basic file validation (empty, filename length, MIME type)
- * 2. Visual file size limits (images at 20MB, PDFs at 100MB)
- * 3. Non-visual file size limits (text/code at 100MB max)
+ * 2. Type-specific size limits (images, PDFs, spreadsheets)
+ * 3. General file size limits (text/code at 512MB max)
  * 4. Multipart upload strategy selection
  * 5. File category detection
  *
@@ -24,6 +25,7 @@ import {
   MAX_IMAGE_FILE_SIZE,
   MAX_PDF_FILE_SIZE,
   MAX_SINGLE_UPLOAD_SIZE,
+  MAX_SPREADSHEET_FILE_SIZE,
   UploadStrategies,
 } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
@@ -54,9 +56,9 @@ function createMockFile(
 
 describe('useFileValidation - Visual File Size Limits', () => {
   describe('pDF files', () => {
-    it('should accept PDF under 100MB limit', () => {
+    it('should accept PDF under 512MB limit', () => {
       const { result } = renderHook(() => useFileValidation());
-      const file = createMockFile('document.pdf', 50 * 1024 * 1024, 'application/pdf'); // 50MB
+      const file = createMockFile('document.pdf', 100 * 1024 * 1024, 'application/pdf'); // 100MB
 
       const validation = result.current.validateFile(file);
 
@@ -65,9 +67,9 @@ describe('useFileValidation - Visual File Size Limits', () => {
       expect(validation.fileCategory).toBe(FileCategories.DOCUMENT);
     });
 
-    it('should accept PDF exactly at 100MB limit', () => {
+    it('should accept PDF exactly at 512MB limit', () => {
       const { result } = renderHook(() => useFileValidation());
-      const file = createMockFile('document.pdf', MAX_PDF_FILE_SIZE, 'application/pdf'); // 100MB
+      const file = createMockFile('document.pdf', MAX_PDF_FILE_SIZE, 'application/pdf'); // 512MB
 
       const validation = result.current.validateFile(file);
 
@@ -75,24 +77,24 @@ describe('useFileValidation - Visual File Size Limits', () => {
       expect(validation.error).toBeUndefined();
     });
 
-    it('should reject PDF over 100MB limit with specific error', () => {
+    it('should reject PDF over 512MB limit with specific error', () => {
       const { result } = renderHook(() => useFileValidation());
-      const file = createMockFile('large-document.pdf', 110 * 1024 * 1024, 'application/pdf'); // 110MB
+      const file = createMockFile('large-document.pdf', 600 * 1024 * 1024, 'application/pdf'); // 600MB
 
       const validation = result.current.validateFile(file);
 
       expect(validation.valid).toBe(false);
       expect(validation.error?.code).toBe('visual_file_too_large');
       expect(validation.error?.message).toContain('PDF');
-      expect(validation.error?.message).toContain('100 MB');
+      expect(validation.error?.message).toContain('512 MB');
       expect(validation.error?.details?.maxSize).toBe(MAX_PDF_FILE_SIZE);
-      expect(validation.error?.details?.actualSize).toBe(110 * 1024 * 1024);
+      expect(validation.error?.details?.actualSize).toBe(600 * 1024 * 1024);
     });
 
-    it('should accept 50MB PDF (previously rejected at 4MB)', () => {
+    it('should accept 200MB PDF (matches ChatGPT limits)', () => {
       const { result } = renderHook(() => useFileValidation());
-      // Large PDFs are now supported via URL-based delivery
-      const file = createMockFile('large-document.pdf', 50 * 1024 * 1024, 'application/pdf');
+      // Large PDFs are now supported via URL-based delivery matching ChatGPT
+      const file = createMockFile('large-document.pdf', 200 * 1024 * 1024, 'application/pdf');
 
       const validation = result.current.validateFile(file);
 
@@ -145,9 +147,9 @@ describe('useFileValidation - Visual File Size Limits', () => {
 
 describe('useFileValidation - Non-Visual File Size Limits', () => {
   describe('text files', () => {
-    it('should accept text files up to 100MB', () => {
+    it('should accept text files up to 512MB', () => {
       const { result } = renderHook(() => useFileValidation());
-      const file = createMockFile('large.txt', 50 * 1024 * 1024, 'text/plain'); // 50MB
+      const file = createMockFile('large.txt', 200 * 1024 * 1024, 'text/plain'); // 200MB
 
       const validation = result.current.validateFile(file);
 
@@ -169,7 +171,7 @@ describe('useFileValidation - Non-Visual File Size Limits', () => {
   describe('code files', () => {
     it('should accept code files over visual limit', () => {
       const { result } = renderHook(() => useFileValidation());
-      const file = createMockFile('app.js', 8 * 1024 * 1024, 'text/javascript'); // 8MB
+      const file = createMockFile('app.js', 50 * 1024 * 1024, 'text/javascript'); // 50MB
 
       const validation = result.current.validateFile(file);
 
@@ -181,12 +183,71 @@ describe('useFileValidation - Non-Visual File Size Limits', () => {
   describe('jSON files', () => {
     it('should accept JSON files over visual limit', () => {
       const { result } = renderHook(() => useFileValidation());
-      const file = createMockFile('data.json', 20 * 1024 * 1024, 'application/json'); // 20MB
+      const file = createMockFile('data.json', 50 * 1024 * 1024, 'application/json'); // 50MB
 
       const validation = result.current.validateFile(file);
 
       expect(validation.valid).toBe(true);
       expect(validation.fileCategory).toBe(FileCategories.TEXT);
+    });
+  });
+});
+
+// ============================================================================
+// Spreadsheet File Size Tests (ChatGPT: 50MB limit)
+// ============================================================================
+
+describe('useFileValidation - Spreadsheet File Size Limits', () => {
+  describe('cSV files', () => {
+    it('should accept CSV under 50MB limit', () => {
+      const { result } = renderHook(() => useFileValidation());
+      const file = createMockFile('data.csv', 30 * 1024 * 1024, 'text/csv'); // 30MB
+
+      const validation = result.current.validateFile(file);
+
+      expect(validation.valid).toBe(true);
+    });
+
+    it('should accept CSV exactly at 50MB limit', () => {
+      const { result } = renderHook(() => useFileValidation());
+      const file = createMockFile('data.csv', MAX_SPREADSHEET_FILE_SIZE, 'text/csv'); // 50MB
+
+      const validation = result.current.validateFile(file);
+
+      expect(validation.valid).toBe(true);
+    });
+
+    it('should reject CSV over 50MB limit', () => {
+      const { result } = renderHook(() => useFileValidation());
+      const file = createMockFile('large-data.csv', 60 * 1024 * 1024, 'text/csv'); // 60MB
+
+      const validation = result.current.validateFile(file);
+
+      expect(validation.valid).toBe(false);
+      expect(validation.error?.code).toBe('file_too_large');
+      expect(validation.error?.message).toContain('Spreadsheet');
+      expect(validation.error?.details?.maxSize).toBe(MAX_SPREADSHEET_FILE_SIZE);
+    });
+  });
+
+  describe('excel files', () => {
+    it('should accept XLSX under 50MB limit', () => {
+      const { result } = renderHook(() => useFileValidation());
+      const file = createMockFile('data.xlsx', 40 * 1024 * 1024, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+      const validation = result.current.validateFile(file);
+
+      expect(validation.valid).toBe(true);
+    });
+
+    it('should reject XLSX over 50MB limit', () => {
+      const { result } = renderHook(() => useFileValidation());
+      const file = createMockFile('large.xlsx', 60 * 1024 * 1024, 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+
+      const validation = result.current.validateFile(file);
+
+      expect(validation.valid).toBe(false);
+      expect(validation.error?.message).toContain('Spreadsheet');
     });
   });
 });
@@ -234,9 +295,9 @@ describe('useFileValidation - Basic Validation', () => {
 // ============================================================================
 
 describe('useFileValidation - Upload Strategy', () => {
-  it('should select single upload for files under 100MB', () => {
+  it('should select single upload for files under 512MB', () => {
     const { result } = renderHook(() => useFileValidation());
-    const file = createMockFile('small.txt', 50 * 1024 * 1024, 'text/plain'); // 50MB
+    const file = createMockFile('small.txt', 200 * 1024 * 1024, 'text/plain'); // 200MB
 
     const validation = result.current.validateFile(file);
 
@@ -244,27 +305,52 @@ describe('useFileValidation - Upload Strategy', () => {
     expect(validation.uploadStrategy).toBe(UploadStrategies.SINGLE);
   });
 
-  it('should select multipart upload for files over 100MB', () => {
+  it('should reject files over type-specific limit before multipart logic', () => {
     const { result } = renderHook(() => useFileValidation());
-    const file = createMockFile('large.txt', 150 * 1024 * 1024, 'text/plain'); // 150MB
+    // 600MB text file exceeds the 512MB general type limit
+    // Multipart never triggers because type check fails first
+    const file = createMockFile('huge-data.txt', 600 * 1024 * 1024, 'text/plain');
 
     const validation = result.current.validateFile(file);
 
+    expect(validation.valid).toBe(false);
+    expect(validation.error?.code).toBe('file_too_large');
+    expect(validation.error?.message).toContain('512 MB');
+  });
+
+  it('should accept file at exactly the type limit (512MB)', () => {
+    const { result } = renderHook(() => useFileValidation());
+    // Exactly at the 512MB limit for general files
+    const file = createMockFile('max-data.txt', 512 * 1024 * 1024, 'text/plain');
+
+    const validation = result.current.validateFile(file);
+
+    // At exactly the limit, file is valid and uses single upload
     expect(validation.valid).toBe(true);
-    expect(validation.uploadStrategy).toBe(UploadStrategies.MULTIPART);
-    expect(validation.partCount).toBeGreaterThan(0);
-    expect(validation.partSize).toBeGreaterThan(0);
+    expect(validation.uploadStrategy).toBe(UploadStrategies.SINGLE);
   });
 
   it('should NOT allow multipart for visual files (blocked by size limit first)', () => {
     const { result } = renderHook(() => useFileValidation());
-    // Even if we tried to upload a 150MB PDF, it would fail at the 100MB visual limit first
-    const file = createMockFile('huge.pdf', 150 * 1024 * 1024, 'application/pdf');
+    // Even if we tried to upload a 600MB PDF, it would fail at the 512MB limit first
+    const file = createMockFile('huge.pdf', 600 * 1024 * 1024, 'application/pdf');
 
     const validation = result.current.validateFile(file);
 
     expect(validation.valid).toBe(false);
     expect(validation.error?.code).toBe('visual_file_too_large');
+  });
+
+  it('should reject oversized images even if under general limit', () => {
+    const { result } = renderHook(() => useFileValidation());
+    // 25MB image should fail because images have 20MB limit, not the 512MB general limit
+    const file = createMockFile('huge.png', 25 * 1024 * 1024, 'image/png');
+
+    const validation = result.current.validateFile(file);
+
+    expect(validation.valid).toBe(false);
+    expect(validation.error?.code).toBe('visual_file_too_large');
+    expect(validation.error?.message).toContain('Image');
   });
 });
 
@@ -273,24 +359,32 @@ describe('useFileValidation - Upload Strategy', () => {
 // ============================================================================
 
 describe('useFileValidation - Constants', () => {
-  it('should expose maxImageFileSize constant', () => {
+  it('should expose maxImageFileSize constant (20MB)', () => {
     const { result } = renderHook(() => useFileValidation());
 
     expect(result.current.constants.maxImageFileSize).toBe(MAX_IMAGE_FILE_SIZE);
     expect(result.current.constants.maxImageFileSize).toBe(20 * 1024 * 1024);
   });
 
-  it('should expose maxPdfFileSize constant', () => {
+  it('should expose maxPdfFileSize constant (512MB)', () => {
     const { result } = renderHook(() => useFileValidation());
 
     expect(result.current.constants.maxPdfFileSize).toBe(MAX_PDF_FILE_SIZE);
-    expect(result.current.constants.maxPdfFileSize).toBe(100 * 1024 * 1024);
+    expect(result.current.constants.maxPdfFileSize).toBe(512 * 1024 * 1024);
   });
 
-  it('should expose maxSingleUploadSize constant', () => {
+  it('should expose maxSpreadsheetFileSize constant (50MB)', () => {
+    const { result } = renderHook(() => useFileValidation());
+
+    expect(result.current.constants.maxSpreadsheetFileSize).toBe(MAX_SPREADSHEET_FILE_SIZE);
+    expect(result.current.constants.maxSpreadsheetFileSize).toBe(50 * 1024 * 1024);
+  });
+
+  it('should expose maxSingleUploadSize constant (512MB)', () => {
     const { result } = renderHook(() => useFileValidation());
 
     expect(result.current.constants.maxSingleUploadSize).toBe(MAX_SINGLE_UPLOAD_SIZE);
+    expect(result.current.constants.maxSingleUploadSize).toBe(512 * 1024 * 1024);
   });
 });
 
@@ -303,9 +397,11 @@ describe('useFileValidation - Multiple Files', () => {
     const { result } = renderHook(() => useFileValidation());
 
     const files = [
-      createMockFile('small.pdf', 50 * 1024 * 1024, 'application/pdf'), // Valid - under 100MB
-      createMockFile('large.pdf', 110 * 1024 * 1024, 'application/pdf'), // Invalid - over 100MB limit
-      createMockFile('code.js', 50 * 1024 * 1024, 'text/javascript'), // Valid - text files have 100MB limit
+      createMockFile('small.pdf', 200 * 1024 * 1024, 'application/pdf'), // Valid - under 512MB
+      createMockFile('large.pdf', 600 * 1024 * 1024, 'application/pdf'), // Invalid - over 512MB limit
+      createMockFile('code.js', 200 * 1024 * 1024, 'text/javascript'), // Valid - text files have 512MB limit
+      createMockFile('huge-image.png', 25 * 1024 * 1024, 'image/png'), // Invalid - over 20MB image limit
+      createMockFile('large-csv.csv', 60 * 1024 * 1024, 'text/csv'), // Invalid - over 50MB spreadsheet limit
     ];
 
     const results = result.current.validateFiles(files);
@@ -314,5 +410,9 @@ describe('useFileValidation - Multiple Files', () => {
     expect(results.get(files[1])?.valid).toBe(false);
     expect(results.get(files[1])?.error?.code).toBe('visual_file_too_large');
     expect(results.get(files[2])?.valid).toBe(true);
+    expect(results.get(files[3])?.valid).toBe(false);
+    expect(results.get(files[3])?.error?.code).toBe('visual_file_too_large');
+    expect(results.get(files[4])?.valid).toBe(false);
+    expect(results.get(files[4])?.error?.code).toBe('file_too_large');
   });
 });

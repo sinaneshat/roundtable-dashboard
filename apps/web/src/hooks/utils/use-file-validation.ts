@@ -4,14 +4,17 @@ import {
   FileCategorySchema,
   FileValidationErrorCodeSchema,
   getFileCategoryFromMime,
+  getMaxFileSizeForMimeType,
   IMAGE_MIME_TYPES,
   MAX_IMAGE_FILE_SIZE,
   MAX_MULTIPART_PARTS,
   MAX_PDF_FILE_SIZE,
   MAX_SINGLE_UPLOAD_SIZE,
+  MAX_SPREADSHEET_FILE_SIZE,
   MAX_TOTAL_FILE_SIZE,
   MIN_MULTIPART_PART_SIZE,
   RECOMMENDED_PART_SIZE,
+  SPREADSHEET_MIME_TYPES,
   UploadStrategies,
   UploadStrategySchema,
 } from '@roundtable/shared';
@@ -21,6 +24,7 @@ import { z } from 'zod';
 import { formatFileSize } from '@/lib/format';
 
 const IMAGE_MIME_SET = new Set<string>(IMAGE_MIME_TYPES);
+const SPREADSHEET_MIME_SET = new Set<string>(SPREADSHEET_MIME_TYPES);
 
 // ============================================================================
 // ZOD SCHEMAS
@@ -89,6 +93,8 @@ const _FileValidationConstantsSchema = z.object({
   maxImageFileSize: z.number().int().positive(),
   /** Maximum PDF file size in bytes */
   maxPdfFileSize: z.number().int().positive(),
+  /** Maximum spreadsheet file size in bytes */
+  maxSpreadsheetFileSize: z.number().int().positive(),
   /** Minimum multipart part size in bytes */
   minPartSize: z.number().int().positive(),
   /** Recommended part size in bytes */
@@ -199,35 +205,30 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
         };
       }
 
-      // Validate file size limits for visual content (images and PDFs)
-      // Large files use URL-based delivery where AI providers fetch from signed URLs
+      // Validate file size limits using centralized type-specific limits
+      // Uses enum-based limits matching ChatGPT: 512MB general, 20MB images, 50MB spreadsheets
+      const maxSizeForType = getMaxFileSizeForMimeType(file.type);
       const isPdf = file.type === 'application/pdf';
       const isImage = IMAGE_MIME_SET.has(file.type);
+      const isSpreadsheet = SPREADSHEET_MIME_SET.has(file.type);
 
-      if (isPdf && file.size > MAX_PDF_FILE_SIZE) {
+      if (file.size > maxSizeForType) {
+        // Determine the appropriate error message based on file type
+        let typeLabel = 'This file type';
+        if (isPdf)
+          typeLabel = 'PDF files';
+        else if (isImage)
+          typeLabel = 'Image files';
+        else if (isSpreadsheet)
+          typeLabel = 'Spreadsheet files';
+
         return {
           valid: false,
           error: {
-            code: 'visual_file_too_large',
-            message: `PDF files must be ${formatFileSize(MAX_PDF_FILE_SIZE)} or smaller. Your file is ${formatFileSize(file.size)}.`,
+            code: isImage || isPdf ? 'visual_file_too_large' : 'file_too_large',
+            message: `${typeLabel} must be ${formatFileSize(maxSizeForType)} or smaller. Your file is ${formatFileSize(file.size)}.`,
             details: {
-              maxSize: MAX_PDF_FILE_SIZE,
-              actualSize: file.size,
-            },
-          },
-          uploadStrategy: UploadStrategies.SINGLE,
-          fileCategory,
-        };
-      }
-
-      if (isImage && file.size > MAX_IMAGE_FILE_SIZE) {
-        return {
-          valid: false,
-          error: {
-            code: 'visual_file_too_large',
-            message: `Image files must be ${formatFileSize(MAX_IMAGE_FILE_SIZE)} or smaller. Your file is ${formatFileSize(file.size)}.`,
-            details: {
-              maxSize: MAX_IMAGE_FILE_SIZE,
+              maxSize: maxSizeForType,
               actualSize: file.size,
             },
           },
@@ -305,6 +306,7 @@ export function useFileValidation(options: UseFileValidationOptions = {}): UseFi
       maxTotalFileSize: MAX_TOTAL_FILE_SIZE,
       maxImageFileSize: MAX_IMAGE_FILE_SIZE,
       maxPdfFileSize: MAX_PDF_FILE_SIZE,
+      maxSpreadsheetFileSize: MAX_SPREADSHEET_FILE_SIZE,
       minPartSize: MIN_MULTIPART_PART_SIZE,
       recommendedPartSize: RECOMMENDED_PART_SIZE,
       allowedTypes,

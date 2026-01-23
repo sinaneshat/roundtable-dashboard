@@ -14,8 +14,9 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import {
   ALLOWED_MIME_TYPES,
   ChatAttachmentStatuses,
-  MAX_SINGLE_UPLOAD_SIZE,
+  getMaxFileSizeForMimeType,
   MIN_MULTIPART_PART_SIZE,
+  MULTIPART_OVERHEAD_TOLERANCE,
 } from '@roundtable/shared/enums';
 import { and, eq } from 'drizzle-orm';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
@@ -297,10 +298,13 @@ export const requestUploadTicketHandler: RouteHandler<typeof requestUploadTicket
       );
     }
 
-    // Validate file size
-    if (body.fileSize > MAX_SINGLE_UPLOAD_SIZE) {
+    // Get the max file size limit for this MIME type (enum-based limits)
+    const maxFileSizeForType = getMaxFileSizeForMimeType(body.mimeType);
+
+    // Validate file size against type-specific limit
+    if (body.fileSize > maxFileSizeForType) {
       throw createError.badRequest(
-        `File too large (max ${MAX_SINGLE_UPLOAD_SIZE / 1024 / 1024}MB). Use multipart upload for larger files.`,
+        `File too large (max ${maxFileSizeForType / 1024 / 1024}MB for this file type). Use multipart upload for larger files.`,
         {
           errorType: 'validation',
           field: 'fileSize',
@@ -308,7 +312,8 @@ export const requestUploadTicketHandler: RouteHandler<typeof requestUploadTicket
       );
     }
 
-    // Create upload ticket
+    // Create upload ticket with the declared file size as the limit
+    // The ticket enforces the client's declared size, not the type limit
     const { ticketId, token, expiresAt } = await createUploadTicket(c, {
       userId: user.id,
       filename: body.filename,
@@ -358,13 +363,15 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
 
     // Pre-check Content-Length to reject oversized files before downloading
     // DoS mitigation: avoids wasting bandwidth/worker time on files that will fail
+    // Note: Content-Length includes multipart boundaries/headers, so add tolerance
     const contentLength = c.req.header('content-length');
     if (contentLength) {
       const size = Number.parseInt(contentLength, 10);
-      if (!Number.isNaN(size) && size > ticket.maxFileSize) {
+      const effectiveLimit = ticket.maxFileSize + MULTIPART_OVERHEAD_TOLERANCE;
+      if (!Number.isNaN(size) && size > effectiveLimit) {
         await deleteTicket(c, ticket.ticketId);
         throw createError.badRequest(
-          `Content-Length ${size} exceeds ticket limit ${ticket.maxFileSize}`,
+          `Content-Length ${size} exceeds limit ${effectiveLimit}`,
           { errorType: 'validation', field: 'content-length' },
         );
       }
@@ -861,7 +868,7 @@ export const createMultipartUploadHandler: RouteHandler<typeof createMultipartUp
     // Check if R2 is available (multipart uploads require R2)
     if (isLocalDevelopment(c.env.UPLOADS_R2_BUCKET)) {
       throw createError.badRequest(
-        'Multipart uploads are not available in local development. Use single-file upload (< 100MB) or run with `pnpm preview` to test with R2.',
+        'Multipart uploads are not available in local development. Use single-file upload (< 100MB) or run with `bun run preview` to test with R2.',
         { errorType: 'configuration' },
       );
     }
