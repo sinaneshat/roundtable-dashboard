@@ -17,6 +17,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
+  useAdminClearUserCacheMutation,
   useCancelSubscriptionMutation,
   useCreateCustomerPortalSessionMutation,
   useSubscriptionsQuery,
@@ -64,6 +65,7 @@ export function NavUser({ initialSession }: NavUserProps) {
   const isStoppingImpersonation = useBoolean(false);
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
   const cancelSubscriptionMutation = useCancelSubscriptionMutation();
+  const clearCacheMutation = useAdminClearUserCacheMutation();
   const showDeleteAccountOption = getWebappEnv() !== WebAppEnvs.PROD;
 
   const user = clientSession?.user ?? initialSession?.user;
@@ -157,18 +159,32 @@ export function NavUser({ initialSession }: NavUserProps) {
   };
 
   const handleStopImpersonating = async () => {
+    const adminUserId = clientSession?.session?.impersonatedBy;
+    if (!adminUserId)
+      return;
+
     isStoppingImpersonation.onTrue();
     const baseUrl = getAppBaseUrl();
 
-    await authClient.admin.stopImpersonating({
-      fetchOptions: {
-        onSuccess: () => {
-          window.location.href = `${baseUrl}/admin/impersonate`;
-        },
-        onError: (ctx) => {
-          showApiErrorToast('Failed to Stop Impersonation', ctx.error);
-          isStoppingImpersonation.onFalse();
-        },
+    // Clear server-side cache for admin user first
+    clearCacheMutation.mutate(adminUserId, {
+      onSuccess: () => {
+        // Then restore admin session - onSuccess fires only after session is established
+        authClient.admin.stopImpersonating({
+          fetchOptions: {
+            onSuccess: () => {
+              window.location.href = `${baseUrl}/admin/impersonate`;
+            },
+            onError: (ctx) => {
+              showApiErrorToast('Failed to Stop Impersonation', ctx.error);
+              isStoppingImpersonation.onFalse();
+            },
+          },
+        });
+      },
+      onError: (error) => {
+        showApiErrorToast('Cache Clear Failed', error);
+        isStoppingImpersonation.onFalse();
       },
     });
   };

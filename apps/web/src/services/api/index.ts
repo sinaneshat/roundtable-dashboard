@@ -10,6 +10,9 @@
 // ============================================================================
 
 export {
+  type AdminClearUserCacheParams,
+  type AdminClearUserCacheResponse,
+  adminClearUserCacheService,
   type AdminSearchUserResult,
   adminSearchUserService,
   type AdminSearchUsersParams,

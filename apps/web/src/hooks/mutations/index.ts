@@ -1,4 +1,5 @@
 export {
+  useAdminClearUserCacheMutation,
   useAdminSearchUsers,
 } from './admin-mutations';
 export {

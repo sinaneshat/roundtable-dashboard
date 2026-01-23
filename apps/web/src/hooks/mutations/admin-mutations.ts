@@ -4,9 +4,9 @@
  * TanStack Query hooks for admin operations
  */
 
-import { useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery } from '@tanstack/react-query';
 
-import { adminSearchUserService } from '@/services/api';
+import { adminClearUserCacheService, adminSearchUserService } from '@/services/api';
 
 /**
  * Hook to search for users by name or email (admin only)
@@ -21,5 +21,15 @@ export function useAdminSearchUsers(query: string, limit = 5) {
     enabled: query.length >= 3,
     staleTime: 30_000,
     gcTime: 60_000,
+  });
+}
+
+/**
+ * Hook to clear all server-side caches for a user (admin only)
+ * Used during impersonation to ensure fresh data
+ */
+export function useAdminClearUserCacheMutation() {
+  return useMutation({
+    mutationFn: (userId: string) => adminClearUserCacheService({ json: { userId } }),
   });
 }

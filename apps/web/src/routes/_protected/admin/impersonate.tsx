@@ -16,7 +16,7 @@ import {
   CommandList,
 } from '@/components/ui/command';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { useAdminSearchUsers } from '@/hooks';
+import { useAdminClearUserCacheMutation, useAdminSearchUsers } from '@/hooks';
 import { useBoolean, useDebouncedValue } from '@/hooks/utils';
 import { authClient } from '@/lib/auth/client';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
@@ -42,6 +42,7 @@ function ImpersonatePage() {
   const isOpen = useBoolean(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedUser, setSelectedUser] = useState<UserResult | null>(null);
+  const clearCacheMutation = useAdminClearUserCacheMutation();
 
   // Debounce search query by 300ms
   const debouncedQuery = useDebouncedValue(searchQuery, 300);
@@ -63,16 +64,26 @@ function ImpersonatePage() {
     isImpersonating.onTrue();
     const baseUrl = getAppBaseUrl();
 
-    await authClient.admin.impersonateUser({
-      userId: selectedUser.id,
-      fetchOptions: {
-        onSuccess: () => {
-          window.location.href = `${baseUrl}/chat`;
-        },
-        onError: (ctx) => {
-          showApiErrorToast('Impersonation Failed', ctx.error);
-          isImpersonating.onFalse();
-        },
+    // Clear server-side cache for target user first
+    clearCacheMutation.mutate(selectedUser.id, {
+      onSuccess: () => {
+        // Then switch session - onSuccess fires only after session is established
+        authClient.admin.impersonateUser({
+          userId: selectedUser.id,
+          fetchOptions: {
+            onSuccess: () => {
+              window.location.href = `${baseUrl}/chat`;
+            },
+            onError: (ctx) => {
+              showApiErrorToast('Impersonation Failed', ctx.error);
+              isImpersonating.onFalse();
+            },
+          },
+        });
+      },
+      onError: (error) => {
+        showApiErrorToast('Cache Clear Failed', error);
+        isImpersonating.onFalse();
       },
     });
   };

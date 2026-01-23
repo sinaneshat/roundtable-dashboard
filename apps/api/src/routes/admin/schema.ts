@@ -56,3 +56,28 @@ export const AdminSearchUserPayloadSchema = z.object({
 }).openapi('AdminSearchUserPayload');
 
 export type AdminSearchUserPayload = z.infer<typeof AdminSearchUserPayloadSchema>;
+
+/**
+ * Admin clear user cache request schema
+ * Clears all server-side caches for a user (for impersonation)
+ */
+export const AdminClearUserCacheBodySchema = z.object({
+  userId: z.string().min(1).openapi({
+    example: 'cm4abc123',
+    description: 'User ID to clear caches for',
+  }),
+}).openapi('AdminClearUserCacheBody');
+
+export type AdminClearUserCacheBody = z.infer<typeof AdminClearUserCacheBodySchema>;
+
+/**
+ * Admin clear user cache response payload schema
+ */
+export const AdminClearUserCachePayloadSchema = z.object({
+  cleared: z.boolean().openapi({
+    example: true,
+    description: 'Whether cache was cleared successfully',
+  }),
+}).openapi('AdminClearUserCachePayload');
+
+export type AdminClearUserCachePayload = z.infer<typeof AdminClearUserCachePayloadSchema>;

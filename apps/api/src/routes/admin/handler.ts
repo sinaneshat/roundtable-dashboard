@@ -1,14 +1,15 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { and, like, ne, or, sql } from 'drizzle-orm';
 
+import { invalidateAllUserCaches } from '@/common/cache-utils';
 import { createError } from '@/common/error-handling';
 import { createHandler, Responses } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/tables';
 import type { ApiEnv } from '@/types';
 
-import type { adminSearchUserRoute } from './route';
-import { AdminSearchUserQuerySchema } from './schema';
+import type { adminClearUserCacheRoute, adminSearchUserRoute } from './route';
+import { AdminClearUserCacheBodySchema, AdminSearchUserQuerySchema } from './schema';
 
 /**
  * Handler for admin user search endpoint
@@ -59,5 +60,35 @@ export const adminSearchUserHandler: RouteHandler<typeof adminSearchUserRoute, A
       users,
       total: users.length,
     });
+  },
+);
+
+/**
+ * Handler for admin clear user cache endpoint
+ * Clears all server-side caches for a user (for impersonation)
+ */
+export const adminClearUserCacheHandler: RouteHandler<typeof adminClearUserCacheRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateBody: AdminClearUserCacheBodySchema,
+    operationName: 'adminClearUserCache',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { userId } = c.validated.body;
+
+    // Check admin role
+    if (user.role !== 'admin') {
+      throw createError.unauthorized('Admin access required', {
+        errorType: 'authorization',
+        resource: 'admin',
+        userId: user.id,
+      });
+    }
+
+    const db = await getDbAsync();
+    await invalidateAllUserCaches(db, userId);
+
+    return Responses.ok(c, { cleared: true });
   },
 );
