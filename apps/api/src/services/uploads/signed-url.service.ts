@@ -157,7 +157,7 @@ export async function generateSignedDownloadPath(
 }
 
 // ============================================================================
-// AI PROVIDER PUBLIC URL GENERATION
+// AI PROVIDER URL GENERATION (DEPRECATED - SESSION AUTH REQUIRED)
 // ============================================================================
 
 export type GenerateAiPublicUrlOptions = {
@@ -178,18 +178,17 @@ export type GenerateAiPublicUrlResult
     | { success: false; error: string };
 
 /**
- * Generate an owner-bound signed URL for AI providers to fetch files.
+ * @deprecated AI providers cannot access files - session authentication is now required.
  *
- * This is used for large files (>4MB) that exceed base64 memory limits.
- * AI providers (OpenAI, Anthropic, Google, OpenRouter) fetch from this URL directly.
+ * All file downloads require session authentication. AI providers (OpenAI, Anthropic,
+ * Google, OpenRouter) cannot authenticate, so URL-based file delivery is not supported.
  *
- * Security: URLs are owner-bound (userId required), 30-minute expiration.
+ * Large files (>4MB) should use:
+ * 1. Pre-extracted text content (for documents)
+ * 2. Base64 encoding (if within memory limits)
+ * 3. Cloudflare AI for PDF processing
  *
- * IMPORTANT: Only works when baseUrl is publicly accessible (preview/production).
- * Returns error for localhost URLs since AI providers cannot access them.
- *
- * @param options - URL generation options
- * @returns Signed URL or error
+ * This function is kept for backward compatibility but will always fail at runtime.
  */
 export async function generateAiPublicUrl(
   options: GenerateAiPublicUrlOptions,
@@ -232,8 +231,8 @@ export async function generateAiPublicUrl(
 }
 
 /**
- * Generate owner-bound URLs for multiple files (batch operation).
- * Uses single key import for efficiency. 30-minute expiration.
+ * @deprecated AI providers cannot access files - session authentication is now required.
+ * @see generateAiPublicUrl for details.
  */
 export async function generateAiPublicUrlBatch(
   baseOptions: Omit<GenerateAiPublicUrlOptions, 'uploadId'>,

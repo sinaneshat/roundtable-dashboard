@@ -592,18 +592,24 @@ export const updateUploadHandler: RouteHandler<typeof updateUploadRoute, ApiEnv>
  * - Supports If-None-Match conditional requests (304 Not Modified)
  *
  * Security model:
- * 1. If signed URL params present: Validate signature (supports shared access)
- * 2. If no signature: Require session auth + ownership check
+ * 1. ALWAYS require session authentication (no anonymous access)
+ * 2. If signed URL params present: Validate signature + session user must match
+ * 3. If no signature: Session auth + ownership check
+ *
+ * NOTE: This breaks AI provider access to large files (>4MB) since they cannot
+ * authenticate. Large files will fall back to base64 or text extraction.
  *
  * @see https://developers.cloudflare.com/r2/api/workers/workers-api-usage
  */
 export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, ApiEnv> = createHandler(
   {
-    auth: 'session-optional',
+    auth: 'session', // SECURITY: Always require session - no anonymous access
     validateParams: IdParamSchema,
     operationName: 'downloadFile',
   },
   async (c) => {
+    const { user } = c.auth(); // Guaranteed by auth: 'session'
+
     // Dynamic import to avoid linter removing "unused" static import
     const signedUrlService = await import('@/services/uploads');
 
@@ -656,7 +662,8 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
       return new Response(result.body, { headers });
     };
 
-    // SECURITY CHECK 1: Signed URL validation (preferred method)
+    // SECURITY: Validate signed URL if present (for expiration/integrity)
+    // But ALWAYS require session user to match - no anonymous access ever
     if (signedUrlService.hasSignatureParams(c)) {
       const validation = await signedUrlService.validateSignedUrl(c, id);
 
@@ -668,65 +675,17 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
         });
       }
 
-      // Get upload record WITH OWNERSHIP VERIFICATION - signed URL userId must match upload owner
-      const uploadRecord = await db.query.upload.findFirst({
-        where: and(
-          eq(tables.upload.id, id),
-          eq(tables.upload.userId, validation.userId),
-        ),
-        columns: {
-          r2Key: true,
-          filename: true,
-          mimeType: true,
-        },
-      });
-
-      if (!uploadRecord) {
-        throw createError.notFound(`Upload not found or access denied: ${id}`, {
-          errorType: 'resource',
+      // SECURITY: Session user MUST match signed URL user - no sharing allowed
+      if (user.id !== validation.userId) {
+        throw createError.unauthorized('Access denied - you can only access your own files', {
+          errorType: 'authorization',
           resource: 'upload',
           resourceId: id,
         });
       }
-
-      // Use streaming with conditional request support (official R2 pattern)
-      const result = await getFileStream(c.env.UPLOADS_R2_BUCKET, uploadRecord.r2Key, {
-        onlyIf: requestHeaders,
-      });
-
-      if (!result.found) {
-        throw createError.notFound('File not found in storage', {
-          errorType: 'resource',
-          resource: 'file',
-          resourceId: id,
-        });
-      }
-
-      // Security audit: file download via signed URL
-      console.error(JSON.stringify({
-        audit: 'file_download',
-        uploadId: id,
-        userId: validation.userId,
-        ip: c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for'),
-        userAgent: c.req.header('user-agent'),
-        method: 'signed_url',
-        timestamp: Date.now(),
-      }));
-
-      return buildStreamingResponse(result, uploadRecord, 'private, max-age=3600');
     }
 
-    // SECURITY CHECK 2: Session auth + ownership
-    const auth = c.auth();
-    if (!auth?.user) {
-      throw createError.unauthenticated('Authentication required for unsigned download URLs', {
-        errorType: 'authorization',
-      });
-    }
-
-    const { user } = auth;
-
-    // Get upload record WITH ownership check - only need r2Key, filename, mimeType
+    // SECURITY: Session user must own the file - private access only
     const uploadRecord = await db.query.upload.findFirst({
       where: and(
         eq(tables.upload.id, id),
@@ -760,7 +719,7 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
       });
     }
 
-    // Security audit: file download via session auth
+    // Security audit: file download
     console.error(JSON.stringify({
       audit: 'file_download',
       uploadId: id,
@@ -771,7 +730,7 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
       timestamp: Date.now(),
     }));
 
-    return buildStreamingResponse(result, uploadRecord, 'private, max-age=3600');
+    return buildStreamingResponse(result, uploadRecord, 'private, no-store');
   },
 );
 
