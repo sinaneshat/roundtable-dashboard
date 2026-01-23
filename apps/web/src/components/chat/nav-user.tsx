@@ -166,25 +166,25 @@ export function NavUser({ initialSession }: NavUserProps) {
     isStoppingImpersonation.onTrue();
     const baseUrl = getAppBaseUrl();
 
-    // Clear server-side cache for admin user first
-    clearCacheMutation.mutate(adminUserId, {
-      onSuccess: () => {
-        // Then restore admin session - onSuccess fires only after session is established
-        authClient.admin.stopImpersonating({
-          fetchOptions: {
+    // First restore admin session, THEN clear cache (need admin perms for cache clear)
+    authClient.admin.stopImpersonating({
+      fetchOptions: {
+        onSuccess: () => {
+          // Now we're back as admin - clear cache before redirect
+          clearCacheMutation.mutate(adminUserId, {
             onSuccess: () => {
               window.location.href = `${baseUrl}/admin/impersonate`;
             },
-            onError: (ctx) => {
-              showApiErrorToast('Failed to Stop Impersonation', ctx.error);
-              isStoppingImpersonation.onFalse();
+            onError: () => {
+              // Cache clear failed but session restored - still redirect
+              window.location.href = `${baseUrl}/admin/impersonate`;
             },
-          },
-        });
-      },
-      onError: (error) => {
-        showApiErrorToast('Cache Clear Failed', error);
-        isStoppingImpersonation.onFalse();
+          });
+        },
+        onError: (ctx) => {
+          showApiErrorToast('Failed to Stop Impersonation', ctx.error);
+          isStoppingImpersonation.onFalse();
+        },
       },
     });
   };
