@@ -47,8 +47,8 @@ import {
   updateApiKeyRoute,
 } from './routes/api-keys/route';
 // Auth routes
-import { secureMeHandler } from './routes/auth/handler';
-import { secureMeRoute } from './routes/auth/route';
+import { clearOwnCacheHandler, secureMeHandler } from './routes/auth/handler';
+import { clearOwnCacheRoute, secureMeRoute } from './routes/auth/route';
 // Billing routes
 import {
   cancelSubscriptionHandler,
@@ -504,6 +504,7 @@ app.notFound(notFound);
 // ============================================================================
 
 app.use('/auth/me', csrfProtection);
+app.use('/auth/clear-cache', csrfProtection);
 app.use('/auth/api-keys', csrfProtection);
 
 // Admin routes CSRF protection
@@ -566,6 +567,7 @@ const appRoutes = app
   .openapi(detailedHealthRoute, detailedHealthHandler)
   .openapi(ogChatRoute, ogChatHandler)
   .openapi(secureMeRoute, secureMeHandler)
+  .openapi(clearOwnCacheRoute, clearOwnCacheHandler)
   .openapi(listApiKeysRoute, listApiKeysHandler)
   .openapi(getApiKeyRoute, getApiKeyHandler)
   .openapi(createApiKeyRoute, createApiKeyHandler)

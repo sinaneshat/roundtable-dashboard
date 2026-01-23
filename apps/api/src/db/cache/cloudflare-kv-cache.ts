@@ -3,24 +3,17 @@
  * Automatic invalidation on mutations, configurable TTL, table-based cache keys
  * @see https://orm.drizzle.team/docs/cache
  *
- * DEPLOYMENT ISOLATION:
- * Each worker deployment gets a unique cache namespace via DEPLOYMENT_ID.
- * This prevents stale cache data from causing 500 errors after deployments.
- * The tableToKeys mapping is in-memory and lost on restart, but with deployment
- * isolation, old cache entries are simply orphaned and expire via TTL.
+ * NO DEPLOYMENT ISOLATION:
+ * We removed deployment-based cache namespacing because crypto.randomUUID()
+ * generates different IDs across worker isolates, causing cache fragmentation.
+ * Instead, we rely on TTL-based expiration and explicit cache invalidation.
+ * Short TTLs (30s-120s) ensure stale data expires quickly after deployments.
  */
 
 import type { Table as TableType } from 'drizzle-orm';
 import { getTableName, is, Table } from 'drizzle-orm';
 import { Cache } from 'drizzle-orm/cache/core';
 import type { CacheConfig } from 'drizzle-orm/cache/core/types';
-
-/**
- * Unique deployment ID generated at module load time.
- * Each worker deployment gets a new ID, isolating cache namespaces.
- * Old cache entries become orphaned but expire naturally via TTL.
- */
-const DEPLOYMENT_ID = crypto.randomUUID().slice(0, 8);
 
 export type CloudflareKVCacheOptions = {
   kv: KVNamespace;
@@ -41,10 +34,9 @@ export class CloudflareKVCache extends Cache {
     this.kv = options.kv;
     this.defaultTtl = options.defaultTtl ?? 300;
     this.globalCache = options.global ?? false;
-    // Include deployment ID in prefix to isolate cache per deployment
-    // This prevents stale cache data from causing 500 errors after deployments
-    const basePrefix = options.keyPrefix ?? 'drizzle:';
-    this.keyPrefix = `${basePrefix}${DEPLOYMENT_ID}:`;
+    // No deployment isolation - relies on TTL expiration and explicit invalidation
+    // Short TTLs (30s-120s) ensure stale data expires quickly after deployments
+    this.keyPrefix = options.keyPrefix ?? 'drizzle:';
   }
 
   override strategy(): 'explicit' | 'all' {

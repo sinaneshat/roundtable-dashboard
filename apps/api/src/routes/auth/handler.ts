@@ -1,9 +1,11 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 
+import { invalidateAllUserCaches } from '@/common/cache-utils';
 import { createHandler, Responses } from '@/core';
+import { getDbAsync } from '@/db';
 import type { ApiEnv } from '@/types';
 
-import type { secureMeRoute } from './route';
+import type { clearOwnCacheRoute, secureMeRoute } from './route';
 
 /**
  * Handler for secure /auth/me endpoint
@@ -29,5 +31,25 @@ export const secureMeHandler: RouteHandler<typeof secureMeRoute, ApiEnv> = creat
       createdAt: user.createdAt,
       updatedAt: user.updatedAt,
     });
+  },
+);
+
+/**
+ * Handler for /auth/clear-cache endpoint
+ * Clears all server-side KV caches for current user
+ * Use before logout to ensure clean state for next login
+ */
+export const clearOwnCacheHandler: RouteHandler<typeof clearOwnCacheRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    operationName: 'clearOwnCache',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const db = await getDbAsync();
+
+    await invalidateAllUserCaches(db, user.id);
+
+    return Responses.ok(c, { cleared: true });
   },
 );
