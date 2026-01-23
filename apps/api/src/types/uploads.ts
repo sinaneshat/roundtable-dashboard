@@ -315,19 +315,17 @@ export type LoadMessageAttachmentsResult = z.infer<typeof LoadMessageAttachments
 // ============================================================================
 
 /**
- * Options for generating signed URLs
+ * Options for generating signed URLs (owner-only access)
  */
 export const SignedUrlOptionsSchema = z.object({
   /** Upload ID to sign */
   uploadId: z.string(),
-  /** User ID who is being granted access */
+  /** User ID who owns the file and is being granted access */
   userId: z.string(),
   /** Optional thread ID for thread-scoped access */
   threadId: z.string().optional(),
-  /** Expiration time in milliseconds (default: 1 hour) */
+  /** Expiration time in milliseconds (default: 15 minutes) */
   expirationMs: z.number().optional(),
-  /** Whether this is for a public thread */
-  isPublic: z.boolean().optional(),
 });
 
 export type SignedUrlOptions = z.infer<typeof SignedUrlOptionsSchema>;
@@ -351,14 +349,13 @@ export const SignedUrlParamsSchema = z.object({
 export type SignedUrlParams = z.infer<typeof SignedUrlParamsSchema>;
 
 /**
- * Valid signature result
+ * Valid signature result (owner-only, no public access)
  */
 export const ValidSignatureResultSchema = z.object({
   valid: z.literal(true),
   uploadId: z.string(),
   userId: z.string(),
   threadId: z.string().optional(),
-  isPublic: z.boolean(),
 });
 
 /**
@@ -508,11 +505,11 @@ const IS_LOCAL_DEV = process.env.WEBAPP_ENV === WebAppEnvs.LOCAL || process.env.
  */
 export const MAX_BASE64_FILE_SIZE = IS_LOCAL_DEV ? 25 * 1024 * 1024 : 10 * 1024 * 1024;
 
-/** Default URL expiration time (1 hour) */
-export const DEFAULT_URL_EXPIRATION_MS = 60 * 60 * 1000;
+/** Default URL expiration time (15 minutes) - owner-only access */
+export const DEFAULT_URL_EXPIRATION_MS = 15 * 60 * 1000;
 
-/** Maximum allowed expiration (24 hours) */
-export const MAX_URL_EXPIRATION_MS = 24 * 60 * 60 * 1000;
+/** Maximum allowed expiration (1 hour) */
+export const MAX_URL_EXPIRATION_MS = 60 * 60 * 1000;
 
 /** Minimum allowed expiration (5 minutes) */
 export const MIN_URL_EXPIRATION_MS = 5 * 60 * 1000;
@@ -520,5 +517,5 @@ export const MIN_URL_EXPIRATION_MS = 5 * 60 * 1000;
 /** Cleanup delay before orphaned uploads are deleted (15 minutes) */
 export const UPLOAD_CLEANUP_DELAY_MS = 15 * 60 * 1000;
 
-/** Public URL expiration for AI provider access (4 hours for long conversations) */
-export const AI_PUBLIC_URL_EXPIRATION_MS = 4 * 60 * 60 * 1000;
+/** URL expiration for AI provider access (30 minutes) - owner-bound */
+export const AI_URL_EXPIRATION_MS = 30 * 60 * 1000;

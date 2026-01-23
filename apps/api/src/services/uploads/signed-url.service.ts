@@ -14,7 +14,7 @@ import type { ErrorContext } from '@/core';
 import type { ApiEnv } from '@/types';
 import type { SignedUrlOptions, ValidateSignatureResult } from '@/types/uploads';
 import {
-  AI_PUBLIC_URL_EXPIRATION_MS,
+  AI_URL_EXPIRATION_MS,
   DEFAULT_URL_EXPIRATION_MS,
   MAX_URL_EXPIRATION_MS,
   MIN_URL_EXPIRATION_MS,
@@ -63,6 +63,32 @@ async function generateSignature(
   return generateSignatureWithKey(key, uploadId, expiration, userId, threadId);
 }
 
+/**
+ * Constant-time string comparison to prevent timing attacks.
+ * Compares all bytes regardless of where mismatch occurs.
+ * SECURITY: Attacker cannot brute-force signatures byte-by-byte via timing analysis.
+ */
+function timingSafeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) {
+    // Always do the comparison work to prevent length-based timing attacks
+    // Compare 'a' against itself but return false
+    let mismatch = 1; // Force mismatch since lengths differ
+    for (let i = 0; i < a.length; i++) {
+      mismatch |= a.charCodeAt(i) ^ a.charCodeAt(i);
+    }
+    return mismatch === 0;
+  }
+
+  // XOR each character code and accumulate differences
+  // This ensures all bytes are checked regardless of early mismatches
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+
+  return mismatch === 0;
+}
+
 async function verifySignature(
   secret: string,
   uploadId: string,
@@ -72,13 +98,17 @@ async function verifySignature(
   providedSignature: string,
 ): Promise<boolean> {
   const expected = await generateSignature(secret, uploadId, expiration, userId, threadId);
-  return expected === providedSignature;
+  return timingSafeEqual(expected, providedSignature);
 }
 
 // ============================================================================
 // SIGNED URL GENERATION
 // ============================================================================
 
+/**
+ * Generate a signed download URL for owner-only access.
+ * No public access - all downloads require valid userId matching upload owner.
+ */
 export async function generateSignedDownloadUrl(
   c: Context<ApiEnv>,
   options: SignedUrlOptions,
@@ -88,13 +118,10 @@ export async function generateSignedDownloadUrl(
     userId,
     threadId,
     expirationMs = DEFAULT_URL_EXPIRATION_MS,
-    isPublic = false,
   } = options;
 
   const clampedExpiration = Math.min(Math.max(expirationMs, MIN_URL_EXPIRATION_MS), MAX_URL_EXPIRATION_MS);
   const expiration = Date.now() + clampedExpiration;
-
-  const effectiveUserId = isPublic ? 'public' : userId;
 
   const secret = c.env.BETTER_AUTH_SECRET;
   if (!secret) {
@@ -105,13 +132,13 @@ export async function generateSignedDownloadUrl(
     throw createError.internal('BETTER_AUTH_SECRET not configured', errorContext);
   }
 
-  const signature = await generateSignature(secret, uploadId, expiration, effectiveUserId, threadId);
+  const signature = await generateSignature(secret, uploadId, expiration, userId, threadId);
 
   const baseUrl = new URL(c.req.url).origin;
   const url = new URL(`${baseUrl}/api/v1/uploads/${encodeURIComponent(uploadId)}/download`);
 
   url.searchParams.set('exp', expiration.toString());
-  url.searchParams.set('uid', effectiveUserId);
+  url.searchParams.set('uid', userId);
   if (threadId) {
     url.searchParams.set('tid', threadId);
   }
@@ -151,16 +178,18 @@ export type GenerateAiPublicUrlResult
     | { success: false; error: string };
 
 /**
- * Generate a publicly accessible signed URL for AI providers to fetch files.
+ * Generate an owner-bound signed URL for AI providers to fetch files.
  *
  * This is used for large files (>4MB) that exceed base64 memory limits.
  * AI providers (OpenAI, Anthropic, Google, OpenRouter) fetch from this URL directly.
+ *
+ * Security: URLs are owner-bound (userId required), 30-minute expiration.
  *
  * IMPORTANT: Only works when baseUrl is publicly accessible (preview/production).
  * Returns error for localhost URLs since AI providers cannot access them.
  *
  * @param options - URL generation options
- * @returns Signed public URL or error
+ * @returns Signed URL or error
  */
 export async function generateAiPublicUrl(
   options: GenerateAiPublicUrlOptions,
@@ -183,7 +212,7 @@ export async function generateAiPublicUrl(
     };
   }
 
-  const expiration = Date.now() + AI_PUBLIC_URL_EXPIRATION_MS;
+  const expiration = Date.now() + AI_URL_EXPIRATION_MS;
 
   const signature = await generateSignature(secret, uploadId, expiration, userId, threadId);
 
@@ -203,8 +232,8 @@ export async function generateAiPublicUrl(
 }
 
 /**
- * Generate public URLs for multiple files (batch operation).
- * Uses single key import for efficiency.
+ * Generate owner-bound URLs for multiple files (batch operation).
+ * Uses single key import for efficiency. 30-minute expiration.
  */
 export async function generateAiPublicUrlBatch(
   baseOptions: Omit<GenerateAiPublicUrlOptions, 'uploadId'>,
@@ -243,7 +272,7 @@ export async function generateAiPublicUrlBatch(
 
   const key = await importSigningKey(secret);
   const now = Date.now();
-  const expiration = now + AI_PUBLIC_URL_EXPIRATION_MS;
+  const expiration = now + AI_URL_EXPIRATION_MS;
 
   await Promise.all(
     uploadIds.map(async (uploadId) => {
@@ -277,9 +306,12 @@ export type BatchSignOptions = {
   userId: string;
   threadId?: string;
   expirationMs?: number;
-  isPublic?: boolean;
 };
 
+/**
+ * Generate batch signed paths for owner-only access.
+ * No public access - all downloads require valid userId matching upload owner.
+ */
 export async function generateBatchSignedPaths(
   c: Context<ApiEnv>,
   items: BatchSignOptions[],
@@ -307,18 +339,16 @@ export async function generateBatchSignedPaths(
         userId,
         threadId,
         expirationMs = DEFAULT_URL_EXPIRATION_MS,
-        isPublic = false,
       } = item;
 
       const clampedExpiration = Math.min(Math.max(expirationMs, MIN_URL_EXPIRATION_MS), MAX_URL_EXPIRATION_MS);
       const expiration = now + clampedExpiration;
-      const effectiveUserId = isPublic ? 'public' : userId;
 
-      const signature = await generateSignatureWithKey(key, uploadId, expiration, effectiveUserId, threadId);
+      const signature = await generateSignatureWithKey(key, uploadId, expiration, userId, threadId);
 
       const params = new URLSearchParams();
       params.set('exp', expiration.toString());
-      params.set('uid', effectiveUserId);
+      params.set('uid', userId);
       if (threadId)
         params.set('tid', threadId);
       params.set('sig', signature);
@@ -334,6 +364,10 @@ export async function generateBatchSignedPaths(
 // SIGNATURE VALIDATION
 // ============================================================================
 
+/**
+ * Validate signed URL parameters.
+ * Security: Rejects 'public' uid - all access is owner-only.
+ */
 export async function validateSignedUrl(
   c: Context<ApiEnv>,
   uploadId: string,
@@ -350,6 +384,11 @@ export async function validateSignedUrl(
 
   if (!exp || !uid || !sig) {
     return { valid: false, error: 'Missing signature parameters' };
+  }
+
+  // Security: Reject public access - all downloads are owner-only
+  if (uid === 'public') {
+    return { valid: false, error: 'Public access is not allowed' };
   }
 
   const expiration = Number.parseInt(exp, 10);
@@ -371,7 +410,6 @@ export async function validateSignedUrl(
     uploadId,
     userId: uid,
     threadId: tid,
-    isPublic: uid === 'public',
   };
 }
 

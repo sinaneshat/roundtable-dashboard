@@ -43,7 +43,6 @@ import {
   getFileStream,
   isCleanupSchedulerAvailable,
   isLocalDevelopment,
-  markTicketUsed,
   putFile,
   scheduleUploadCleanup,
   shouldExtractPdfText,
@@ -255,11 +254,10 @@ export const getDownloadUrlHandler: RouteHandler<typeof getDownloadUrlRoute, Api
       });
     }
 
-    // Generate signed download URL (1 hour expiration)
+    // Generate signed download URL (15-minute default expiration)
     const signedUrl = await generateSignedDownloadUrl(c, {
       uploadId: id,
       userId: user.id,
-      expirationMs: 60 * 60 * 1000, // 1 hour
     });
 
     return Responses.ok(c, {
@@ -348,7 +346,7 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
     const { token } = c.validated.query;
     const db = await getDbAsync();
 
-    // Validate ticket
+    // Validate ticket (atomically marks as used to prevent race conditions)
     const validation = await validateUploadTicket(c, token, user.id);
     if (!validation.valid) {
       throw createError.unauthorized(validation.error, {
@@ -357,6 +355,20 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
     }
 
     const { ticket } = validation;
+
+    // Pre-check Content-Length to reject oversized files before downloading
+    // DoS mitigation: avoids wasting bandwidth/worker time on files that will fail
+    const contentLength = c.req.header('content-length');
+    if (contentLength) {
+      const size = Number.parseInt(contentLength, 10);
+      if (!Number.isNaN(size) && size > ticket.maxFileSize) {
+        await deleteTicket(c, ticket.ticketId);
+        throw createError.badRequest(
+          `Content-Length ${size} exceeds ticket limit ${ticket.maxFileSize}`,
+          { errorType: 'validation', field: 'content-length' },
+        );
+      }
+    }
 
     // Parse multipart form data
     const body = await c.req.parseBody({ all: true });
@@ -403,8 +415,8 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
       );
     }
 
-    // Mark ticket as used immediately to prevent race conditions
-    await markTicketUsed(c, ticket.ticketId);
+    // NOTE: Ticket already marked as used atomically during validateUploadTicket()
+    // No separate markTicketUsed() call needed - prevents race condition window
 
     // Generate IDs and storage key
     const uploadId = ulid();
@@ -649,11 +661,12 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
         });
       }
 
-      const isPublicAccess = validation.isPublic;
-
-      // Get upload record - only need r2Key, filename, mimeType for download
+      // Get upload record WITH OWNERSHIP VERIFICATION - signed URL userId must match upload owner
       const uploadRecord = await db.query.upload.findFirst({
-        where: eq(tables.upload.id, id),
+        where: and(
+          eq(tables.upload.id, id),
+          eq(tables.upload.userId, validation.userId),
+        ),
         columns: {
           r2Key: true,
           filename: true,
@@ -662,7 +675,7 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
       });
 
       if (!uploadRecord) {
-        throw createError.notFound(`Upload not found: ${id}`, {
+        throw createError.notFound(`Upload not found or access denied: ${id}`, {
           errorType: 'resource',
           resource: 'upload',
           resourceId: id,
@@ -682,12 +695,18 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
         });
       }
 
-      // Stricter cache for public access
-      const cacheControl = isPublicAccess
-        ? 'private, no-store, max-age=0'
-        : 'private, max-age=3600';
+      // Security audit: file download via signed URL
+      console.error(JSON.stringify({
+        audit: 'file_download',
+        uploadId: id,
+        userId: validation.userId,
+        ip: c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for'),
+        userAgent: c.req.header('user-agent'),
+        method: 'signed_url',
+        timestamp: Date.now(),
+      }));
 
-      return buildStreamingResponse(result, uploadRecord, cacheControl);
+      return buildStreamingResponse(result, uploadRecord, 'private, max-age=3600');
     }
 
     // SECURITY CHECK 2: Session auth + ownership
@@ -733,6 +752,17 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
         resourceId: id,
       });
     }
+
+    // Security audit: file download via session auth
+    console.error(JSON.stringify({
+      audit: 'file_download',
+      uploadId: id,
+      userId: user.id,
+      ip: c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for'),
+      userAgent: c.req.header('user-agent'),
+      method: 'session_auth',
+      timestamp: Date.now(),
+    }));
 
     return buildStreamingResponse(result, uploadRecord, 'private, max-age=3600');
   },
