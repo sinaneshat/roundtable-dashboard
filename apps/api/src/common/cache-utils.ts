@@ -74,3 +74,32 @@ export async function invalidateSidebarCache(
     await db.$cache.invalidate({ tags: [ThreadCacheTags.sidebar(userId)] });
   }
 }
+
+/**
+ * Invalidate ALL user-specific caches for impersonation or session switch
+ * Clears: threads, credits, subscriptions, sidebar, user tier/usage
+ */
+export async function invalidateAllUserCaches(
+  db: Awaited<ReturnType<typeof getDbAsync>>,
+  userId: string,
+): Promise<void> {
+  if (!db.$cache?.invalidate)
+    return;
+
+  const { UserCacheTags, SubscriptionCacheTags, CustomerCacheTags } = await import('@/db/cache/cache-tags');
+
+  const tags = [
+    // Thread-related caches
+    ...ThreadCacheTags.all(userId),
+    // Credit balance and subscription status
+    ...CreditCacheTags.all(userId),
+    // User tier and usage
+    ...UserCacheTags.all(userId),
+    // Subscription data
+    ...SubscriptionCacheTags.all(userId),
+    // Customer data
+    ...CustomerCacheTags.all(userId),
+  ];
+
+  await db.$cache.invalidate({ tags });
+}

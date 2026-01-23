@@ -3,7 +3,7 @@ import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createApiResponseSchema, createProtectedRouteResponses } from '@/core';
 
-import { AdminSearchUserPayloadSchema, AdminSearchUserQuerySchema } from './schema';
+import { AdminClearUserCacheBodySchema, AdminClearUserCachePayloadSchema, AdminSearchUserPayloadSchema, AdminSearchUserQuerySchema } from './schema';
 
 /**
  * Admin: Search users by name or email
@@ -24,6 +24,38 @@ export const adminSearchUserRoute = createRoute({
       content: {
         'application/json': {
           schema: createApiResponseSchema(AdminSearchUserPayloadSchema),
+        },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+/**
+ * Admin: Clear all caches for a user
+ * Used during impersonation to ensure fresh data
+ */
+export const adminClearUserCacheRoute = createRoute({
+  method: 'post',
+  path: '/admin/users/clear-cache',
+  tags: ['admin'],
+  summary: 'Clear all server caches for a user (admin only)',
+  description: 'Invalidates all server-side KV caches for a user. Used during impersonation to ensure fresh data.',
+  request: {
+    body: {
+      content: {
+        'application/json': {
+          schema: AdminClearUserCacheBodySchema,
+        },
+      },
+    },
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Cache cleared successfully',
+      content: {
+        'application/json': {
+          schema: createApiResponseSchema(AdminClearUserCachePayloadSchema),
         },
       },
     },

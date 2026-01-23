@@ -29,8 +29,8 @@ import type { ApiEnv } from '@/types';
 import { createOpenApiApp } from './core/app';
 import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, performanceTracking, RateLimiterFactory, requestLogger } from './middleware';
 // Admin routes
-import { adminSearchUserHandler } from './routes/admin/handler';
-import { adminSearchUserRoute } from './routes/admin/route';
+import { adminClearUserCacheHandler, adminSearchUserHandler } from './routes/admin/handler';
+import { adminClearUserCacheRoute, adminSearchUserRoute } from './routes/admin/route';
 // API Keys routes
 import {
   createApiKeyHandler,
@@ -506,6 +506,9 @@ app.notFound(notFound);
 app.use('/auth/me', csrfProtection);
 app.use('/auth/api-keys', csrfProtection);
 
+// Admin routes CSRF protection
+app.use('/admin/users/clear-cache', csrfProtection);
+
 app.use('/billing/checkout', csrfProtection);
 app.use('/billing/portal', csrfProtection);
 app.use('/billing/sync-after-checkout', csrfProtection);
@@ -635,7 +638,8 @@ const appRoutes = app
   .openapi(getCreditBalanceRoute, getCreditBalanceHandler)
   .openapi(getCreditTransactionsRoute, getCreditTransactionsHandler)
   .openapi(estimateCreditCostRoute, estimateCreditCostHandler)
-  .openapi(adminSearchUserRoute, adminSearchUserHandler);
+  .openapi(adminSearchUserRoute, adminSearchUserHandler)
+  .openapi(adminClearUserCacheRoute, adminClearUserCacheHandler);
 
 let creditsChain = appRoutes;
 if (IS_DEV_ENVIRONMENT) {
