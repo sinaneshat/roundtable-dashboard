@@ -465,13 +465,14 @@ export const abortMultipartUploadRoute = createRoute({
 /**
  * Download file
  * Serves the file content from R2/local storage
+ * SECURITY: Requires session auth - users can only access their own files
  */
 export const downloadUploadRoute = createRoute({
   method: 'get',
   path: '/uploads/:id/download',
   tags: ['Uploads'],
   summary: 'Download file',
-  description: 'Download the file content. Returns the file with proper content-type header.',
+  description: 'Download the file content. Requires authentication - users can only access their own uploads.',
   request: {
     params: IdParamSchema,
   },
@@ -488,6 +489,7 @@ export const downloadUploadRoute = createRoute({
       description: 'File content',
     },
     ...StandardApiResponses.UNAUTHORIZED,
+    ...StandardApiResponses.FORBIDDEN,
     ...StandardApiResponses.NOT_FOUND,
     ...StandardApiResponses.INTERNAL_SERVER_ERROR,
   },

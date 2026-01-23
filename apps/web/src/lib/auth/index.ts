@@ -10,9 +10,6 @@
 // Client exports
 export { authClient } from './client';
 
-// Session cache exports
-export { clearCachedSession } from './session-cache';
-
 // Centralized types - single source of truth
 export type {
   Session,
@@ -21,4 +18,4 @@ export type {
 } from './types';
 
 // Utility exports
-export { clearAllAuthCaches, clearServiceWorkerCache, extractSessionToken } from './utils';
+export { clearServiceWorkerCache, extractSessionToken, invalidateUserQueries } from './utils';

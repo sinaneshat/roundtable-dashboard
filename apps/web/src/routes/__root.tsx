@@ -17,7 +17,6 @@ import { Icons } from '@/components/icons';
 import { StructuredData } from '@/components/seo';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { getCachedSession, setCachedSession } from '@/lib/auth/session-cache';
 import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
 import { TurnstileProvider } from '@/lib/turnstile';
 import { IdleLazyProvider } from '@/lib/utils/lazy-provider';
@@ -38,7 +37,7 @@ const twitterHandle = BRAND.social.twitterHandle;
 
 export const Route = createRootRouteWithContext<RouterContext>()({
   // ✅ SSR SESSION STRATEGY: Fetch session on both server and client
-  // Server uses cookies via cookieMiddleware, client uses cached session
+  // Server uses cookies via cookieMiddleware, client lets TanStack Query handle caching
   // This enables true SSR with user data rendered on first paint
   beforeLoad: async () => {
     // Server-side: fetch session using cookies (SSR-safe)
@@ -52,16 +51,10 @@ export const Route = createRootRouteWithContext<RouterContext>()({
       }
     }
 
-    // Client-side: reuse cached session to avoid unnecessary API call
-    const cached = getCachedSession();
-    if (cached !== null) {
-      return { session: cached };
-    }
-
-    // First client load: fetch session from API
+    // Client-side: protected routes will handle session via TanStack Query
+    // Don't cache session in memory - let normal query caching handle it
     try {
       const session = await getSession();
-      setCachedSession(session);
       return { session };
     } catch (error) {
       console.error('[ROOT] Client session error:', error);

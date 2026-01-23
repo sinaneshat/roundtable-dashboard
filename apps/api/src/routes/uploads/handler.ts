@@ -14,8 +14,9 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import {
   ALLOWED_MIME_TYPES,
   ChatAttachmentStatuses,
-  MAX_SINGLE_UPLOAD_SIZE,
+  getMaxFileSizeForMimeType,
   MIN_MULTIPART_PART_SIZE,
+  MULTIPART_OVERHEAD_TOLERANCE,
 } from '@roundtable/shared/enums';
 import { and, eq } from 'drizzle-orm';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
@@ -43,7 +44,6 @@ import {
   getFileStream,
   isCleanupSchedulerAvailable,
   isLocalDevelopment,
-  markTicketUsed,
   putFile,
   scheduleUploadCleanup,
   shouldExtractPdfText,
@@ -255,11 +255,10 @@ export const getDownloadUrlHandler: RouteHandler<typeof getDownloadUrlRoute, Api
       });
     }
 
-    // Generate signed download URL (1 hour expiration)
+    // Generate signed download URL (15-minute default expiration)
     const signedUrl = await generateSignedDownloadUrl(c, {
       uploadId: id,
       userId: user.id,
-      expirationMs: 60 * 60 * 1000, // 1 hour
     });
 
     return Responses.ok(c, {
@@ -299,10 +298,13 @@ export const requestUploadTicketHandler: RouteHandler<typeof requestUploadTicket
       );
     }
 
-    // Validate file size
-    if (body.fileSize > MAX_SINGLE_UPLOAD_SIZE) {
+    // Get the max file size limit for this MIME type (enum-based limits)
+    const maxFileSizeForType = getMaxFileSizeForMimeType(body.mimeType);
+
+    // Validate file size against type-specific limit
+    if (body.fileSize > maxFileSizeForType) {
       throw createError.badRequest(
-        `File too large (max ${MAX_SINGLE_UPLOAD_SIZE / 1024 / 1024}MB). Use multipart upload for larger files.`,
+        `File too large (max ${maxFileSizeForType / 1024 / 1024}MB for this file type). Use multipart upload for larger files.`,
         {
           errorType: 'validation',
           field: 'fileSize',
@@ -310,7 +312,8 @@ export const requestUploadTicketHandler: RouteHandler<typeof requestUploadTicket
       );
     }
 
-    // Create upload ticket
+    // Create upload ticket with the declared file size as the limit
+    // The ticket enforces the client's declared size, not the type limit
     const { ticketId, token, expiresAt } = await createUploadTicket(c, {
       userId: user.id,
       filename: body.filename,
@@ -348,7 +351,7 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
     const { token } = c.validated.query;
     const db = await getDbAsync();
 
-    // Validate ticket
+    // Validate ticket (atomically marks as used to prevent race conditions)
     const validation = await validateUploadTicket(c, token, user.id);
     if (!validation.valid) {
       throw createError.unauthorized(validation.error, {
@@ -357,6 +360,22 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
     }
 
     const { ticket } = validation;
+
+    // Pre-check Content-Length to reject oversized files before downloading
+    // DoS mitigation: avoids wasting bandwidth/worker time on files that will fail
+    // Note: Content-Length includes multipart boundaries/headers, so add tolerance
+    const contentLength = c.req.header('content-length');
+    if (contentLength) {
+      const size = Number.parseInt(contentLength, 10);
+      const effectiveLimit = ticket.maxFileSize + MULTIPART_OVERHEAD_TOLERANCE;
+      if (!Number.isNaN(size) && size > effectiveLimit) {
+        await deleteTicket(c, ticket.ticketId);
+        throw createError.badRequest(
+          `Content-Length ${size} exceeds limit ${effectiveLimit}`,
+          { errorType: 'validation', field: 'content-length' },
+        );
+      }
+    }
 
     // Parse multipart form data
     const body = await c.req.parseBody({ all: true });
@@ -403,8 +422,8 @@ export const uploadWithTicketHandler: RouteHandler<typeof uploadWithTicketRoute,
       );
     }
 
-    // Mark ticket as used immediately to prevent race conditions
-    await markTicketUsed(c, ticket.ticketId);
+    // NOTE: Ticket already marked as used atomically during validateUploadTicket()
+    // No separate markTicketUsed() call needed - prevents race condition window
 
     // Generate IDs and storage key
     const uploadId = ulid();
@@ -573,18 +592,24 @@ export const updateUploadHandler: RouteHandler<typeof updateUploadRoute, ApiEnv>
  * - Supports If-None-Match conditional requests (304 Not Modified)
  *
  * Security model:
- * 1. If signed URL params present: Validate signature (supports shared access)
- * 2. If no signature: Require session auth + ownership check
+ * 1. ALWAYS require session authentication (no anonymous access)
+ * 2. If signed URL params present: Validate signature + session user must match
+ * 3. If no signature: Session auth + ownership check
+ *
+ * NOTE: This breaks AI provider access to large files (>4MB) since they cannot
+ * authenticate. Large files will fall back to base64 or text extraction.
  *
  * @see https://developers.cloudflare.com/r2/api/workers/workers-api-usage
  */
 export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, ApiEnv> = createHandler(
   {
-    auth: 'session-optional',
+    auth: 'session', // SECURITY: Always require session - no anonymous access
     validateParams: IdParamSchema,
     operationName: 'downloadFile',
   },
   async (c) => {
+    const { user } = c.auth(); // Guaranteed by auth: 'session'
+
     // Dynamic import to avoid linter removing "unused" static import
     const signedUrlService = await import('@/services/uploads');
 
@@ -637,7 +662,8 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
       return new Response(result.body, { headers });
     };
 
-    // SECURITY CHECK 1: Signed URL validation (preferred method)
+    // SECURITY: Validate signed URL if present (for expiration/integrity)
+    // But ALWAYS require session user to match - no anonymous access ever
     if (signedUrlService.hasSignatureParams(c)) {
       const validation = await signedUrlService.validateSignedUrl(c, id);
 
@@ -649,58 +675,17 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
         });
       }
 
-      const isPublicAccess = validation.isPublic;
-
-      // Get upload record - only need r2Key, filename, mimeType for download
-      const uploadRecord = await db.query.upload.findFirst({
-        where: eq(tables.upload.id, id),
-        columns: {
-          r2Key: true,
-          filename: true,
-          mimeType: true,
-        },
-      });
-
-      if (!uploadRecord) {
-        throw createError.notFound(`Upload not found: ${id}`, {
-          errorType: 'resource',
+      // SECURITY: Session user MUST match signed URL user - no sharing allowed
+      if (user.id !== validation.userId) {
+        throw createError.unauthorized('Access denied - you can only access your own files', {
+          errorType: 'authorization',
           resource: 'upload',
           resourceId: id,
         });
       }
-
-      // Use streaming with conditional request support (official R2 pattern)
-      const result = await getFileStream(c.env.UPLOADS_R2_BUCKET, uploadRecord.r2Key, {
-        onlyIf: requestHeaders,
-      });
-
-      if (!result.found) {
-        throw createError.notFound('File not found in storage', {
-          errorType: 'resource',
-          resource: 'file',
-          resourceId: id,
-        });
-      }
-
-      // Stricter cache for public access
-      const cacheControl = isPublicAccess
-        ? 'private, no-store, max-age=0'
-        : 'private, max-age=3600';
-
-      return buildStreamingResponse(result, uploadRecord, cacheControl);
     }
 
-    // SECURITY CHECK 2: Session auth + ownership
-    const auth = c.auth();
-    if (!auth?.user) {
-      throw createError.unauthenticated('Authentication required for unsigned download URLs', {
-        errorType: 'authorization',
-      });
-    }
-
-    const { user } = auth;
-
-    // Get upload record WITH ownership check - only need r2Key, filename, mimeType
+    // SECURITY: Session user must own the file - private access only
     const uploadRecord = await db.query.upload.findFirst({
       where: and(
         eq(tables.upload.id, id),
@@ -734,7 +719,18 @@ export const downloadUploadHandler: RouteHandler<typeof downloadUploadRoute, Api
       });
     }
 
-    return buildStreamingResponse(result, uploadRecord, 'private, max-age=3600');
+    // Security audit: file download
+    console.error(JSON.stringify({
+      audit: 'file_download',
+      uploadId: id,
+      userId: user.id,
+      ip: c.req.header('cf-connecting-ip') || c.req.header('x-forwarded-for'),
+      userAgent: c.req.header('user-agent'),
+      method: 'session_auth',
+      timestamp: Date.now(),
+    }));
+
+    return buildStreamingResponse(result, uploadRecord, 'private, no-store');
   },
 );
 
@@ -831,7 +827,7 @@ export const createMultipartUploadHandler: RouteHandler<typeof createMultipartUp
     // Check if R2 is available (multipart uploads require R2)
     if (isLocalDevelopment(c.env.UPLOADS_R2_BUCKET)) {
       throw createError.badRequest(
-        'Multipart uploads are not available in local development. Use single-file upload (< 100MB) or run with `pnpm preview` to test with R2.',
+        'Multipart uploads are not available in local development. Use single-file upload (< 100MB) or run with `bun run preview` to test with R2.',
         { errorType: 'configuration' },
       );
     }

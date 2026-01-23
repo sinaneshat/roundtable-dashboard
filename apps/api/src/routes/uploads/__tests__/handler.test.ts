@@ -3,6 +3,12 @@
  *
  * Unit tests for file upload functionality.
  * Tests cover size limits, MIME type validation, and upload flow.
+ *
+ * Size limits match ChatGPT (2026):
+ * - General files: 512MB
+ * - Images: 20MB
+ * - PDFs: 512MB
+ * - Spreadsheets: 50MB
  */
 
 import {
@@ -10,6 +16,7 @@ import {
   MAX_IMAGE_FILE_SIZE,
   MAX_PDF_FILE_SIZE,
   MAX_SINGLE_UPLOAD_SIZE,
+  MAX_SPREADSHEET_FILE_SIZE,
   MIN_MULTIPART_PART_SIZE,
 } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
@@ -19,25 +26,29 @@ import { describe, expect, it } from 'vitest';
 // ============================================================================
 
 describe('upload Size Limits', () => {
-  it('should have MAX_SINGLE_UPLOAD_SIZE set to 100MB', () => {
-    expect(MAX_SINGLE_UPLOAD_SIZE).toBe(100 * 1024 * 1024);
+  it('should have MAX_SINGLE_UPLOAD_SIZE set to 512MB (matches ChatGPT)', () => {
+    expect(MAX_SINGLE_UPLOAD_SIZE).toBe(512 * 1024 * 1024);
   });
 
-  it('should have MAX_PDF_FILE_SIZE set to 100MB', () => {
-    expect(MAX_PDF_FILE_SIZE).toBe(100 * 1024 * 1024);
+  it('should have MAX_PDF_FILE_SIZE set to 512MB (matches ChatGPT)', () => {
+    expect(MAX_PDF_FILE_SIZE).toBe(512 * 1024 * 1024);
   });
 
-  it('should have MAX_IMAGE_FILE_SIZE set to 20MB', () => {
+  it('should have MAX_IMAGE_FILE_SIZE set to 20MB (matches ChatGPT)', () => {
     expect(MAX_IMAGE_FILE_SIZE).toBe(20 * 1024 * 1024);
+  });
+
+  it('should have MAX_SPREADSHEET_FILE_SIZE set to 50MB (matches ChatGPT)', () => {
+    expect(MAX_SPREADSHEET_FILE_SIZE).toBe(50 * 1024 * 1024);
   });
 
   it('should have MIN_MULTIPART_PART_SIZE set to 5MB', () => {
     expect(MIN_MULTIPART_PART_SIZE).toBe(5 * 1024 * 1024);
   });
 
-  it('should allow PDFs up to 100MB (larger than typical docs)', () => {
-    // 6MB PDF should be well under the limit (this was the bug case)
-    const testPdfSize = 6 * 1024 * 1024; // 6MB
+  it('should allow PDFs up to 512MB (larger than typical docs)', () => {
+    // 100MB PDF should be well under the limit
+    const testPdfSize = 100 * 1024 * 1024; // 100MB
     expect(testPdfSize).toBeLessThan(MAX_PDF_FILE_SIZE);
     expect(testPdfSize).toBeLessThan(MAX_SINGLE_UPLOAD_SIZE);
   });
@@ -187,20 +198,24 @@ describe('upload Size Validation Scenarios', () => {
       expect(isFileSizeValid(1 * 1024 * 1024)).toBe(true);
     });
 
-    it('should accept 6MB PDF (reported bug case)', () => {
+    it('should accept 6MB PDF', () => {
       expect(isFileSizeValid(6 * 1024 * 1024)).toBe(true);
     });
 
-    it('should accept 50MB PDF', () => {
-      expect(isFileSizeValid(50 * 1024 * 1024)).toBe(true);
-    });
-
-    it('should accept 100MB PDF (exactly at limit)', () => {
+    it('should accept 100MB PDF', () => {
       expect(isFileSizeValid(100 * 1024 * 1024)).toBe(true);
     });
 
-    it('should reject 101MB PDF (over limit)', () => {
-      expect(isFileSizeValid(101 * 1024 * 1024)).toBe(false);
+    it('should accept 300MB PDF', () => {
+      expect(isFileSizeValid(300 * 1024 * 1024)).toBe(true);
+    });
+
+    it('should accept 512MB PDF (exactly at limit)', () => {
+      expect(isFileSizeValid(512 * 1024 * 1024)).toBe(true);
+    });
+
+    it('should reject 600MB PDF (over limit)', () => {
+      expect(isFileSizeValid(600 * 1024 * 1024)).toBe(false);
     });
   });
 
@@ -215,6 +230,16 @@ describe('upload Size Validation Scenarios', () => {
 
     it('should accept 20MB image', () => {
       expect(isFileSizeValid(20 * 1024 * 1024)).toBe(true);
+    });
+  });
+
+  describe('spreadsheet uploads', () => {
+    it('should accept 30MB spreadsheet', () => {
+      expect(isFileSizeValid(30 * 1024 * 1024)).toBe(true);
+    });
+
+    it('should accept 50MB spreadsheet (at type limit)', () => {
+      expect(isFileSizeValid(50 * 1024 * 1024)).toBe(true);
     });
   });
 });

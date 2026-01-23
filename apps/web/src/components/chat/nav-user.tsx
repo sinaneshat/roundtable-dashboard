@@ -18,13 +18,12 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
-  useAdminClearUserCacheMutation,
   useCancelSubscriptionMutation,
   useCreateCustomerPortalSessionMutation,
   useSubscriptionsQuery,
 } from '@/hooks';
 import { useBoolean } from '@/hooks/utils';
-import { clearAllAuthCaches, clearCachedSession, clearServiceWorkerCache } from '@/lib/auth';
+import { clearServiceWorkerCache, invalidateUserQueries } from '@/lib/auth';
 import { authClient, deleteUser, signOut, useSession } from '@/lib/auth/client';
 import type { Session, User } from '@/lib/auth/types';
 import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
@@ -67,7 +66,6 @@ export function NavUser({ initialSession }: NavUserProps) {
   const isStoppingImpersonation = useBoolean(false);
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
   const cancelSubscriptionMutation = useCancelSubscriptionMutation();
-  const clearCacheMutation = useAdminClearUserCacheMutation();
   const showDeleteAccountOption = getWebappEnv() !== WebAppEnvs.PROD;
 
   const user = clientSession?.user ?? initialSession?.user;
@@ -94,24 +92,17 @@ export function NavUser({ initialSession }: NavUserProps) {
     (sub: Subscription) => (sub.status === StripeSubscriptionStatuses.ACTIVE || sub.status === StripeSubscriptionStatuses.TRIALING) && !sub.cancelAtPeriodEnd,
   );
   const handleSignOut = async () => {
-    // Clear server-side caches FIRST (while still authenticated)
+    // Clear server-side caches while authenticated
     try {
       await clearOwnCacheService();
-    } catch {
-      // Ignore server cache clear errors - still proceed with sign out
-    }
-
-    // Clear client-side caches
-    clearCachedSession();
-    clearAllAuthCaches(queryClient);
+    } catch { /* ignore */ }
 
     // Sign out and redirect
     await signOut({
       fetchOptions: {
         onSuccess: () => {
-          // Clear service worker cache to prevent stale pages on next login
+          invalidateUserQueries(queryClient);
           clearServiceWorkerCache();
-          // Full page navigation to clear any remaining state
           window.location.href = '/auth/sign-in';
         },
       },
@@ -153,29 +144,18 @@ export function NavUser({ initialSession }: NavUserProps) {
   const handleDeleteAccount = async () => {
     isDeleting.onTrue();
     try {
-      // Clear server-side caches FIRST (while still authenticated)
       try {
         await clearOwnCacheService();
-      } catch {
-        // Ignore server cache clear errors - still proceed with delete
-      }
+      } catch { /* ignore */ }
 
       const appBaseUrl = getAppBaseUrl();
-      await deleteUser({
-        callbackURL: `${appBaseUrl}/auth/sign-in`,
-      });
+      await deleteUser({ callbackURL: `${appBaseUrl}/auth/sign-in` });
 
-      // Clear client-side caches
-      clearCachedSession();
-      clearAllAuthCaches(queryClient);
-
-      // Sign out and redirect
       await signOut({
         fetchOptions: {
           onSuccess: () => {
-            // Clear service worker cache to prevent stale pages on next login
+            invalidateUserQueries(queryClient);
             clearServiceWorkerCache();
-            // Full page navigation to clear any remaining state
             window.location.href = '/auth/sign-in';
           },
         },
@@ -188,30 +168,20 @@ export function NavUser({ initialSession }: NavUserProps) {
   };
 
   const handleStopImpersonating = async () => {
-    const adminUserId = clientSession?.session?.impersonatedBy;
-    if (!adminUserId)
+    if (!clientSession?.session?.impersonatedBy)
       return;
 
     isStoppingImpersonation.onTrue();
     const baseUrl = getAppBaseUrl();
 
-    // Better Auth handles session restoration - reads admin_session cookie and restores it
-    // First restore admin session, THEN clear cache (need admin perms for cache clear)
+    // Just restore session, then invalidate client queries
+    // No need to clear server cache - just invalidate client state
     authClient.admin.stopImpersonating({
       fetchOptions: {
         onSuccess: () => {
-          // Now we're back as admin - clear caches before redirect
-          clearCacheMutation.mutate(adminUserId, {
-            onSuccess: () => {
-              clearServiceWorkerCache();
-              window.location.href = `${baseUrl}/admin/impersonate`;
-            },
-            onError: () => {
-              // Cache clear failed but session restored - still redirect
-              clearServiceWorkerCache();
-              window.location.href = `${baseUrl}/admin/impersonate`;
-            },
-          });
+          invalidateUserQueries(queryClient);
+          clearServiceWorkerCache();
+          window.location.href = `${baseUrl}/admin/impersonate`;
         },
         onError: (ctx) => {
           showApiErrorToast('Failed to Stop Impersonation', ctx.error);

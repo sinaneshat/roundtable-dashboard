@@ -6,8 +6,11 @@
 
 import { BETTER_AUTH_SESSION_COOKIE_NAME, EMAIL_DOMAIN_CONFIG } from '@roundtable/shared';
 import { WebAppEnvs, WebAppEnvSchema } from '@roundtable/shared/enums';
+import type { QueryClient } from '@tanstack/react-query';
 import { APIError } from 'better-auth/api';
 import { z } from 'zod';
+
+import { invalidationPatterns } from '@/lib/data/query-keys';
 
 // ============================================================================
 // SCHEMAS
@@ -139,32 +142,19 @@ export function extractSessionToken(cookieHeader: string | undefined): string {
 }
 
 /**
- * Clear all auth-related caches on the client
- * Used on logout to ensure clean state for next login
+ * Invalidate all user-specific queries on auth state change
+ * Following TanStack Query pattern - targeted invalidation, not clear all
  *
- * Clears:
- * - TanStack Query cache (all queries)
- * - Session memory cache
- * - Better Auth cookies
- * - localStorage auth items
+ * Used on:
+ * - Logout: clear current user's cached data
+ * - Impersonation start: prepare for different user's data
+ * - Impersonation stop: restore admin's data
  *
  * @param queryClient - TanStack Query client instance
  */
-export function clearAllAuthCaches(queryClient: { clear: () => void }): void {
-  // Clear TanStack Query cache - removes all cached queries
-  queryClient.clear();
-
-  // Clear localStorage items that might hold user-specific data
-  if (typeof window !== 'undefined') {
-    // Clear any auth-related localStorage items
-    const keysToRemove: string[] = [];
-    for (let i = 0; i < localStorage.length; i++) {
-      const key = localStorage.key(i);
-      if (key && (key.startsWith('auth') || key.startsWith('session') || key.startsWith('user'))) {
-        keysToRemove.push(key);
-      }
-    }
-    keysToRemove.forEach(key => localStorage.removeItem(key));
+export function invalidateUserQueries(queryClient: QueryClient): void {
+  for (const queryKey of invalidationPatterns.sessionChange) {
+    queryClient.invalidateQueries({ queryKey });
   }
 }
 

@@ -364,10 +364,84 @@ export function getFileTypeLabelFromMime(mimeType: string): string {
 }
 
 // ============================================================================
-// UPLOAD SIZE CONSTANTS (R2/S3 Limits)
+// UPLOAD SIZE LIMITS - SINGLE SOURCE OF TRUTH
+// Modeled after ChatGPT's file upload limits (2026)
+// @see https://help.openai.com/en/articles/8555545-file-uploads-faq
 // ============================================================================
 
-export const MAX_SINGLE_UPLOAD_SIZE = 100 * 1024 * 1024;
+/**
+ * File size limit categories - enum-based pattern for consistency
+ * ChatGPT limits: 512MB general, 20MB images, 50MB spreadsheets
+ */
+export const FILE_SIZE_LIMIT_CATEGORIES = ['general', 'image', 'spreadsheet', 'pdf', 'document'] as const;
+
+export type FileSizeLimitCategory = typeof FILE_SIZE_LIMIT_CATEGORIES[number];
+
+/**
+ * File size limits by category (in bytes)
+ * SINGLE SOURCE OF TRUTH - use getMaxFileSizeForMimeType() to get limits
+ */
+export const FILE_SIZE_LIMITS = {
+  /** General files - 512MB (matches ChatGPT) */
+  GENERAL: 512 * 1024 * 1024,
+  /** Images - 20MB (matches ChatGPT) */
+  IMAGE: 20 * 1024 * 1024,
+  /** Spreadsheets (CSV, XLS, XLSX) - 50MB (matches ChatGPT) */
+  SPREADSHEET: 50 * 1024 * 1024,
+  /** PDFs - 512MB (matches ChatGPT's general document limit) */
+  PDF: 512 * 1024 * 1024,
+  /** Office documents (DOC, DOCX, PPT, PPTX) - 512MB */
+  DOCUMENT: 512 * 1024 * 1024,
+} as const;
+
+/**
+ * Spreadsheet MIME types for limit detection
+ */
+export const SPREADSHEET_MIME_TYPES = [
+  'text/csv',
+  'application/vnd.ms-excel',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+] as const;
+
+/**
+ * Get the file category for size limit purposes
+ */
+export function getFileSizeLimitCategory(mimeType: string): FileSizeLimitCategory {
+  if ((IMAGE_MIME_TYPES as readonly string[]).includes(mimeType))
+    return 'image';
+  if ((SPREADSHEET_MIME_TYPES as readonly string[]).includes(mimeType))
+    return 'spreadsheet';
+  if (mimeType === 'application/pdf')
+    return 'pdf';
+  if ((DOCUMENT_MIME_TYPES as readonly string[]).includes(mimeType))
+    return 'document';
+  return 'general';
+}
+
+/**
+ * Get max file size for a given MIME type
+ * SINGLE SOURCE OF TRUTH for file size validation
+ */
+export function getMaxFileSizeForMimeType(mimeType: string): number {
+  const category = getFileSizeLimitCategory(mimeType);
+  switch (category) {
+    case 'image': return FILE_SIZE_LIMITS.IMAGE;
+    case 'spreadsheet': return FILE_SIZE_LIMITS.SPREADSHEET;
+    case 'pdf': return FILE_SIZE_LIMITS.PDF;
+    case 'document': return FILE_SIZE_LIMITS.DOCUMENT;
+    default: return FILE_SIZE_LIMITS.GENERAL;
+  }
+}
+
+/**
+ * Multipart form overhead tolerance
+ * Content-Length includes boundaries, headers, field names - typically 200-500 bytes
+ * Using 1KB buffer for safety margin
+ */
+export const MULTIPART_OVERHEAD_TOLERANCE = 1024; // 1KB
+
+// Legacy constants - mapped to new limits for backward compatibility
+export const MAX_SINGLE_UPLOAD_SIZE = FILE_SIZE_LIMITS.GENERAL;
 export const MIN_MULTIPART_PART_SIZE = 5 * 1024 * 1024;
 export const RECOMMENDED_PART_SIZE = 10 * 1024 * 1024;
 export const MAX_TOTAL_FILE_SIZE = 5 * 1024 * 1024 * 1024;
@@ -391,18 +465,14 @@ export const MAX_MULTIPART_PARTS = 10000;
  */
 export const URL_FILE_SIZE_THRESHOLD = 4 * 1024 * 1024; // 4MB
 
-/**
- * Maximum image file size when using URL-based delivery.
- * AI providers (OpenAI, Anthropic, Google) can fetch images from URLs.
- * ChatGPT supports ~20MB images.
- */
-export const MAX_IMAGE_FILE_SIZE = 20 * 1024 * 1024; // 20MB
+/** Maximum image file size - 20MB (matches ChatGPT) */
+export const MAX_IMAGE_FILE_SIZE = FILE_SIZE_LIMITS.IMAGE;
 
-/**
- * Maximum PDF file size when using URL-based delivery.
- * AI providers can fetch PDFs from URLs for document analysis.
- */
-export const MAX_PDF_FILE_SIZE = 100 * 1024 * 1024; // 100MB
+/** Maximum PDF file size - 512MB (matches ChatGPT general documents) */
+export const MAX_PDF_FILE_SIZE = FILE_SIZE_LIMITS.PDF;
+
+/** Maximum spreadsheet file size - 50MB (matches ChatGPT) */
+export const MAX_SPREADSHEET_FILE_SIZE = FILE_SIZE_LIMITS.SPREADSHEET;
 
 // ============================================================================
 // UPLOAD STATUS (Frontend Upload Lifecycle)

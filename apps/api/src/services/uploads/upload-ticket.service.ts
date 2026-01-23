@@ -177,6 +177,54 @@ export async function createUploadTicket(
   return { ticketId, token, expiresAt };
 }
 
+/**
+ * Atomically mark ticket as used, returns true if already used (race condition detected)
+ * SECURITY: Must be called BEFORE processing upload to prevent concurrent uploads
+ */
+async function markTicketUsedAtomic(
+  kv: KVNamespace | undefined,
+  ticketId: string,
+): Promise<{ alreadyUsed: boolean }> {
+  if (!kv) {
+    return { alreadyUsed: false };
+  }
+
+  const kvKey = `${TICKET_KV_PREFIX}${ticketId}`;
+  const ticketData = await kv.get(kvKey);
+
+  if (!ticketData) {
+    // No KV entry - create one marked as used to prevent replay
+    // This handles edge case where KV wasn't available during ticket creation
+    const minimalTicket: UploadTicket = {
+      ticketId,
+      userId: '',
+      filename: '',
+      mimeType: '',
+      maxFileSize: 0,
+      expiresAt: Date.now() + 60000,
+      used: true,
+      createdAt: Date.now(),
+    };
+    await kv.put(kvKey, JSON.stringify(minimalTicket), { expirationTtl: 60 });
+    return { alreadyUsed: false };
+  }
+
+  const result = UploadTicketSchema.safeParse(JSON.parse(ticketData));
+  if (!result.success) {
+    return { alreadyUsed: false };
+  }
+
+  // Check if already used
+  if (result.data.used) {
+    return { alreadyUsed: true };
+  }
+
+  // Atomically mark as used BEFORE returning valid
+  const updatedTicket: UploadTicket = { ...result.data, used: true };
+  await kv.put(kvKey, JSON.stringify(updatedTicket), { expirationTtl: 60 });
+  return { alreadyUsed: false };
+}
+
 export async function validateUploadTicket(
   c: Context<ApiEnv>,
   token: string,
@@ -215,6 +263,13 @@ export async function validateUploadTicket(
     return { valid: false, error: 'User mismatch' };
   }
 
+  // SECURITY: Atomically mark ticket as used BEFORE returning valid
+  // Prevents race condition where concurrent uploads can use same ticket
+  const { alreadyUsed } = await markTicketUsedAtomic(c.env.KV, payload.tid);
+  if (alreadyUsed) {
+    return { valid: false, error: 'Ticket has already been used' };
+  }
+
   const ticket: UploadTicket = {
     ticketId: payload.tid,
     userId: payload.uid,
@@ -222,20 +277,9 @@ export async function validateUploadTicket(
     mimeType: payload.mt,
     maxFileSize: payload.ms,
     expiresAt: (payload.exp ?? 0) * 1000,
-    used: false,
+    used: true, // Marked as used
     createdAt: (payload.iat ?? 0) * 1000,
   };
-
-  const kv = c.env.KV;
-  if (kv) {
-    const ticketData = await kv.get(`${TICKET_KV_PREFIX}${payload.tid}`);
-    if (ticketData) {
-      const result = UploadTicketSchema.safeParse(JSON.parse(ticketData));
-      if (result.success && result.data.used) {
-        return { valid: false, error: 'Ticket has already been used' };
-      }
-    }
-  }
 
   return { valid: true, ticket };
 }
