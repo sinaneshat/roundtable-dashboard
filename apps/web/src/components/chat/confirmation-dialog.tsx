@@ -83,7 +83,7 @@ export function ConfirmationDialog({
                   {icon}
                   <div className="flex-1">
                     <DialogTitle>{title}</DialogTitle>
-                    <DialogDescription className="mt-1">
+                    <DialogDescription className="mt-2">
                       {description}
                     </DialogDescription>
                   </div>

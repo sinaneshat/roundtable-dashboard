@@ -33,10 +33,17 @@ export function useCreateProjectMutation() {
 
   return useMutation<CreateProjectResult, Error, Parameters<typeof createProjectService>[0]>({
     mutationFn: createProjectService,
-    onSuccess: () => {
+    onSuccess: (response) => {
+      if (!response.success) {
+        toastManager.error(response.error?.message ?? 'Failed to create project');
+        return;
+      }
       invalidationPatterns.projects.forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
+    },
+    onError: () => {
+      toastManager.error('Failed to create project');
     },
     retry: false,
     throwOnError: false,

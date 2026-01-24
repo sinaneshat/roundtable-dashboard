@@ -1,17 +1,21 @@
 import { createFileRoute } from '@tanstack/react-router';
+import { z } from 'zod';
 
 import { ProjectDetailScreen } from '@/containers/screens/projects/ProjectDetailScreen';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import {
-  projectAttachmentsQueryOptions,
-  projectMemoriesQueryOptions,
   projectQueryOptions,
   projectThreadsQueryOptions,
 } from '@/lib/data/query-options';
 import type { GetProjectResponse } from '@/services/api';
 
+const searchSchema = z.object({
+  settings: z.boolean().optional(),
+});
+
 export const Route = createFileRoute('/_protected/chat/projects/$projectId/')({
   staleTime: 0,
+  validateSearch: searchSchema,
 
   loader: async ({ params, context }) => {
     const { queryClient } = context;
@@ -24,21 +28,15 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/')({
     const projectId = params.projectId;
     const options = projectQueryOptions(projectId);
 
-    let initialAttachments;
-    let initialMemories;
     let initialThreads;
 
     try {
       // Always prefetch project data
       await queryClient.ensureQueryData(options);
 
-      // SSR: Prefetch all tab data in parallel for hydration
+      // SSR: Prefetch threads for hydration
       if (isServer) {
-        [initialAttachments, initialMemories, initialThreads] = await Promise.all([
-          queryClient.ensureInfiniteQueryData(projectAttachmentsQueryOptions(projectId)),
-          queryClient.ensureInfiniteQueryData(projectMemoriesQueryOptions(projectId)),
-          queryClient.ensureInfiniteQueryData(projectThreadsQueryOptions(projectId)),
-        ]);
+        initialThreads = await queryClient.ensureInfiniteQueryData(projectThreadsQueryOptions(projectId));
       }
     } catch (error) {
       console.error('[ProjectDetail] Loader error:', error);
@@ -51,8 +49,6 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/')({
     return {
       project,
       projectName: project?.name ?? null,
-      initialAttachments,
-      initialMemories,
       initialThreads,
     };
   },
@@ -79,15 +75,15 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/')({
 
 function ProjectDetailRoute() {
   const { projectId } = Route.useParams();
+  const { settings } = Route.useSearch();
   const loaderData = Route.useLoaderData();
 
   return (
     <ProjectDetailScreen
       projectId={projectId}
       initialProject={loaderData?.project ?? null}
-      initialAttachments={loaderData?.initialAttachments}
-      initialMemories={loaderData?.initialMemories}
       initialThreads={loaderData?.initialThreads}
+      openSettings={settings}
     />
   );
 }

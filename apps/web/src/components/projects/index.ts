@@ -11,8 +11,11 @@ export {
 } from './project-form-fields';
 export { ProjectIconBadge, ProjectIconColorPicker } from './project-icon-color-picker';
 export { getProjectIconComponent, ProjectIconPicker } from './project-icon-picker';
+export { ProjectLimitDialog } from './project-limit-dialog';
 export { ProjectList } from './project-list';
 export type { ProjectListItemData } from './project-list-item';
 export { ProjectListItem } from './project-list-item';
 export { ProjectListSkeleton } from './project-list-skeleton';
 export { ProjectPendingFileItem } from './project-pending-file-item';
+export { ProjectSettingsModal } from './project-settings-modal';
+export { ProjectTemplateChips } from './project-template-chips';
