@@ -1,15 +1,13 @@
+import type { AutomatedJobStatus } from '@roundtable/shared/enums';
+import { AUTOMATED_JOB_STATUSES } from '@roundtable/shared/enums';
 import { relations, sql } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
 import { user } from './auth';
 import { chatThread } from './chat';
 
-/**
- * Automated Job Status
- * Lifecycle: pending → running → completed | failed
- */
-export const AUTOMATED_JOB_STATUSES = ['pending', 'running', 'completed', 'failed'] as const;
-export type AutomatedJobStatus = (typeof AUTOMATED_JOB_STATUSES)[number];
+// Re-export for backwards compatibility
+export { AUTOMATED_JOB_STATUSES, type AutomatedJobStatus };
 
 /**
  * Per-round configuration determined by prompt analysis

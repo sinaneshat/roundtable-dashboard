@@ -39,6 +39,8 @@ type DepthParticlesProps = {
   baseOpacity?: number;
   /** Blur amount in pixels (default 25) */
   blur?: number;
+  /** Intensity multiplier for opacity and speed (default 1.0) */
+  intensity?: number;
 };
 
 /**
@@ -50,6 +52,7 @@ export function DepthParticles({
   count = 15,
   baseOpacity = 0.3,
   blur = 25,
+  intensity = 1.0,
 }: DepthParticlesProps) {
   const rainbowColors = BRAND.logoGradient;
   const particles = [];
@@ -59,7 +62,7 @@ export function DepthParticles({
     const baseY = (i * 73.3) % 100;
     const size = 4 + (i % 5) * 2;
     const colorIndex = i % rainbowColors.length;
-    const speed = 0.3 + (i % 4) * 0.15;
+    const speed = (0.3 + (i % 4) * 0.15) * intensity;
 
     const x = baseX + Math.sin(frame * 0.012 * speed + i) * 4;
     const y = baseY + Math.cos(frame * 0.008 * speed + i * 0.5) * 4;
@@ -75,7 +78,7 @@ export function DepthParticles({
           height: size,
           borderRadius: '50%',
           backgroundColor: rainbowColors[colorIndex],
-          opacity: baseOpacity,
+          opacity: baseOpacity * intensity,
         }}
       />,
     );

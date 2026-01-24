@@ -65,7 +65,10 @@ function isValidIconKey(key: string): key is IconsKey {
 
 function getRoleIcon(iconName: string): Icon {
   if (isValidIconKey(iconName)) {
-    return Icons[iconName];
+    const icon = Icons[iconName];
+    // Custom brand icons (reddit, twitter, instagram) won't be used as role icons
+    // All role icons are standard Lucide icons which are compatible with Icon type
+    return icon as Icon;
   }
   return Icons.lightbulb;
 }

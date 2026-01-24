@@ -32,8 +32,9 @@ import {
 
 import { BrowserFrame } from '../../components/BrowserFrame';
 import { DepthParticles, EdgeVignette } from '../../components/scene-primitives';
+import { VideoFeatureCaptions } from '../../components/ui-replicas';
 import { useCinematicCamera, useFocusPull } from '../../hooks';
-import { BACKGROUNDS, SPACING, TEXT, TYPOGRAPHY } from '../../lib/design-tokens';
+import { BACKGROUNDS, SPACING } from '../../lib/design-tokens';
 
 // Dark theme colors from globals.css - matching actual app
 const SIDEBAR_COLORS = {
@@ -66,7 +67,7 @@ const DEMO_PROJECTS = [
 const CINEMATIC_SPRING = { damping: 40, stiffness: 100, mass: 1.2 };
 
 // Sidebar width
-const SIDEBAR_WIDTH = 280;
+const SIDEBAR_WIDTH = 320;
 
 export function Scene03Sidebar() {
   const frame = useCurrentFrame();
@@ -100,19 +101,17 @@ export function Scene03Sidebar() {
     extrapolateRight: 'clamp',
   });
 
-  // Subtle zoom as sidebar reveals
-  const zoomScale = interpolate(sidebarProgress, [0, 1], [0.98, 1]);
+  // Unified entrance zoom - same timing across all scenes
+  const entranceZoom = interpolate(
+    spring({ frame, fps, config: { damping: 25, stiffness: 150 }, durationInFrames: 25 }),
+    [0, 1],
+    [0.96, 1],
+  );
 
-  // Label animation with cinematic spring
-  const labelProgress = spring({
-    frame: frame - 10,
-    fps,
-    config: CINEMATIC_SPRING,
-    durationInFrames: 25,
-  });
-
-  const labelOpacity = interpolate(labelProgress, [0, 1], [0, 1]);
-  const labelY = interpolate(labelProgress, [0, 1], [20, 0]);
+  // Exit fade in last 10 frames
+  const exitFade = frame > 65
+    ? interpolate(frame, [65, 75], [1, 0], { extrapolateRight: 'clamp' })
+    : 1;
 
   // Items stagger with cinematic spring
   const getItemProgress = (index: number) => {
@@ -154,10 +153,10 @@ export function Scene03Sidebar() {
   const menuButtonStyles: CSSProperties = {
     display: 'flex',
     alignItems: 'center',
-    gap: 8,
-    padding: '10px 12px',
+    gap: 10,
+    padding: '8px 16px',
     margin: '0 8px',
-    borderRadius: 10,
+    borderRadius: 8,
     backgroundColor: 'transparent',
     cursor: 'pointer',
     width: 'calc(100% - 16px)',
@@ -203,26 +202,6 @@ export function Scene03Sidebar() {
     maxWidth: 200,
   };
 
-  // Project item styles
-  const projectItemStyles: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 10,
-    padding: '8px 12px',
-    margin: '0 8px 2px',
-    borderRadius: 8,
-    cursor: 'pointer',
-  };
-
-  // Project color dot
-  const projectDotStyles = (color: string): CSSProperties => ({
-    width: 8,
-    height: 8,
-    borderRadius: 4,
-    backgroundColor: color,
-    flexShrink: 0,
-  });
-
   // SidebarFooter styles
   const footerStyles: CSSProperties = {
     marginTop: 'auto',
@@ -235,7 +214,7 @@ export function Scene03Sidebar() {
     alignItems: 'center',
     gap: 10,
     padding: '8px 16px',
-    borderRadius: 12,
+    borderRadius: 8,
     cursor: 'pointer',
     width: '100%',
     minHeight: 44,
@@ -277,7 +256,8 @@ export function Scene03Sidebar() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        padding: SPACING['2xl'],
+        overflow: 'hidden',
+        padding: SPACING.lg,
         perspective: 1200,
         perspectiveOrigin: 'center center',
       }}
@@ -294,48 +274,31 @@ export function Scene03Sidebar() {
       {/* Edge Vignette */}
       <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
 
-      {/* Feature Label */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 40,
-          right: 60,
-          opacity: labelOpacity,
-          transform: `translateY(${labelY}px)`,
-          zIndex: 100,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 20,
-            fontWeight: 600,
-            color: TEXT.primary,
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-            backdropFilter: 'blur(10px)',
-            padding: '10px 20px',
-            borderRadius: 12,
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-            fontFamily: '\'Noto Sans\', system-ui, sans-serif',
-          }}
-        >
-          Organize your conversations
-        </span>
-      </div>
+      {/* Feature Captions */}
+      <VideoFeatureCaptions
+        position="bottom-left"
+        captions={[
+          { start: 0, end: 35, text: 'Organized workspace', subtitle: 'Projects and threads at a glance' },
+          { start: 35, end: 75, text: 'Quick navigation', subtitle: 'Find any conversation instantly' },
+        ]}
+      />
 
-      {/* Browser Frame Wrapper with camera effects */}
+      {/* Browser Frame Wrapper with zoom + scan animation */}
       <div
         style={{
-          transform: `scale(${zoomScale})`,
+          transform: `scale(${entranceZoom})`,
+          transformOrigin: 'center center',
           filter: focusFilter,
-          transformStyle: 'preserve-3d',
+          opacity: exitFade,
         }}
       >
         <BrowserFrame url="roundtable.ai">
           <div
             style={{
               display: 'flex',
-              width: 1100,
-              height: 650,
+              width: 1200,
+              height: 700,
+              overflow: 'hidden',
               backgroundColor: BACKGROUNDS.primary,
             }}
           >
@@ -364,8 +327,8 @@ export function Scene03Sidebar() {
                   }}
                 >
                   <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                    <rect x="3" y="3" width="7" height="18" rx="1" />
-                    <rect x="14" y="3" width="7" height="18" rx="1" />
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M9 3v18" />
                   </svg>
                 </div>
               </div>
@@ -425,21 +388,39 @@ export function Scene03Sidebar() {
                       <div
                         key={project.id}
                         style={{
-                          ...projectItemStyles,
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: '8px 16px',
+                          borderRadius: 8,
                           opacity: itemOpacity,
                           transform: `translateX(${itemX}px)`,
                         }}
                       >
-                        <div style={projectDotStyles(project.color)} />
-                        <span style={{ fontSize: 14, color: SIDEBAR_COLORS.sidebarForeground, flex: 1 }}>
-                          {project.name}
-                        </span>
-                        <span style={{ fontSize: 12, color: SIDEBAR_COLORS.mutedForeground }}>
-                          {project.threadCount}
-                        </span>
+                        {/* Chevron on LEFT */}
                         <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2} style={{ opacity: 0.5 }}>
                           <path d="m9 18 6-6-6-6" />
                         </svg>
+                        {/* Icon badge instead of color dot */}
+                        <div
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 6,
+                            backgroundColor: project.color,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2}>
+                            <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+                          </svg>
+                        </div>
+                        {/* Name only - NO count or right chevron */}
+                        <span style={{ fontSize: 14, color: SIDEBAR_COLORS.sidebarForeground, flex: 1 }}>
+                          {project.name}
+                        </span>
                       </div>
                     );
                   })}
@@ -476,11 +457,13 @@ export function Scene03Sidebar() {
                         <span style={threadTitleStyles}>{thread.title}</span>
                         {/* More menu icon - visible on active/hover */}
                         {thread.isActive && (
-                          <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2}>
-                            <circle cx="12" cy="12" r="1" fill="currentColor" />
-                            <circle cx="19" cy="12" r="1" fill="currentColor" />
-                            <circle cx="5" cy="12" r="1" fill="currentColor" />
-                          </svg>
+                          <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
+                            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2}>
+                              <circle cx="12" cy="12" r="1" fill="currentColor" />
+                              <circle cx="19" cy="12" r="1" fill="currentColor" />
+                              <circle cx="5" cy="12" r="1" fill="currentColor" />
+                            </svg>
+                          </div>
                         )}
                       </div>
                     );
@@ -530,20 +513,17 @@ export function Scene03Sidebar() {
               </div>
             </div>
 
-            {/* Main content area (placeholder) */}
+            {/* Main content - empty state, content not in focus */}
             <div
               style={{
                 flex: 1,
+                backgroundColor: BACKGROUNDS.primary,
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                opacity: sidebarOpacity,
+                opacity: sidebarOpacity * 0.5,
               }}
-            >
-              <span style={{ ...TYPOGRAPHY.h3, color: TEXT.muted }}>
-                Select a conversation
-              </span>
-            </div>
+            />
           </div>
         </BrowserFrame>
       </div>

@@ -663,6 +663,15 @@ export {
   VisualMimeTypeSchema,
 } from './file-types';
 
+// Automated jobs enums
+export {
+  AUTOMATED_JOB_STATUSES,
+  type AutomatedJobStatus,
+  AutomatedJobStatuses,
+  AutomatedJobStatusSchema,
+  DEFAULT_AUTOMATED_JOB_STATUS,
+} from './jobs';
+
 // Logging enums
 export {
   type DebugData,

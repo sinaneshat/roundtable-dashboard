@@ -164,6 +164,8 @@ type TypewriterTextProps = {
   text: string;
   delay?: number;
   charsPerFrame?: number;
+  /** If true, stream word-by-word (2-3 words at a time) instead of char-by-char */
+  wordMode?: boolean;
   className?: string;
   style?: CSSProperties;
 };
@@ -172,18 +174,37 @@ export function TypewriterText({
   text,
   delay = 0,
   charsPerFrame = 0.5,
+  wordMode = false,
   className,
   style,
 }: TypewriterTextProps) {
   const frame = useCurrentFrame();
   const adjustedFrame = Math.max(0, frame - delay);
-  const charsToShow = Math.floor(adjustedFrame * charsPerFrame);
-  const displayText = text.slice(0, Math.min(charsToShow, text.length));
+
+  let displayText: string;
+
+  if (wordMode) {
+    const words = text.split(/(\s+)/);
+    const wordsToShow = Math.floor(adjustedFrame * charsPerFrame * 2);
+    displayText = words.slice(0, Math.min(wordsToShow, words.length)).join('');
+  } else {
+    const charsToShow = Math.floor(adjustedFrame * charsPerFrame);
+    displayText = text.slice(0, Math.min(charsToShow, text.length));
+  }
+
+  const isComplete = displayText.length >= text.length;
+
+  // Subtle opacity ramp on newly appeared text
+  const recentChars = 10;
+  const stableText = displayText.slice(0, Math.max(0, displayText.length - recentChars));
+  const newText = displayText.slice(Math.max(0, displayText.length - recentChars));
+  const newTextOpacity = isComplete ? 1 : interpolate(adjustedFrame % 5, [0, 5], [0.7, 1]);
 
   return (
     <span className={className} style={style}>
-      {displayText}
-      {charsToShow < text.length && (
+      {stableText}
+      {newText && <span style={{ opacity: newTextOpacity }}>{newText}</span>}
+      {!isComplete && (
         <span className="animate-blink">|</span>
       )}
     </span>

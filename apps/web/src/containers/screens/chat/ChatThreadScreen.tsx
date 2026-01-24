@@ -373,8 +373,8 @@ export default function ChatThreadScreen({
           query: { roundNumber: currentRound },
         });
 
-        if (response.success && response.data && response.data.memories?.length > 0) {
-          const firstMemory = response.data.memories[0];
+        const firstMemory = response?.memories?.[0];
+        if (firstMemory) {
           toastManager.success(
             t('chat.memory.memorySaved'),
             firstMemory.summary,

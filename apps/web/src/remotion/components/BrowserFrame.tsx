@@ -6,6 +6,7 @@
  */
 
 import type { CSSProperties, ReactNode } from 'react';
+import { useCurrentFrame } from 'remotion';
 
 // ============================================================================
 // Types
@@ -14,7 +15,7 @@ import type { CSSProperties, ReactNode } from 'react';
 type BrowserFrameProps = {
   /** Content to display inside the browser frame */
   children: ReactNode;
-  /** URL to display in the address bar (default: 'roundtable.now') */
+  /** URL to display in the address bar (default: 'roundtable.ai') */
   url?: string;
   /** Whether to show the traffic light buttons (default: true) */
   showTrafficLights?: boolean;
@@ -45,15 +46,18 @@ const FRAME_STYLES = {
 
 export function BrowserFrame({
   children,
-  url = 'roundtable.now',
+  url = 'roundtable.ai',
   showTrafficLights = true,
 }: BrowserFrameProps) {
-  // Outer container with shadow and border
+  const frame = useCurrentFrame();
+  const shadowPulse = 0.4 + Math.sin(frame * 0.06) * 0.1;
+
+  // Outer container with breathing shadow and border
   const containerStyles: CSSProperties = {
     display: 'flex',
     flexDirection: 'column',
     borderRadius: FRAME_STYLES.borderRadius,
-    boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.5)',
+    boxShadow: `0 25px 50px -12px rgba(0, 0, 0, ${shadowPulse}), 0 0 80px rgba(0, 0, 0, ${shadowPulse * 0.3})`,
     border: '1px solid rgba(255, 255, 255, 0.1)',
     overflow: 'hidden',
   };

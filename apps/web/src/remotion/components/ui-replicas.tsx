@@ -17,7 +17,7 @@
  */
 
 import type { CSSProperties, ReactNode } from 'react';
-import { Img, interpolate, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
+import { Img, interpolate, spring, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 
 import { FONTS } from '../lib/design-tokens';
 
@@ -132,91 +132,61 @@ export function VideoTextShimmer({ children, style }: VideoTextShimmerProps) {
 
 // ============================================================================
 // Participant Placeholder with Shimmer
-// Source: @/components/chat/model-message-card.tsx
-// Shows avatar + name with shimmer "Gathering thoughts..." text
+// Source: @/components/chat/model-message-card.tsx (shimmer/loading state)
+// Structure: space-y-1 wrapper > header (avatar + name + indicator) > shimmer content (py-2)
+// Avatar: 32px gradient circle matching provider color
 // ============================================================================
 
 type VideoParticipantPlaceholderProps = {
   modelName: string;
   provider?: string;
-  avatarFallback?: string;
-  loadingText?: string;
   isModerator?: boolean;
-  role?: string;
-  roleColor?: string;
+  loadingText: string;
 };
 
-export function VideoParticipantPlaceholder({
-  modelName,
-  provider,
-  avatarFallback,
-  loadingText = 'Gathering thoughts...',
-  isModerator = false,
-  role,
-  roleColor,
-}: VideoParticipantPlaceholderProps) {
-  const wrapperStyles: CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    width: '100%',
-  };
+export function VideoParticipantPlaceholder({ modelName, provider, isModerator, loadingText }: VideoParticipantPlaceholderProps) {
+  const frame = useCurrentFrame();
 
-  const headerStyles: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 16,
-    flexWrap: 'wrap',
-  };
-
-  const nameStyles: CSSProperties = {
-    fontSize: 20,
-    fontWeight: 600,
-    color: COLORS.mutedForeground,
-    fontFamily: FONTS.sans,
-  };
-
-  // Role badge: matches model-message-card.tsx Badge styling
-  // "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border"
-  const roleBadgeStyles: CSSProperties = role
-    ? {
-        display: 'inline-flex',
-        alignItems: 'center',
-        padding: '2px 8px',
-        borderRadius: 9999,
-        fontSize: 12,
-        fontWeight: 500,
-        border: `1px solid ${roleColor || COLORS.borderWhite20}`,
-        color: roleColor || COLORS.mutedForeground,
-        backgroundColor: roleColor ? `${roleColor}15` : 'transparent',
-      }
-    : {};
-
-  const shimmerContainerStyles: CSSProperties = {
-    fontSize: 14,
-    color: COLORS.mutedForeground,
-    fontFamily: FONTS.sans,
-  };
-
-  const finalAvatarSrc = isModerator
-    ? staticFile('static/logo.webp')
-    : undefined;
+  // Shimmer animation - opacity oscillates 0.4 to 0.8
+  const shimmerOpacity = interpolate(
+    Math.sin(frame * 0.15),
+    [-1, 1],
+    [0.4, 0.8],
+  );
 
   return (
-    <div style={wrapperStyles}>
-      <div style={headerStyles}>
-        <VideoAvatar
-          src={finalAvatarSrc}
-          provider={isModerator ? undefined : provider}
-          fallback={avatarFallback || modelName}
-          size={32}
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+      {/* Header: flex items-center gap-3 mb-5 flex-wrap */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' as const }}>
+        {/* Avatar: real model icon */}
+        {isModerator
+          ? <VideoAvatar src={staticFile('static/logo.webp')} fallback="RT" size={32} />
+          : <VideoAvatar provider={provider} fallback={modelName} size={32} />}
+        {/* Model name: text-xl font-semibold text-muted-foreground */}
+        <span style={{ fontSize: 20, fontWeight: 600, color: COLORS.mutedForeground }}>
+          {modelName}
+        </span>
+        {/* Pending indicator: ml-1 size-1.5 */}
+        <span style={{
+          marginLeft: 4,
+          width: 6,
+          height: 6,
+          borderRadius: 9999,
+          backgroundColor: COLORS.primary60,
+        }}
         />
-        <span style={nameStyles}>{modelName}</span>
-        {role && <span style={roleBadgeStyles}>{role}</span>}
       </div>
-      <div style={shimmerContainerStyles}>
-        <VideoTextShimmer>{loadingText}</VideoTextShimmer>
+
+      {/* Shimmer text: py-2 text-muted-foreground text-base */}
+      <div style={{
+        paddingTop: 8,
+        paddingBottom: 8,
+        fontSize: 16,
+        color: COLORS.mutedForeground,
+        opacity: shimmerOpacity,
+      }}
+      >
+        {loadingText}
       </div>
     </div>
   );
@@ -441,75 +411,117 @@ export function VideoAccordion({ title, isOpen, children, icon }: VideoAccordion
 // ============================================================================
 // Web Search Result Item
 // Source: @/components/chat/web-search-result-item.tsx
-// Shows domain, title, content preview with avatar
+// Structure: favicon (size-4) + title (text-sm font-medium) on top row,
+//            domain (text-xs muted) below title, snippet (text-xs muted, line-clamp-2)
 // ============================================================================
 
 type VideoWebSearchResultProps = {
   domain: string;
   title: string;
-  url: string;
   snippet?: string;
+  url?: string;
 };
 
-export function VideoWebSearchResult({ domain, title, snippet }: VideoWebSearchResultProps) {
-  const itemStyles: CSSProperties = {
-    padding: '12px 0',
-    borderBottom: '1px solid rgba(77, 77, 77, 0.1)',
-  };
-
-  const headerStyles: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 8,
-    marginBottom: 4,
-  };
-
-  const avatarStyles: CSSProperties = {
-    width: 16,
-    height: 16,
-    borderRadius: 4,
-    backgroundColor: COLORS.muted,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    fontSize: 10,
-    color: COLORS.mutedForeground,
-    flexShrink: 0,
-  };
-
-  const titleStyles: CSSProperties = {
-    fontSize: 14,
-    fontWeight: 500,
-    color: COLORS.foreground,
-    fontFamily: FONTS.sans,
-  };
-
-  const domainStyles: CSSProperties = {
-    fontSize: 12,
-    color: COLORS.mutedForeground,
-    fontFamily: FONTS.sans,
-  };
-
-  const snippetStyles: CSSProperties = {
-    fontSize: 12,
-    color: COLORS.mutedForeground,
-    lineHeight: 1.5,
-    marginTop: 4,
-    display: '-webkit-box',
-    WebkitLineClamp: 2,
-    WebkitBoxOrient: 'vertical',
-    overflow: 'hidden',
-    fontFamily: FONTS.sans,
-  };
+export function VideoWebSearchResult({ domain, title, snippet, url }: VideoWebSearchResultProps) {
+  const cleanDomain = domain.replace('www.', '');
 
   return (
-    <div style={itemStyles}>
-      <div style={headerStyles}>
-        <div style={avatarStyles}>{domain[0]?.toUpperCase()}</div>
-        <span style={domainStyles}>{domain}</span>
+    <div style={{ padding: '12px 0', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ flex: 1, minWidth: 0, paddingBottom: 4 }}>
+        {/* Row: favicon + title (flex items-start gap-2) */}
+        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 8 }}>
+          {/* Favicon placeholder: size-5 (20px) rounded-full, globe fallback */}
+          <div style={{
+            width: 20,
+            height: 20,
+            borderRadius: 9999,
+            backgroundColor: 'rgba(58, 58, 58, 0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            flexShrink: 0,
+            marginTop: 2,
+          }}
+          >
+            <svg
+              width={14}
+              height={14}
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke={COLORS.mutedForeground}
+              strokeWidth={2}
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <circle cx="12" cy="12" r="10" />
+              <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+              <path d="M2 12h20" />
+            </svg>
+          </div>
+
+          <div style={{ flex: 1, minWidth: 0 }}>
+            {/* Title: text-sm font-medium text-foreground, line-clamp-1 */}
+            <span style={{
+              fontSize: 14,
+              fontWeight: 500,
+              color: COLORS.foreground,
+              fontFamily: FONTS.sans,
+              display: 'block',
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
+              whiteSpace: 'nowrap',
+            }}
+            >
+              {title}
+            </span>
+            {/* URL in muted blue */}
+            {url && (
+              <span style={{
+                fontSize: 11,
+                color: 'rgba(96, 165, 250, 0.7)',
+                fontFamily: FONTS.sans,
+                marginTop: 2,
+                display: 'block',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis',
+                whiteSpace: 'nowrap',
+              }}
+              >
+                {url}
+              </span>
+            )}
+            {/* Domain: text-xs text-muted-foreground mt-0.5 */}
+            <span style={{
+              fontSize: 12,
+              color: COLORS.mutedForeground,
+              fontFamily: FONTS.sans,
+              marginTop: 2,
+              display: 'block',
+            }}
+            >
+              {cleanDomain}
+            </span>
+          </div>
+        </div>
+
+        {/* Snippet: text-xs text-muted-foreground leading-relaxed, line-clamp-2 */}
+        {snippet && (
+          <div style={{
+            marginTop: 8,
+            fontSize: 12,
+            color: COLORS.mutedForeground,
+            fontFamily: FONTS.sans,
+            lineHeight: 1.625,
+            display: '-webkit-box',
+            WebkitLineClamp: 2,
+            WebkitBoxOrient: 'vertical',
+            overflow: 'hidden',
+          }}
+          >
+            {snippet}
+          </div>
+        )}
       </div>
-      <div style={titleStyles}>{title}</div>
-      {snippet && <div style={snippetStyles}>{snippet}</div>}
     </div>
   );
 }
@@ -591,9 +603,11 @@ export function VideoTabs({ tabs, activeTab }: VideoTabsProps) {
     gridTemplateColumns: `repeat(${tabs.length}, 1fr)`,
     gap: 4,
     padding: 4,
-    backgroundColor: 'rgba(58, 58, 58, 0.5)',
-    borderRadius: 10,
+    height: 36, // h-9
+    backgroundColor: '#3a3a3a', // bg-muted
+    borderRadius: 8, // rounded-lg
     marginBottom: 16,
+    overflow: 'hidden',
   };
 
   return (
@@ -601,12 +615,13 @@ export function VideoTabs({ tabs, activeTab }: VideoTabsProps) {
       {tabs.map((tab) => {
         const isActive = tab.id === activeTab;
         const tabStyles: CSSProperties = {
-          padding: '8px 16px',
-          borderRadius: 8,
+          padding: '4px 12px', // px-3 py-1
+          borderRadius: 6, // rounded-md
           fontSize: 14,
           fontWeight: 500,
-          color: isActive ? COLORS.foreground : COLORS.mutedForeground,
-          backgroundColor: isActive ? 'rgba(255, 255, 255, 0.1)' : 'transparent',
+          color: isActive ? '#dedede' : '#a3a3a3', // foreground when active, muted otherwise
+          backgroundColor: isActive ? '#1a1a1a' : 'transparent', // bg-background when active
+          boxShadow: isActive ? '0 1px 2px rgba(0,0,0,0.1)' : 'none', // shadow when active
           textAlign: 'center',
           cursor: 'pointer',
           fontFamily: FONTS.sans,
@@ -739,42 +754,47 @@ export function VideoAvatar({ src, fallback, fallbackColor, size = 32, provider 
 // ============================================================================
 
 type VideoUserMessageProps = {
-  children: ReactNode;
+  text: string;
 };
 
-export function VideoUserMessage({ children }: VideoUserMessageProps) {
-  // Container: "flex flex-col items-end gap-2" (right-aligned)
-  const containerStyles: CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    alignItems: 'flex-end',
-    gap: 8,
-    width: '100%',
-  };
-
-  // Bubble: "max-w-[85%] ml-auto w-fit min-w-0 overflow-hidden
-  //          bg-secondary text-secondary-foreground
-  //          rounded-2xl rounded-br-md px-4 py-3
-  //          text-base leading-relaxed"
-  const bubbleStyles: CSSProperties = {
-    maxWidth: '85%',
-    marginLeft: 'auto',
-    width: 'fit-content',
-    minWidth: 0,
-    overflow: 'hidden',
-    backgroundColor: COLORS.secondary,
-    color: COLORS.secondaryForeground,
-    borderRadius: 16, // rounded-2xl
-    borderBottomRightRadius: 6, // rounded-br-md
-    padding: '12px 16px',
-    fontSize: 16,
-    lineHeight: 1.625,
-  };
-
+export function VideoUserMessage({ text }: VideoUserMessageProps) {
   return (
-    <div style={containerStyles}>
-      <div style={bubbleStyles}>
-        {children}
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      alignItems: 'flex-end',
+      gap: 8,
+    }}
+    >
+      <div style={{
+        maxWidth: '85%',
+        marginLeft: 'auto',
+        width: 'fit-content',
+        minWidth: 0,
+      }}
+      >
+        <div style={{
+          borderRadius: 16,
+          borderBottomRightRadius: 6, // rounded-br-md for chat bubble effect
+          paddingLeft: 16,
+          paddingRight: 16,
+          paddingTop: 12,
+          paddingBottom: 12,
+          backgroundColor: '#383838', // bg-secondary
+          color: '#dedede', // text-secondary-foreground
+        }}
+        >
+          <p style={{
+            fontSize: 16,
+            lineHeight: 1.625,
+            whiteSpace: 'pre-wrap',
+            wordBreak: 'break-word',
+            margin: 0,
+          }}
+          >
+            {text}
+          </p>
+        </div>
       </div>
     </div>
   );
@@ -825,6 +845,9 @@ export function VideoParticipantHeader({
     fontSize: 20,
     fontWeight: 600,
     color: COLORS.mutedForeground,
+    overflow: 'hidden',
+    textOverflow: 'ellipsis',
+    whiteSpace: 'nowrap',
   };
 
   // Role badge: "inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium border"
@@ -877,63 +900,77 @@ export function VideoParticipantHeader({
 // ============================================================================
 // Participant Message Card
 // Source: @/components/chat/model-message-card.tsx
-// Combines header + message content in the actual app layout
+// Structure: space-y-1 wrapper > header (avatar + name + badge + indicator) > content
+// Avatar: 32px gradient circle matching provider color
 // ============================================================================
+
+function StreamingDot() {
+  const frame = useCurrentFrame();
+  const pulseOpacity = interpolate(Math.sin(frame * 0.2), [-1, 1], [0.4, 1.0]);
+  return (
+    <span style={{
+      marginLeft: 4,
+      width: 6,
+      height: 6,
+      borderRadius: 9999,
+      backgroundColor: 'rgba(234, 234, 234, 0.6)',
+      opacity: pulseOpacity,
+    }}
+    />
+  );
+}
 
 type VideoParticipantMessageProps = {
   modelName: string;
   provider?: string;
-  avatarSrc?: string;
-  avatarFallback?: string;
-  avatarColor?: string;
   role?: string;
-  roleColor?: string;
-  showStreamingIndicator?: boolean;
   isModerator?: boolean;
+  showStreamingIndicator?: boolean;
   children: ReactNode;
 };
 
-export function VideoParticipantMessage({
-  modelName,
-  provider,
-  avatarSrc,
-  avatarFallback,
-  avatarColor,
-  role,
-  roleColor,
-  showStreamingIndicator = false,
-  isModerator = false,
-  children,
-}: VideoParticipantMessageProps) {
-  // Wrapper matches model-message-card structure
-  const wrapperStyles: CSSProperties = {
-    display: 'flex',
-    flexDirection: 'column',
-    gap: 4,
-    width: '100%',
-  };
-
-  // Content: "text-base leading-relaxed text-foreground"
-  const contentStyles: CSSProperties = {
-    color: COLORS.foreground,
-    fontSize: 16,
-    lineHeight: 1.6,
-  };
-
+export function VideoParticipantMessage({ modelName, provider, role, isModerator, showStreamingIndicator, children }: VideoParticipantMessageProps) {
   return (
-    <div style={wrapperStyles}>
-      <VideoParticipantHeader
-        modelName={modelName}
-        provider={provider}
-        avatarSrc={avatarSrc}
-        avatarFallback={avatarFallback}
-        avatarColor={avatarColor}
-        role={role}
-        roleColor={roleColor}
-        showStreamingIndicator={showStreamingIndicator}
-        isModerator={isModerator}
-      />
-      <div style={contentStyles}>
+    <div style={{
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 4,
+    }}
+    >
+      {/* Header: flex items-center gap-3 mb-5 flex-wrap */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' as const }}>
+        {/* Avatar: real model icon */}
+        {isModerator
+          ? <VideoAvatar src={staticFile('static/logo.webp')} fallback="RT" size={32} />
+          : <VideoAvatar provider={provider} fallback={modelName} size={32} />}
+        {/* Model name */}
+        <span style={{ fontSize: 20, fontWeight: 600, color: isModerator ? 'rgba(255,255,255,0.95)' : '#a3a3a3' }}>
+          {modelName}
+        </span>
+        {/* Role badge if present */}
+        {role && !isModerator && (
+          <span style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            padding: '2px 8px',
+            borderRadius: 9999,
+            fontSize: 12,
+            fontWeight: 500,
+            border: '1px solid rgba(255,255,255,0.2)',
+            color: '#bfbfbf',
+          }}
+          >
+            {role}
+          </span>
+        )}
+        {/* Streaming indicator: ml-1 size-1.5 with pulse */}
+        {showStreamingIndicator && (
+          <StreamingDot />
+        )}
+      </div>
+
+      {/* Content: py-2 text-base min-w-0 */}
+      <div style={{ paddingTop: 8, paddingBottom: 8, fontSize: 16, lineHeight: 1.6, color: '#dedede', minWidth: 0, whiteSpace: 'pre-wrap' as const }}>
         {children}
       </div>
     </div>
@@ -1108,6 +1145,7 @@ export function VideoGlassCard({ children, variant = 'medium', style }: VideoGla
         ...glassStyles,
         borderRadius: 16,
         padding: '16px 24px',
+        overflow: 'hidden',
         ...style,
       }}
     >
@@ -1172,6 +1210,8 @@ export function VideoButton({ children, variant = 'default', size = 'md', style 
         justifyContent: 'center',
         gap: 8,
         whiteSpace: 'nowrap',
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
         borderRadius: 12,
         fontWeight: 500,
         ...variantStyles,
@@ -1187,76 +1227,83 @@ export function VideoButton({ children, variant = 'default', size = 'md', style 
 // ============================================================================
 // Auto/Manual Mode Toggle
 // Source: @/components/chat/chat-auto-mode-toggle.tsx
-// Active: Purple gradient pill with sparkles icon
+// Container: inline-flex rounded-full border border-border/50 p-0.5 gap-0.5 relative bg-muted/30
+// Each button: relative z-10 px-3 py-1 rounded-full text-xs font-medium
+// Auto active: gradient from-violet-500/20 via-purple-500/20 to-fuchsia-500/20, border-purple-500/30
+// Manual active: bg-muted/50 border border-border/50
 // ============================================================================
 
 type VideoAutoModeToggleProps = {
-  mode: 'auto' | 'manual';
+  value: 'auto' | 'manual';
 };
 
-export function VideoAutoModeToggle({ mode }: VideoAutoModeToggleProps) {
-  const containerStyles: CSSProperties = {
-    display: 'inline-flex',
-    alignItems: 'center',
-    padding: 4,
-    gap: 4,
-  };
-
-  const baseButtonStyles: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    padding: '6px 12px',
-    borderRadius: 8,
-    fontSize: 12,
-    fontWeight: 500,
-    cursor: 'pointer',
-    position: 'relative',
-  };
-
-  const autoActiveStyles: CSSProperties = {
-    ...baseButtonStyles,
-    background: 'linear-gradient(to right, rgba(139, 92, 246, 0.2), rgba(168, 85, 247, 0.2), rgba(217, 70, 239, 0.2))',
-    border: '1px solid rgba(168, 85, 247, 0.3)',
-    color: 'rgb(168, 85, 247)',
-  };
-
-  const autoInactiveStyles: CSSProperties = {
-    ...baseButtonStyles,
-    background: 'transparent',
-    border: '1px solid transparent',
-    color: COLORS.mutedForeground,
-  };
-
-  const manualActiveStyles: CSSProperties = {
-    ...baseButtonStyles,
-    background: 'rgba(58, 58, 58, 0.5)',
-    border: '1px solid rgba(77, 77, 77, 0.5)',
-    color: COLORS.foreground,
-  };
-
-  const manualInactiveStyles: CSSProperties = {
-    ...baseButtonStyles,
-    background: 'transparent',
-    border: '1px solid transparent',
-    color: COLORS.mutedForeground,
-  };
-
-  // Sparkles icon SVG
-  const SparklesIcon = ({ color }: { color: string }) => (
-    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={color} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-      <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
-    </svg>
-  );
+export function VideoAutoModeToggle({ value }: VideoAutoModeToggleProps) {
+  const isAuto = value === 'auto';
 
   return (
-    <div style={containerStyles}>
-      <div style={mode === 'auto' ? autoActiveStyles : autoInactiveStyles}>
-        <SparklesIcon color={mode === 'auto' ? 'rgb(168, 85, 247)' : COLORS.mutedForeground} />
-        <span>Auto</span>
+    <div style={{
+      display: 'inline-flex',
+      borderRadius: 9999,
+      border: '1px solid rgba(77, 77, 77, 0.5)',
+      padding: 2,
+      gap: 2,
+      position: 'relative',
+      backgroundColor: 'rgba(68, 68, 68, 0.3)',
+    }}
+    >
+      {/* Auto button */}
+      <div style={{
+        position: 'relative',
+        zIndex: 10,
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        paddingLeft: 12,
+        paddingRight: 12,
+        paddingTop: 4,
+        paddingBottom: 4,
+        borderRadius: 9999,
+        fontSize: 12,
+        fontWeight: 500,
+        color: isAuto ? '#dedede' : 'rgba(163, 163, 163, 0.7)',
+        ...(isAuto
+          ? {
+              background: 'linear-gradient(135deg, rgba(139,92,246,0.2), rgba(168,85,247,0.2), rgba(217,70,239,0.2))',
+              border: '1px solid rgba(168, 85, 247, 0.3)',
+            }
+          : {}),
+      }}
+      >
+        {/* Sparkles icon - size-3 (12px) */}
+        <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+          <path d="M9.937 15.5A2 2 0 0 0 8.5 14.063l-6.135-1.582a.5.5 0 0 1 0-.962L8.5 9.936A2 2 0 0 0 9.937 8.5l1.582-6.135a.5.5 0 0 1 .963 0L14.063 8.5A2 2 0 0 0 15.5 9.937l6.135 1.581a.5.5 0 0 1 0 .964L15.5 14.063a2 2 0 0 0-1.437 1.437l-1.582 6.135a.5.5 0 0 1-.963 0z" />
+        </svg>
+        Auto
       </div>
-      <div style={mode === 'manual' ? manualActiveStyles : manualInactiveStyles}>
-        <span>Manual</span>
+
+      {/* Manual button */}
+      <div style={{
+        position: 'relative',
+        zIndex: 10,
+        display: 'flex',
+        alignItems: 'center',
+        paddingLeft: 12,
+        paddingRight: 12,
+        paddingTop: 4,
+        paddingBottom: 4,
+        borderRadius: 9999,
+        fontSize: 12,
+        fontWeight: 500,
+        color: !isAuto ? '#dedede' : 'rgba(163, 163, 163, 0.7)',
+        ...(!isAuto
+          ? {
+              backgroundColor: 'rgba(68, 68, 68, 0.5)',
+              border: '1px solid rgba(77, 77, 77, 0.5)',
+            }
+          : {}),
+      }}
+      >
+        Manual
       </div>
     </div>
   );
@@ -1567,7 +1614,7 @@ export function VideoModelItem({
     width: 36,
     height: 20,
     borderRadius: 9999,
-    backgroundColor: isSelected ? 'rgb(168, 85, 247)' : COLORS.muted,
+    backgroundColor: isSelected ? '#eaeaea' : COLORS.muted,
     position: 'relative',
     flexShrink: 0,
   };
@@ -1579,7 +1626,7 @@ export function VideoModelItem({
     width: 16,
     height: 16,
     borderRadius: 9999,
-    backgroundColor: COLORS.white,
+    backgroundColor: isSelected ? '#1a1a1a' : COLORS.white,
     boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
   };
 
@@ -1723,7 +1770,7 @@ export function VideoFullChatInput({
       {/* Toolbar */}
       <div style={toolbarStyles}>
         <div style={toolbarLeftStyles}>
-          <VideoAutoModeToggle mode={mode} />
+          <VideoAutoModeToggle value={mode} />
           {models.length > 0 && <VideoModelSelectionButton models={models} />}
           <div style={attachBtnStyles}>
             <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -1746,122 +1793,88 @@ export function VideoFullChatInput({
 // ============================================================================
 // Pre-Search Card (Web Search)
 // Source: @/components/chat/pre-search-card.tsx
-// Shows web search with blue globe icon and collapsible results
+// EXACT replica of actual PreSearchCard structure
 // ============================================================================
 
 type VideoPreSearchCardProps = {
-  isOpen?: boolean;
-  isStreaming?: boolean;
-  query?: string;
-  results?: Array<{
-    domain: string;
-    title: string;
-    snippet?: string;
-  }>;
-  totalSources?: number;
+  isOpen: boolean;
+  isStreaming: boolean;
+  query: string;
+  results: Array<{ domain: string; title: string; snippet: string }>;
+  totalSources: number;
 };
 
-export function VideoPreSearchCard({
-  isOpen = true,
-  isStreaming = false,
-  query = 'SaaS product launch strategies',
-  results = [],
-  totalSources = 0,
-}: VideoPreSearchCardProps) {
-  // Header: flex items-center gap-3 mb-6
-  const headerStyles: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 12,
-    marginBottom: 24,
-  };
-
-  // Icon container: size-8 flex items-center justify-center rounded-full bg-blue-500/20
-  const iconContainerStyles: CSSProperties = {
-    width: 32,
-    height: 32,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    borderRadius: 9999,
-    backgroundColor: 'rgba(59, 130, 246, 0.2)', // bg-blue-500/20
-    flexShrink: 0,
-  };
-
-  // Title: text-xl font-semibold text-muted-foreground
-  const titleStyles: CSSProperties = {
-    fontSize: 20,
-    fontWeight: 600,
-    color: COLORS.mutedForeground,
-    fontFamily: FONTS.sans,
-  };
-
-  // Streaming indicator
-  const indicatorStyles: CSSProperties = {
-    width: 6,
-    height: 6,
-    borderRadius: 9999,
-    backgroundColor: 'rgba(234, 234, 234, 0.6)', // bg-primary/60
-    flexShrink: 0,
-  };
-
-  // Collapsible trigger
-  const triggerStyles: CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: 6,
-    color: COLORS.mutedForeground,
-    fontSize: 14,
-    cursor: 'pointer',
-  };
-
-  // Chevron rotation
-  const chevronStyles: CSSProperties = {
-    width: 14,
-    height: 14,
-    flexShrink: 0,
-    transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
-    transition: 'transform 0.2s ease',
-  };
-
-  // Content container
-  const contentStyles: CSSProperties = {
-    marginTop: isOpen ? 12 : 0,
-    display: isOpen ? 'block' : 'none',
-  };
-
-  // Query display
-  const queryStyles: CSSProperties = {
-    fontSize: 14,
-    color: COLORS.foreground,
-    fontWeight: 500,
-    marginBottom: 12,
-    padding: '8px 12px',
-    borderRadius: 8,
-    backgroundColor: 'rgba(59, 130, 246, 0.1)', // subtle blue bg
-    border: '1px solid rgba(59, 130, 246, 0.2)',
-    fontFamily: FONTS.sans,
-  };
+export function VideoPreSearchCard({ isOpen, isStreaming, results, totalSources }: VideoPreSearchCardProps) {
+  const frame = useCurrentFrame();
 
   return (
     <div style={{ width: '100%', marginBottom: 20 }}>
-      <div style={headerStyles}>
-        <div style={iconContainerStyles}>
-          {/* Globe icon - text-blue-300 */}
-          <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke="#93c5fd" strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+      {/* Header - EXACTLY matching actual: flex items-center gap-3 mb-6 */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 24 }}>
+        {/* Globe icon container: size-8 (32px), rounded-full, bg-blue-500/20 */}
+        <div style={{
+          width: 32,
+          height: 32,
+          borderRadius: 9999,
+          backgroundColor: 'rgba(59, 130, 246, 0.2)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          flexShrink: 0,
+        }}
+        >
+          {/* Globe icon: size-4 (16px), text-blue-300 */}
+          <svg
+            width={16}
+            height={16}
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="rgb(147, 197, 253)"
+            strokeWidth={2}
+            strokeLinecap="round"
+            strokeLinejoin="round"
+          >
             <circle cx="12" cy="12" r="10" />
             <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
             <path d="M2 12h20" />
           </svg>
         </div>
+
+        {/* Title area: flex items-center gap-2 flex-1 */}
         <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0 }}>
-          <span style={titleStyles}>Web Search</span>
-          {isStreaming && <span style={indicatorStyles} />}
+          {/* text-xl font-semibold text-muted-foreground */}
+          <span style={{ fontSize: 20, fontWeight: 600, color: COLORS.mutedForeground, fontFamily: FONTS.sans }}>
+            Web Search
+          </span>
+
+          {/* Streaming pulse indicator: size-1.5 (6px) */}
+          {isStreaming && (
+            <span style={{
+              width: 6,
+              height: 6,
+              borderRadius: 9999,
+              backgroundColor: 'rgba(234, 234, 234, 0.6)',
+              opacity: interpolate(Math.sin((frame / 15) * Math.PI), [-1, 1], [0.4, 1]),
+            }}
+            />
+          )}
         </div>
       </div>
 
-      <div style={triggerStyles}>
-        <svg style={chevronStyles} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+      {/* Collapsible trigger: flex items-center gap-1.5 text-sm text-muted-foreground */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 6, color: COLORS.mutedForeground, fontSize: 14, cursor: 'pointer' }}>
+        {/* Chevron: size-3.5 (14px), rotate-90 when open */}
+        <svg
+          width={14}
+          height={14}
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          style={{ transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)', flexShrink: 0 }}
+        >
           <path d="m9 18 6-6-6-6" />
         </svg>
         <span style={{ fontWeight: 500 }}>
@@ -1869,27 +1882,178 @@ export function VideoPreSearchCard({
         </span>
       </div>
 
-      <div style={contentStyles}>
-        {query && (
-          <div style={queryStyles}>
-            🔍
-            {query}
-          </div>
-        )}
-        {results.length > 0 && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {results.map((result, i) => (
-              <VideoWebSearchResult
-                key={i}
-                domain={result.domain}
-                title={result.title}
-                url={`https://${result.domain}`}
-                snippet={result.snippet}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      {/* Content: mt-3, space-y-4 */}
+      {isOpen && (
+        <div style={{ marginTop: 12, display: 'flex', flexDirection: 'column', gap: 16 }}>
+          {results.map((result, i) => (
+            <VideoWebSearchResult key={i} {...result} />
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// VideoFeatureLabel - Shared feature label overlay for all scenes
+// Matches the design language across the entire showcase
+// ============================================================================
+
+type VideoFeatureLabelProps = {
+  text: string;
+  subtitle?: string;
+  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+};
+
+export function VideoFeatureLabel({ text, subtitle, position = 'top-left' }: VideoFeatureLabelProps) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  // Entrance animation
+  const progress = spring({
+    frame,
+    fps,
+    config: { damping: 25, stiffness: 120, mass: 0.8 },
+    durationInFrames: 20,
+  });
+
+  const opacity = interpolate(progress, [0, 1], [0, 1]);
+  const translateY = interpolate(progress, [0, 1], [15, 0]);
+
+  const positionStyles: CSSProperties = {
+    'top-left': { top: 40, left: 60 },
+    'top-right': { top: 40, right: 60 },
+    'bottom-left': { bottom: 90, left: 60 },
+    'bottom-right': { bottom: 90, right: 60 },
+  }[position];
+
+  return (
+    <div style={{
+      position: 'absolute',
+      ...positionStyles,
+      opacity,
+      transform: `translateY(${translateY}px)`,
+      zIndex: 100,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 6,
+    }}
+    >
+      <span style={{
+        fontSize: 22,
+        fontWeight: 700,
+        color: '#ffffff',
+        fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+        letterSpacing: '-0.01em',
+        textShadow: '0 2px 12px rgba(0,0,0,0.8), 0 0 40px rgba(0,0,0,0.4)',
+      }}
+      >
+        {text}
+      </span>
+      {subtitle && (
+        <span style={{
+          fontSize: 14,
+          fontWeight: 400,
+          color: 'rgba(255, 255, 255, 0.7)',
+          fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+          textShadow: '0 1px 8px rgba(0,0,0,0.6)',
+          maxWidth: 280,
+          lineHeight: 1.4,
+        }}
+        >
+          {subtitle}
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ============================================================================
+// VideoFeatureCaptions - Cycles through multiple labels for a scene
+// Use for scenes that showcase multiple features over time
+// ============================================================================
+
+type CaptionItem = { start: number; end: number; text: string; subtitle?: string };
+
+type VideoFeatureCaptionsProps = {
+  captions: CaptionItem[];
+  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+};
+
+export function VideoFeatureCaptions({ captions, position = 'bottom-left' }: VideoFeatureCaptionsProps) {
+  const frame = useCurrentFrame();
+  const { fps } = useVideoConfig();
+
+  const activeCaption = captions.find(c => frame >= c.start && frame < c.end);
+  if (!activeCaption)
+    return null;
+
+  const localFrame = frame - activeCaption.start;
+  const duration = activeCaption.end - activeCaption.start;
+
+  // Enter animation
+  const enterProgress = spring({
+    frame: localFrame,
+    fps,
+    config: { damping: 22, stiffness: 120, mass: 0.8 },
+    durationInFrames: 15,
+  });
+
+  // Exit animation (last 8 frames)
+  const exitOpacity = localFrame > duration - 8
+    ? interpolate(localFrame, [duration - 8, duration], [1, 0], { extrapolateLeft: 'clamp' })
+    : 1;
+
+  const translateX = interpolate(enterProgress, [0, 1], [-20, 0]);
+  const scaleValue = interpolate(enterProgress, [0, 1], [0.95, 1]);
+  const blurValue = localFrame < 5 ? interpolate(localFrame, [0, 5], [2, 0]) : 0;
+  const opacity = interpolate(enterProgress, [0, 1], [0, 1]) * exitOpacity;
+
+  const positionStyles: CSSProperties = {
+    'top-left': { top: 40, left: 60 },
+    'top-right': { top: 40, right: 60 },
+    'bottom-left': { bottom: 90, left: 60 },
+    'bottom-right': { bottom: 90, right: 60 },
+  }[position];
+
+  return (
+    <div style={{
+      position: 'absolute',
+      ...positionStyles,
+      opacity,
+      transform: `translateX(${translateX}px) scale(${scaleValue})`,
+      filter: blurValue > 0 ? `blur(${blurValue}px)` : undefined,
+      zIndex: 100,
+      display: 'flex',
+      flexDirection: 'column',
+      gap: 4,
+    }}
+    >
+      <span style={{
+        fontSize: 28,
+        fontWeight: 700,
+        color: '#ffffff',
+        fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+        letterSpacing: '-0.02em',
+        textShadow: '0 2px 12px rgba(0,0,0,0.8), 0 0 30px rgba(0,0,0,0.3)',
+      }}
+      >
+        {activeCaption.text}
+      </span>
+      {activeCaption.subtitle && (
+        <span style={{
+          fontSize: 14,
+          fontWeight: 400,
+          color: 'rgba(255, 255, 255, 0.65)',
+          fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+          textShadow: '0 1px 6px rgba(0,0,0,0.5)',
+          maxWidth: 360,
+          lineHeight: 1.4,
+        }}
+        >
+          {activeCaption.subtitle}
+        </span>
+      )}
     </div>
   );
 }

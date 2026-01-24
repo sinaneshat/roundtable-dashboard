@@ -17,4 +17,5 @@ export type {
 } from './types';
 
 // Utility exports
-export { extractSessionToken } from './utils';
+export type { AdminUser } from './utils';
+export { extractSessionToken, requireAdmin } from './utils';

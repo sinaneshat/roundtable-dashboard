@@ -43,11 +43,7 @@ export async function generateNextRoundPrompt(
   try {
     // Load all messages from the thread
     const messages = await db
-      .select({
-        role: tables.chatMessage.role,
-        parts: tables.chatMessage.parts,
-        roundNumber: tables.chatMessage.roundNumber,
-      })
+      .select()
       .from(tables.chatMessage)
       .where(eq(tables.chatMessage.threadId, threadId))
       .orderBy(desc(tables.chatMessage.createdAt));
@@ -60,14 +56,14 @@ export async function generateNextRoundPrompt(
       messages: [{
         id: 'generate-prompt',
         role: 'user',
-        content: `Original discussion topic: "${initialPrompt}"
+        parts: [{ type: 'text', text: `Original discussion topic: "${initialPrompt}"
 
 Conversation so far:
 ${conversationSummary}
 
 Current round: ${currentRound + 1}
 
-Generate the next follow-up prompt to deepen this discussion.`,
+Generate the next follow-up prompt to deepen this discussion.` }],
       }],
       system: PROMPT_GENERATION_SYSTEM,
       temperature: 0.7,
@@ -92,11 +88,7 @@ Generate the next follow-up prompt to deepen this discussion.`,
  * Build a summary of the conversation for context
  */
 function buildConversationSummary(
-  messages: Array<{
-    role: string;
-    parts: unknown;
-    roundNumber: number;
-  }>,
+  messages: Array<typeof tables.chatMessage.$inferSelect>,
   upToRound: number,
 ): string {
   const relevantMessages = messages
@@ -132,13 +124,15 @@ function extractTextFromParts(parts: unknown): string {
 /**
  * Default follow-up prompts when generation fails
  */
+const DEFAULT_FOLLOWUP_PROMPTS = [
+  'Based on these perspectives, what are the strongest arguments on each side?',
+  'What potential blind spots or assumptions might we be missing in this discussion?',
+  'How might these ideas be practically applied or tested?',
+  'What are the long-term implications of these different viewpoints?',
+  'Where do you see the most promising areas for consensus or synthesis?',
+] as const;
+
 function getDefaultFollowUp(round: number): string {
-  const prompts = [
-    'Based on these perspectives, what are the strongest arguments on each side?',
-    'What potential blind spots or assumptions might we be missing in this discussion?',
-    'How might these ideas be practically applied or tested?',
-    'What are the long-term implications of these different viewpoints?',
-    'Where do you see the most promising areas for consensus or synthesis?',
-  ];
-  return prompts[round % prompts.length] || prompts[0];
+  const index = round % DEFAULT_FOLLOWUP_PROMPTS.length;
+  return DEFAULT_FOLLOWUP_PROMPTS.at(index) ?? DEFAULT_FOLLOWUP_PROMPTS[0];
 }

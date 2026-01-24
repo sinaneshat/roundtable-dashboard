@@ -58,7 +58,7 @@ export async function selectModelsForPrompt(
       messages: [{
         id: 'select-models',
         role: 'user',
-        content: `Select 2-3 AI models for this discussion prompt:\n\n"${prompt}"`,
+        parts: [{ type: 'text', text: `Select 2-3 AI models for this discussion prompt:\n\n"${prompt}"` }],
       }],
       system: MODEL_SELECTION_SYSTEM_PROMPT,
       temperature: 0.3,

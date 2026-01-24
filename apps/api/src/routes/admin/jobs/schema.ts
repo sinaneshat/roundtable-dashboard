@@ -188,3 +188,17 @@ export const JobCreatedResponseSchema = z.object({
 }).openapi('JobCreatedResponse');
 
 export type JobCreatedResponse = z.infer<typeof JobCreatedResponseSchema>;
+
+/**
+ * Delete job response
+ */
+export const DeleteJobResponseSchema = z.object({
+  deleted: z.boolean().openapi({
+    description: 'Whether the job was deleted',
+  }),
+  threadDeleted: z.boolean().optional().openapi({
+    description: 'Whether the associated thread was also deleted',
+  }),
+}).openapi('DeleteJobResponse');
+
+export type DeleteJobResponse = z.infer<typeof DeleteJobResponseSchema>;

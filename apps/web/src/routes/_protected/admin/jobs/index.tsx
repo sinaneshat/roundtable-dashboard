@@ -1,4 +1,6 @@
+import type { AutomatedJobStatus } from '@roundtable/shared/enums';
 import { createFileRoute, Link } from '@tanstack/react-router';
+import type { LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Icons } from '@/components/icons';
@@ -36,25 +38,25 @@ export const Route = createFileRoute('/_protected/admin/jobs/')({
   component: JobsListPage,
 });
 
-const STATUS_ICONS = {
+type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
+
+const STATUS_ICONS: Record<AutomatedJobStatus, LucideIcon> = {
   pending: Icons.clock,
   running: Icons.loader,
   completed: Icons.checkCircle,
   failed: Icons.alertCircle,
-  cancelled: Icons.x,
-} as const;
+};
 
-const STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
+const STATUS_VARIANTS: Record<AutomatedJobStatus, BadgeVariant> = {
   pending: 'outline',
   running: 'default',
   completed: 'secondary',
   failed: 'destructive',
-  cancelled: 'outline',
 };
 
-function JobStatusBadge({ status }: { status: AutomatedJob['status'] }) {
-  const StatusIcon = STATUS_ICONS[status] ?? Icons.circle;
-  const variant = STATUS_VARIANTS[status] ?? 'outline';
+function JobStatusBadge({ status }: { status: AutomatedJobStatus }) {
+  const StatusIcon = STATUS_ICONS[status];
+  const variant = STATUS_VARIANTS[status];
 
   return (
     <Badge variant={variant} className="flex items-center gap-1 shrink-0">
@@ -250,7 +252,7 @@ function JobCard({
   );
 }
 
-type StatusFilter = 'all' | 'pending' | 'running' | 'completed' | 'failed';
+type StatusFilter = 'all' | AutomatedJobStatus;
 
 function JobsListPage() {
   const t = useTranslations();
@@ -284,7 +286,8 @@ function JobsListPage() {
 
   // Infinite scroll handler - fetch at 80% scroll
   const handleScroll = useCallback(() => {
-    if (!scrollRef.current) return;
+    if (!scrollRef.current)
+      return;
     const { scrollTop, scrollHeight, clientHeight } = scrollRef.current;
     const scrollPercentage = (scrollTop + clientHeight) / scrollHeight;
 
@@ -296,7 +299,8 @@ function JobsListPage() {
   // Setup scroll listener
   useEffect(() => {
     const viewport = scrollRef.current;
-    if (!viewport) return;
+    if (!viewport)
+      return;
     viewport.addEventListener('scroll', handleScroll);
     return () => viewport.removeEventListener('scroll', handleScroll);
   }, [handleScroll]);

@@ -21,7 +21,7 @@ import {
 import { DepthParticles, EdgeVignette } from '../../components/scene-primitives';
 import { VideoButton } from '../../components/ui-replicas';
 import { useCinematicCamera, useFocusTransition } from '../../hooks';
-import { BACKGROUNDS, BRAND, RAINBOW, SPACING, TEXT, TYPOGRAPHY } from '../../lib/design-tokens';
+import { BACKGROUNDS, BRAND, FONTS, HEX_COLORS, RAINBOW, SPACING, TEXT, TYPOGRAPHY } from '../../lib/design-tokens';
 
 export function Scene17Finale() {
   const frame = useCurrentFrame();
@@ -35,7 +35,7 @@ export function Scene17Finale() {
     duration: 90,
     intensity: 0.6,
     breathingEnabled: true,
-    breathingIntensity: 4,
+    breathingIntensity: 8,
     orbitSpeed: 0.008,
   });
 
@@ -60,16 +60,10 @@ export function Scene17Finale() {
     extrapolateRight: 'clamp',
   });
 
-  // URL text entrance
-  const urlProgress = spring({
-    frame: frame - 25,
-    fps,
-    config: { damping: 200 },
-    durationInFrames: 25,
-  });
-
-  const urlOpacity = interpolate(urlProgress, [0, 1], [0, 1]);
-  const urlY = interpolate(urlProgress, [0, 1], [30, 0]);
+  // Exit fade in last 10 frames
+  const exitFade = frame > 140
+    ? interpolate(frame, [140, 150], [1, 0], { extrapolateRight: 'clamp' })
+    : 1;
 
   // CTA entrance
   const ctaProgress = spring({
@@ -109,6 +103,7 @@ export function Scene17Finale() {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
         perspective: 1500,
         perspectiveOrigin: 'center center',
       }}
@@ -143,7 +138,7 @@ export function Scene17Finale() {
       <div
         style={{
           transform: `scale(${logoScale})`,
-          opacity: logoOpacity,
+          opacity: logoOpacity * exitFade,
           filter: focusFilter,
         }}
       >
@@ -178,7 +173,7 @@ export function Scene17Finale() {
                 fontWeight: 700,
                 color: TEXT.primary,
                 letterSpacing: '-0.02em',
-                fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+                fontFamily: FONTS.sans,
               }}
             >
               Roundtable
@@ -187,34 +182,10 @@ export function Scene17Finale() {
         </div>
       </div>
 
-      {/* URL with gradient text - cinematic focus */}
-      <div
-        style={{
-          marginTop: SPACING.xl,
-          opacity: urlOpacity,
-          transform: `translateY(${urlY}px)`,
-          filter: focusFilter,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 36,
-            fontWeight: 600,
-            background: `linear-gradient(90deg, ${RAINBOW.colors.slice(0, 4).join(', ')})`,
-            backgroundClip: 'text',
-            WebkitBackgroundClip: 'text',
-            WebkitTextFillColor: 'transparent',
-            fontFamily: '\'Noto Sans\', system-ui, sans-serif',
-          }}
-        >
-          roundtable.now
-        </span>
-      </div>
-
       {/* CTA Button - cinematic focus */}
       <div
         style={{
-          marginTop: SPACING.lg,
+          marginTop: SPACING.xl,
           opacity: ctaOpacity,
           transform: `scale(${ctaScale * ctaPulse})`,
           filter: focusFilter,
@@ -258,7 +229,7 @@ export function Scene17Finale() {
           style={{
             position: 'absolute',
             inset: 0,
-            backgroundColor: '#000000',
+            backgroundColor: HEX_COLORS.black,
             opacity: interpolate(frame, [75, 90], [0, 1], {
               extrapolateRight: 'clamp',
             }),

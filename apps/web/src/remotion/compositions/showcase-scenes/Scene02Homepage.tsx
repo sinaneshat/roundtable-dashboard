@@ -22,19 +22,20 @@ import {
 } from 'remotion';
 
 import { DepthParticles, EdgeVignette } from '../../components/scene-primitives';
-import { VideoAvatar, VideoGlassCard, VideoLogo } from '../../components/ui-replicas';
+import { VideoAvatar, VideoFeatureCaptions, VideoGlassCard, VideoLogo } from '../../components/ui-replicas';
 import { useCinematicCamera, useFocusPull } from '../../hooks';
-import { BACKGROUNDS, SPACING, TEXT } from '../../lib/design-tokens';
+import { BACKGROUNDS, FONTS, SPACING, TEXT } from '../../lib/design-tokens';
 
-// Role types and colors matching actual app
-type RoleName = 'Researcher' | 'Writer' | 'Analyst' | 'Creator';
+// Role types and colors matching actual app (from packages/shared/src/enums/roles.ts)
+type RoleName = 'Ideator' | 'Strategist' | 'Analyst' | 'Builder' | 'Critic';
 type RoleColors = { bg: string; text: string; border: string };
 
 const ROLE_COLORS: Record<RoleName, RoleColors> = {
-  Researcher: { bg: 'rgba(59, 130, 246, 0.2)', text: '#93c5fd', border: 'rgba(59, 130, 246, 0.3)' },
-  Writer: { bg: 'rgba(168, 85, 247, 0.2)', text: '#c4b5fd', border: 'rgba(168, 85, 247, 0.3)' },
-  Analyst: { bg: 'rgba(34, 197, 94, 0.2)', text: '#86efac', border: 'rgba(34, 197, 94, 0.3)' },
-  Creator: { bg: 'rgba(251, 146, 60, 0.2)', text: '#fdba74', border: 'rgba(251, 146, 60, 0.3)' },
+  Ideator: { bg: 'rgba(34, 197, 94, 0.2)', text: '#4ade80', border: 'rgba(34, 197, 94, 0.3)' },
+  Strategist: { bg: 'rgba(59, 130, 246, 0.2)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.3)' },
+  Analyst: { bg: 'rgba(6, 182, 212, 0.2)', text: '#22d3ee', border: 'rgba(6, 182, 212, 0.3)' },
+  Builder: { bg: 'rgba(249, 115, 22, 0.2)', text: '#fb923c', border: 'rgba(249, 115, 22, 0.3)' },
+  Critic: { bg: 'rgba(236, 72, 153, 0.2)', text: '#f472b6', border: 'rgba(236, 72, 153, 0.3)' },
 };
 
 // Floating participant cards with messages
@@ -55,21 +56,21 @@ const CLAUDE_CARD: FloatingParticipant = {
 const GPT4O_CARD: FloatingParticipant = {
   provider: 'openai',
   name: 'GPT-4o',
-  role: 'Writer',
+  role: 'Strategist',
   message: 'Building on that, consider the user journey...',
 };
 
 const GEMINI_CARD: FloatingParticipant = {
   provider: 'google',
   name: 'Gemini',
-  role: 'Researcher',
+  role: 'Ideator',
   message: 'Looking at market data, I found...',
 };
 
 const DEEPSEEK_CARD: FloatingParticipant = {
   provider: 'deepseek',
   name: 'DeepSeek',
-  role: 'Creator',
+  role: 'Builder',
   message: 'Here\'s an innovative alternative...',
 };
 
@@ -96,12 +97,12 @@ export function Scene02Homepage() {
   });
 
   // Enhanced dolly with camera position
-  const dollyX = interpolate(frame, [0, 90], [50, -50], {
+  const dollyX = interpolate(frame, [0, 90], [80, -80], {
     extrapolateRight: 'clamp',
   });
 
-  // Subtle zoom during dolly
-  const zoomScale = interpolate(frame, [0, 90], [1, 1.03], {
+  // Enhanced zoom during dolly
+  const zoomScale = interpolate(frame, [0, 90], [1, 1.08], {
     extrapolateRight: 'clamp',
   });
 
@@ -127,6 +128,11 @@ export function Scene02Homepage() {
   });
 
   const subtitleOpacity = interpolate(subtitleProgress, [0, 1], [0, 1]);
+
+  // Exit fade in last 10 frames
+  const exitFade = frame > 80
+    ? interpolate(frame, [80, 90], [1, 0], { extrapolateRight: 'clamp' })
+    : 1;
 
   // Feature cards floating effect - enhanced with breathing
   const cardFloatY = Math.sin(frame * 0.08) * 8 + breathingOffset.y * 0.5;
@@ -164,7 +170,8 @@ export function Scene02Homepage() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
-          padding: SPACING['3xl'],
+          padding: SPACING.lg,
+          opacity: exitFade,
         }}
       >
         {/* Logo */}
@@ -192,7 +199,7 @@ export function Scene02Homepage() {
               color: TEXT.primary,
               textAlign: 'center',
               margin: 0,
-              fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+              fontFamily: FONTS.sans,
               lineHeight: 1.2,
             }}
           >
@@ -213,7 +220,7 @@ export function Scene02Homepage() {
               color: TEXT.secondary,
               textAlign: 'center',
               margin: 0,
-              fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+              fontFamily: FONTS.sans,
             }}
           >
             Multiple AI models. One conversation. Better answers.
@@ -238,12 +245,12 @@ export function Scene02Homepage() {
             <VideoAvatar provider={CLAUDE_CARD.provider} fallback={CLAUDE_CARD.name} size={32} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.primary }}>{CLAUDE_CARD.name}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.muted }}>{CLAUDE_CARD.name}</span>
                 <span
                   style={{
-                    fontSize: 9,
+                    fontSize: 12,
                     fontWeight: 500,
-                    padding: '2px 6px',
+                    padding: '2px 8px',
                     borderRadius: 9999,
                     backgroundColor: ROLE_COLORS[CLAUDE_CARD.role].bg,
                     color: ROLE_COLORS[CLAUDE_CARD.role].text,
@@ -275,12 +282,12 @@ export function Scene02Homepage() {
             <VideoAvatar provider={GPT4O_CARD.provider} fallback={GPT4O_CARD.name} size={32} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.primary }}>{GPT4O_CARD.name}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.muted }}>{GPT4O_CARD.name}</span>
                 <span
                   style={{
-                    fontSize: 9,
+                    fontSize: 12,
                     fontWeight: 500,
-                    padding: '2px 6px',
+                    padding: '2px 8px',
                     borderRadius: 9999,
                     backgroundColor: ROLE_COLORS[GPT4O_CARD.role].bg,
                     color: ROLE_COLORS[GPT4O_CARD.role].text,
@@ -312,12 +319,12 @@ export function Scene02Homepage() {
             <VideoAvatar provider={GEMINI_CARD.provider} fallback={GEMINI_CARD.name} size={32} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.primary }}>{GEMINI_CARD.name}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.muted }}>{GEMINI_CARD.name}</span>
                 <span
                   style={{
-                    fontSize: 9,
+                    fontSize: 12,
                     fontWeight: 500,
-                    padding: '2px 6px',
+                    padding: '2px 8px',
                     borderRadius: 9999,
                     backgroundColor: ROLE_COLORS[GEMINI_CARD.role].bg,
                     color: ROLE_COLORS[GEMINI_CARD.role].text,
@@ -348,12 +355,12 @@ export function Scene02Homepage() {
             <VideoAvatar provider={DEEPSEEK_CARD.provider} fallback={DEEPSEEK_CARD.name} size={32} />
             <div style={{ flex: 1, minWidth: 0 }}>
               <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.primary }}>{DEEPSEEK_CARD.name}</span>
+                <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.muted }}>{DEEPSEEK_CARD.name}</span>
                 <span
                   style={{
-                    fontSize: 9,
+                    fontSize: 12,
                     fontWeight: 500,
-                    padding: '2px 6px',
+                    padding: '2px 8px',
                     borderRadius: 9999,
                     backgroundColor: ROLE_COLORS[DEEPSEEK_CARD.role].bg,
                     color: ROLE_COLORS[DEEPSEEK_CARD.role].text,
@@ -368,6 +375,15 @@ export function Scene02Homepage() {
           </div>
         </VideoGlassCard>
       </div>
+
+      {/* Feature captions overlay */}
+      <VideoFeatureCaptions
+        position="bottom-left"
+        captions={[
+          { start: 0, end: 45, text: 'Meet the AI council', subtitle: 'Multiple models collaborate on your questions' },
+          { start: 45, end: 90, text: 'Diverse perspectives', subtitle: 'Each AI brings unique reasoning and knowledge' },
+        ]}
+      />
     </AbsoluteFill>
   );
 }

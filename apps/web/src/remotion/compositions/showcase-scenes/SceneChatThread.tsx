@@ -1,18 +1,17 @@
 /**
  * Scene: Unified Chat Thread
- * Duration: 480 frames (16 seconds at 30fps)
+ * Duration: ~700 frames (23+ seconds at 30fps)
  *
  * THE CORE FEATURE - Complete chat thread flow in ONE scene:
  * - Frame 0-30: User message slides up
- * - Frame 30-90: Web search accordion opens, streams results
- * - Frame 90-120: Web search accordion collapses
- * - Frame 120-150: First participant placeholder appears with shimmer
- * - Frame 150-210: Claude content streams (camera zoom focus)
- * - Frame 180-240: GPT-4o placeholder then streams (camera zoom)
- * - Frame 210-270: Gemini placeholder then streams (camera zoom)
- * - Frame 280-310: All complete, moderator placeholder with shimmer
- * - Frame 310-420: Moderator synthesis streams
- * - Frame 420-480: Hold on complete thread
+ * - Frame 30-80: Web search accordion opens, streams results
+ * - Frame 80: Web search accordion collapses
+ * - Frame 90: ALL participant placeholders + moderator placeholder appear simultaneously
+ * - Frame 130-250: Claude streams first
+ * - Frame 260-380: GPT-4o streams second
+ * - Frame 390-510: Gemini streams third
+ * - Frame 520-660: Moderator streams last (after all participants done)
+ * - Frame 660+: Hold on complete thread
  *
  * Key behaviors:
  * - overflow: hidden with translateY for auto-scroll (no scrollbar)
@@ -32,6 +31,7 @@ import {
 import { BrowserFrame } from '../../components/BrowserFrame';
 import { DepthParticles, EdgeVignette } from '../../components/scene-primitives';
 import {
+  VideoFeatureCaptions,
   VideoParticipantMessage,
   VideoParticipantPlaceholder,
   VideoPreSearchCard,
@@ -39,7 +39,7 @@ import {
 } from '../../components/ui-replicas';
 import { TypewriterText } from '../../components/video-primitives';
 import { useCameraPan, useCinematicCamera, useFocusPull } from '../../hooks';
-import { BACKGROUNDS, SPACING, TEXT } from '../../lib/design-tokens';
+import { BACKGROUNDS, FONTS, SPACING } from '../../lib/design-tokens';
 
 // Cinematic spring config
 const CINEMATIC_SPRING = { damping: 40, stiffness: 100, mass: 1.2 };
@@ -48,11 +48,11 @@ const SMOOTH_SPRING = { damping: 30, stiffness: 80, mass: 1 };
 // The user's question - technology focused (no SaaS)
 const USER_QUESTION = 'Compare approaches for building real-time collaborative features';
 
-// Web search results - technology focused
+// Web search results - technology focused with URLs
 const SEARCH_RESULTS = [
-  { domain: 'crdt.tech', title: 'CRDTs for Collaborative Editing', snippet: 'Conflict-free replicated data types enable seamless collaboration...' },
-  { domain: 'realtimeapi.io', title: 'WebSocket vs Server-Sent Events', snippet: 'Comparing real-time communication protocols for modern apps...' },
-  { domain: 'operationaltransform.org', title: 'Operational Transformation Explained', snippet: 'How Google Docs achieves real-time collaborative editing...' },
+  { domain: 'crdt.tech', url: 'https://crdt.tech/resources', title: 'CRDTs for Collaborative Editing', snippet: 'Conflict-free replicated data types enable seamless real-time collaboration without requiring a central coordination server. They mathematically guarantee eventual consistency.' },
+  { domain: 'realtimeapi.io', url: 'https://realtimeapi.io/compare', title: 'WebSocket vs Server-Sent Events: Complete Guide', snippet: 'A comprehensive comparison of real-time communication protocols. WebSockets offer bidirectional low-latency communication while SSE provides simpler server-to-client streaming.' },
+  { domain: 'yjs.dev', url: 'https://yjs.dev/docs/getting-started', title: 'Yjs: Shared Editing Framework', snippet: 'The most performant CRDT implementation available. Used by Notion, Linear, and other major collaborative applications for document synchronization.' },
 ];
 
 // AI responses with timing - technology focused
@@ -61,52 +61,88 @@ const AI_RESPONSES = [
     provider: 'anthropic',
     modelName: 'Claude',
     loadingText: 'Analyzing collaboration patterns...',
-    text: 'CRDTs offer the strongest consistency guarantees for distributed collaboration. Unlike OT, they handle offline edits gracefully and merge deterministically without a central server.',
-    placeholderStart: 120,
-    streamStart: 150,
-    streamDuration: 60,
+    text: `CRDTs (Conflict-Free Replicated Data Types) provide the strongest consistency guarantees for distributed collaboration. Unlike Operational Transform, they handle offline edits gracefully and merge deterministically without requiring a central server.
+
+Key advantages of CRDTs:
+\u2022 Automatic conflict resolution without user intervention
+\u2022 Works offline with eventual consistency guaranteed
+\u2022 No central coordination needed - truly peer-to-peer capable
+\u2022 Libraries like Yjs and Automerge are production-ready
+
+For your use case, I'd recommend starting with Yjs for its superior performance on large documents, then layering WebSocket transport on top for real-time sync.`,
+    placeholderStart: 90,
+    streamStart: 120,
+    streamDuration: 90,
   },
   {
     provider: 'openai',
     modelName: 'GPT-4o',
     loadingText: 'Researching architectures...',
-    text: 'Consider your latency requirements carefully. WebSockets provide bidirectional communication but require connection management. For simpler use cases, SSE with periodic polling can be more reliable.',
-    placeholderStart: 150,
-    streamStart: 180,
-    streamDuration: 60,
+    text: `Consider your latency requirements carefully when choosing a real-time architecture. Here's a practical comparison:
+
+WebSockets:
+\u2022 Bidirectional, low-latency (sub-50ms)
+\u2022 Requires connection management and reconnection logic
+\u2022 Best for collaborative editing and live cursors
+
+Server-Sent Events (SSE):
+\u2022 Simpler to implement, works through proxies
+\u2022 One-directional (server to client)
+\u2022 Great for notifications and status updates
+
+For collaborative features, I recommend a hybrid approach: WebSockets for real-time cursor positions and typing indicators, with CRDTs handling the document state to ensure consistency.`,
+    placeholderStart: 90,
+    streamStart: 230,
+    streamDuration: 90,
   },
   {
     provider: 'google',
     modelName: 'Gemini',
     loadingText: 'Gathering technical insights...',
-    text: 'Yjs and Automerge are battle-tested CRDT libraries. Yjs offers better performance for large documents, while Automerge has a more intuitive API for complex nested data structures.',
-    placeholderStart: 180,
-    streamStart: 210,
-    streamDuration: 60,
+    text: `Yjs and Automerge are the two battle-tested CRDT libraries worth evaluating:
+
+Yjs (recommended for performance):
+\u2022 10-100x faster than Automerge for large documents
+\u2022 Rich ecosystem: y-websocket, y-indexeddb, y-webrtc
+\u2022 Used by Notion, Linear, and other major products
+\u2022 Sub-document support for granular sync
+
+Automerge (recommended for complex data):
+\u2022 More intuitive API for nested objects and arrays
+\u2022 Built-in change history and time travel
+\u2022 Better TypeScript support out of the box
+\u2022 Smaller bundle size
+
+Both handle network partitions gracefully and guarantee eventual consistency without data loss.`,
+    placeholderStart: 90,
+    streamStart: 340,
+    streamDuration: 90,
   },
 ];
 
 // Moderator synthesis
 const MODERATOR_CONFIG = {
-  modelName: 'Roundtable',
-  loadingText: 'Synthesizing perspectives...',
-  text: `The council recommends a layered approach:
+  modelName: 'Council Moderator',
+  loadingText: 'Observing discussion...',
+  text: `Based on the council's analysis, here's the recommended architecture:
 
-1. Use CRDTs (Yjs/Automerge) for conflict-free state
-2. WebSockets for low-latency updates
-3. Operational Transform for cursor positions
+**Foundation Layer:** Use Yjs as your CRDT engine for document state management. Its performance characteristics and ecosystem make it the clear choice for production.
 
-Key tradeoff: CRDTs add storage overhead but eliminate merge conflicts entirely.`,
-  placeholderStart: 280,
-  streamStart: 310,
+**Transport Layer:** WebSockets via y-websocket for real-time sync with automatic reconnection. Fall back to SSE for environments where WebSockets aren't available.
+
+**Presence Layer:** Implement cursor positions and typing indicators as ephemeral WebSocket messages (not persisted in CRDT state).
+
+**Key Trade-off:** CRDTs add ~20-30% storage overhead but completely eliminate merge conflicts and enable true offline-first capability.
+
+This layered approach gives you the best of all worlds: consistency, performance, and developer experience.`,
+  placeholderStart: 90,
+  streamStart: 450,
   streamDuration: 110,
 };
 
 // Timeline constants
 const WEB_SEARCH_START = 30;
-const WEB_SEARCH_COLLAPSE = 90;
-const CONTENT_SCROLL_START = 150;
-
+const WEB_SEARCH_COLLAPSE = 80;
 // Calculate which participant is currently streaming (for camera zoom)
 function getCurrentStreamingIndex(frame: number): number {
   for (let i = AI_RESPONSES.length - 1; i >= 0; i--) {
@@ -155,6 +191,11 @@ export function SceneChatThread() {
     transitionDuration: 60,
   });
 
+  // Exit fade in last 10 frames
+  const exitFade = frame > 710
+    ? interpolate(frame, [710, 720], [1, 0], { extrapolateRight: 'clamp' })
+    : 1;
+
   // === CONTAINER ANIMATION ===
   const containerProgress = spring({
     frame,
@@ -168,42 +209,23 @@ export function SceneChatThread() {
   });
 
   // === CAMERA ZOOM EFFECT ===
-  // Zoom in slightly on the currently streaming participant
   const currentStreamingIndex = getCurrentStreamingIndex(frame);
-  const isAnyStreaming = currentStreamingIndex >= 0;
 
-  // Smooth zoom transition - enhanced
-  const zoomProgress = spring({
-    frame: isAnyStreaming ? 10 : 0,
-    fps,
-    config: SMOOTH_SPRING,
-    durationInFrames: 30,
-  });
-
-  const cameraScale = interpolate(zoomProgress, [0, 1], [1, 1.025], {
-    extrapolateRight: 'clamp',
-  });
-
-  // Subtle camera movement - enhanced with breathing
-  const orbitX = Math.sin(frame * 0.006) * 2 + breathingOffset.x * 0.5;
-  const orbitY = Math.cos(frame * 0.004) * 1.5 + breathingOffset.y * 0.5;
+  // Unified entrance zoom - same timing across all scenes
+  const entranceZoom = interpolate(
+    spring({ frame, fps, config: { damping: 25, stiffness: 150 }, durationInFrames: 25 }),
+    [0, 1],
+    [0.96, 1],
+  );
 
   // === AUTO-SCROLL via translateY (no scrollbar) ===
-  // Content scrolls up as more participants appear
-  const scrollOffset = (() => {
-    if (frame < CONTENT_SCROLL_START)
-      return 0;
-
-    // Calculate how much to scroll based on visible content
-    const scrollProgress = interpolate(
-      frame,
-      [CONTENT_SCROLL_START, 280, 340, 420],
-      [0, 120, 200, 280],
-      { extrapolateRight: 'clamp' },
-    );
-
-    return scrollProgress;
-  })();
+  // Content scrolls up as conversation grows beyond 750px viewport
+  const scrollOffset = interpolate(
+    frame,
+    [0, 80, 130, 220, 320, 420, 550],
+    [0, 0, -150, -450, -700, -950, -1300],
+    { extrapolateRight: 'clamp' },
+  );
 
   // === USER MESSAGE ===
   const userMsgProgress = spring({
@@ -235,29 +257,6 @@ export function SceneChatThread() {
 
   // Web search accordion open state - starts open, collapses at WEB_SEARCH_COLLAPSE
   const isWebSearchOpen = frame < WEB_SEARCH_COLLAPSE + 30;
-
-  // === LABEL ===
-  const labelProgress = spring({
-    frame: frame - 5,
-    fps,
-    config: { damping: 200 },
-    durationInFrames: 20,
-  });
-  const labelOpacity = interpolate(labelProgress, [0, 1], [0, 1]);
-  const labelY = interpolate(labelProgress, [0, 1], [20, 0]);
-
-  // Dynamic label
-  const getLabelText = () => {
-    if (frame < WEB_SEARCH_START)
-      return 'Multiple perspectives. Real-time.';
-    if (frame < WEB_SEARCH_COLLAPSE)
-      return 'Searching for relevant context';
-    if (frame < 280)
-      return 'Each AI brings unique insights';
-    if (frame < MODERATOR_CONFIG.streamStart)
-      return 'The Moderator synthesizes';
-    return 'Unified insights from the council';
-  };
 
   // === PARTICIPANT RENDERING ===
   const renderParticipants = () => {
@@ -367,7 +366,6 @@ export function SceneChatThread() {
       opacity: modOpacity,
       transform: `translateY(${modY}px) scale(${modHighlightScale})`,
       transformOrigin: 'top left',
-      marginTop: SPACING.lg,
     };
 
     return (
@@ -404,12 +402,11 @@ export function SceneChatThread() {
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
-        justifyContent: 'flex-start',
-        padding: SPACING['2xl'],
-        paddingTop: SPACING.lg,
+        justifyContent: 'center',
+        padding: SPACING.lg,
         perspective: 1200,
         perspectiveOrigin: 'center center',
-        fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+        fontFamily: FONTS.sans,
         overflow: 'hidden', // No scrollbar
       }}
     >
@@ -426,93 +423,91 @@ export function SceneChatThread() {
       <EdgeVignette innerRadius={55} edgeOpacity={0.6} />
 
       {/* Feature Label */}
-      <div
-        style={{
-          position: 'absolute',
-          top: 40,
-          left: 60,
-          opacity: labelOpacity,
-          transform: `translateY(${labelY}px)`,
-          zIndex: 100,
-        }}
-      >
-        <span
-          style={{
-            fontSize: 20,
-            fontWeight: 600,
-            color: TEXT.primary,
-            backgroundColor: 'rgba(0, 0, 0, 0.6)',
-            backdropFilter: 'blur(10px)',
-            padding: '10px 20px',
-            borderRadius: 12,
-            border: '1px solid rgba(255, 255, 255, 0.1)',
-          }}
-        >
-          {getLabelText()}
-        </span>
-      </div>
+      <VideoFeatureCaptions
+        position="bottom-left"
+        captions={[
+          { start: 0, end: 30, text: 'Ask your question', subtitle: 'All models receive the same prompt' },
+          { start: 30, end: 90, text: 'Web-grounded answers', subtitle: 'Real-time search enriches AI responses' },
+          { start: 90, end: 180, text: 'Multiple perspectives', subtitle: 'Each AI brings unique reasoning and knowledge' },
+          { start: 180, end: 430, text: 'The roundtable in action', subtitle: 'Compare insights side by side' },
+          { start: 430, end: 560, text: 'Moderator synthesis', subtitle: 'AI summarizes the best ideas from all models' },
+        ]}
+      />
 
       {/* Browser Frame with Messages Container */}
-      <BrowserFrame url="roundtable.ai">
-        {/* Inner container with camera zoom and auto-scroll via translateY */}
-        <div
-          style={{
-            width: 1100,
-            height: 650,
-            display: 'flex',
-            flexDirection: 'column',
-            gap: SPACING.lg,
-            padding: SPACING.lg,
-            opacity: containerOpacity,
-            transform: `
-              translateX(${orbitX}px)
-              translateY(${orbitY - scrollOffset}px)
-              scale(${cameraScale})
-            `,
-            transformOrigin: 'top center',
-            backgroundColor: BACKGROUNDS.primary,
-            overflow: 'hidden', // No scrollbar - using translateY for auto-scroll
-          }}
-        >
-          {/* User Message */}
+      <div
+        style={{
+          transform: `scale(${entranceZoom})`,
+          transformOrigin: 'center center',
+          width: '100%',
+          display: 'flex',
+          justifyContent: 'center',
+          opacity: exitFade,
+        }}
+      >
+        <BrowserFrame url="roundtable.ai">
+          {/* Fixed-size viewport - overflow hidden clips the scrolling content */}
           <div
             style={{
-              opacity: userMsgOpacity,
-              transform: `translateY(${userMsgY}px)`,
-              marginBottom: SPACING.md,
+              width: 1200,
+              height: 750,
+              overflow: 'hidden',
+              backgroundColor: BACKGROUNDS.primary,
+              position: 'relative',
             }}
           >
-            <VideoUserMessage>{USER_QUESTION}</VideoUserMessage>
-          </div>
-
-          {/* Web Search Card - integrated in same scene */}
-          {frame >= WEB_SEARCH_START && (
+            {/* Scrolling content - translates up as conversation grows */}
             <div
               style={{
-                opacity: webSearchOpacity,
-                transform: `translateY(${webSearchY}px)`,
-                marginBottom: SPACING.sm,
+                display: 'flex',
+                flexDirection: 'column',
+                gap: 56,
+                padding: '32px 48px',
+                maxWidth: 896,
+                margin: '0 auto',
+                transform: `translateY(${scrollOffset}px)`,
+                opacity: containerOpacity,
               }}
             >
-              <VideoPreSearchCard
-                isOpen={isWebSearchOpen}
-                isStreaming={isWebSearchStreaming}
-                query="real-time collaborative features CRDT WebSocket"
-                results={SEARCH_RESULTS}
-                totalSources={9}
-              />
+              {/* User Message with typewriter effect */}
+              <div style={{ opacity: userMsgOpacity, transform: `translateY(${userMsgY}px)` }}>
+                <VideoUserMessage
+                  text={frame < 20
+                    ? USER_QUESTION.slice(0, Math.min(Math.floor(frame * 3), USER_QUESTION.length))
+                    : USER_QUESTION}
+                />
+              </div>
+
+              {/* Web Search - part of the same flow */}
+              {frame >= WEB_SEARCH_START && (
+                <div
+                  style={{
+                    opacity: webSearchOpacity,
+                    transform: `translateY(${webSearchY}px)`,
+                    marginTop: -36,
+                  }}
+                >
+                  <VideoPreSearchCard
+                    isOpen={isWebSearchOpen}
+                    isStreaming={isWebSearchStreaming}
+                    query="real-time collaborative features CRDT WebSocket"
+                    results={SEARCH_RESULTS}
+                    totalSources={9}
+                  />
+                </div>
+              )}
+
+              {/* ALL participants in a sub-container with space-y-4 (16px) */}
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                {renderParticipants()}
+              </div>
+
+              {/* Moderator - same level as participants group */}
+              {renderModerator()}
             </div>
-          )}
-
-          {/* AI Participant Responses */}
-          <div style={{ display: 'flex', flexDirection: 'column', gap: SPACING.lg }}>
-            {renderParticipants()}
           </div>
-
-          {/* Moderator Synthesis */}
-          {renderModerator()}
-        </div>
-      </BrowserFrame>
+        </BrowserFrame>
+      </div>
     </AbsoluteFill>
   );
 }

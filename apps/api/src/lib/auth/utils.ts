@@ -10,6 +10,8 @@ import { APIError } from 'better-auth/api';
 import { env as workersEnv } from 'cloudflare:workers';
 import { z } from 'zod';
 
+import { createError } from '@/common/error-handling';
+
 // ============================================================================
 // SCHEMAS
 // ============================================================================
@@ -141,4 +143,36 @@ export function extractSessionToken(cookieHeader: string | undefined): string {
 
   const sessionTokenMatch = cookieHeader.match(new RegExp(`${BETTER_AUTH_SESSION_COOKIE_NAME.replace(/\./g, '\\.')}=([^;]+)`));
   return sessionTokenMatch?.[1] || '';
+}
+
+// ============================================================================
+// ADMIN AUTHORIZATION
+// ============================================================================
+
+/**
+ * User type for admin authorization
+ * Using Zod for schema validation
+ */
+export const AdminUserSchema = z.object({
+  id: z.string(),
+  role: z.string().nullable().optional(),
+});
+
+export type AdminUser = z.infer<typeof AdminUserSchema>;
+
+/**
+ * Require admin role for protected operations
+ * Throws unauthorized error if user is not an admin
+ *
+ * @param {AdminUser} user - User object with role property
+ * @throws {Error} Unauthorized error if user.role !== 'admin'
+ */
+export function requireAdmin(user: AdminUser): void {
+  if (user.role !== 'admin') {
+    throw createError.unauthorized('Admin access required', {
+      errorType: 'authorization',
+      resource: 'admin',
+      userId: user.id,
+    });
+  }
 }

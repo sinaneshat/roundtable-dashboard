@@ -25,7 +25,7 @@ import {
 
 import { EdgeVignette } from '../../components/scene-primitives';
 import { useCinematicCamera, useFocusPull } from '../../hooks';
-import { BACKGROUNDS, BRAND, RAINBOW, SPACING, TEXT, TYPOGRAPHY } from '../../lib/design-tokens';
+import { BACKGROUNDS, BRAND, FONTS, RAINBOW, SPACING, TEXT, TYPOGRAPHY } from '../../lib/design-tokens';
 
 export function Scene01Intro() {
   const frame = useCurrentFrame();
@@ -37,9 +37,9 @@ export function Scene01Intro() {
     movement: 'reveal',
     startFrame: 0,
     duration: 50,
-    intensity: 0.8,
+    intensity: 1.2,
     breathingEnabled: true,
-    breathingIntensity: 4,
+    breathingIntensity: 6,
   });
 
   // Focus pull effect - blur to sharp
@@ -89,6 +89,11 @@ export function Scene01Intro() {
   // Subtitle animations
   const subtitleOpacity = interpolate(subtitleProgress, [0, 1], [0, 1]);
 
+  // Exit fade in last 10 frames
+  const exitFade = frame > 80
+    ? interpolate(frame, [80, 90], [1, 0], { extrapolateRight: 'clamp' })
+    : 1;
+
   // Background glow pulse - tied to camera breathing
   const glowPulse = Math.sin(frame * 0.1) * 0.2 + 0.8;
 
@@ -105,11 +110,12 @@ export function Scene01Intro() {
         flexDirection: 'column',
         alignItems: 'center',
         justifyContent: 'center',
+        overflow: 'hidden',
         perspective: 1200,
         perspectiveOrigin: 'center center',
       }}
     >
-      {/* Background depth layer - blurred particles with parallax */}
+      {/* Background depth layer - blurred particles with parallax + burst */}
       <div
         style={{
           position: 'absolute',
@@ -119,14 +125,22 @@ export function Scene01Intro() {
           transform: `translate(${breathingOffset.x * 0.3}px, ${breathingOffset.y * 0.3}px)`,
         }}
       >
-        {/* Floating particles - far depth layer */}
-        {Array.from({ length: 25 }).map((_, i) => {
+        {/* Floating particles - with burst effect at logo reveal */}
+        {Array.from({ length: frame >= 10 && frame < 50 ? 50 : 25 }).map((_, i) => {
           const x = (Math.sin(i * 1.5) * 40 + 50);
           const y = (Math.cos(i * 2.1) * 30 + 50);
           const size = 4 + (i % 5) * 2;
+
+          // Burst: particles explode outward from center at frame 10-25
+          const isBursting = frame >= 10 && frame < 50;
+          const burstProgress = isBursting ? Math.min((frame - 10) / 40, 1) : 0;
+          const burstRadius = burstProgress * 30;
+          const burstAngle = (i / (frame >= 10 && frame < 50 ? 50 : 25)) * Math.PI * 2;
+          const burstX = isBursting ? Math.cos(burstAngle) * burstRadius * (1 - burstProgress * 0.5) : 0;
+          const burstY = isBursting ? Math.sin(burstAngle) * burstRadius * (1 - burstProgress * 0.5) : 0;
+
           const floatY = Math.sin(frame * 0.05 + i) * 10;
           const floatX = Math.cos(frame * 0.03 + i * 0.7) * 5;
-          // Rainbow colors for particles
           const color = BRAND.logoGradient[i % BRAND.logoGradient.length];
 
           return (
@@ -141,7 +155,7 @@ export function Scene01Intro() {
                 borderRadius: '50%',
                 backgroundColor: color,
                 opacity: 0.6,
-                transform: `translate(${floatX}px, ${floatY}px)`,
+                transform: `translate(${floatX + burstX}px, ${floatY + burstY}px)`,
               }}
             />
           );
@@ -155,7 +169,7 @@ export function Scene01Intro() {
           width: 900,
           height: 900,
           borderRadius: '50%',
-          background: `radial-gradient(circle, ${BRAND.colors.primary}50 0%, transparent 70%)`,
+          background: `radial-gradient(circle, #FFD70050 0%, transparent 70%)`,
           filter: 'blur(100px)',
           opacity: logoOpacity * glowPulse,
           transform: `scale(${logoScale}) translate(${breathingOffset.x * 0.5}px, ${breathingOffset.y * 0.5}px)`,
@@ -172,6 +186,7 @@ export function Scene01Intro() {
           flexDirection: 'column',
           alignItems: 'center',
           justifyContent: 'center',
+          opacity: exitFade,
         }}
       >
         {/* Logo container with rainbow border */}
@@ -186,7 +201,7 @@ export function Scene01Intro() {
               position: 'relative',
               padding: 5,
               borderRadius: 36,
-              background: `linear-gradient(${glowRotation}deg, ${RAINBOW.colors.slice(0, 6).join(', ')})`,
+              background: `linear-gradient(${glowRotation}deg, ${RAINBOW.colors.join(', ')})`,
               boxShadow: `0 0 60px ${BRAND.colors.primary}40`,
             }}
           >
@@ -214,7 +229,7 @@ export function Scene01Intro() {
                   fontWeight: 700,
                   color: TEXT.primary,
                   letterSpacing: '-0.02em',
-                  fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+                  fontFamily: FONTS.sans,
                 }}
               >
                 Roundtable

@@ -7,7 +7,7 @@ import { createError } from '@/common/error-handling';
 import { createHandler, IdParamSchema, Responses } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/tables';
-import { extractSessionToken } from '@/lib/auth';
+import { extractSessionToken, requireAdmin } from '@/lib/auth';
 import type { ApiEnv } from '@/types';
 import type { StartAutomatedJobQueueMessage } from '@/types/queues';
 
@@ -25,19 +25,6 @@ import {
   JobListQuerySchema,
   UpdateJobRequestSchema,
 } from './schema';
-
-/**
- * Helper: Check if user is admin
- */
-function requireAdmin(user: { role?: string | null; id: string }) {
-  if (user.role !== 'admin') {
-    throw createError.unauthorized('Admin access required', {
-      errorType: 'authorization',
-      resource: 'admin',
-      userId: user.id,
-    });
-  }
-}
 
 /**
  * Helper: Transform DB job to response format
@@ -122,8 +109,9 @@ export const listJobsHandler: RouteHandler<typeof listJobsRoute, ApiEnv> = creat
       return transformJob(job, thread?.slug ?? null, thread?.isPublic ?? false);
     });
 
-    const nextCursor = hasMore && results.length > 0
-      ? results[results.length - 1]!.createdAt.toISOString()
+    const lastResult = results.at(-1);
+    const nextCursor = hasMore && lastResult
+      ? lastResult.createdAt.toISOString()
       : null;
 
     return Responses.ok(c, {

@@ -45,12 +45,16 @@ export const COLORS = {
 export const HEX_COLORS = {
   background: '#1a1a1a',
   foreground: '#dedede',
-  card: '#282828',
-  secondary: '#3a3a3a', // User message background
-  muted: '#3a3a3a',
-  mutedForeground: '#a3a3a3',
-  border: 'rgba(77, 77, 77, 0.6)',
+  card: '#383838', // oklch(0.22 0 0) - corrected
+  secondary: '#444444', // oklch(0.269 0 0) - corrected
+  muted: '#444444', // oklch(0.269 0 0) - corrected
+  mutedForeground: '#bfbfbf', // oklch(0.75 0 0) - corrected
+  border: 'rgba(102, 102, 102, 0.6)', // oklch(0.4 0 0 / 60%) - corrected
+  borderWhite5: 'rgba(255, 255, 255, 0.05)',
+  borderWhite8: 'rgba(255, 255, 255, 0.08)',
+  borderWhite10: 'rgba(255, 255, 255, 0.1)',
   borderWhite12: 'rgba(255, 255, 255, 0.12)',
+  borderWhite15: 'rgba(255, 255, 255, 0.15)',
   borderWhite20: 'rgba(255, 255, 255, 0.2)',
   borderWhite30: 'rgba(255, 255, 255, 0.3)',
   primary: '#eaeaea',
@@ -62,6 +66,26 @@ export const HEX_COLORS = {
   purple500: '#a855f7',
   destructive: '#dc2626', // Mic recording red (hsl(0, 84.2%, 60.2%))
 } as const;
+
+// Sidebar colors (matching app sidebar)
+export const SIDEBAR_COLORS = {
+  sidebar: '#383838', // oklch(0.22 0 0) - corrected
+  sidebarForeground: '#dedede', // oklch(0.87 0 0)
+  sidebarAccent: '#444444', // oklch(0.269 0 0) - corrected
+  sidebarBorder: 'rgba(102, 102, 102, 0.6)', // oklch(0.4 0 0 / 60%) - corrected
+  mutedForeground: '#bfbfbf', // oklch(0.75 0 0) - corrected
+} as const;
+
+// Role colors (matching actual app participant roles)
+export const ROLE_COLORS = {
+  Ideator: { bg: 'rgba(34, 197, 94, 0.2)', text: '#4ade80', border: 'rgba(34, 197, 94, 0.3)' },
+  Strategist: { bg: 'rgba(59, 130, 246, 0.2)', text: '#60a5fa', border: 'rgba(59, 130, 246, 0.3)' },
+  Analyst: { bg: 'rgba(6, 182, 212, 0.2)', text: '#22d3ee', border: 'rgba(6, 182, 212, 0.3)' },
+  Builder: { bg: 'rgba(249, 115, 22, 0.2)', text: '#fb923c', border: 'rgba(249, 115, 22, 0.3)' },
+  Critic: { bg: 'rgba(236, 72, 153, 0.2)', text: '#f472b6', border: 'rgba(236, 72, 153, 0.3)' },
+} as const;
+
+export type RoleName = keyof typeof ROLE_COLORS;
 
 // Font stack matching globals.css
 // Noto Sans: universal multilingual font (Latin + Arabic/Persian/Urdu)

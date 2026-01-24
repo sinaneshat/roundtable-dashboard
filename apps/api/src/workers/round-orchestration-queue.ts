@@ -206,7 +206,7 @@ async function handleContinueAutomatedJob(
  */
 async function handleCompleteAutomatedJob(
   message: CompleteAutomatedJobQueueMessage,
-  env: CloudflareEnv,
+  _env: CloudflareEnv,
 ): Promise<void> {
   const { jobId, threadId, autoPublish } = message;
 
@@ -403,10 +403,11 @@ async function processQueueMessage(
     msg.ack();
   } catch (error) {
     const messageType = msg.body.type;
-    const threadId = msg.body.threadId;
+    // threadId exists on most message types except start-automated-job which has jobId
+    const identifier = 'threadId' in msg.body ? msg.body.threadId : ('jobId' in msg.body ? msg.body.jobId : 'unknown');
 
     console.error(
-      `[RoundOrchestration] ❌ Failed ${messageType} for thread ${threadId}:`,
+      `[RoundOrchestration] ❌ Failed ${messageType} for ${identifier}:`,
       error,
     );
 

@@ -336,6 +336,15 @@ export async function executePreSearch(
 const STALE_STREAMING_TIMEOUT_MS = 15_000; // 15 seconds
 
 /**
+ * Minimal pre-search fields needed for wait check
+ * Allows using partial pre-search data from callbacks
+ */
+type PreSearchWaitCheckFields = {
+  status: string;
+  createdAt: string;
+};
+
+/**
  * Check if pre-search should block message sending
  *
  * ✅ RESUMPTION FIX: Added timeout-based fallback for stale STREAMING status.
@@ -347,7 +356,7 @@ const STALE_STREAMING_TIMEOUT_MS = 15_000; // 15 seconds
  */
 export function shouldWaitForPreSearch(
   webSearchEnabled: boolean,
-  preSearchForRound: StoredPreSearch | undefined,
+  preSearchForRound: PreSearchWaitCheckFields | StoredPreSearch | undefined,
 ): boolean {
   if (!webSearchEnabled) {
     return false;

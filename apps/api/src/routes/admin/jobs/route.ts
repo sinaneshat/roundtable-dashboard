@@ -1,4 +1,4 @@
-import { createRoute, z } from '@hono/zod-openapi';
+import { createRoute } from '@hono/zod-openapi';
 import * as HttpStatusCodes from 'stoker/http-status-codes';
 
 import { createApiResponseSchema, createProtectedRouteResponses, IdParamSchema } from '@/core';
@@ -6,6 +6,7 @@ import { createApiResponseSchema, createProtectedRouteResponses, IdParamSchema }
 import {
   CreateJobRequestSchema,
   DeleteJobQuerySchema,
+  DeleteJobResponseSchema,
   JobCreatedResponseSchema,
   JobListQuerySchema,
   JobListResponseSchema,
@@ -74,7 +75,7 @@ export const createJobRoute = createRoute({
  */
 export const getJobRoute = createRoute({
   method: 'get',
-  path: '/admin/jobs/{id}',
+  path: '/admin/jobs/:id',
   tags: ['admin-jobs'],
   summary: 'Get automated job details (admin only)',
   description: 'Get details of a specific automated job including thread slug.',
@@ -99,7 +100,7 @@ export const getJobRoute = createRoute({
  */
 export const updateJobRoute = createRoute({
   method: 'patch',
-  path: '/admin/jobs/{id}',
+  path: '/admin/jobs/:id',
   tags: ['admin-jobs'],
   summary: 'Update automated job (admin only)',
   description: 'Update job settings - cancel a running job or toggle thread visibility.',
@@ -131,7 +132,7 @@ export const updateJobRoute = createRoute({
  */
 export const deleteJobRoute = createRoute({
   method: 'delete',
-  path: '/admin/jobs/{id}',
+  path: '/admin/jobs/:id',
   tags: ['admin-jobs'],
   summary: 'Delete automated job (admin only)',
   description: 'Delete an automated job. Optionally delete the associated thread with deleteThread=true.',
@@ -144,10 +145,7 @@ export const deleteJobRoute = createRoute({
       description: 'Job deleted',
       content: {
         'application/json': {
-          schema: createApiResponseSchema(z.object({
-            deleted: z.boolean(),
-            threadDeleted: z.boolean().optional(),
-          })),
+          schema: createApiResponseSchema(DeleteJobResponseSchema),
         },
       },
     },
