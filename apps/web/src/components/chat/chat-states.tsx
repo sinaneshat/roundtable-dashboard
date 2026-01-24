@@ -265,8 +265,7 @@ export function ErrorState({
             </p>
           </div>
           {onRetry && (
-            <Button onClick={onRetry} variant="outline">
-              <Icons.refreshCw className="h-4 w-4 me-2" />
+            <Button onClick={onRetry} variant="outline" startIcon={<Icons.refreshCw />}>
               {retryLabel}
             </Button>
           )}
@@ -291,8 +290,7 @@ export function ErrorState({
                 {description || t('states.error.description')}
               </p>
               {onRetry && (
-                <Button variant="outline" onClick={onRetry}>
-                  <Icons.refreshCw className="h-4 w-4 me-2" />
+                <Button variant="outline" onClick={onRetry} startIcon={<Icons.refreshCw />}>
                   {retryLabel}
                 </Button>
               )}

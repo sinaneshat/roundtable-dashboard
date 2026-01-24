@@ -140,10 +140,10 @@ export function ShareDialog({
               </Button>
               <Button
                 onClick={onMakePublic}
-                disabled={isLoading}
-                startIcon={isLoading ? <Icons.loader className="size-4 animate-spin" /> : undefined}
+                loading={isLoading}
+                loadingText={t('chat.makingPublic')}
               >
-                {isLoading ? t('chat.makingPublic') : t('chat.makePublic')}
+                {t('chat.makePublic')}
               </Button>
             </DialogFooter>
           </>
@@ -247,12 +247,13 @@ export function ShareDialog({
             <DialogFooter bordered bleed>
               <Button
                 onClick={onMakePrivate}
-                disabled={isLoading}
+                loading={isLoading}
+                loadingText={t('chat.makingPrivate')}
                 variant="outline"
                 className="w-full sm:w-auto h-10 border-amber-500/30 text-amber-500 hover:bg-amber-500/10 hover:text-amber-400 hover:border-amber-500/40"
-                startIcon={isLoading ? <Icons.loader className="size-4 animate-spin" /> : <Icons.lock className="size-4" />}
+                startIcon={<Icons.lock />}
               >
-                {isLoading ? t('chat.makingPrivate') : t('chat.makePrivate')}
+                {t('chat.makePrivate')}
               </Button>
             </DialogFooter>
           </>

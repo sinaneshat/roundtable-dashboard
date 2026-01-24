@@ -302,7 +302,7 @@ export function isAiProcessableMimeType(mimeType: string): boolean {
 // ============================================================================
 
 // 1. ARRAY CONSTANT - Source of truth
-export const INCOMPATIBILITY_REASONS = ['noVision', 'noFileSupport'] as const;
+export const INCOMPATIBILITY_REASONS = ['noVision', 'noFileSupport', 'fileTooLarge'] as const;
 
 // 2. DEFAULT VALUE
 export const DEFAULT_INCOMPATIBILITY_REASON: IncompatibilityReason = 'noVision';
@@ -320,6 +320,7 @@ export type IncompatibilityReason = z.infer<typeof IncompatibilityReasonSchema>;
 export const IncompatibilityReasons = {
   NO_VISION: 'noVision' as const,
   NO_FILE_SUPPORT: 'noFileSupport' as const,
+  FILE_TOO_LARGE: 'fileTooLarge' as const,
 } as const;
 
 // ============================================================================

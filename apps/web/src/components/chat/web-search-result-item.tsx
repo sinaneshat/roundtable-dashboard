@@ -154,8 +154,8 @@ export function WebSearchResultItem({
                     variant="ghost"
                     size="sm"
                     className="p-0 h-5 text-xs mt-1 text-primary/70 hover:text-primary hover:bg-transparent"
+                    startIcon={<Icons.chevronDown className={cn('transition-transform', isExpanded.value && 'rotate-180')} />}
                   >
-                    <Icons.chevronDown className={cn('size-3 mr-0.5 transition-transform', isExpanded.value && 'rotate-180')} />
                     {isExpanded.value ? t('collapseLess') : t('expandMore')}
                   </Button>
                 </CollapsibleTrigger>

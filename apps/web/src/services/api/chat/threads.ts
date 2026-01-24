@@ -74,11 +74,14 @@ export type GetThreadRoundChangelogResponse = InferResponseType<GetThreadRoundCh
 
 type GetThreadStreamResumptionStateEndpoint = ApiClientType['chat']['threads'][':threadId']['stream-status']['$get'];
 type AnalyzePromptEndpoint = ApiClientType['chat']['analyze']['$post'];
+type GetThreadMemoryEventsEndpoint = ApiClientType['chat']['threads'][':threadId']['memory-events']['$get'];
 
 export type GetThreadStreamResumptionStateRequest = InferRequestType<GetThreadStreamResumptionStateEndpoint>;
 export type GetThreadStreamResumptionStateResponse = InferResponseType<GetThreadStreamResumptionStateEndpoint, 200>;
 export type AnalyzePromptRequest = InferRequestType<AnalyzePromptEndpoint>;
 export type AnalyzePromptResponse = InferResponseType<AnalyzePromptEndpoint, 200>;
+export type GetThreadMemoryEventsRequest = InferRequestType<GetThreadMemoryEventsEndpoint>;
+export type GetThreadMemoryEventsResponse = InferResponseType<GetThreadMemoryEventsEndpoint, 200>;
 
 // ============================================================================
 // Service Functions - Thread CRUD
@@ -177,6 +180,19 @@ export async function getThreadStreamResumptionStateService(
 ) {
   const client = createApiClient({ cookieHeader: options?.cookieHeader });
   return parseResponse(client.chat.threads[':threadId']['stream-status'].$get(data));
+}
+
+// ============================================================================
+// Service Functions - Memory Events
+// ============================================================================
+
+/**
+ * Get memory events for a specific round
+ * Used to poll for memory creation after round completes
+ */
+export async function getThreadMemoryEventsService(data: GetThreadMemoryEventsRequest) {
+  const client = createApiClient();
+  return parseResponse(client.chat.threads[':threadId']['memory-events'].$get(data));
 }
 
 // ============================================================================

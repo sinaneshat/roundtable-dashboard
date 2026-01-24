@@ -69,11 +69,11 @@ export function RHFDatePicker<
                       !field.value && 'text-muted-foreground',
                     )}
                     aria-required={!!required}
+                    endIcon={<Icons.calendar className="ms-auto opacity-50" />}
                   >
                     {selectedDate
                       ? format(selectedDate, 'PPP')
                       : <span>{placeholder || t('forms.pickDate')}</span>}
-                    <Icons.calendar className="ms-auto size-4 opacity-50" />
                   </Button>
                 </FormControl>
               </PopoverTrigger>

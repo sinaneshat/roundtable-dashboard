@@ -61,7 +61,7 @@ function DialogContent({
       <DialogOverlay glass={glass} />
       <DialogPrimitive.Content
         className={cn(
-          'fixed left-[50%] top-[50%] z-50 flex flex-col w-[calc(100%-2rem)] sm:w-full max-w-lg max-h-[90vh] translate-x-[-50%] translate-y-[-50%] duration-200',
+          'fixed left-[50%] top-[50%] z-50 flex flex-col w-[calc(100%-2rem)] sm:w-full max-w-lg max-h-[90vh] translate-x-[-50%] translate-y-[-50%] duration-200 overflow-auto',
           'data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95',
           glass
             ? cn('gap-0 rounded-2xl border border-border bg-card p-0 shadow-lg')
@@ -192,5 +192,6 @@ export {
   DialogOverlay,
   DialogPortal,
   DialogTitle,
-  DialogTrigger,
+  DialogTrigger
 };
+

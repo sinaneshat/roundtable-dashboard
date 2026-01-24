@@ -13,11 +13,14 @@ import type { ProjectFormValues } from '@/components/projects';
 import {
   AttachmentDeleteDialog,
   getProjectFormDefaults,
+  MemoryDeleteDialog,
   ProjectDeleteDialog,
   ProjectFormFields,
   ProjectFormSchema,
   ProjectIconBadge,
+  ProjectMemoryCard,
   ProjectPendingFileItem,
+  ProjectThreadCard,
 } from '@/components/projects';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -27,7 +30,7 @@ import { SmartImage } from '@/components/ui/smart-image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAddAttachmentToProjectMutation, useUpdateProjectMutation } from '@/hooks/mutations';
 import { useDownloadUrlQuery, useProjectAttachmentsQuery, useProjectMemoriesQuery, useProjectQuery, useProjectThreadsQuery } from '@/hooks/queries';
-import { useChatAttachments, useDragDrop, useThreadNavigation } from '@/hooks/utils';
+import { useChatAttachments, useDragDrop } from '@/hooks/utils';
 import { formatFileSize } from '@/lib/format';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
@@ -64,7 +67,13 @@ export function ProjectDetailScreen({
     fetchNextPage: fetchMoreAttachments,
     isFetchingNextPage: isFetchingMoreAttachments,
   } = useProjectAttachmentsQuery(projectId, { initialData: initialAttachments });
-  const { data: memoriesData, isFetching: isMemoriesFetching } = useProjectMemoriesQuery(projectId, { initialData: initialMemories });
+  const {
+    data: memoriesData,
+    isFetching: isMemoriesFetching,
+    hasNextPage: hasMoreMemories,
+    fetchNextPage: fetchMoreMemories,
+    isFetchingNextPage: isFetchingMoreMemories,
+  } = useProjectMemoriesQuery(projectId, { initialData: initialMemories });
 
   // Get project from query response
   const project = projectResponse?.success ? projectResponse.data : null;
@@ -187,6 +196,9 @@ export function ProjectDetailScreen({
                 projectId={projectId}
                 memories={memories}
                 isLoading={memories.length === 0 && isMemoriesFetching}
+                hasNextPage={hasMoreMemories}
+                fetchNextPage={fetchMoreMemories}
+                isFetchingNextPage={isFetchingMoreMemories}
               />
             </TabsContent>
 
@@ -316,8 +328,8 @@ function ProjectSettingsSection({ project, onDelete }: ProjectSettingsSectionPro
                 size="sm"
                 className="text-destructive hover:text-destructive hover:bg-destructive/10"
                 onClick={onDelete}
+                startIcon={<Icons.trash />}
               >
-                <Icons.trash className="size-4 mr-2" />
                 {t('actions.delete')}
               </Button>
             </div>
@@ -564,10 +576,9 @@ function ProjectFilesSection({
             size="sm"
             onClick={handleUploadClick}
             disabled={isUploading}
+            loading={isUploading}
+            startIcon={<Icons.upload />}
           >
-            {isUploading
-              ? <Icons.loader className="size-4 mr-2 animate-spin" />
-              : <Icons.upload className="size-4 mr-2" />}
             {t('projects.uploadFiles')}
           </Button>
         )}
@@ -585,8 +596,8 @@ function ProjectFilesSection({
                   variant={ComponentVariants.OUTLINE}
                   className="mt-4"
                   onClick={handleUploadClick}
+                  startIcon={<Icons.upload />}
                 >
-                  <Icons.upload className="size-4 mr-2" />
                   {t('projects.uploadFiles')}
                 </Button>
               </div>
@@ -641,14 +652,27 @@ function ProjectFilesSection({
   );
 }
 
+type ProjectMemory = NonNullable<ListProjectMemoriesResponse['data']>['items'][number];
+
 type ProjectMemoriesSectionProps = {
   projectId: string;
-  memories: unknown[];
+  memories: ProjectMemory[];
   isLoading: boolean;
+  hasNextPage?: boolean;
+  fetchNextPage?: () => void;
+  isFetchingNextPage?: boolean;
 };
 
-function ProjectMemoriesSection({ memories, isLoading }: ProjectMemoriesSectionProps) {
+function ProjectMemoriesSection({
+  projectId,
+  memories,
+  isLoading,
+  hasNextPage,
+  fetchNextPage,
+  isFetchingNextPage,
+}: ProjectMemoriesSectionProps) {
   const t = useTranslations();
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
 
   if (isLoading) {
     return (
@@ -667,33 +691,57 @@ function ProjectMemoriesSection({ memories, isLoading }: ProjectMemoriesSectionP
   }
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('projects.memories')}</CardTitle>
-        <CardDescription>
-          {t('projects.memoriesDescription')}
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        {memories.length === 0
-          ? (
-              <div className="text-center py-8">
-                <Icons.brain className="size-12 mx-auto text-muted-foreground/50" />
-                <p className="mt-2 text-sm font-medium">{t('projects.memoriesEmpty')}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t('projects.memoriesAutoGenerated')}
-                </p>
-              </div>
-            )
-          : (
-              <div className="text-sm text-muted-foreground">
-                {memories.length}
-                {' '}
-                memories
-              </div>
-            )}
-      </CardContent>
-    </Card>
+    <>
+      <Card>
+        <CardHeader>
+          <CardTitle>{t('projects.memories')}</CardTitle>
+          <CardDescription>
+            {t('projects.memoriesDescription')}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {memories.length === 0
+            ? (
+                <div className="text-center py-8">
+                  <Icons.brain className="size-12 mx-auto text-muted-foreground/50" />
+                  <p className="mt-2 text-sm font-medium">{t('projects.memoriesEmpty')}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('projects.memoriesAutoGenerated')}
+                  </p>
+                </div>
+              )
+            : (
+                <div className="space-y-2">
+                  {memories.map(memory => (
+                    <ProjectMemoryCard
+                      key={memory.id}
+                      memory={memory}
+                      onDelete={() => setDeleteTarget(memory.id)}
+                    />
+                  ))}
+                  {hasNextPage && fetchNextPage && (
+                    <Button
+                      variant={ComponentVariants.GHOST}
+                      size="sm"
+                      className="w-full mt-2"
+                      onClick={fetchNextPage}
+                      disabled={isFetchingNextPage}
+                    >
+                      {isFetchingNextPage ? t('actions.loading') : t('actions.loadMore')}
+                    </Button>
+                  )}
+                </div>
+              )}
+        </CardContent>
+      </Card>
+
+      <MemoryDeleteDialog
+        open={!!deleteTarget}
+        onOpenChange={open => !open && setDeleteTarget(null)}
+        projectId={projectId}
+        memoryId={deleteTarget}
+      />
+    </>
   );
 }
 
@@ -704,7 +752,6 @@ type ProjectThreadsSectionProps = {
 
 function ProjectThreadsSection({ projectId, initialData }: ProjectThreadsSectionProps) {
   const t = useTranslations();
-  const { createClickHandler } = useThreadNavigation();
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; slug: string } | null>(null);
   const {
     data,
@@ -721,7 +768,7 @@ function ProjectThreadsSection({ projectId, initialData }: ProjectThreadsSection
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{t('projects.threads')}</CardTitle>
-          <Button asChild size="sm" startIcon={<Icons.plus className="size-4" />}>
+          <Button asChild size="sm" startIcon={<Icons.plus />}>
             <Link to="/chat/projects/$projectId/new" params={{ projectId }}>
               {t('projects.newChat')}
             </Link>
@@ -743,7 +790,7 @@ function ProjectThreadsSection({ projectId, initialData }: ProjectThreadsSection
       <Card>
         <CardHeader className="flex flex-row items-center justify-between">
           <CardTitle>{t('projects.threads')}</CardTitle>
-          <Button asChild size="sm" startIcon={<Icons.plus className="size-4" />}>
+          <Button asChild size="sm" startIcon={<Icons.plus />}>
             <Link to="/chat/projects/$projectId/new" params={{ projectId }}>
               {t('projects.newChat')}
             </Link>
@@ -761,48 +808,13 @@ function ProjectThreadsSection({ projectId, initialData }: ProjectThreadsSection
                 </div>
               )
             : (
-                <div className="space-y-1">
+                <div className="space-y-2">
                   {threads.map(thread => (
-                    <div
+                    <ProjectThreadCard
                       key={thread.id}
-                      className={cn(
-                        'flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors group',
-                      )}
-                    >
-                      <Link
-                        to="/chat/$slug"
-                        params={{ slug: thread.slug }}
-                        onClick={createClickHandler({
-                          id: thread.id,
-                          slug: thread.slug,
-                          title: thread.title,
-                          createdAt: thread.createdAt,
-                          updatedAt: thread.updatedAt,
-                        })}
-                        preload={false}
-                        className="flex items-center gap-3 flex-1 min-w-0"
-                      >
-                        <Icons.messageSquare className="size-4 text-muted-foreground shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium truncate">{thread.title}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {new Date(thread.updatedAt).toLocaleDateString()}
-                          </p>
-                        </div>
-                      </Link>
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          setDeleteTarget({ id: thread.id, slug: thread.slug });
-                        }}
-                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
-                        title={t('chat.deleteThread')}
-                      >
-                        <Icons.trash className="size-4" />
-                      </button>
-                    </div>
+                      thread={thread}
+                      onDelete={() => setDeleteTarget({ id: thread.id, slug: thread.slug })}
+                    />
                   ))}
                   {hasNextPage && (
                     <Button

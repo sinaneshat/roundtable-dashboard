@@ -70,9 +70,22 @@ export const HardcodedModelSchema = z.object({
   supports_reasoning_stream: z.boolean(),
   streaming_behavior: StreamingBehaviorSchema.optional(),
   tags: z.array(ModelCapabilityTagSchema), // User-facing capability filter tags
+  maxFileSizeMB: z.number(), // ✅ Max total file size this model can handle (MB) - derived from context_length
 });
 
 export type HardcodedModel = z.infer<typeof HardcodedModelSchema>;
+
+/**
+ * ✅ DERIVE MAX FILE SIZE: Calculate max file upload capacity from context length
+ * Formula: (context_length × 0.4) / 250,000
+ * - 0.4 = 40% of context reserved for files
+ * - 250,000 = ~tokens per MB of PDF content
+ * - Minimum 1 MB for any model
+ */
+function deriveMaxFileSizeMB(contextLength: number): number {
+  const calculated = Math.floor((contextLength * 0.4) / 250000);
+  return Math.max(1, calculated); // Minimum 1 MB
+}
 
 /**
  * Derive capability tags from model properties
@@ -105,8 +118,8 @@ function deriveModelTags(model: BaseModelData): ModelCapabilityTag[] {
   return tags;
 }
 
-// Base model data without tags (tags are derived automatically)
-type BaseModelData = Omit<HardcodedModel, 'tags'>;
+// Base model data without computed fields (tags + maxFileSizeMB are derived automatically)
+type BaseModelData = Omit<HardcodedModel, 'tags' | 'maxFileSizeMB'>;
 
 const BASE_MODELS: readonly BaseModelData[] = [
   {
@@ -777,10 +790,11 @@ const BASE_MODELS: readonly BaseModelData[] = [
   },
 ];
 
-// Derive HARDCODED_MODELS with computed tags from BASE_MODELS
+// Derive HARDCODED_MODELS with computed tags + maxFileSizeMB from BASE_MODELS
 export const HARDCODED_MODELS: readonly HardcodedModel[] = BASE_MODELS.map((model) => {
   const tags = deriveModelTags(model);
-  return { ...model, tags } as HardcodedModel;
+  const maxFileSizeMB = deriveMaxFileSizeMB(model.context_length);
+  return { ...model, tags, maxFileSizeMB } as HardcodedModel;
 });
 
 // ============================================================================
@@ -846,6 +860,7 @@ export function getModelById(modelId: string): HardcodedModel | undefined {
     supports_reasoning_stream: found.supports_reasoning_stream,
     streaming_behavior: found.streaming_behavior,
     tags: found.tags,
+    maxFileSizeMB: found.maxFileSizeMB,
   } satisfies HardcodedModel;
 }
 

@@ -30,12 +30,14 @@ import { ChatSection } from './chat-states';
 import { ChatThreadActions } from './chat-thread-actions';
 import { useThreadHeaderOptional } from './thread-header-context';
 
-const BREADCRUMB_PATHS = ['/chat', '/chat/pricing'] as const;
+const BREADCRUMB_PATHS = ['/chat', '/chat/pricing', '/admin/impersonate', '/admin/jobs'] as const;
 type BreadcrumbPath = (typeof BREADCRUMB_PATHS)[number];
 
 const BREADCRUMB_MAP: Record<BreadcrumbPath, { titleKey: string; parent?: string }> = {
   '/chat': { titleKey: 'navigation.chat' },
   '/chat/pricing': { titleKey: 'navigation.pricing', parent: '/chat' },
+  '/admin/impersonate': { titleKey: 'admin.impersonate.title', parent: '/chat' },
+  '/admin/jobs': { titleKey: 'admin.jobs.title', parent: '/chat' },
 };
 
 function isBreadcrumbPath(path: string): path is BreadcrumbPath {

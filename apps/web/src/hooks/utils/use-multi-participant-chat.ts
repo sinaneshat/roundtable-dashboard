@@ -13,6 +13,7 @@ import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getAvailableSources, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, isObject, isPreSearch, mergeParticipantMetadata } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatParticipant, DbUserMessageMetadata } from '@/services/api';
+import { shouldWaitForPreSearch } from '@/stores/chat/utils/pre-search-execution';
 
 import { useSyncedRefs } from './use-synced-refs';
 
@@ -53,7 +54,7 @@ const UseMultiParticipantChatOptionsSchema = z.object({
     updatedAt: z.string().optional(),
   })),
   messages: z.array(z.custom<UIMessage>()).optional(),
-  mode: z.string().optional(),
+  mode: z.string().nullable().optional(),
   regenerateRoundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
   // Callbacks are not validated - they pass through via TypeScript types
 });
@@ -171,6 +172,12 @@ type UseMultiParticipantChatOptions = {
    * Guards the flag-clearing effect in use-streaming-trigger.ts to prevent premature clearing.
    */
   setHasSentPendingMessage?: (value: boolean) => void;
+  /**
+   * ✅ PRE-SEARCH RACE FIX: Callback to get current pre-searches from store
+   * Used in continueFromParticipant as defense in depth to prevent triggering
+   * participants while pre-search is still streaming.
+   */
+  getPreSearches?: () => Array<{ roundNumber: number; status: string; createdAt: string }>;
 };
 
 /**
@@ -333,6 +340,8 @@ export function useMultiParticipantChat(
     acknowledgeStreamFinish,
     // ✅ STREAMING BUG FIX: Mark when message actually sent to AI SDK
     setHasSentPendingMessage,
+    // ✅ PRE-SEARCH RACE FIX: Get current pre-searches from store
+    getPreSearches,
   } = options;
 
   // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
@@ -375,6 +384,8 @@ export function useMultiParticipantChat(
     acknowledgeStreamFinish,
     // ✅ STREAMING BUG FIX: Mark when message actually sent to AI SDK
     setHasSentPendingMessage,
+    // ✅ PRE-SEARCH RACE FIX: Get current pre-searches from store
+    getPreSearches,
   });
 
   // Participant error tracking - simple Set-based tracking to prevent duplicate responses
@@ -2444,6 +2455,23 @@ export function useMultiParticipantChat(
     }
 
     rlog.resume('continue', `P${fromIndex} r${roundNumber} msgs=${messages.length} search=${messagesToSearch.length} enabled=${enabled.length}`);
+
+    // =========================================================================
+    // ✅ PRE-SEARCH RACE FIX: Block if pre-search still streaming (defense in depth)
+    // =========================================================================
+    // The primary guard is in use-streaming-trigger.ts, but this provides defense
+    // in depth to prevent triggering participants from multiple code paths while
+    // pre-search is still active.
+    const webSearchEnabled = callbackRefs.enableWebSearch.current;
+    if (webSearchEnabled && callbackRefs.getPreSearches.current) {
+      const preSearches = callbackRefs.getPreSearches.current();
+      const preSearchForRound = preSearches.find(ps => ps.roundNumber === roundNumber);
+      if (shouldWaitForPreSearch(webSearchEnabled, preSearchForRound)) {
+        rlog.resume('cfp-exit', `P${fromIndex} EXIT: pre-search not complete r${roundNumber}`);
+        isTriggeringRef.current = false;
+        return;
+      }
+    }
 
     // =========================================================================
     // ✅ MISSING EARLIER PARTICIPANT FIX: Validate all earlier participants have messages

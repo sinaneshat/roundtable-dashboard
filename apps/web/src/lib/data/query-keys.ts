@@ -168,6 +168,18 @@ export const queryKeys = {
     detail: (id: string) => QueryKeyFactory.detail('uploads', id),
     downloadUrl: (id: string) => QueryKeyFactory.action('uploads', 'downloadUrl', id),
   },
+
+  // Admin: Automated Jobs
+  adminJobs: {
+    all: QueryKeyFactory.base('adminJobs'),
+    lists: () => [...queryKeys.adminJobs.all, 'list'] as const,
+    list: (status?: string) =>
+      status
+        ? QueryKeyFactory.action('adminJobs', 'list', status)
+        : QueryKeyFactory.list('adminJobs'),
+    details: () => [...queryKeys.adminJobs.all, 'detail'] as const,
+    detail: (id: string) => QueryKeyFactory.detail('adminJobs', id),
+  },
 } as const;
 
 /**
@@ -314,16 +326,11 @@ export const invalidationPatterns = {
     queryKeys.uploads.lists(),
   ],
 
-  // Leave thread - invalidate ALL thread-specific caches when navigating away
-  // Used by navigation-reset.ts when user leaves a thread to start a new chat
-  // CRITICAL: Must include ALL thread-specific data to prevent stale state
+  // Leave thread - invalidate auxiliary thread-specific caches when navigating away
+  // NOTE: We do NOT invalidate bySlug() or detail() - those should stay cached for snappy navigation
+  // Only invalidate ephemeral data that shouldn't persist across sessions
   leaveThread: (threadId: string) => [
-    queryKeys.threads.messages(threadId),
-    queryKeys.threads.preSearches(threadId),
-    queryKeys.threads.feedback(threadId),
-    queryKeys.threads.streamResumption(threadId),
-    queryKeys.threads.changelog(threadId),
-    queryKeys.threads.detail(threadId),
+    queryKeys.threads.streamResumption(threadId), // Ephemeral streaming state
   ],
 
   // Auth state change - invalidate ALL user-specific data
@@ -338,6 +345,17 @@ export const invalidationPatterns = {
     queryKeys.apiKeys.all,
     queryKeys.projects.all,
     queryKeys.uploads.all,
+    queryKeys.adminJobs.all,
+  ],
+
+  // Admin jobs operations
+  adminJobs: [
+    queryKeys.adminJobs.lists(),
+  ],
+
+  adminJobDetail: (jobId: string) => [
+    queryKeys.adminJobs.detail(jobId),
+    queryKeys.adminJobs.lists(),
   ],
 } as const;
 
@@ -445,4 +463,16 @@ export function isListOrSidebarQuery(query: { queryKey: readonly unknown[] }): b
     return false;
   const key = query.queryKey[1];
   return key === QueryKeySegments.LIST || key === QueryKeySegments.SIDEBAR;
+}
+
+/**
+ * Predicate for list/sidebar queries WITHOUT a projectId
+ * Prevents new standalone threads from being added to project-specific caches
+ */
+export function isNonProjectListOrSidebarQuery(query: { queryKey: readonly unknown[] }): boolean {
+  if (!isListOrSidebarQuery(query))
+    return false;
+  // Check if query has a projectId in its params (3rd element)
+  const params = query.queryKey[2] as { projectId?: string } | undefined;
+  return !params?.projectId;
 }

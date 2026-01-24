@@ -282,7 +282,7 @@ function RootErrorComponent({ error, reset }: ErrorComponentProps) {
                 variant="default"
                 size="lg"
                 onClick={reset}
-                startIcon={<Icons.refreshCw className="size-4" />}
+                startIcon={<Icons.refreshCw />}
                 className="min-w-[140px]"
               >
                 Try Again
@@ -291,7 +291,7 @@ function RootErrorComponent({ error, reset }: ErrorComponentProps) {
                 variant="outline"
                 size="lg"
                 asChild
-                startIcon={<Icons.home className="size-4" />}
+                startIcon={<Icons.home />}
                 className="min-w-[140px]"
               >
                 <Link to="/">Go Home</Link>

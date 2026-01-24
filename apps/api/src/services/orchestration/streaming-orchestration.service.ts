@@ -848,6 +848,7 @@ export async function buildSystemPromptWithContext(
             maxModerators: 3,
             db,
             baseUrl,
+            r2Bucket: env.UPLOADS_R2_BUCKET, // Load project attachment content
           }),
           loadThreadAttachmentContext({
             threadId: thread.id,

@@ -11,14 +11,14 @@ export const Route = createFileRoute('/_protected/admin')({
 
     return { session };
   },
-  // ✅ LAYOUT ROUTE CACHING: Prevent unnecessary loader re-runs
+  // Layout route caching: Prevent unnecessary loader re-runs
   staleTime: Infinity,
   component: AdminLayout,
 });
 
 /**
- * Admin route layout - just renders children.
- * Requires admin role check in beforeLoad.
+ * Admin route layout - minimal wrapper for admin pages.
+ * Auth check happens in beforeLoad. Breadcrumbs are handled by chat-header.
  */
 function AdminLayout() {
   return <Outlet />;

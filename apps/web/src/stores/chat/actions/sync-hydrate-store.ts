@@ -53,21 +53,29 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
 
   const storeApi = useChatStoreApi();
   const hasHydrated = useRef(false);
+  const prevThreadIdRef = useRef<string | undefined>(undefined);
 
   // Track thread ID to detect navigation
   const threadId = thread?.id;
 
   useLayoutEffect(() => {
-    // Get current store state
-    const state = storeApi.getState();
+    // Reset hydration flag when threadId changes
+    if (prevThreadIdRef.current !== threadId) {
+      hasHydrated.current = false;
+      prevThreadIdRef.current = threadId;
+    }
 
-    const currentThreadId = state.thread?.id || state.createdThreadId;
-    const isSameThread = threadId && currentThreadId === threadId;
+    const state = storeApi.getState();
     const isInitialized = state.hasInitiallyLoaded;
+    const isSameThread = threadId && (state.thread?.id === threadId || state.createdThreadId === threadId);
     const storeMessages = state.messages || [];
 
+    rlog.sync('hydrate-check', `props=${thread?.slug ?? '-'}(${initialMessages.length}msg) store=${state.thread?.slug ?? '-'}(${storeMessages.length}msg) init=${isInitialized} same=${isSameThread} hydrated=${hasHydrated.current}`);
+    rlog.init('hydrate-data', `propMsgs=${initialMessages.length} propParts=${participants.length} storeMsgs=${storeMessages.length}`);
+
     // Skip if already initialized for this thread
-    if (isInitialized && isSameThread) {
+    if (isInitialized && isSameThread && hasHydrated.current) {
+      rlog.sync('hydrate-skip', 'already initialized for this thread');
       return;
     }
 
@@ -80,8 +88,17 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
       return;
     }
 
-    // Skip if no data to hydrate
-    if (!thread || participants.length === 0) {
+    // Skip if no thread data to hydrate
+    if (!thread) {
+      rlog.sync('hydrate-skip', 'no thread data');
+      return;
+    }
+
+    // ✅ FIX: Skip if data is shell (empty participants/messages)
+    // Prevents useThreadNavigation's cache pre-population from causing empty store
+    const isShellData = participants.length === 0 && initialMessages.length === 0;
+    if (isShellData) {
+      rlog.sync('hydrate-skip', 'shell data (empty participants/messages)');
       return;
     }
 
@@ -123,13 +140,25 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
       // ✅ SCOPE VALIDATION: Verify thread context is still current before prefilling
       // This prevents stale prefill data from being applied after navigation
       const currentScope = storeApi.getState().resumptionScopeThreadId;
+
+      rlog.resume('prefill-check', `phase=${streamResumptionState.currentPhase} round=${streamResumptionState.roundNumber} skipForm=${skipPrefillDueToFormSubmission} scopeMatch=${currentScope === threadId}`);
+
       if (!skipPrefillDueToFormSubmission && currentScope === threadId) {
+        rlog.resume('prefill-apply', `applying resumption state phase=${streamResumptionState.currentPhase} round=${streamResumptionState.roundNumber} partIdx=${streamResumptionState.nextParticipantToTrigger}`);
         state.prefillStreamResumptionState(threadId, streamResumptionState);
+      } else {
+        rlog.resume('prefill-skip', `skipForm=${skipPrefillDueToFormSubmission} scopeMatch=${currentScope === threadId}`);
       }
+    } else if (threadId) {
+      rlog.resume('prefill-none', 'no streamResumptionState provided');
     }
 
     // Initialize thread with SSR data
     state.initializeThread(thread, participants, initialMessages);
+
+    const afterState = storeApi.getState();
+    rlog.sync('hydrate-done', `slug=${afterState.thread?.slug ?? '-'} msgs=${afterState.messages.length} parts=${participants.length}`);
+    rlog.init('hydrate-after', `msgs=${afterState.messages.length} parts=${afterState.participants.length}`);
 
     // ✅ CRITICAL FIX: Set pre-searches into store for resumption
     // Without this, streaming trigger finds no pre-search for current round
@@ -147,9 +176,4 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
 
     hasHydrated.current = true;
   }, [storeApi, mode, thread, threadId, participants, initialMessages, streamResumptionState, initialPreSearches, initialChangelog]);
-
-  // Reset hydration flag when thread changes
-  useLayoutEffect(() => {
-    hasHydrated.current = false;
-  }, [threadId]);
 }

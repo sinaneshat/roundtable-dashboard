@@ -41,16 +41,6 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     initialPreSearches,
   } = options;
 
-  const actions = useChatStore(useShallow(s => ({
-    setScreenMode: s.setScreenMode,
-    initializeThread: s.initializeThread,
-    prefillStreamResumptionState: s.prefillStreamResumptionState,
-    setThread: s.setThread,
-    setParticipants: s.setParticipants,
-    setMessages: s.setMessages,
-    setPreSearches: s.setPreSearches,
-  })));
-
   const storeApi = useChatStoreApi();
 
   const streamingStateSet = useChatStore(useShallow(s => ({
@@ -65,12 +55,12 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
 
   useEffect(() => {
     rlog.flow('screen', `setScreenMode=${mode}`);
-    actions.setScreenMode(mode);
+    storeApi.getState().setScreenMode(mode);
     return () => {
       rlog.flow('screen', `CLEANUP setScreenMode=null (was ${mode})`);
-      actions.setScreenMode(null);
+      storeApi.getState().setScreenMode(null);
     };
-  }, [mode, actions]);
+  }, [mode, storeApi]);
 
   useEffect(() => {
     const threadId = thread?.id;
@@ -117,11 +107,13 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
 
     // ✅ RECOVERY: msgs exist but parts=0 is inconsistent state - force re-init
     const isInconsistentState = hasMessages && !hasParticipants;
+    // ✅ HYDRATION FIX: Store thread must match incoming threadId to skip
+    const storeMatchesIncoming = storeThreadId === threadId;
     if (isInconsistentState) {
       rlog.init('inconsistent', `msgs=${freshState.messages.length} parts=0 - FORCING re-init`);
       // Fall through to initializeThread
-    } else if (storeHasMoreData || (storeAlreadyLoaded && hasCriticalData)) {
-      rlog.init('skip', `storeHasMore=${storeHasMoreData ? 1 : 0} storeLoaded=${storeAlreadyLoaded ? 1 : 0} hasCritical=${hasCriticalData ? 1 : 0} - skipping re-init`);
+    } else if ((storeHasMoreData && storeMatchesIncoming) || (storeAlreadyLoaded && hasCriticalData && storeMatchesIncoming)) {
+      rlog.init('skip', `storeHasMore=${storeHasMoreData ? 1 : 0} storeLoaded=${storeAlreadyLoaded ? 1 : 0} hasCritical=${hasCriticalData ? 1 : 0} storeMatch=${storeMatchesIncoming ? 1 : 0} - skipping re-init`);
       rlog.flow('screen-init', `SKIP-REINIT - store already has data, preserving streaming state`);
       initializedThreadIdRef.current = threadId ?? null;
 
@@ -151,7 +143,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     // causing initializeThread to check streamResumptionPrefilled=false and wipe messages.
     // Now we prefill synchronously BEFORE initializeThread checks the flag.
     if (threadId && streamResumptionState && !alreadyInitialized && !skipPrefillDueToFormSubmission) {
-      actions.prefillStreamResumptionState(threadId, streamResumptionState);
+      storeApi.getState().prefillStreamResumptionState(threadId, streamResumptionState);
     }
 
     // Re-read the flag after potential prefill (Zustand updates are sync)
@@ -170,13 +162,13 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
 
     if (isReady && !alreadyInitialized && !isFormActionsSubmission) {
       initializedThreadIdRef.current = threadId;
-      actions.initializeThread(thread, participants, initialMessages);
+      storeApi.getState().initializeThread(thread, participants, initialMessages);
 
       // ✅ CRITICAL FIX: Set pre-searches into store when hydrated from server
       // Previously only used for conditional logic but never stored
       // Without this, streaming trigger finds no pre-search for current round
       if (initialPreSearches?.length) {
-        actions.setPreSearches(initialPreSearches);
+        storeApi.getState().setPreSearches(initialPreSearches);
         rlog.init('presearch-hydrate', `set ${initialPreSearches.length} pre-searches into store`);
       }
     }
@@ -184,7 +176,7 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
     if (threadId !== initializedThreadIdRef.current && initializedThreadIdRef.current !== null) {
       initializedThreadIdRef.current = null;
     }
-  }, [thread, participants, initialMessages, actions, streamingStateSet, streamResumptionState, storeApi, initialPreSearches, mode]);
+  }, [thread, participants, initialMessages, streamingStateSet, streamResumptionState, storeApi, initialPreSearches, mode]);
 
   // ✅ SSR CONSISTENCY: Stale data handling moved to server-side in page.tsx
   // verifyAndFetchFreshMessages() retries DB reads before SSR completes

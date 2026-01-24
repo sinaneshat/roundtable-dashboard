@@ -54,7 +54,7 @@ export const STALE_TIMES = {
   // ============================================================================
   threads: 60 * 1000, // 1 minute - sidebar list, invalidated on mutations
   threadsSidebar: 30 * 1000, // 30s - lightweight sidebar endpoint, shorter TTL for fresher titles
-  threadDetail: 0, // NO CACHE - private threads must always be fresh for real-time collaboration
+  threadDetail: 30_000, // 30 seconds - allows snappy navigation, refetches if stale
   threadMessages: 0, // NO CACHE - messages may be added via streaming, must always be fresh
   threadChangelog: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
   threadModerators: Infinity, // Never stale - ONE-WAY DATA FLOW pattern (FLOW_DOCUMENTATION.md:32)
@@ -82,6 +82,7 @@ export const STALE_TIMES = {
   // ============================================================================
   userProfile: 5 * 60 * 1000, // 5 minutes - user profile rarely changes
   apiKeys: 5 * 60 * 1000, // 5 minutes - API keys rarely created/deleted
+  adminJobs: 5 * 1000, // 5 seconds - admin jobs poll frequently for running jobs
 
   // ============================================================================
   // Chat Configuration (semi-static)

@@ -315,10 +315,15 @@ export function useDeleteThreadMutation() {
 
       return { previousThreads, previousUsage, threadId, slug: variables.slug, projectId: variables.projectId };
     },
-    onSuccess: (_data, _variables, context) => {
+    onSuccess: (data, _variables, context) => {
       if (!context)
         return;
-      const { threadId, slug, projectId } = context;
+      const { threadId, slug } = context;
+
+      // Use projectId from response (fallback to context if not available)
+      const projectId = (data.success && data.data?.projectId)
+        ? data.data.projectId
+        : context.projectId;
 
       // Remove all thread-specific caches
       queryClient.removeQueries({ queryKey: queryKeys.threads.detail(threadId) });
@@ -340,6 +345,7 @@ export function useDeleteThreadMutation() {
         queryClient.invalidateQueries({ queryKey: queryKeys.projects.attachments(projectId) });
         queryClient.invalidateQueries({ queryKey: queryKeys.projects.memories(projectId) });
         queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.context(projectId) });
         queryClient.invalidateQueries({ queryKey: queryKeys.projects.sidebar() });
       }
 

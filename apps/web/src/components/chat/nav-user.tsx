@@ -1,5 +1,4 @@
 import { StripeSubscriptionStatuses, SubscriptionTiers } from '@roundtable/shared';
-import { WebAppEnvs } from '@roundtable/shared/enums';
 import { useQueryClient } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useEffect, useMemo, useState } from 'react';
@@ -15,6 +14,9 @@ import {
   DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import {
@@ -26,7 +28,7 @@ import { useBoolean } from '@/hooks/utils';
 import { clearServiceWorkerCache, invalidateUserQueries } from '@/lib/auth';
 import { authClient, deleteUser, signOut, useSession } from '@/lib/auth/client';
 import type { Session, User } from '@/lib/auth/types';
-import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
+import { getAppBaseUrl } from '@/lib/config/base-urls';
 import { useTranslations } from '@/lib/i18n';
 import { showApiErrorToast } from '@/lib/toast';
 import dynamic from '@/lib/utils/dynamic';
@@ -66,7 +68,6 @@ export function NavUser({ initialSession }: NavUserProps) {
   const isStoppingImpersonation = useBoolean(false);
   const customerPortalMutation = useCreateCustomerPortalSessionMutation();
   const cancelSubscriptionMutation = useCancelSubscriptionMutation();
-  const showDeleteAccountOption = getWebappEnv() !== WebAppEnvs.PROD;
 
   const user = clientSession?.user ?? initialSession?.user;
 
@@ -303,28 +304,49 @@ export function NavUser({ initialSession }: NavUserProps) {
                   <p className="text-[10px] text-muted-foreground">{t('userMenu.feedbackDescription')}</p>
                 </div>
               </DropdownMenuItem>
-              {showDeleteAccountOption && (
-                <DropdownMenuItem
-                  onClick={showDeleteDialog.onTrue}
-                  className="text-destructive focus:text-destructive focus:bg-destructive/10"
-                >
-                  <Icons.trash />
-                  <div className="flex-1">
-                    <p className="text-xs font-semibold">{t('userMenu.deleteAccount')}</p>
-                    <p className="text-[10px] text-muted-foreground/70">{t('userMenu.deleteAccountDescription')}</p>
-                  </div>
-                </DropdownMenuItem>
-              )}
+              <DropdownMenuItem
+                onClick={showDeleteDialog.onTrue}
+                className="text-destructive focus:text-destructive focus:bg-destructive/10"
+              >
+                <Icons.trash />
+                <div className="flex-1">
+                  <p className="text-xs font-semibold">{t('userMenu.deleteAccount')}</p>
+                  <p className="text-[10px] text-muted-foreground/70">{t('userMenu.deleteAccountDescription')}</p>
+                </div>
+              </DropdownMenuItem>
               {user?.role === 'admin' && (
-                <DropdownMenuItem asChild>
-                  <Link to="/admin/impersonate" preload="intent" className="flex items-center gap-2">
-                    <Icons.userCog className="size-4" />
-                    <div className="flex-1">
-                      <p className="text-xs font-semibold">{t('userMenu.impersonateUser')}</p>
-                      <p className="text-[10px] text-muted-foreground">{t('userMenu.impersonateDescription')}</p>
-                    </div>
-                  </Link>
-                </DropdownMenuItem>
+                <>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuSub>
+                    <DropdownMenuSubTrigger className="gap-2">
+                      <Icons.shieldAlert className="size-4" />
+                      <div className="flex-1">
+                        <p className="text-xs font-semibold">{t('userMenu.admin')}</p>
+                        <p className="text-[10px] text-muted-foreground">{t('userMenu.adminDescription')}</p>
+                      </div>
+                    </DropdownMenuSubTrigger>
+                    <DropdownMenuSubContent className="min-w-48">
+                      <DropdownMenuItem asChild>
+                        <Link to="/admin/impersonate" preload="intent" className="flex items-center gap-2">
+                          <Icons.userCog className="size-4" />
+                          <div className="flex-1">
+                            <p className="text-xs font-semibold">{t('userMenu.impersonateUser')}</p>
+                            <p className="text-[10px] text-muted-foreground">{t('userMenu.impersonateDescription')}</p>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
+                      <DropdownMenuItem asChild>
+                        <Link to="/admin/jobs" preload="intent" className="flex items-center gap-2">
+                          <Icons.sparkles className="size-4" />
+                          <div className="flex-1">
+                            <p className="text-xs font-semibold">{t('userMenu.automatedJobs')}</p>
+                            <p className="text-[10px] text-muted-foreground">{t('userMenu.automatedJobsDescription')}</p>
+                          </div>
+                        </Link>
+                      </DropdownMenuItem>
+                    </DropdownMenuSubContent>
+                  </DropdownMenuSub>
+                </>
               )}
               {isImpersonating && (
                 <>

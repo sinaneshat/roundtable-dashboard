@@ -130,6 +130,7 @@ function ImpersonatePage() {
                     'flex w-full [&>span]:flex [&>span]:w-full [&>span]:justify-between',
                     !selectedUser && 'text-muted-foreground',
                   )}
+                  endIcon={<Icons.chevronsUpDown className="opacity-50" />}
                 >
                   {selectedUser
                     ? (
@@ -146,7 +147,6 @@ function ImpersonatePage() {
                     : (
                         t('admin.impersonate.searchPlaceholder')
                       )}
-                  <Icons.chevronsUpDown className="ml-2 size-4 shrink-0 opacity-50" />
                 </Button>
               </PopoverTrigger>
               <PopoverContent className="w-[var(--radix-popover-trigger-width)] p-0" align="start">
@@ -230,9 +230,10 @@ function ImpersonatePage() {
                 onClick={handleImpersonate}
                 disabled={isImpersonating.value}
                 loading={isImpersonating.value}
+                loadingText={t('admin.impersonate.switching')}
+                startIcon={<Icons.userCheck />}
               >
-                {!isImpersonating.value && <Icons.userCheck className="size-4 mr-2" />}
-                {isImpersonating.value ? t('admin.impersonate.switching') : t('admin.impersonate.impersonateButton')}
+                {t('admin.impersonate.impersonateButton')}
               </Button>
             </div>
           )}

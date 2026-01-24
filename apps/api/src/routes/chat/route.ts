@@ -16,6 +16,8 @@ import {
   DeleteThreadResponseSchema,
   ExistingModeratorMessageSchema,
   GetThreadFeedbackResponseSchema,
+  MemoryEventQuerySchema,
+  MemoryEventResponseSchema,
   MessagesListResponseSchema,
   ParticipantDetailResponseSchema,
   PreSearchListResponseSchema,
@@ -1099,6 +1101,42 @@ Returns \`ThreadStreamResumptionState\` with:
       description: 'Stream resumption state retrieved successfully',
       content: {
         'application/json': { schema: ThreadStreamResumptionStateResponseSchema },
+      },
+    },
+    ...createProtectedRouteResponses(),
+  },
+});
+
+/**
+ * GET /chat/threads/:threadId/memory-events
+ * ✅ MEMORY EVENTS: Poll for memory creation events after round completes
+ */
+export const getThreadMemoryEventsRoute = createRoute({
+  method: 'get',
+  path: '/chat/threads/:threadId/memory-events',
+  tags: ['chat'],
+  summary: 'Get memory events for a round',
+  description: `Check if memories were created for a specific round. Frontend polls this after round completes to show toast notification.
+
+**Response**:
+- Returns memory event data if memories were created
+- Returns null if no memories were created for this round
+- Events are stored in KV with 5 minute TTL
+
+**Usage**:
+1. Wait for round to complete (all participants done)
+2. Poll this endpoint with roundNumber query param
+3. If memories exist, show toast notification
+4. Invalidate project memories query cache`,
+  request: {
+    params: ThreadIdParamSchema,
+    query: MemoryEventQuerySchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      description: 'Memory event data (or null if none)',
+      content: {
+        'application/json': { schema: MemoryEventResponseSchema },
       },
     },
     ...createProtectedRouteResponses(),

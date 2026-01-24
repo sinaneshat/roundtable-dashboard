@@ -1,4 +1,4 @@
-import { EMAIL_DOMAIN_CONFIG, NodeEnvs } from '@roundtable/shared';
+import { ACCOUNT_ABUSE_CONFIG, EMAIL_DOMAIN_CONFIG, NodeEnvs } from '@roundtable/shared';
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { createAuthMiddleware } from 'better-auth/api';
@@ -9,6 +9,7 @@ import { db } from '@/db';
 import * as authSchema from '@/db/tables/auth';
 import { getApiServerOrigin, getAppBaseUrl } from '@/lib/config/base-urls';
 
+import { isEmailBlockedFromSignup, recordAccountDeletion } from '../account-abuse';
 import { isAllowedEmailDomain, isRestrictedEnvironment, validateEmailDomain } from '../utils';
 
 /**
@@ -215,7 +216,12 @@ function createAuth() {
       user: {
         create: {
           before: async (user) => {
-            // Skip validation in production - only restrict preview/local
+            // Check for account abuse (ALL environments)
+            if (user.email && await isEmailBlockedFromSignup(user.email)) {
+              throw new Error(ACCOUNT_ABUSE_CONFIG.ERROR_MESSAGE);
+            }
+
+            // Skip domain validation in production - only restrict preview/local
             if (!isRestrictedEnvironment()) {
               return;
             }
@@ -292,6 +298,12 @@ function createAuth() {
       },
       deleteUser: {
         enabled: true,
+        afterDelete: async (user) => {
+          // Record deletion to prevent free round abuse
+          if (user.email) {
+            await recordAccountDeletion(user.email);
+          }
+        },
       },
     },
 

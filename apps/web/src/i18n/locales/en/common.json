@@ -23,6 +23,84 @@
       "success": "Impersonation Started",
       "switching": "Switching user...",
       "title": "Impersonate User"
+    },
+    "jobs": {
+      "title": "Automated Jobs",
+      "description": "Create and manage automated multi-round AI conversations",
+      "create": "Create Job",
+      "createFirst": "Create your first job",
+      "empty": "No jobs yet",
+      "emptyDescription": "Create your first automated job to generate AI discussions",
+      "loadError": "Failed to load jobs",
+      "noFilterResults": "No jobs match this filter",
+      "created": "Job created and queued for processing",
+      "deleted": "Job deleted successfully",
+      "deleteError": "Failed to delete job",
+      "deleteConfirmTitle": "Delete Job",
+      "deleteConfirmDescription": "This will permanently delete this job.",
+      "deleteThreadOption": "Also delete the associated thread",
+      "cancelConfirmTitle": "Cancel Job?",
+      "cancelConfirmDescription": "This will stop the job and mark it as cancelled. This cannot be undone.",
+      "createdAt": "Created {date}",
+      "round": "Round {current} / {total}",
+      "roundProgress": "Round {current}/{total}",
+      "autoPublish": "Auto-publish",
+      "viewThread": "View Thread",
+      "publish": "Publish",
+      "run": "Run",
+      "retry": "Retry",
+      "copyLink": "Copy link",
+      "linkCopied": "Link copied",
+      "details": "Job Details",
+      "prompt": "Initial Prompt",
+      "rounds": "Rounds",
+      "models": "Selected Models",
+      "startedAt": "Started",
+      "completedAt": "Completed",
+      "error": "Error",
+      "endOfList": "No more jobs",
+      "filter": {
+        "all": "All",
+        "pending": "Pending",
+        "running": "Running",
+        "completed": "Completed",
+        "failed": "Failed"
+      },
+      "new": {
+        "title": "Create Automated Job",
+        "description": "Set up an automated multi-round AI discussion with auto-selected models",
+        "promptLabel": "Initial Prompt",
+        "promptPlaceholder": "Enter the discussion topic or question...",
+        "promptHint": "This prompt will start the discussion. AI will select models and generate follow-up questions.",
+        "roundsLabel": "Number of Rounds",
+        "roundsHint": "How many rounds of discussion (1-5)",
+        "autoPublishLabel": "Auto-publish when complete",
+        "autoPublishHint": "Make the thread public automatically when all rounds finish",
+        "submit": "Create Job"
+      },
+      "trends": {
+        "title": "Discover Trends",
+        "description": "Find trending topics on social media to generate discussion prompts",
+        "keywordLabel": "Keyword",
+        "keywordPlaceholder": "Enter a topic to explore...",
+        "platforms": "Platforms",
+        "discover": "Discover",
+        "discovering": "Searching...",
+        "noResults": "No trends found for this keyword",
+        "createJob": "Create Job",
+        "suggestedRounds": "Rounds",
+        "relevance": "Relevance",
+        "reasoning": "Why trending",
+        "editPrompt": "Edit prompt before creating",
+        "selectAll": "Select all",
+        "deselectAll": "Deselect all",
+        "selectedCount": "{count} selected",
+        "createSelected": "Create {count} jobs",
+        "creating": "Creating {current}/{total}...",
+        "batchCreated": "{count} jobs created successfully",
+        "batchErrors": "{count} jobs failed to create",
+        "discoveryError": "Failed to discover trends"
+      }
     }
   },
   "actions": {
@@ -379,6 +457,9 @@
     "feedback": {
       "dislike": "Dislike",
       "like": "Like"
+    },
+    "memory": {
+      "memorySaved": "Memory saved"
     },
     "input": {
       "attachFiles": "Attach files",
@@ -968,7 +1049,20 @@
     "threadLimitReached": "This project has reached its {{max}} thread limit",
     "expand": "Expand",
     "collapse": "Collapse",
-    "newThread": "New thread"
+    "newThread": "New thread",
+    "removeMemory": "Remove Memory",
+    "removeMemoryConfirm": "Remove this memory from the project? This cannot be undone.",
+    "memoryRemoved": "Memory removed",
+    "memoryRemoveError": "Failed to remove memory",
+    "memorySource": {
+      "chat": "From chat",
+      "explicit": "Manual",
+      "moderator": "From moderator",
+      "search": "From search",
+      "instruction": "Instructions"
+    },
+    "expandMore": "Show more",
+    "collapseLess": "Show less"
   },
   "roleDeleted": "Role deleted",
   "roleDeletedMessage": "The custom role has been deleted.",
@@ -1116,6 +1210,10 @@
     "defaultName": "User"
   },
   "userMenu": {
+    "admin": "Admin",
+    "adminDescription": "Administration tools",
+    "automatedJobs": "Automated Jobs",
+    "automatedJobsDescription": "Manage automated AI conversations",
     "deleteAccount": "Delete Account",
     "deleteAccountDescription": "Permanently delete your account",
     "feedbackDescription": "Help us improve Roundtable",

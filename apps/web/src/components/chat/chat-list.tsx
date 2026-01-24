@@ -1,4 +1,4 @@
-import { Link } from '@tanstack/react-router';
+import { Link, useLocation } from '@tanstack/react-router';
 import { motion } from 'motion/react';
 import { startTransition, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
@@ -21,7 +21,7 @@ import {
   useSidebar,
 } from '@/components/ui/sidebar';
 import { useToggleFavoriteMutation, useUpdateThreadMutation } from '@/hooks/mutations';
-import { useCurrentPathname, useIsMounted, useThreadNavigation } from '@/hooks/utils';
+import { useIsMounted } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import type { ChatSidebarItem } from '@/services/api';
 
@@ -64,20 +64,10 @@ function ChatItem({
   onRenameCancel,
 }: ChatItemProps) {
   const t = useTranslations();
-  const { createClickHandler } = useThreadNavigation();
 
   const handleRenameFormSubmit = useCallback((title: string) => {
     onRenameSubmit(chat, title);
   }, [chat, onRenameSubmit]);
-
-  const handleClick = createClickHandler({
-    id: chat.id,
-    slug: chat.slug,
-    title: chat.title,
-    isFavorite: chat.isFavorite,
-    createdAt: chat.createdAt,
-    updatedAt: chat.updatedAt,
-  });
 
   const content = (
     <SidebarMenuItem>
@@ -95,12 +85,11 @@ function ChatItem({
               asChild
               isActive={isActive}
             >
-              {/* ✅ FIX: Pre-populate cache before navigation to eliminate skeleton flash */}
+              {/* ✅ FIX: Use preload="intent" for native prefetching - avoids shell data race */}
               <Link
                 to="/chat/$slug"
                 params={{ slug: chat.slug }}
-                onClick={handleClick}
-                preload={false}
+                preload="intent"
               >
                 <div
                   className="truncate overflow-hidden text-ellipsis whitespace-nowrap"
@@ -144,7 +133,8 @@ export function ChatList({
   disableAnimations = false,
   onShareClick,
 }: ChatListProps) {
-  const pathname = useCurrentPathname();
+  // Use TanStack Router's useLocation for SSR-compatible pathname
+  const { pathname } = useLocation();
   const { isMobile, setOpenMobile } = useSidebar();
   const [chatToDelete, setChatToDelete] = useState<ChatSidebarItem | null>(null);
   const [editingChatId, setEditingChatId] = useState<string | null>(null);

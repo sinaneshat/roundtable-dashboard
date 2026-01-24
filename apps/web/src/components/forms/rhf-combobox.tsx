@@ -68,9 +68,9 @@ export function RHFComboBox<
                       'w-full justify-between',
                       !field.value && 'text-muted-foreground',
                     )}
+                    endIcon={<Icons.chevronsUpDown className="opacity-50" />}
                   >
                     {selectedOption?.label || t('forms.selectOption', { option: title })}
-                    <Icons.chevronsUpDown className="ms-2 size-4 shrink-0 opacity-50" />
                   </Button>
                 </FormControl>
               </PopoverTrigger>

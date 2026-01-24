@@ -29,7 +29,7 @@ import { z } from 'zod';
 import { PendingAttachmentSchema } from '@/hooks/utils';
 import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
 import { ChatParticipantSchema, ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
-import type { ApiChangelog, ChatThread, StoredPreSearch } from '@/services/api';
+import type { ApiChangelog, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 import { ModeratorPayloadSchema } from '@/services/api';
 
 import type {
@@ -780,6 +780,30 @@ export const SidebarAnimationActionsSchema = z.object({
 export const SidebarAnimationSliceSchema = z.intersection(SidebarAnimationStateSchema, SidebarAnimationActionsSchema);
 
 // ============================================================================
+// NAVIGATION SLICE SCHEMAS
+// ============================================================================
+
+export const NavigationStateSchema = z.object({
+  /** Target slug for pending navigation - set when navigating between threads */
+  pendingNavigationTargetSlug: z.string().nullable(),
+});
+
+export const NavigationActionsSchema = z.object({
+  /** Set pending navigation target when navigating between threads */
+  setPendingNavigationTarget: z.custom<(slug: string | null) => void>(),
+  /** Clear pending navigation target */
+  clearPendingNavigationTarget: z.custom<() => void>(),
+  /** ✅ ATOMIC SWITCH: Atomically reset + initialize when navigation completes */
+  atomicThreadSwitch: z.custom<(
+    newThread: ChatThread,
+    newParticipants: ChatParticipant[],
+    newMessages: UIMessage[],
+  ) => void>(),
+});
+
+export const NavigationSliceSchema = z.intersection(NavigationStateSchema, NavigationActionsSchema);
+
+// ============================================================================
 // OPERATIONS SLICE SCHEMAS
 // ============================================================================
 
@@ -816,36 +840,39 @@ export const ChatStoreSchema = z.intersection(
                           z.intersection(
                             z.intersection(
                               z.intersection(
-                                FormSliceSchema,
-                                FeedbackSliceSchema,
+                                z.intersection(
+                                  FormSliceSchema,
+                                  FeedbackSliceSchema,
+                                ),
+                                UISliceSchema,
                               ),
-                              UISliceSchema,
+                              PreSearchSliceSchema,
                             ),
-                            PreSearchSliceSchema,
+                            ChangelogSliceSchema,
                           ),
-                          ChangelogSliceSchema,
+                          ThreadSliceSchema,
                         ),
-                        ThreadSliceSchema,
+                        FlagsSliceSchema,
                       ),
-                      FlagsSliceSchema,
+                      DataSliceSchema,
                     ),
-                    DataSliceSchema,
+                    TrackingSliceSchema,
                   ),
-                  TrackingSliceSchema,
+                  CallbacksSliceSchema,
                 ),
-                CallbacksSliceSchema,
+                ScreenSliceSchema,
               ),
-              ScreenSliceSchema,
+              StreamResumptionSliceSchema,
             ),
-            StreamResumptionSliceSchema,
+            RoundFlowSliceSchema,
           ),
-          RoundFlowSliceSchema,
+          AnimationSliceSchema,
         ),
-        AnimationSliceSchema,
+        AttachmentsSliceSchema,
       ),
-      AttachmentsSliceSchema,
+      SidebarAnimationSliceSchema,
     ),
-    SidebarAnimationSliceSchema,
+    NavigationSliceSchema,
   ),
   OperationsActionsSchema,
 );
@@ -922,3 +949,7 @@ export type AttachmentsSlice = z.infer<typeof AttachmentsSliceSchema>;
 export type SidebarAnimationState = z.infer<typeof SidebarAnimationStateSchema>;
 export type SidebarAnimationActions = z.infer<typeof SidebarAnimationActionsSchema>;
 export type SidebarAnimationSlice = z.infer<typeof SidebarAnimationSliceSchema>;
+
+export type NavigationState = z.infer<typeof NavigationStateSchema>;
+export type NavigationActions = z.infer<typeof NavigationActionsSchema>;
+export type NavigationSlice = z.infer<typeof NavigationSliceSchema>;

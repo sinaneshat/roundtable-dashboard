@@ -334,10 +334,16 @@ export function useStreamingTrigger({
       // complete or abort before we clear the waiting flag.
       const webSearchEnabled = getEffectiveWebSearchEnabled(freshState.thread, freshState.enableWebSearch);
       if (webSearchEnabled) {
-        const currentRound = getCurrentRoundNumber(freshState.messages);
+        // ✅ FIX: Use streamingRoundNumber as primary source (set reliably at submission time)
+        // Fallback to getCurrentRoundNumber only if streamingRoundNumber not set
+        // This prevents race where messages haven't synced but pre-search is streaming
+        const currentRound = freshState.streamingRoundNumber ?? getCurrentRoundNumber(freshState.messages);
         const preSearchForRound = freshState.preSearches.find(ps => ps.roundNumber === currentRound);
-        if (preSearchForRound && preSearchForRound.status === MessageStatuses.STREAMING) {
-          rlog.trigger('clear-guard', `skip: preSearch still streaming for r${currentRound}`);
+        // ✅ DEFENSE IN DEPTH: Also check if ANY pre-search is streaming
+        // Catches edge cases where round calculation might be off
+        const anyPreSearchStreaming = freshState.preSearches.some(ps => ps.status === MessageStatuses.STREAMING);
+        if (preSearchForRound?.status === MessageStatuses.STREAMING || anyPreSearchStreaming) {
+          rlog.trigger('clear-guard', `skip: preSearch streaming r${currentRound} any=${anyPreSearchStreaming ? 1 : 0}`);
           return;
         }
       }

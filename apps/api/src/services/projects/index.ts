@@ -7,4 +7,10 @@
 
 export { type AutoLinkParams, autoLinkUploadsToProject } from './auto-link.service';
 export { syncInstructionMemory, type SyncInstructionMemoryParams } from './instruction-memory.service';
-export { extractMemoriesFromRound, type MemoryExtractionParams } from './memory-extraction.service';
+export {
+  type ConversationExtractionResult,
+  type ConversationMemoryParams,
+  extractMemoriesFromConversation,
+  extractMemoriesFromRound,
+  type MemoryExtractionParams,
+} from './memory-extraction.service';

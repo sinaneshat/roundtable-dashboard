@@ -21,7 +21,7 @@ import * as tables from '@/db/tables';
 import type { ProjectMemoryMetadata } from '@/db/validation/project';
 import { deductCreditsForAction } from '@/services/billing/credit.service';
 import { generateTraceId, trackLLMGeneration } from '@/services/errors/posthog-llm-tracking.service';
-import { buildMemoryExtractionPrompt } from '@/services/prompts';
+import { buildMemoryExtractionPrompt, buildSelectiveMemoryPrompt } from '@/services/prompts';
 
 export type MemoryExtractionParams = {
   projectId: string;
@@ -293,6 +293,263 @@ export async function extractMemoriesFromRound(
     } catch {
       // Non-critical - don't fail extraction if billing fails
       console.error('[Memory Extraction] Credit deduction failed', { projectId, userId });
+    }
+  }
+
+  return result;
+}
+
+// ============================================================================
+// Conversation Memory Extraction (Non-Moderator Threads)
+// ============================================================================
+
+export type ConversationMemoryParams = {
+  projectId: string;
+  threadId: string;
+  roundNumber: number;
+  userQuestion: string;
+  participantResponses: Array<{ participantName: string; response: string }>;
+  userId: string;
+  ai: Ai;
+  db: Awaited<ReturnType<typeof getDbAsync>>;
+};
+
+export type ConversationExtractionResult = {
+  extracted: ExtractedMemory[];
+  memoryIds: string[];
+};
+
+const MIN_SELECTIVE_IMPORTANCE = 6; // Higher threshold for non-moderator extraction
+
+/**
+ * Extract memories from a conversation (for non-moderator threads)
+ *
+ * More selective than moderator-based extraction:
+ * - Only extracts preferences, important facts, and explicit remember requests
+ * - Higher importance threshold (6 vs 5)
+ * - Designed for threads without moderator synthesis
+ */
+export async function extractMemoriesFromConversation(
+  params: ConversationMemoryParams,
+): Promise<ConversationExtractionResult> {
+  const { projectId, threadId, roundNumber, userQuestion, participantResponses, userId, ai, db } = params;
+
+  const result: ConversationExtractionResult = {
+    extracted: [],
+    memoryIds: [],
+  };
+
+  // Skip if no meaningful content
+  const totalResponseLength = participantResponses.reduce((acc, r) => acc + r.response.length, 0);
+  if (totalResponseLength < 100) {
+    console.error('[Conversation Memory] Skipped: responses too short', {
+      projectId,
+      threadId,
+      roundNumber,
+      totalLength: totalResponseLength,
+    });
+    return result;
+  }
+
+  console.error('[Conversation Memory] Starting extraction', {
+    projectId,
+    threadId,
+    roundNumber,
+    participantCount: participantResponses.length,
+    totalResponseLength,
+  });
+
+  // Fetch existing memories to avoid duplicates
+  const existingMemories = await db.query.projectMemory.findMany({
+    where: and(
+      eq(tables.projectMemory.projectId, projectId),
+      eq(tables.projectMemory.isActive, true),
+    ),
+    columns: { content: true, summary: true },
+    orderBy: [desc(tables.projectMemory.importance), desc(tables.projectMemory.createdAt)],
+    limit: MAX_EXISTING_MEMORIES,
+  });
+
+  const existingContent = existingMemories.map(m => m.content);
+  const existingSummaries = existingMemories.map(m => m.summary || m.content.slice(0, 50));
+
+  // Build selective extraction prompt
+  const prompt = buildSelectiveMemoryPrompt(
+    userQuestion,
+    participantResponses.map(r => ({ name: r.participantName, response: r.response })),
+    existingSummaries,
+  );
+
+  // Call Cloudflare AI for extraction
+  let extractedMemories: ExtractedMemory[] = [];
+  const traceId = generateTraceId();
+  const startTime = performance.now();
+
+  try {
+    const response = await ai.run('@cf/meta/llama-3.1-8b-instruct' as Parameters<Ai['run']>[0], {
+      messages: [{ role: 'user', content: prompt }],
+      max_tokens: 1024,
+      temperature: 0.3,
+    });
+
+    let responseText = '';
+    if (response && typeof response === 'object' && 'response' in response) {
+      responseText = String(response.response || '');
+    } else if (typeof response === 'string') {
+      responseText = response;
+    }
+
+    // Track Cloudflare AI usage
+    const estimatedInputTokens = Math.ceil(prompt.length / 4);
+    const estimatedOutputTokens = Math.ceil(responseText.length / 4);
+
+    trackLLMGeneration(
+      {
+        userId,
+        threadId,
+        roundNumber,
+        threadMode: 'conversation_memory_extraction',
+        participantId: 'system',
+        participantIndex: 0,
+        modelId: '@cf/meta/llama-3.1-8b-instruct',
+      },
+      {
+        text: responseText,
+        finishReason: 'stop',
+        usage: {
+          inputTokens: estimatedInputTokens,
+          outputTokens: estimatedOutputTokens,
+        },
+      },
+      [{ role: 'user', content: prompt }],
+      traceId,
+      startTime,
+      {
+        modelPricing: CLOUDFLARE_AI_PRICING['llama-3.1-8b-instruct'],
+        additionalProperties: {
+          projectId,
+          operation_type: 'conversation_memory_extraction',
+          provider: 'cloudflare',
+          is_token_estimate: true,
+        },
+      },
+    ).catch(() => {});
+
+    if (!responseText) {
+      return result;
+    }
+
+    // Parse JSON from response
+    const jsonMatch = responseText.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      console.error('[Conversation Memory] No JSON array found', {
+        projectId,
+        threadId,
+        responsePreview: responseText.slice(0, 200),
+      });
+      return result;
+    }
+
+    const parsed = JSON.parse(jsonMatch[0]);
+    if (!Array.isArray(parsed)) {
+      return result;
+    }
+
+    extractedMemories = parsed.filter((m): m is ExtractedMemory =>
+      typeof m.content === 'string'
+      && typeof m.summary === 'string'
+      && typeof m.importance === 'number'
+      && ['preference', 'fact', 'decision', 'context'].includes(m.category),
+    );
+
+    console.error('[Conversation Memory] Parsed memories', {
+      projectId,
+      threadId,
+      rawCount: parsed.length,
+      validCount: extractedMemories.length,
+    });
+  } catch (error) {
+    console.error('[Conversation Memory] AI call failed:', error);
+    return result;
+  }
+
+  // Filter, deduplicate, and insert
+  const memoriesToInsert: Array<{
+    id: string;
+    projectId: string;
+    content: string;
+    summary: string;
+    source: typeof ProjectMemorySources.CHAT;
+    sourceThreadId: string;
+    sourceRoundNumber: number;
+    importance: number;
+    isActive: boolean;
+    metadata: ProjectMemoryMetadata;
+    createdBy: string;
+    createdAt: Date;
+    updatedAt: Date;
+  }> = [];
+
+  for (const memory of extractedMemories) {
+    // Skip low-importance memories (higher threshold for selective extraction)
+    if (memory.importance < MIN_SELECTIVE_IMPORTANCE) {
+      continue;
+    }
+
+    // Check for duplicates
+    const isDuplicate = existingContent.some(existing =>
+      existing.toLowerCase().includes(memory.content.toLowerCase().slice(0, 50))
+      || memory.content.toLowerCase().includes(existing.toLowerCase().slice(0, 50)),
+    );
+
+    if (isDuplicate) {
+      continue;
+    }
+
+    const now = new Date();
+    const memoryId = ulid();
+    memoriesToInsert.push({
+      id: memoryId,
+      projectId,
+      content: memory.content,
+      summary: memory.summary,
+      source: ProjectMemorySources.CHAT,
+      sourceThreadId: threadId,
+      sourceRoundNumber: roundNumber,
+      importance: Math.min(10, Math.max(1, memory.importance)),
+      isActive: true,
+      metadata: {
+        category: memory.category,
+        extractedAt: now.toISOString(),
+        modelUsed: 'llama-3.1-8b-instruct',
+      },
+      createdBy: userId,
+      createdAt: now,
+      updatedAt: now,
+    });
+
+    result.extracted.push(memory);
+    result.memoryIds.push(memoryId);
+  }
+
+  // Insert memories
+  if (memoriesToInsert.length > 0) {
+    await db.insert(tables.projectMemory).values(memoriesToInsert);
+    console.error('[Conversation Memory] Inserted memories', {
+      projectId,
+      threadId,
+      count: memoriesToInsert.length,
+      memoryIds: result.memoryIds,
+    });
+
+    // Deduct credits
+    try {
+      await deductCreditsForAction(userId, 'memoryExtraction', {
+        threadId,
+        description: `Conversation memory: ${memoriesToInsert.length} memories from round ${roundNumber}`,
+      });
+    } catch {
+      console.error('[Conversation Memory] Credit deduction failed', { projectId, userId });
     }
   }
 

@@ -30,6 +30,23 @@ import { createOpenApiApp } from './core/app';
 import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, performanceTracking, RateLimiterFactory, requestLogger } from './middleware';
 // Admin routes
 import { adminClearUserCacheHandler, adminSearchUserHandler } from './routes/admin/handler';
+// Admin Jobs routes
+import {
+  createJobHandler,
+  deleteJobHandler,
+  getJobHandler,
+  listJobsHandler,
+  updateJobHandler,
+} from './routes/admin/jobs/handler';
+import {
+  createJobRoute,
+  deleteJobRoute,
+  getJobRoute,
+  listJobsRoute,
+  updateJobRoute,
+} from './routes/admin/jobs/route';
+import { discoverTrendsHandler } from './routes/admin/jobs/trends/handler';
+import { discoverTrendsRoute } from './routes/admin/jobs/trends/route';
 import { adminClearUserCacheRoute, adminSearchUserRoute } from './routes/admin/route';
 // API Keys routes
 import {
@@ -96,6 +113,7 @@ import {
   getThreadChangelogHandler,
   getThreadFeedbackHandler,
   getThreadHandler,
+  getThreadMemoryEventsHandler,
   getThreadMessagesHandler,
   getThreadPreSearchesHandler,
   getThreadRoundChangelogHandler,
@@ -133,6 +151,7 @@ import {
   getThreadBySlugRoute,
   getThreadChangelogRoute,
   getThreadFeedbackRoute,
+  getThreadMemoryEventsRoute,
   getThreadMessagesRoute,
   getThreadPreSearchesRoute,
   getThreadRoundChangelogRoute,
@@ -513,6 +532,8 @@ app.use('/auth/api-keys', csrfProtection);
 
 // Admin routes CSRF protection
 app.use('/admin/users/clear-cache', csrfProtection);
+app.use('/admin/jobs', csrfProtection);
+app.on(['PATCH', 'DELETE'], '/admin/jobs/:id', csrfProtection);
 
 app.use('/billing/checkout', csrfProtection);
 app.use('/billing/portal', csrfProtection);
@@ -604,6 +625,7 @@ const appRoutes = app
   .openapi(streamChatRoute, streamChatHandler)
   .openapi(resumeThreadStreamRoute, resumeThreadStreamHandler)
   .openapi(getThreadStreamResumptionStateRoute, getThreadStreamResumptionStateHandler)
+  .openapi(getThreadMemoryEventsRoute, getThreadMemoryEventsHandler)
   .openapi(addParticipantRoute, addParticipantHandler)
   .openapi(updateParticipantRoute, updateParticipantHandler)
   .openapi(deleteParticipantRoute, deleteParticipantHandler)
@@ -647,7 +669,15 @@ const appRoutes = app
   .openapi(getCreditTransactionsRoute, getCreditTransactionsHandler)
   .openapi(estimateCreditCostRoute, estimateCreditCostHandler)
   .openapi(adminSearchUserRoute, adminSearchUserHandler)
-  .openapi(adminClearUserCacheRoute, adminClearUserCacheHandler);
+  .openapi(adminClearUserCacheRoute, adminClearUserCacheHandler)
+  // Admin Jobs routes
+  .openapi(listJobsRoute, listJobsHandler)
+  .openapi(createJobRoute, createJobHandler)
+  .openapi(getJobRoute, getJobHandler)
+  .openapi(updateJobRoute, updateJobHandler)
+  .openapi(deleteJobRoute, deleteJobHandler)
+  // Admin Jobs Trends routes
+  .openapi(discoverTrendsRoute, discoverTrendsHandler);
 
 let creditsChain = appRoutes;
 if (IS_DEV_ENVIRONMENT) {

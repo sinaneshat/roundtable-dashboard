@@ -8,6 +8,8 @@ import * as auth from './tables/auth';
 import * as billing from './tables/billing';
 import * as chat from './tables/chat';
 import * as credits from './tables/credits';
+import * as deletedAccountAudit from './tables/deleted-account-audit';
+import * as job from './tables/job';
 import * as project from './tables/project';
 import * as upload from './tables/upload';
 import * as usage from './tables/usage';
@@ -18,6 +20,8 @@ const schema = {
   ...billing,
   ...chat,
   ...credits,
+  ...deletedAccountAudit,
+  ...job,
   ...project,
   ...upload,
   ...usage,
@@ -330,6 +334,8 @@ export * from './tables/auth';
 export * from './tables/billing';
 export * from './tables/chat';
 export * from './tables/credits';
+export * from './tables/deleted-account-audit';
+export * from './tables/job';
 export * from './tables/project';
 export * from './tables/upload';
 export * from './tables/usage';

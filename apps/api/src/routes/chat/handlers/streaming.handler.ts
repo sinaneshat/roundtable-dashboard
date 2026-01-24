@@ -94,6 +94,7 @@ import {
   prepareValidatedMessages,
 } from '@/services/orchestration';
 import { processParticipantChanges } from '@/services/participants';
+import { extractMemoriesFromConversation } from '@/services/projects';
 import { buildParticipantSystemPrompt } from '@/services/prompts';
 import {
   initializeRoundExecution,
@@ -777,15 +778,19 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           ? 'minimal'
           : 'low';
 
-      const providerOptions = supportsReasoningStream
-        ? {
-            openrouter: {
-              reasoning: {
-                effort: reasoningEffort,
-              },
+      // ✅ MIDDLE-OUT TRANSFORM: Always enable for automatic context compression
+      // OpenRouter's middle-out removes content from middle of conversations, preserving recent + first messages
+      // ✅ REASONING: Conditionally add reasoning effort for o1/o3/o4 models
+      const providerOptions = {
+        openrouter: {
+          transforms: ['middle-out'],
+          ...(supportsReasoningStream && {
+            reasoning: {
+              effort: reasoningEffort,
             },
-          }
-        : undefined;
+          }),
+        },
+      };
 
       const baseModel = client.chat(participant.modelId);
       const isDeepSeek = isDeepSeekModel(participant.modelId);
@@ -824,8 +829,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         messages: modelMessages,
         maxOutputTokens,
         ...(modelSupportsTemperature && { temperature: temperatureValue }),
-        // ✅ REASONING: Add providerOptions for o1/o3/o4 models
-        ...(providerOptions && { providerOptions }),
+        // ✅ MIDDLE-OUT + REASONING: Always include providerOptions with transforms
+        providerOptions,
         // ✅ CHUNK NORMALIZATION: Normalize streaming for models with buffered chunk delivery
         // Some providers (xAI/Grok, DeepSeek, Gemini) buffer server-side, sending large chunks
         // (sometimes entire paragraphs) instead of token-by-token. This causes UI jumpiness.
@@ -1602,6 +1607,18 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
             const hasMoreParticipants = nextParticipantIndex < participants.length;
             const needsModerator = participants.length >= 2 && allParticipantsComplete;
 
+            // ✅ DEBUG: Log round completion check for memory extraction debugging
+            console.error('[Streaming] Round completion check', {
+              allParticipantsComplete,
+              hasProjectId: !!thread.projectId,
+              projectId: thread.projectId,
+              needsModerator,
+              participantCount: participants.length,
+              hasMoreParticipants,
+              threadId,
+              roundNumber: currentRoundNumber,
+            });
+
             // =========================================================================
             // QUEUE-BASED ORCHESTRATION: Guaranteed delivery via Cloudflare Queues
             // =========================================================================
@@ -1660,6 +1677,89 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                 } catch (error) {
                   console.error('[RoundOrchestration] Failed to queue moderator:', error);
                 }
+              }
+            } else if (allParticipantsComplete && thread.projectId) {
+              // =========================================================================
+              // ✅ CONVERSATION MEMORY EXTRACTION: For non-moderator threads
+              // =========================================================================
+              // When there's no moderator (single participant or moderator disabled),
+              // extract memories directly from the conversation. This runs in background
+              // via waitUntil to not block the response.
+              //
+              // For multi-participant threads with moderator, extraction happens in
+              // moderator.handler.ts after synthesis completes.
+              // =========================================================================
+
+              // Extract user question from message parts
+              const userQuestionText = extractUserQuery([
+                ...previousMessages,
+                message as import('ai').UIMessage,
+              ]);
+
+              // Collect participant response from this streaming call
+              // For single-participant threads, this is the only response
+              const participantResponses = [{
+                participantName: participant.role || 'AI',
+                response: finishResult.text,
+              }];
+
+              // Extract memories in background
+              const memoryExtractionPromise = extractMemoriesFromConversation({
+                projectId: thread.projectId,
+                threadId,
+                roundNumber: currentRoundNumber,
+                userQuestion: userQuestionText,
+                participantResponses,
+                userId: user.id,
+                ai: c.env.AI,
+                db,
+              }).then(async (result) => {
+                if (result.extracted.length > 0) {
+                  console.error('[Streaming] Memories extracted for non-moderator thread', {
+                    projectId: thread.projectId,
+                    threadId,
+                    roundNumber: currentRoundNumber,
+                    memoryCount: result.extracted.length,
+                    memoryIds: result.memoryIds,
+                  });
+
+                  // ✅ Store memory event in KV for frontend to poll
+                  const memoryEventKey = `memory-event:${threadId}:${currentRoundNumber}`;
+                  const memoryEventData = {
+                    memoryIds: result.memoryIds,
+                    memories: result.extracted.map(m => ({
+                      id: result.memoryIds[result.extracted.indexOf(m)],
+                      summary: m.summary,
+                      content: m.content.slice(0, 200),
+                    })),
+                    projectId: thread.projectId,
+                    createdAt: Date.now(),
+                  };
+
+                  try {
+                    await c.env.KV.put(
+                      memoryEventKey,
+                      JSON.stringify(memoryEventData),
+                      { expirationTtl: 300 }, // 5 min TTL
+                    );
+                    console.error('[Streaming] Memory event stored in KV', {
+                      key: memoryEventKey,
+                      memoryCount: result.extracted.length,
+                    });
+                  } catch (kvError) {
+                    console.error('[Streaming] Failed to store memory event in KV:', kvError);
+                  }
+                }
+                return result;
+              }).catch((error) => {
+                console.error('[Streaming] Memory extraction failed:', error);
+                return { extracted: [], memoryIds: [] };
+              });
+
+              if (executionCtx) {
+                executionCtx.waitUntil(memoryExtractionPromise);
+              } else {
+                memoryExtractionPromise.catch(() => {});
               }
             }
           } catch (onFinishError) {

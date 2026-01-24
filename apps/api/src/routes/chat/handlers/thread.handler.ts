@@ -8,7 +8,7 @@ import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
 
 import { executeBatch } from '@/common/batch-operations';
-import { invalidateMessagesCache, invalidatePublicThreadCache, invalidateSidebarCache, invalidateThreadCache } from '@/common/cache-utils';
+import { invalidateMessagesCache, invalidateProjectCache, invalidatePublicThreadCache, invalidateSidebarCache, invalidateThreadCache } from '@/common/cache-utils';
 import { ErrorContextBuilders } from '@/common/error-contexts';
 import { createError } from '@/common/error-handling';
 import { verifyThreadOwnership } from '@/common/permissions';
@@ -21,6 +21,7 @@ import {
   getCursorOrderBy,
   IdParamSchema,
   Responses,
+  ThreadIdParamSchema,
   ThreadSlugParamSchema,
 } from '@/core';
 import * as tables from '@/db';
@@ -63,6 +64,7 @@ import type {
   deleteThreadRoute,
   getPublicThreadRoute,
   getThreadBySlugRoute,
+  getThreadMemoryEventsRoute,
   getThreadRoute,
   getThreadSlugStatusRoute,
   listPublicThreadSlugsRoute,
@@ -73,6 +75,7 @@ import type {
 import type { MessageAttachment } from '../schema';
 import {
   CreateThreadRequestSchema,
+  MemoryEventQuerySchema,
   ThreadListQuerySchema,
   UpdateThreadRequestSchema,
 } from '../schema';
@@ -1597,6 +1600,11 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
 
     await invalidateThreadCache(db, user.id, id, thread.slug);
 
+    // ✅ PROJECT CACHE: Invalidate if thread belonged to a project
+    if (thread.projectId) {
+      await invalidateProjectCache(db, thread.projectId);
+    }
+
     // ✅ PUBLIC THREAD CACHE: Invalidate if thread was public
     // Also clears cached OG images from R2
     // CRITICAL: Must invalidate BOTH current slug AND previousSlug caches
@@ -1609,6 +1617,7 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
 
     return Responses.ok(c, {
       deleted: true,
+      projectId: thread.projectId,
     });
   },
 );
@@ -2097,5 +2106,56 @@ export const getThreadSlugStatusHandler: RouteHandler<typeof getThreadSlugStatus
       title: thread.title,
       isAiGeneratedTitle: thread.isAiGeneratedTitle,
     });
+  },
+);
+
+/**
+ * Get Memory Events Handler
+ * ✅ MEMORY EVENTS: Poll for memory creation events after round completes
+ */
+export const getThreadMemoryEventsHandler: RouteHandler<typeof getThreadMemoryEventsRoute, ApiEnv> = createHandler(
+  {
+    auth: 'session',
+    validateParams: ThreadIdParamSchema,
+    validateQuery: MemoryEventQuerySchema,
+    operationName: 'getThreadMemoryEvents',
+  },
+  async (c) => {
+    const { user } = c.auth();
+    const { threadId } = c.validated.params;
+    const { roundNumber } = c.validated.query;
+
+    // Verify thread ownership
+    const db = await getDbAsync();
+    const thread = await db.query.chatThread.findFirst({
+      where: eq(tables.chatThread.id, threadId),
+      columns: { userId: true, projectId: true },
+    });
+
+    if (!thread) {
+      throw createError.notFound('Thread not found', ErrorContextBuilders.resourceNotFound('thread', threadId));
+    }
+    if (thread.userId !== user.id) {
+      throw createError.unauthorized(
+        'Not authorized to access this thread',
+        ErrorContextBuilders.authorization('thread', threadId),
+      );
+    }
+
+    // Check KV for memory event
+    const memoryEventKey = `memory-event:${threadId}:${roundNumber}`;
+    const eventData = await c.env.KV.get(memoryEventKey);
+
+    if (!eventData) {
+      return Responses.ok(c, null);
+    }
+
+    try {
+      const parsed = JSON.parse(eventData);
+      return Responses.ok(c, parsed);
+    } catch {
+      console.error('[MemoryEvents] Failed to parse KV data', { key: memoryEventKey });
+      return Responses.ok(c, null);
+    }
   },
 );

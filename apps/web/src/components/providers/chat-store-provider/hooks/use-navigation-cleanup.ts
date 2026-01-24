@@ -3,14 +3,25 @@
  *
  * Handles comprehensive cleanup when navigating between routes.
  * Stops streaming, clears pending operations, resets state, and invalidates queries.
+ *
+ * CRITICAL: Uses useLayoutEffect to ensure cleanup runs BEFORE child components
+ * hydrate the store (useSyncHydrateStore). Without this, the execution order is:
+ * 1. Child layoutEffect hydrates store with new data
+ * 2. Parent effect RESETS the store → black screen!
+ *
+ * With useLayoutEffect:
+ * 1. Parent layoutEffect RESETS old thread data
+ * 2. Child layoutEffect hydrates with new thread data
+ * 3. Paint → user sees correct content
  */
 
 import { useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@tanstack/react-router';
 import type { RefObject } from 'react';
-import { useEffect } from 'react';
+import { useLayoutEffect } from 'react';
 
 import { invalidationPatterns } from '@/lib/data/query-keys';
+import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatStoreApi } from '@/stores/chat';
 
 type UseNavigationCleanupParams = {
@@ -28,7 +39,8 @@ export function useNavigationCleanup({
   const { pathname } = useLocation();
   const queryClient = useQueryClient();
 
-  useEffect(() => {
+  // CRITICAL: Must be useLayoutEffect to run BEFORE child's useSyncHydrateStore
+  useLayoutEffect(() => {
     const prevPath = prevPathnameRef.current;
 
     // Handle initial mount
@@ -46,6 +58,9 @@ export function useNavigationCleanup({
     }
 
     const currentState = store.getState();
+
+    // 🔍 DEBUG: Log navigation detection
+    rlog.init('nav-cleanup', `from=${prevPath?.split('/').pop() ?? '-'} to=${pathname?.split('/').pop() ?? '-'} storeT=${currentState.thread?.slug ?? '-'} msgs=${currentState.messages.length}`);
 
     // Detect navigation patterns
     const isLeavingThread = prevPath?.startsWith('/chat/') && prevPath !== '/chat';
@@ -78,8 +93,8 @@ export function useNavigationCleanup({
       currentState.clearAllPreSearchTracking();
     }
 
-    // ✅ CRITICAL: Invalidate queries for the OLD thread when navigating between threads
-    // This prevents stale data from the previous thread bleeding into the new thread
+    // Invalidate only ephemeral data (like stream resumption state)
+    // NOTE: We do NOT invalidate thread data cache - it should stay for snappy navigation
     if (isNavigatingBetweenThreads || isLeavingThread) {
       const oldThreadId = currentState.thread?.id || currentState.createdThreadId;
       if (oldThreadId) {
@@ -89,10 +104,15 @@ export function useNavigationCleanup({
       }
     }
 
-    // Full reset when navigating between different threads
+    // ✅ FIX: Immediate reset when navigating between threads
+    // remountDeps handles component remounting so store starts fresh
     if (isNavigatingBetweenThreads) {
+      rlog.init('nav-cleanup', `RESET thread→thread`);
+      currentState.chatStop?.();
       currentState.resetForThreadNavigation();
       currentState.clearAllPreSearchTracking();
+      const afterState = store.getState();
+      rlog.init('nav-cleanup', `AFTER-RESET msgs=${afterState.messages.length} thread=${afterState.thread?.slug ?? '-'}`);
     }
 
     // Reset when navigating from overview to a DIFFERENT thread
@@ -105,9 +125,9 @@ export function useNavigationCleanup({
         const currentSlug = currentState.thread?.slug;
         const isNavigatingToSameThread = targetSlug && currentSlug && targetSlug === currentSlug;
 
-        // ✅ V8 FIX: Also skip reset during active streaming
-        // This prevents flash when overview→thread after sending message
+        // ✅ FIX: Immediate reset - remountDeps handles component remounting
         if (!isNavigatingToSameThread && !currentState.isStreaming) {
+          currentState.chatStop?.();
           currentState.resetForThreadNavigation();
         }
       }

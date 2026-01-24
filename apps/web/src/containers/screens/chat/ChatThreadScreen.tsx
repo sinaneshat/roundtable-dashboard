@@ -19,8 +19,10 @@ import {
   threadHasDocumentFiles,
   threadHasImageFiles,
 } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import dynamic from '@/lib/utils/dynamic';
 import type { ApiMessage, ApiParticipant, ChangelogItem, ChatThread, Model, RoundFeedbackData, StoredPreSearch, ThreadDetailData, ThreadStreamResumptionState } from '@/services/api';
+import { getThreadMemoryEventsService } from '@/services/api';
 import {
   areAllParticipantsCompleteForRound,
   getModeratorMessageForRound,
@@ -114,6 +116,9 @@ export default function ChatThreadScreen({
     initialChangelog,
   });
 
+  // 🔍 DEBUG: Log props vs what useSyncHydrateStore received
+  rlog.init('screen-props', `t=${thread.id?.slice(-8)} slug=${thread.slug} msgs=${uiMessages.length} parts=${participants.length}`);
+
   useThreadHeaderUpdater({ thread, slug, onDeleteClick: isDeleteDialogOpen.onTrue });
 
   const { setSelectedModelIds } = useModelPreferencesStore(useShallow(s => ({
@@ -130,6 +135,7 @@ export default function ChatThreadScreen({
     messages,
     setSelectedParticipants,
     waitingToStartStreaming,
+    storeThread,
   } = useChatStore(
     useShallow(s => ({
       isStreaming: s.isStreaming,
@@ -141,8 +147,12 @@ export default function ChatThreadScreen({
       messages: s.messages,
       setSelectedParticipants: s.setSelectedParticipants,
       waitingToStartStreaming: s.waitingToStartStreaming,
+      storeThread: s.thread,
     })),
   );
+
+  // 🔍 DEBUG: Log store state after hydration
+  rlog.init('screen-store', `t=${storeThread?.id?.slice(-8) ?? '-'} slug=${storeThread?.slug ?? '-'} msgs=${messages.length}`);
 
   const { data: modelsData } = useModelsQuery();
   const allEnabledModels = useMemo(() => {
@@ -328,6 +338,57 @@ export default function ChatThreadScreen({
     return allParticipantsComplete && !moderatorExists;
   }, [messages, participants]);
 
+  // ✅ MEMORY EVENTS: Poll for memory creation after round completes
+  const previousRoundCompleteRef = useRef<{ round: number; complete: boolean } | null>(null);
+
+  useEffect(() => {
+    // Only poll for project threads
+    if (!thread.projectId)
+      return;
+
+    const currentRound = getCurrentRoundNumber(messages);
+    if (currentRound === 0)
+      return;
+
+    const allParticipantsComplete = areAllParticipantsCompleteForRound(messages, participants, currentRound);
+
+    // Check if round just completed (transition from incomplete to complete)
+    const prevState = previousRoundCompleteRef.current;
+    const roundJustCompleted = allParticipantsComplete
+      && prevState
+      && prevState.round === currentRound
+      && !prevState.complete;
+
+    // Update ref for next check
+    previousRoundCompleteRef.current = { round: currentRound, complete: allParticipantsComplete };
+
+    if (!roundJustCompleted)
+      return;
+
+    // Poll for memory events after 3 seconds (allow extraction to complete)
+    const timeout = setTimeout(async () => {
+      try {
+        const response = await getThreadMemoryEventsService({
+          param: { threadId: thread.id },
+          query: { roundNumber: currentRound },
+        });
+
+        if (response.success && response.data && response.data.memories?.length > 0) {
+          const firstMemory = response.data.memories[0];
+          toastManager.success(
+            t('chat.memory.memorySaved'),
+            firstMemory.summary,
+          );
+        }
+      } catch (error) {
+        // Silent fail - memory events are non-critical
+        console.error('[MemoryEvents] Failed to poll:', error);
+      }
+    }, 3000);
+
+    return () => clearTimeout(timeout);
+  }, [messages, participants, thread.id, thread.projectId, t]);
+
   const isSubmitBlocked = isStreaming || isModeratorStreaming || Boolean(pendingMessage) || isAwaitingModerator || waitingToStartStreaming;
 
   const handlePromptSubmit = useCallback(
@@ -383,6 +444,7 @@ export default function ChatThreadScreen({
         onOpenChange={isDeleteDialogOpen.setValue}
         threadId={thread.id}
         threadSlug={slug}
+        projectId={thread.projectId ?? undefined}
         redirectIfCurrent={true}
       />
     </>

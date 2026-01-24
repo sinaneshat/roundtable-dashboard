@@ -283,11 +283,13 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
     const finalHasError = errorMetadata.hasError || !!emptyResponseError;
     const finalErrorMessage = emptyResponseError || errorMetadata.errorMessage;
 
-    // Parse and validate finish reason with fallback to 'unknown'
+    // Parse and validate finish reason
+    // If stream completed with content but invalid finishReason, infer 'stop' (successful completion)
+    // 'unknown' is reserved for truly interrupted/aborted streams with no content
     const finishReasonResult = FinishReasonSchema.safeParse(finishResult.finishReason);
     const validatedFinishReason = finishReasonResult.success
       ? finishReasonResult.data
-      : FinishReasons.UNKNOWN;
+      : (text || reasoningText) ? FinishReasons.STOP : FinishReasons.UNKNOWN;
 
     const messageMetadata = createParticipantMetadata({
       roundNumber,

@@ -474,11 +474,14 @@ export function useIncompleteRoundResumption(
               && p.text.trim().length > 0,
           ) || false;
 
+          // ✅ FIX: Prioritize hasTextContent - if text exists, never treat as interrupted
+          // Aligns with isMessageComplete() which trusts content over finishReason
           const isEmptyResponse = !hasTextContent && (!msg.parts || msg.parts.length === 0);
-          const isEmptyInterruptedResponse = isEmptyResponse
+          const isEmptyInterruptedResponse = !hasTextContent && (
+            isEmptyResponse
             || (assistantMetadata?.finishReason === FinishReasons.UNKNOWN
-              && assistantMetadata?.usage?.totalTokens === 0
-              && !hasTextContent);
+              && assistantMetadata?.usage?.totalTokens === 0)
+          );
 
           if (messageComplete && !isEmptyInterruptedResponse) {
             // ✅ Message is COMPLETE: All parts are done, has content or finishReason

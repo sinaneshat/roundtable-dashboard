@@ -122,10 +122,9 @@ export function PricingContent({
                   variant="outline"
                   size="sm"
                   onClick={onManageBilling}
-                  className="gap-2"
+                  endIcon={<Icons.externalLink />}
                 >
                   {t('billing.manageBilling')}
-                  <Icons.externalLink className="h-3.5 w-3.5" />
                 </Button>
               </div>
             </CardContent>

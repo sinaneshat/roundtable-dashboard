@@ -135,6 +135,89 @@ export function getIncompatibilityReason(
   return null;
 }
 
+// ============================================================================
+// FILE SIZE COMPATIBILITY CHECKING
+// ============================================================================
+
+/**
+ * ✅ FILE SIZE COMPATIBILITY: Check if a model can handle the total file size
+ * Used for auto-deselecting models when uploaded files exceed their capacity
+ *
+ * @param modelMaxFileSizeMB - Model's max file capacity (from model config)
+ * @param totalFileSizeMB - Total size of all uploaded files in MB
+ * @returns true if model can handle the files
+ */
+export function isModelCompatibleWithFileSize(
+  modelMaxFileSizeMB: number | undefined,
+  totalFileSizeMB: number,
+): boolean {
+  // If model has no limit defined, assume compatible
+  if (modelMaxFileSizeMB === undefined || modelMaxFileSizeMB === null)
+    return true;
+  return totalFileSizeMB <= modelMaxFileSizeMB;
+}
+
+/**
+ * ✅ FILE SIZE INCOMPATIBILITY REASON: Get user-friendly message for file size issues
+ * Returns null if compatible, otherwise returns IncompatibilityReason.FILE_TOO_LARGE
+ *
+ * @param modelMaxFileSizeMB - Model's max file capacity (from model config)
+ * @param totalFileSizeMB - Total size of all uploaded files in MB
+ * @returns IncompatibilityReason or null if compatible
+ */
+export function getFileSizeIncompatibilityReason(
+  modelMaxFileSizeMB: number | undefined,
+  totalFileSizeMB: number,
+): IncompatibilityReason | null {
+  if (modelMaxFileSizeMB === undefined || modelMaxFileSizeMB === null)
+    return null;
+  if (totalFileSizeMB <= modelMaxFileSizeMB)
+    return null;
+  return IncompatibilityReasons.FILE_TOO_LARGE;
+}
+
+/**
+ * ✅ FILE SIZE MESSAGE: Get human-readable message about model's file capacity
+ * Used for tooltip/UI display when model is disabled due to file size
+ *
+ * @param modelMaxFileSizeMB - Model's max file capacity (from model config)
+ * @returns Human-readable message about capacity, or null if no limit
+ */
+export function getFileSizeCapacityMessage(
+  modelMaxFileSizeMB: number | undefined,
+): string | null {
+  if (modelMaxFileSizeMB === undefined || modelMaxFileSizeMB === null)
+    return null;
+  return `This model supports up to ${modelMaxFileSizeMB}MB of file content`;
+}
+
+/**
+ * ✅ GET FILE SIZE INCOMPATIBLE MODEL IDS: Find models that can't handle file size
+ *
+ * @param models - Array of models with id and maxFileSizeMB
+ * @param totalFileSizeMB - Total size of all uploaded files in MB
+ * @returns Set of model IDs that cannot handle the file size
+ */
+export function getFileSizeIncompatibleModelIds<T extends { id: string; maxFileSizeMB?: number }>(
+  models: T[],
+  totalFileSizeMB: number,
+): Set<string> {
+  const incompatibleIds = new Set<string>();
+
+  // No files = no size incompatibilities
+  if (totalFileSizeMB <= 0) {
+    return incompatibleIds;
+  }
+
+  for (const model of models) {
+    if (!isModelCompatibleWithFileSize(model.maxFileSizeMB, totalFileSizeMB)) {
+      incompatibleIds.add(model.id);
+    }
+  }
+
+  return incompatibleIds;
+}
+
 /**
  * Filter models to only those compatible with given files
  *

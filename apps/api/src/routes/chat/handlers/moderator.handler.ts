@@ -146,6 +146,12 @@ async function generateCouncilModerator(
     prompt: 'Analyze this council discussion and produce the moderator analysis in markdown format.',
     temperature: 0.3,
     maxOutputTokens: 8192,
+    // ✅ MIDDLE-OUT TRANSFORM: Enable automatic context compression
+    providerOptions: {
+      openrouter: {
+        transforms: ['middle-out'],
+      },
+    },
     // ✅ STREAMING TIMEOUT: 15 min for complex moderator analysis
     // Cloudflare has UNLIMITED wall-clock - only constraint is 100s idle timeout
     abortSignal: AbortSignal.timeout(AI_TIMEOUT_CONFIG.moderatorAnalysisMs),

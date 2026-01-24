@@ -380,6 +380,10 @@ export type ThreadSlugStatus = z.infer<typeof ThreadSlugStatusPayloadSchema>;
 
 export const DeleteThreadResponseSchema = createApiResponseSchema(z.object({
   deleted: z.boolean().openapi({ example: true }),
+  projectId: z.string().nullish().openapi({
+    description: 'Project ID if thread belonged to a project (for cache invalidation)',
+    example: '01HXYZ123ABC',
+  }),
 })).openapi('DeleteThreadResponse');
 
 export const AddParticipantRequestSchema = z.object({
@@ -1966,3 +1970,45 @@ export const PartialAnalysisConfigSchema = z.object({
 }).openapi('PartialAnalysisConfig');
 
 export type PartialAnalysisConfig = z.infer<typeof PartialAnalysisConfigSchema>;
+
+// ============================================================================
+// MEMORY EVENTS SCHEMAS
+// ============================================================================
+
+export const MemoryEventQuerySchema = z.object({
+  roundNumber: z.coerce.number().int().min(1).openapi({
+    description: 'Round number to check for memory events',
+    example: 1,
+  }),
+}).openapi('MemoryEventQuery');
+
+export const MemoryEventItemSchema = z.object({
+  id: z.string().openapi({
+    description: 'Memory ID',
+  }),
+  summary: z.string().openapi({
+    description: 'Brief summary of the memory',
+  }),
+  content: z.string().openapi({
+    description: 'Memory content (truncated to 200 chars)',
+  }),
+}).openapi('MemoryEventItem');
+
+export const MemoryEventResponseSchema = z.object({
+  memoryIds: z.array(z.string()).openapi({
+    description: 'IDs of created memories',
+  }),
+  memories: z.array(MemoryEventItemSchema).openapi({
+    description: 'Created memories with summary and content',
+  }),
+  projectId: z.string().openapi({
+    description: 'Project ID the memories belong to',
+  }),
+  createdAt: z.number().openapi({
+    description: 'Unix timestamp when memories were created',
+  }),
+}).nullable().openapi('MemoryEventResponse');
+
+export type MemoryEventQuery = z.infer<typeof MemoryEventQuerySchema>;
+export type MemoryEventItem = z.infer<typeof MemoryEventItemSchema>;
+export type MemoryEventResponse = z.infer<typeof MemoryEventResponseSchema>;

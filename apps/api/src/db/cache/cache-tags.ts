@@ -132,6 +132,21 @@ const PublicSlugsListCacheTags = {
   all: () => [PublicSlugsListCacheTags.list, PublicThreadCacheTags.slugsList],
 } as const;
 
+const ProjectCacheTags = {
+  detail: (projectId: string) => `project-${projectId}`,
+  threads: (projectId: string) => `project-threads-${projectId}`,
+  memories: (projectId: string) => `project-memories-${projectId}`,
+  attachments: (projectId: string) => `project-attachments-${projectId}`,
+  context: (projectId: string) => `project-context-${projectId}`,
+  all: (projectId: string) => [
+    ProjectCacheTags.detail(projectId),
+    ProjectCacheTags.threads(projectId),
+    ProjectCacheTags.memories(projectId),
+    ProjectCacheTags.attachments(projectId),
+    ProjectCacheTags.context(projectId),
+  ],
+} as const;
+
 export function getUserSubscriptionCacheTags(
   userId: string,
   customerId?: string,
@@ -177,6 +192,7 @@ export {
   ModelsCacheTags,
   PriceCacheTags,
   ProductCacheTags,
+  ProjectCacheTags,
   PublicSlugsListCacheTags,
   PublicThreadCacheTags,
   SubscriptionCacheTags,

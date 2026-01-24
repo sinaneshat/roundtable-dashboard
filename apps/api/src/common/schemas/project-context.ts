@@ -122,6 +122,8 @@ export const ProjectAttachmentItemSchema = z.object({
   r2Key: z.string(),
   threadId: z.string().nullable(),
   threadTitle: z.string().nullable(),
+  source: z.enum(['project', 'thread']),
+  textContent: z.string().nullable(),
 });
 
 export type ProjectAttachmentItem = z.infer<typeof ProjectAttachmentItemSchema>;
@@ -160,6 +162,7 @@ export const ProjectContextParamsSchema = z.object({
   maxSearchResults: z.number().int().positive().optional(),
   maxModerators: z.number().int().positive().optional(),
   db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
+  r2Bucket: z.custom<R2Bucket>().optional(),
 });
 
 export type ProjectContextParams = z.infer<typeof ProjectContextParamsSchema>;

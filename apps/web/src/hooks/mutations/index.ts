@@ -1,4 +1,10 @@
 export {
+  useCreateJobMutation,
+  useDeleteJobMutation,
+  useDiscoverTrendsMutation,
+  useUpdateJobMutation,
+} from './admin-job-mutations';
+export {
   useAdminClearUserCacheMutation,
   useAdminSearchUsers,
 } from './admin-mutations';

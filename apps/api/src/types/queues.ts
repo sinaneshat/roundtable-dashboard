@@ -175,6 +175,84 @@ export const TriggerPreSearchQueueMessageSchema = z.object({
 
 export type TriggerPreSearchQueueMessage = z.infer<typeof TriggerPreSearchQueueMessageSchema>;
 
+// ============================================================================
+// AUTOMATED JOB QUEUE MESSAGES
+// ============================================================================
+
+/**
+ * Start automated job queue message schema
+ * Sent when an admin creates a new automated job.
+ *
+ * @see src/workers/round-orchestration-queue.ts - Consumer
+ * @see src/routes/admin/jobs/handler.ts - Producer
+ */
+export const StartAutomatedJobQueueMessageSchema = z.object({
+  /** Message type discriminator */
+  type: z.literal(RoundOrchestrationMessageTypes.START_AUTOMATED_JOB),
+  /** Unique message ID for idempotency */
+  messageId: z.string(),
+  /** Job ID to start */
+  jobId: z.string(),
+  /** User ID who owns the job */
+  userId: z.string(),
+  /** User's session token for auth */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
+  /** ISO timestamp when message was queued */
+  queuedAt: z.string(),
+});
+
+export type StartAutomatedJobQueueMessage = z.infer<typeof StartAutomatedJobQueueMessageSchema>;
+
+/**
+ * Continue automated job queue message schema
+ * Sent after a round completes to continue with next round.
+ *
+ * @see src/workers/round-orchestration-queue.ts - Consumer
+ */
+export const ContinueAutomatedJobQueueMessageSchema = z.object({
+  /** Message type discriminator */
+  type: z.literal(RoundOrchestrationMessageTypes.CONTINUE_AUTOMATED_JOB),
+  /** Unique message ID for idempotency */
+  messageId: z.string(),
+  /** Job ID to continue */
+  jobId: z.string(),
+  /** Thread ID for the conversation */
+  threadId: z.string(),
+  /** Current round number (0-based) */
+  currentRound: z.number(),
+  /** User ID who owns the job */
+  userId: z.string(),
+  /** User's session token for auth */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
+  /** ISO timestamp when message was queued */
+  queuedAt: z.string(),
+});
+
+export type ContinueAutomatedJobQueueMessage = z.infer<typeof ContinueAutomatedJobQueueMessageSchema>;
+
+/**
+ * Complete automated job queue message schema
+ * Sent when all rounds are done to finalize the job.
+ *
+ * @see src/workers/round-orchestration-queue.ts - Consumer
+ */
+export const CompleteAutomatedJobQueueMessageSchema = z.object({
+  /** Message type discriminator */
+  type: z.literal(RoundOrchestrationMessageTypes.COMPLETE_AUTOMATED_JOB),
+  /** Unique message ID for idempotency */
+  messageId: z.string(),
+  /** Job ID to complete */
+  jobId: z.string(),
+  /** Thread ID for the conversation */
+  threadId: z.string(),
+  /** Whether to auto-publish the thread */
+  autoPublish: z.boolean(),
+  /** ISO timestamp when message was queued */
+  queuedAt: z.string(),
+});
+
+export type CompleteAutomatedJobQueueMessage = z.infer<typeof CompleteAutomatedJobQueueMessageSchema>;
+
 /**
  * Round orchestration queue message union schema
  * Used by queue consumer to route messages to appropriate handlers.
@@ -184,6 +262,9 @@ export const RoundOrchestrationQueueMessageSchema = z.discriminatedUnion('type',
   TriggerModeratorQueueMessageSchema,
   CheckRoundCompletionQueueMessageSchema,
   TriggerPreSearchQueueMessageSchema,
+  StartAutomatedJobQueueMessageSchema,
+  ContinueAutomatedJobQueueMessageSchema,
+  CompleteAutomatedJobQueueMessageSchema,
 ]);
 
 export type RoundOrchestrationQueueMessage = z.infer<typeof RoundOrchestrationQueueMessageSchema>;

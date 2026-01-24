@@ -13,6 +13,7 @@ import {
   threadFeedbackQueryOptions,
   threadPreSearchesQueryOptions,
 } from '@/lib/data/query-options';
+import { rlog } from '@/lib/utils/dev-logger';
 import type {
   GetThreadBySlugResponse,
   GetThreadFeedbackResponse,
@@ -21,39 +22,40 @@ import type {
 import { useIsInCreationFlow } from '@/stores/chat';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
-  // ✅ DISABLE route-level caching to fix preloading race condition
-  // React Query handles caching at the query level instead
   staleTime: 0,
-
-  // ✅ SKELETON FLASH FIX: Only show pending component after 300ms
   pendingMs: 300,
 
   loader: async ({ params, context }) => {
     const { queryClient } = context;
 
-    // ✅ GUARD: Skip loading when slug is undefined (safety check)
-    // This shouldn't happen when Link uses proper params syntax
     if (!params.slug) {
-      console.error('[ChatThread] Loader skipped - slug undefined');
-      return { threadTitle: null, threadId: null, preSearches: undefined, changelog: undefined, feedback: undefined, streamResumption: undefined };
+      return {
+        threadTitle: null,
+        threadId: null,
+        threadData: null,
+        preSearches: undefined,
+        changelog: undefined,
+        feedback: undefined,
+        streamResumption: undefined,
+      };
     }
 
     const options = threadBySlugQueryOptions(params.slug);
     const isServer = typeof window === 'undefined';
 
-    // ✅ FIX: Check cache FIRST for SPA navigation (flow-controller pre-populates cache)
-    // For threadDetail with staleTime: 0, ensureQueryData always refetches even with cache.
-    // Skip fetch if cache exists AND has prefetch meta (indicating fresh data from flow-controller)
+    rlog.init('loader', `slug=${params.slug} server=${isServer ? 1 : 0}`);
+
+    // Check cache for prefetched thread data (from flow-controller)
     const cachedThreadData = !isServer ? queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey) : null;
     const hasPrefetchMeta = cachedThreadData?.meta?.requestId === 'prefetch';
 
-    // ✅ FIX: Early return when flow-controller prefetched data - skip all auxiliary fetches
-    // During creation flow, thread data is fresh and no auxiliary data exists yet
-    if (hasPrefetchMeta) {
-      const threadData = cachedThreadData?.success ? cachedThreadData.data : null;
+    // Early return when flow-controller prefetched data
+    if (hasPrefetchMeta && cachedThreadData?.success) {
+      const threadData = cachedThreadData.data;
+      rlog.init('loader', `prefetch-hit: ${threadData.thread.slug} msgs=${threadData.messages.length}`);
       return {
-        threadTitle: threadData?.thread?.title ?? null,
-        threadId: threadData?.thread?.id ?? null,
+        threadTitle: threadData.thread.title ?? null,
+        threadId: threadData.thread.id ?? null,
         threadData,
         preSearches: undefined,
         changelog: undefined,
@@ -62,24 +64,27 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
       };
     }
 
-    // ensureQueryData internally checks staleTime and only fetches if data is stale/missing
-    // @see https://tanstack.com/router/latest/docs/framework/react/guide/external-data-loading
-    // ✅ FIX: Wrap in try-catch to handle SSR errors gracefully (e.g., 401 unauthorized)
-    // On error, return empty data and let component handle via useQuery
     try {
       await queryClient.ensureQueryData(options);
     } catch (error) {
       console.error('[ChatThread] Loader error:', error);
-      // Return empty loader data - component will re-fetch via useQuery
-      return { threadTitle: null, threadId: null, preSearches: undefined, changelog: undefined, feedback: undefined, streamResumption: undefined };
+      return {
+        threadTitle: null,
+        threadId: null,
+        threadData: null,
+        preSearches: undefined,
+        changelog: undefined,
+        feedback: undefined,
+        streamResumption: undefined,
+      };
     }
 
-    // Get thread ID from cached data for auxiliary fetches
     const cachedData = queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey);
     const threadId = cachedData?.success && cachedData.data?.thread?.id;
     const threadTitle = cachedData?.success && cachedData.data?.thread?.title ? cachedData.data.thread.title : null;
 
-    // Auxiliary data: streamResumption, changelog, feedback, preSearches
+    rlog.init('loader', `ensured: ${threadTitle} msgs=${cachedData?.success ? cachedData.data.messages.length : 0}`);
+
     let preSearches;
     let changelog;
     let feedback;
@@ -92,8 +97,7 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
       const preSearchesOptions = threadPreSearchesQueryOptions(threadId);
 
       if (isServer) {
-        // ✅ SSR: Await all auxiliary data for proper hydration
-        // useQuery doesn't return cached data on first SSR render, so pass via loaderData
+        // On server, await all for proper hydration
         const [streamResult, changelogResult, feedbackResult, preSearchesResult] = await Promise.all([
           queryClient.ensureQueryData(streamOptions).catch(() => null),
           queryClient.ensureQueryData(changelogOptions).catch(() => null),
@@ -106,14 +110,10 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
         feedback = feedbackResult?.success ? feedbackResult.data?.feedback : undefined;
         preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
       } else {
-        // ✅ SPA NAVIGATION: Check cache FIRST before ensureQueryData
-        // - New thread: flow-controller pre-populates cache → use cached data (no network)
-        // - Existing thread: fetches if cache empty/invalidated, uses cache if valid
-        // - Thread→Thread: Previous thread cache invalidated by leaveThread pattern
+        // On client, check cache first, then prefetch missing data
         const cachedChangelog = queryClient.getQueryData(changelogOptions.queryKey);
         const cachedPreSearches = queryClient.getQueryData(preSearchesOptions.queryKey);
 
-        // ✅ FIX: Only fetch what's NOT already in cache
         const [changelogResult, preSearchesResult] = await Promise.all([
           cachedChangelog
             ? Promise.resolve(cachedChangelog)
@@ -125,14 +125,13 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
         changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
         preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
 
-        // Other auxiliary data - use cache + prefetch pattern (non-blocking)
         const cachedStream = queryClient.getQueryData<GetThreadStreamResumptionStateResponse>(streamOptions.queryKey);
         const cachedFeedback = queryClient.getQueryData<GetThreadFeedbackResponse>(feedbackOptions.queryKey);
 
         streamResumption = cachedStream?.success ? cachedStream.data : undefined;
         feedback = cachedFeedback?.success ? cachedFeedback.data?.feedback : undefined;
 
-        // ✅ FIX: Swallow prefetch errors - for new threads, no auxiliary data exists yet
+        // Prefetch missing auxiliary data in background
         if (!cachedStream)
           queryClient.prefetchQuery(streamOptions).catch(() => {});
         if (!cachedFeedback)
@@ -140,11 +139,18 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
       }
     }
 
-    // Return threadData from loader for SSR - useQuery doesn't have access to server-prefetched data on first render
     const threadData = cachedData?.success ? cachedData.data : null;
-    return { threadTitle, threadId, threadData, preSearches, changelog, feedback, streamResumption };
+    return {
+      threadTitle,
+      threadId,
+      threadData,
+      preSearches,
+      changelog,
+      feedback,
+      streamResumption,
+    };
   },
-  // Dynamic title from loader data
+
   head: ({ loaderData, params }) => {
     const siteUrl = getAppBaseUrl();
     const displayTitle = loaderData?.threadTitle
@@ -173,9 +179,8 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
       ],
     };
   },
-  // ✅ SSR: Direct component - renders on server with loader data
+
   component: ChatThreadRoute,
-  // pendingComponent shown during route transitions
   pendingComponent: ThreadContentSkeleton,
 });
 
@@ -184,36 +189,27 @@ function ChatThreadRoute() {
   const { data: session } = useSession();
   const loaderData = Route.useLoaderData();
 
-  // ✅ FIX: Check if we're in creation flow - data already in store, no need to fetch
   const isInCreationFlow = useIsInCreationFlow();
 
-  // Use loaderData as primary source (available on SSR)
-  // useQuery provides client-side updates/refetches
-  // ✅ SKELETON FLASH FIX: When loaderData has threadData (from SSR or prefetch cache),
-  // use it as initialData and extend staleTime to prevent immediate refetch
+  // Use loaderData.threadData as initialData for seamless SSR hydration
   const hasLoaderData = Boolean(loaderData?.threadData);
   const { data: queryData, isError, error, isFetching } = useQuery({
     ...threadBySlugQueryOptions(slug ?? ''),
-    // ✅ FIX: Disable query during creation flow - data already in Zustand store
     enabled: Boolean(slug) && !isInCreationFlow,
-    // ✅ FIX: Use loader data as initial data to prevent flash
     initialData: hasLoaderData && loaderData.threadData
       ? { success: true as const, data: loaderData.threadData }
       : undefined,
-    // ✅ FIX: Extend staleTime when data came from loader to prevent immediate refetch
-    // 10s grace period for fresh data - thread detail will be refetched on subsequent navigations
     staleTime: hasLoaderData ? 10_000 : 0,
   });
 
-  // Prefer loader data (SSR/prefetch), fall back to query data (client updates)
-  // During creation flow, loader should have prefetch cache data from flow-controller
+  // Fallback pattern: loaderData first, then queryData
   const threadResponse = loaderData?.threadData ?? (queryData?.success ? queryData.data : null);
-
-  // loaderData for auxiliary data (already prefetched in loader)
   const streamResumptionState = loaderData?.streamResumption ?? null;
   const changelog = loaderData?.changelog;
   const feedback = loaderData?.feedback;
   const preSearches = loaderData?.preSearches;
+
+  rlog.init('route', `url=${slug} loaderData=${loaderData?.threadData?.thread?.slug ?? '-'}(${loaderData?.threadData?.messages?.length ?? 0}msg) queryData=${queryData?.success ? 'ok' : 'none'}`);
 
   const user = useMemo(() => ({
     id: session?.user?.id ?? '',
@@ -221,10 +217,8 @@ function ChatThreadRoute() {
     image: session?.user?.image || null,
   }), [session?.user?.id, session?.user?.name, session?.user?.image]);
 
-  // Show skeleton only when:
-  // 1. No slug (invalid route state)
-  // 2. No thread data AND fetching AND not in creation flow (store has data during creation)
-  if (!slug || (!threadResponse && isFetching && !isInCreationFlow)) {
+  // Show skeleton while fetching and no data yet
+  if (!slug || (!threadResponse && isFetching)) {
     return <ThreadContentSkeleton />;
   }
 
@@ -256,12 +250,14 @@ function ChatThreadRoute() {
 
   const { thread, participants, messages } = threadResponse;
 
+  rlog.init('route-pass', `thread=${thread.slug}(${thread.id?.slice(-8)}) msgs=${messages.length} parts=${participants.length}`);
+
   return (
     <ChatThreadScreen
       thread={thread}
       participants={participants}
       initialMessages={messages}
-      slug={slug}
+      slug={slug ?? ''}
       user={user}
       streamResumptionState={streamResumptionState}
       initialChangelog={changelog}

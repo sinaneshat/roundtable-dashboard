@@ -9,6 +9,7 @@ import type { getDbAsync } from '@/db';
 import {
   CreditCacheTags,
   MessageCacheTags,
+  ProjectCacheTags,
   PublicSlugsListCacheTags,
   PublicThreadCacheTags,
   ThreadCacheTags,
@@ -94,6 +95,15 @@ export async function invalidateSidebarCache(
 ): Promise<void> {
   if (db.$cache?.invalidate) {
     await db.$cache.invalidate({ tags: [ThreadCacheTags.sidebar(userId)] });
+  }
+}
+
+export async function invalidateProjectCache(
+  db: Awaited<ReturnType<typeof getDbAsync>>,
+  projectId: string,
+): Promise<void> {
+  if (db.$cache?.invalidate) {
+    await db.$cache.invalidate({ tags: ProjectCacheTags.all(projectId) });
   }
 }
 

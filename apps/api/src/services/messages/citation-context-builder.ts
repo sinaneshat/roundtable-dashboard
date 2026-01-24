@@ -30,6 +30,7 @@ import type { CitableContextResult, CitableSource, CitationSourceMap } from '@/t
 export type CitableContextParams = ProjectContextParams & {
   includeAttachments?: boolean;
   baseUrl: string; // Base URL for generating absolute download URLs
+  r2Bucket?: R2Bucket; // R2 bucket for loading attachment content
 };
 
 // ============================================================================
@@ -161,6 +162,7 @@ function buildModeratorSources(
 
 /**
  * Build citable sources from project attachments
+ * When textContent is available, includes actual file content for AI to reference
  */
 function buildAttachmentSources(
   attachments: AggregatedProjectContext['attachments'],
@@ -183,12 +185,34 @@ function buildAttachmentSources(
             ? 'JSON file'
             : 'File';
 
-    const content = [
-      `Filename: ${attachment.filename}`,
-      `Type: ${typeDescription} (${attachment.mimeType})`,
-      `Size: ${sizeDisplay}`,
-      attachment.threadTitle ? `From thread: ${attachment.threadTitle}` : '',
-    ].filter(Boolean).join('\n');
+    // Source label: project-level files vs thread uploads
+    const sourceLabel = attachment.source === 'project'
+      ? 'Project file'
+      : attachment.threadTitle
+        ? `From thread: ${attachment.threadTitle}`
+        : '';
+
+    // Build content: use textContent if available, else metadata only
+    let content: string;
+    if (attachment.textContent) {
+      // Include actual file content for AI to reference and cite
+      const header = [
+        `Filename: ${attachment.filename}`,
+        `Type: ${typeDescription} (${attachment.mimeType})`,
+        `Size: ${sizeDisplay}`,
+        sourceLabel,
+      ].filter(Boolean).join('\n');
+      content = `${header}\n\n--- Document Content ---\n${attachment.textContent}`;
+    } else {
+      // Metadata only for files without extractable text (images, etc.)
+      content = [
+        `Filename: ${attachment.filename}`,
+        `Type: ${typeDescription} (${attachment.mimeType})`,
+        `Size: ${sizeDisplay}`,
+        sourceLabel,
+        '(No text content available - binary file)',
+      ].filter(Boolean).join('\n');
+    }
 
     // Generate absolute download URL for attachment
     const downloadUrl = `${baseUrl}/api/v1/uploads/${attachment.id}/download`;
@@ -207,6 +231,8 @@ function buildAttachmentSources(
         downloadUrl,
         mimeType: attachment.mimeType,
         fileSize: attachment.fileSize,
+        source: attachment.source,
+        hasTextContent: !!attachment.textContent,
       },
     };
   });

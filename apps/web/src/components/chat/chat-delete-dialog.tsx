@@ -1,4 +1,5 @@
 import { useLocation, useNavigate } from '@tanstack/react-router';
+import { useMemo } from 'react';
 
 import { ConfirmationDialog } from '@/components/chat/confirmation-dialog';
 import { useDeleteThreadMutation } from '@/hooks/mutations';
@@ -27,6 +28,14 @@ export function ChatDeleteDialog({
   const navigate = useNavigate();
   const deleteThreadMutation = useDeleteThreadMutation();
 
+  // Auto-detect projectId from URL if not provided (matches /chat/projects/{projectId}/{slug})
+  const projectIdFromUrl = useMemo(() => {
+    const match = pathname.match(/^\/chat\/projects\/([^/]+)\//);
+    return match?.[1] ?? null;
+  }, [pathname]);
+
+  const effectiveProjectId = projectId ?? projectIdFromUrl;
+
   const handleDelete = () => {
     deleteThreadMutation.mutate({ param: { id: threadId }, slug: threadSlug, projectId }, {
       onSuccess: () => {
@@ -34,8 +43,19 @@ export function ChatDeleteDialog({
           t('chat.threadDeleted'),
           t('chat.threadDeletedDescription'),
         );
-        if (redirectIfCurrent && threadSlug) {
-          if (pathname.includes(`/chat/${threadSlug}`)) {
+        // DEBUG - remove after testing
+        console.log('[ChatDeleteDialog] redirect check:', {
+          redirectIfCurrent,
+          threadSlug,
+          pathname,
+          effectiveProjectId,
+          endsWithSlug: pathname.endsWith(`/${threadSlug}`),
+        });
+        if (redirectIfCurrent && threadSlug && pathname.endsWith(`/${threadSlug}`)) {
+          console.log('[ChatDeleteDialog] navigating to:', effectiveProjectId ? `/chat/projects/${effectiveProjectId}/new` : '/chat');
+          if (effectiveProjectId) {
+            navigate({ to: '/chat/projects/$projectId/new', params: { projectId: effectiveProjectId } });
+          } else {
             navigate({ to: '/chat' });
           }
         }

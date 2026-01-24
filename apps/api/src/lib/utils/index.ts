@@ -7,6 +7,7 @@ export * from './dev-logger';
 export * from './error-handling';
 export * from './error-metadata-builders';
 export * from './file-capability';
+export * from './internal-api';
 export * from './memo-utils';
 export * from './message-formatting';
 export * from './message-status';

@@ -2,7 +2,6 @@ import type { ConfirmationDialogVariant } from '@roundtable/shared';
 import { ConfirmationDialogVariants } from '@roundtable/shared';
 import type { ReactNode } from 'react';
 
-import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -105,11 +104,11 @@ export function ConfirmationDialog({
           </Button>
           <Button
             onClick={onConfirm}
-            disabled={isLoading}
+            loading={isLoading}
+            loadingText={confirmingText}
             className={cn(variantStyles[variant])}
-            startIcon={isLoading ? <Icons.loader className="size-4 animate-spin" /> : undefined}
           >
-            {isLoading && confirmingText ? confirmingText : confirmText}
+            {confirmText}
           </Button>
         </DialogFooter>
       </DialogContent>

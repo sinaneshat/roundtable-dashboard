@@ -605,6 +605,9 @@ export const ROUND_ORCHESTRATION_MESSAGE_TYPES = [
   'trigger-moderator',
   'check-round-completion',
   'trigger-pre-search',
+  'start-automated-job',
+  'continue-automated-job',
+  'complete-automated-job',
 ] as const;
 
 // 2. ZOD SCHEMA
@@ -625,6 +628,9 @@ export const RoundOrchestrationMessageTypes = {
   TRIGGER_MODERATOR: 'trigger-moderator' as const,
   CHECK_ROUND_COMPLETION: 'check-round-completion' as const,
   TRIGGER_PRE_SEARCH: 'trigger-pre-search' as const,
+  START_AUTOMATED_JOB: 'start-automated-job' as const,
+  CONTINUE_AUTOMATED_JOB: 'continue-automated-job' as const,
+  COMPLETE_AUTOMATED_JOB: 'complete-automated-job' as const,
 } as const;
 
 // ============================================================================

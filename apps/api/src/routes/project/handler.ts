@@ -260,12 +260,17 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
 
     // Sync custom instructions to project memory if provided
     if (body.customInstructions) {
+      console.error('[Project Create] Syncing instruction memory', {
+        projectId,
+        instructionLength: body.customInstructions.length,
+      });
       await syncInstructionMemory({
         db,
         projectId,
         customInstructions: body.customInstructions,
         userId: user.id,
       });
+      console.error('[Project Create] Instruction memory sync complete', { projectId });
     }
 
     return Responses.created(c, {
@@ -318,12 +323,18 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
       .returning();
 
     if (body.customInstructions !== undefined) {
+      console.error('[Project Update] Syncing instruction memory', {
+        projectId: id,
+        instructionLength: body.customInstructions?.length ?? 0,
+        isClearing: !body.customInstructions,
+      });
       await syncInstructionMemory({
         db,
         projectId: id,
         customInstructions: body.customInstructions || null,
         userId: user.id,
       });
+      console.error('[Project Update] Instruction memory sync complete', { projectId: id });
     }
 
     // Fetch counts for response

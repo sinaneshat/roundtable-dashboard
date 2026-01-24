@@ -142,8 +142,8 @@ function AuthFormContent() {
                 size="sm"
                 className="h-auto py-1 px-2 text-xs text-muted-foreground"
                 onClick={goBack}
+                startIcon={<Icons.arrowLeft />}
               >
-                <Icons.arrowLeft className="size-3 mr-1" />
                 {t('actions.back')}
               </Button>
             </div>

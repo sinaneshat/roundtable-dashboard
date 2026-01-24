@@ -153,7 +153,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                   variant="default"
                   size="lg"
                   onClick={this.handleReset}
-                  startIcon={<Icons.refreshCw className="size-4" />}
+                  startIcon={<Icons.refreshCw />}
                   className="min-w-[140px]"
                 >
                   Reload Page
@@ -162,7 +162,7 @@ export class GlobalErrorBoundary extends Component<Props, State> {
                   variant="outline"
                   size="lg"
                   onClick={() => window.history.back()}
-                  startIcon={<Icons.arrowLeft className="size-4" />}
+                  startIcon={<Icons.arrowLeft />}
                   className="min-w-[140px]"
                 >
                   Go Back

@@ -145,6 +145,12 @@ class OpenRouterService {
         temperature: params.temperature ?? DEFAULT_AI_PARAMS.temperature,
         maxOutputTokens: params.maxTokens ?? DEFAULT_AI_PARAMS.maxTokens,
         topP: params.topP ?? DEFAULT_AI_PARAMS.topP,
+        // ✅ MIDDLE-OUT TRANSFORM: Enable automatic context compression
+        providerOptions: {
+          openrouter: {
+            transforms: ['middle-out'],
+          },
+        },
       });
 
       return {

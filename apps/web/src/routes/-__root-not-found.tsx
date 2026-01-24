@@ -22,7 +22,7 @@ export function NotFoundComponent() {
             <Button
               size="lg"
               asChild
-              startIcon={<Icons.home className="size-4" />}
+              startIcon={<Icons.home />}
             >
               <Link to="/">{t('pages.notFound.goHome')}</Link>
             </Button>

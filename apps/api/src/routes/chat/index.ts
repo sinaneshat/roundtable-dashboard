@@ -48,6 +48,7 @@ export {
   getPublicThreadHandler,
   getThreadBySlugHandler,
   getThreadHandler,
+  getThreadMemoryEventsHandler,
   getThreadSlugStatusHandler,
   listPublicThreadSlugsHandler,
   listSidebarThreadsHandler,

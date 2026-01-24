@@ -235,8 +235,8 @@ export const InlineErrorDisplay: React.FC<{
       <span className="text-sm text-muted-foreground ml-2">{error}</span>
     </div>
     {onRetry && (
-      <Button onClick={onRetry} size="sm" variant="ghost">
-        <Icons.refreshCw className="h-3 w-3" />
+      <Button onClick={onRetry} size="icon" variant="ghost" aria-label="Retry">
+        <Icons.refreshCw />
       </Button>
     )}
   </div>

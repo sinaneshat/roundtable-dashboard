@@ -22,7 +22,10 @@
     "test": "NODE_OPTIONS='--max-old-space-size=2048' vitest run",
     "test:watch": "NODE_OPTIONS='--max-old-space-size=2048' vitest",
     "test:sequential": "NODE_OPTIONS='--max-old-space-size=1024' vitest run --no-file-parallelism --maxWorkers=1",
-    "test:ci": "NODE_OPTIONS='--max-old-space-size=2048' CI=true vitest run --maxWorkers=2 --no-file-parallelism"
+    "test:ci": "NODE_OPTIONS='--max-old-space-size=2048' CI=true vitest run --maxWorkers=2 --no-file-parallelism",
+    "remotion:studio": "remotion studio src/remotion/index.ts --config src/remotion/remotion.config.ts",
+    "remotion:render": "remotion render src/remotion/index.ts --config src/remotion/remotion.config.ts",
+    "remotion:render:ph": "remotion render src/remotion/index.ts ProductHuntDemo --config src/remotion/remotion.config.ts out/ph-demo.mp4"
   },
   "dependencies": {
     "@ffmpeg/ffmpeg": "^0.12.15",
@@ -49,6 +52,13 @@
     "@radix-ui/react-toggle": "^1.1.10",
     "@radix-ui/react-tooltip": "^1.2.8",
     "@radix-ui/react-visually-hidden": "^1.2.4",
+    "@remotion/bundler": "4.0.252",
+    "@remotion/cli": "4.0.252",
+    "@remotion/google-fonts": "4.0.252",
+    "@remotion/player": "4.0.252",
+    "@remotion/tailwind": "4.0.252",
+    "@remotion/transitions": "4.0.252",
+    "@remotion/zod-types": "4.0.252",
     "@roundtable/shared": "workspace:*",
     "@tanstack/react-query": "^5.90.19",
     "@tanstack/react-router": "^1.154.8",
@@ -77,6 +87,7 @@
     "react-dom": "19.2.3",
     "react-hook-form": "^7.70.0",
     "react-markdown": "^10.1.0",
+    "remotion": "4.0.252",
     "schema-dts": "^1.1.5",
     "shiki": "^3.20.0",
     "streamdown": "^1.6.10",

@@ -24,13 +24,16 @@
  */
 
 import type { Message, MessageBatch } from '@cloudflare/workers-types';
-import { BASE_URL_CONFIG } from '@roundtable/shared';
-import { BETTER_AUTH_SESSION_COOKIE_NAME, MessagePartTypes, RoundOrchestrationMessageTypes, UIMessageRoles, WebAppEnvs, WebAppEnvSchema } from '@roundtable/shared/enums';
+import { MessagePartTypes, RoundOrchestrationMessageTypes, UIMessageRoles } from '@roundtable/shared/enums';
 
+import { buildSessionAuthHeaders, drainStream, getBaseUrl } from '@/lib/utils/internal-api';
 import { calculateExponentialBackoff } from '@/lib/utils/queue-utils';
 import type {
   CheckRoundCompletionQueueMessage,
+  CompleteAutomatedJobQueueMessage,
+  ContinueAutomatedJobQueueMessage,
   RoundOrchestrationQueueMessage,
+  StartAutomatedJobQueueMessage,
   TriggerModeratorQueueMessage,
   TriggerParticipantQueueMessage,
   TriggerPreSearchQueueMessage,
@@ -45,51 +48,6 @@ const MAX_RETRY_DELAY_SECONDS = 300;
 
 /** Base retry delay in seconds */
 const BASE_RETRY_DELAY_SECONDS = 60;
-
-// ============================================================================
-// HELPERS
-// ============================================================================
-
-/**
- * Get base URL for current environment
- */
-function getBaseUrl(env: CloudflareEnv): string {
-  const envResult = WebAppEnvSchema.safeParse(env.WEBAPP_ENV);
-  const validEnv = envResult.success ? envResult.data : WebAppEnvs.LOCAL;
-  return BASE_URL_CONFIG[validEnv].app;
-}
-
-/**
- * Build auth headers using user's session cookie
- *
- * Uses the session token from the original request (passed via queue message)
- * to authenticate with Better Auth - same as browser-based requests.
- */
-function buildSessionAuthHeaders(sessionToken: string): Record<string, string> {
-  return {
-    'Content-Type': 'application/json',
-    'Cookie': `${BETTER_AUTH_SESSION_COOKIE_NAME}=${sessionToken}`,
-  };
-}
-
-/**
- * Drain a response stream (consume all data without processing)
- */
-async function drainStream(response: Response): Promise<void> {
-  const reader = response.body?.getReader();
-  if (!reader)
-    return;
-
-  try {
-    while (true) {
-      const { done } = await reader.read();
-      if (done)
-        break;
-    }
-  } finally {
-    reader.releaseLock();
-  }
-}
 
 // ============================================================================
 // MESSAGE PROCESSORS
@@ -134,6 +92,9 @@ async function triggerParticipantStream(
 
 /**
  * Trigger a moderator stream via internal API call
+ *
+ * After moderator completes, checks if thread belongs to an automated job
+ * and queues continuation if needed.
  */
 async function triggerModeratorStream(
   message: TriggerModeratorQueueMessage,
@@ -157,6 +118,19 @@ async function triggerModeratorStream(
 
   // Drain the stream response to allow completion
   await drainStream(response);
+
+  // Check if this thread belongs to an automated job
+  // If so, queue the continuation to the next round
+  try {
+    const { checkJobContinuation } = await import('@/services/jobs');
+    const { getDbAsync } = await import('@/db');
+    const db = await getDbAsync();
+
+    await checkJobContinuation(threadId, roundNumber, sessionToken, db, env.ROUND_ORCHESTRATION_QUEUE);
+  } catch (err) {
+    // Log but don't fail - job continuation is optional
+    console.warn('[triggerModeratorStream] Job continuation check failed:', err);
+  }
 }
 
 /**
@@ -187,6 +161,61 @@ async function triggerPreSearch(
 
   // Drain the stream response to allow completion
   await drainStream(response);
+}
+
+// ============================================================================
+// AUTOMATED JOB PROCESSORS
+// ============================================================================
+
+/**
+ * Start an automated job - create thread, select models, queue first round
+ */
+async function handleStartAutomatedJob(
+  message: StartAutomatedJobQueueMessage,
+  env: CloudflareEnv,
+): Promise<void> {
+  const { jobId, sessionToken } = message;
+
+  // Lazy-load job orchestration service and DB
+  const { startAutomatedJob } = await import('@/services/jobs');
+  const { getDbAsync } = await import('@/db');
+
+  const db = await getDbAsync();
+  await startAutomatedJob(jobId, sessionToken, db, env, env.ROUND_ORCHESTRATION_QUEUE);
+}
+
+/**
+ * Continue an automated job to the next round
+ */
+async function handleContinueAutomatedJob(
+  message: ContinueAutomatedJobQueueMessage,
+  env: CloudflareEnv,
+): Promise<void> {
+  const { jobId, threadId, currentRound, sessionToken } = message;
+
+  // Lazy-load job orchestration service and DB
+  const { continueAutomatedJob } = await import('@/services/jobs');
+  const { getDbAsync } = await import('@/db');
+
+  const db = await getDbAsync();
+  await continueAutomatedJob(jobId, threadId, currentRound, sessionToken, db, env, env.ROUND_ORCHESTRATION_QUEUE);
+}
+
+/**
+ * Complete an automated job - mark done, optionally publish
+ */
+async function handleCompleteAutomatedJob(
+  message: CompleteAutomatedJobQueueMessage,
+  env: CloudflareEnv,
+): Promise<void> {
+  const { jobId, threadId, autoPublish } = message;
+
+  // Lazy-load job orchestration service and DB
+  const { completeAutomatedJob } = await import('@/services/jobs');
+  const { getDbAsync } = await import('@/db');
+
+  const db = await getDbAsync();
+  await completeAutomatedJob(jobId, threadId, autoPublish, db);
 }
 
 /**
@@ -309,6 +338,9 @@ async function processQueueMessage(
     // Lazy-load schemas to avoid startup CPU limit
     const {
       CheckRoundCompletionQueueMessageSchema,
+      CompleteAutomatedJobQueueMessageSchema,
+      ContinueAutomatedJobQueueMessageSchema,
+      StartAutomatedJobQueueMessageSchema,
       TriggerModeratorQueueMessageSchema,
       TriggerParticipantQueueMessageSchema,
       TriggerPreSearchQueueMessageSchema,
@@ -342,6 +374,27 @@ async function processQueueMessage(
         await triggerPreSearch(parsed.data, env);
       } else {
         throw new Error(`Invalid trigger-pre-search message: ${parsed.error.message}`);
+      }
+    } else if (messageType === 'start-automated-job') {
+      const parsed = StartAutomatedJobQueueMessageSchema.safeParse(body);
+      if (parsed.success) {
+        await handleStartAutomatedJob(parsed.data, env);
+      } else {
+        throw new Error(`Invalid start-automated-job message: ${parsed.error.message}`);
+      }
+    } else if (messageType === 'continue-automated-job') {
+      const parsed = ContinueAutomatedJobQueueMessageSchema.safeParse(body);
+      if (parsed.success) {
+        await handleContinueAutomatedJob(parsed.data, env);
+      } else {
+        throw new Error(`Invalid continue-automated-job message: ${parsed.error.message}`);
+      }
+    } else if (messageType === 'complete-automated-job') {
+      const parsed = CompleteAutomatedJobQueueMessageSchema.safeParse(body);
+      if (parsed.success) {
+        await handleCompleteAutomatedJob(parsed.data, env);
+      } else {
+        throw new Error(`Invalid complete-automated-job message: ${parsed.error.message}`);
       }
     } else {
       throw new Error(`Unhandled message type: ${messageType}`);

@@ -45,6 +45,7 @@ import {
   FLAGS_DEFAULTS,
   FORM_DEFAULTS,
   MODERATOR_STATE_RESET,
+  NAVIGATION_DEFAULTS,
   PENDING_MESSAGE_STATE_RESET,
   PRESEARCH_DEFAULTS,
   REGENERATION_STATE_RESET,
@@ -71,6 +72,7 @@ import type {
   FeedbackSlice,
   FlagsSlice,
   FormSlice,
+  NavigationSlice,
   OperationsActions,
   PreSearchSlice,
   RoundFlowSlice,
@@ -1097,6 +1099,14 @@ const createRoundFlowSlice: SliceCreator<RoundFlowSlice> = (set, get) => ({
     set({ flowLastError: error, flowState: error ? RoundFlowStates.ERROR : get().flowState }, false, 'roundFlow/setFlowError'),
 });
 
+/**
+ * Resolve all pending animation promises before clearing.
+ * Prevents memory leak from hanging promises when navigating away or completing streaming.
+ */
+function resolveAllPendingAnimations(resolvers: Map<number, () => void>) {
+  resolvers.forEach(resolver => resolver());
+}
+
 const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
   ...ANIMATION_DEFAULTS,
 
@@ -1151,10 +1161,10 @@ const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
     await Promise.all(animationPromises);
   },
 
-  clearAnimations: () =>
-    set({
-      ...ANIMATION_DEFAULTS,
-    }, false, 'animation/clearAnimations'),
+  clearAnimations: () => {
+    resolveAllPendingAnimations(get().animationResolvers);
+    set({ ...ANIMATION_DEFAULTS }, false, 'animation/clearAnimations');
+  },
 });
 
 const createAttachmentsSlice: SliceCreator<AttachmentsSlice> = (set, get) => ({
@@ -1224,6 +1234,76 @@ const createSidebarAnimationSlice: SliceCreator<SidebarAnimationSlice> = set => 
     }, false, 'sidebarAnimation/completeTitleAnimation'),
 });
 
+// ============================================================================
+// NAVIGATION SLICE (Deferred thread navigation for atomic reset-on-hydrate)
+// ============================================================================
+
+const createNavigationSlice: SliceCreator<NavigationSlice> = (set, get) => ({
+  ...NAVIGATION_DEFAULTS,
+
+  setPendingNavigationTarget: (slug: string | null) =>
+    set({ pendingNavigationTargetSlug: slug }, false, 'navigation/setPendingTarget'),
+
+  clearPendingNavigationTarget: () =>
+    set({ pendingNavigationTargetSlug: null }, false, 'navigation/clearPendingTarget'),
+
+  /**
+   * ✅ ATOMIC THREAD SWITCH: Combines reset + initialization in ONE set() call
+   * This prevents the blank page issue caused by the race condition:
+   * 1. Old: resetForThreadNavigation clears store → blank state
+   * 2. Old: Route loader fetches data → async delay
+   * 3. Old: Component renders with empty store → BLANK PAGE
+   *
+   * New: We defer the reset until data is ready, then do both atomically:
+   * 1. Navigation starts → mark pending, stop streaming (minimal cleanup)
+   * 2. Route loader fetches data → async
+   * 3. Hydration detects pending navigation complete → atomic reset + init
+   */
+  atomicThreadSwitch: (newThread, newParticipants, newMessages) => {
+    const state = get();
+
+    // 1. Stop streaming
+    state.chatStop?.();
+    state.chatSetMessages?.([]);
+
+    // 2. Resolve pending animations
+    resolveAllPendingAnimations(state.animationResolvers);
+
+    // 3. Increment scope version
+    const newScopeVersion = (state.resumptionScopeVersion ?? 0) + 1;
+
+    // 4. ATOMIC: Reset + new data in ONE set() call - no empty state window
+    set({
+      // Reset state (from THREAD_NAVIGATION_RESET_STATE)
+      ...THREAD_NAVIGATION_RESET_STATE,
+      // Fresh Set/Map instances
+      createdModeratorRounds: new Set<number>(),
+      triggeredPreSearchRounds: new Set<number>(),
+      triggeredModeratorRounds: new Set<number>(),
+      triggeredModeratorIds: new Set<string>(),
+      preSearchActivityTimes: new Map<number, number>(),
+      pendingAnimations: new Set<number>(),
+      animationResolvers: new Map(),
+      resumptionAttempts: new Set<string>(),
+      // Scope versioning
+      resumptionScopeThreadId: newThread.id,
+      resumptionScopeVersion: newScopeVersion,
+
+      // NEW data immediately - this is the key fix!
+      thread: newThread,
+      participants: sortByPriority(newParticipants),
+      messages: newMessages,
+
+      // Clear navigation flag
+      pendingNavigationTargetSlug: null,
+
+      // Mark initialized
+      hasInitiallyLoaded: true,
+      showInitialUI: false,
+    }, false, 'operations/atomicThreadSwitch');
+  },
+});
+
 const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
   resetThreadState: () =>
     set(THREAD_RESET_STATE, false, 'operations/resetThreadState'),
@@ -1236,6 +1316,9 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
     // 2. CLEAR: Reset AI SDK messages synchronously
     state.chatSetMessages?.([]);
+
+    // ✅ FIX A1: Resolve pending animation promises before clearing
+    resolveAllPendingAnimations(state.animationResolvers);
 
     // 3. INCREMENT: Bump scope version to invalidate ALL in-flight operations
     // This prevents stale effects from executing after navigation
@@ -1270,10 +1353,12 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       triggeredPreSearchRounds: new Set(),
       triggeredModeratorRounds: new Set(),
       triggeredModeratorIds: new Set(),
+      preSearchActivityTimes: new Map<number, number>(),
     }, false, 'operations/resetToOverview');
   },
 
   initializeThread: (thread: ChatThread, participants: ChatParticipant[], initialMessages?: UIMessage[]) => {
+    rlog.init('initThread', `START t=${thread.id?.slice(-8)} newMsgs=${initialMessages?.length ?? 0} newParts=${participants.length}`);
     const currentState = get();
     const isSameThread = currentState.thread?.id === thread.id || currentState.createdThreadId === thread.id;
     const storeMessages = currentState.messages;
@@ -1418,6 +1503,13 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
     const sortedParticipants = sortByPriority(participants);
     const enabledParticipants = getEnabledSortedParticipants(participants);
+
+    // ✅ HYDRATION DEBUG: Track message count before final set()
+    const hasStaleStreamingParts = storeMessages.some(msg =>
+      msg.parts?.some(p => 'state' in p && p.state === TextPartStates.STREAMING),
+    );
+    rlog.init('initThread', `SET msgs=${messagesToSet.length} parts=${sortedParticipants.length} stale=${hasStaleStreamingParts ? 1 : 0}`);
+
     const formParticipants = enabledParticipants.map((p, index) => ({
       id: p.id,
       modelId: p.modelId,
@@ -1496,6 +1588,22 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     const preserveStreamingState = isActiveResumption || hasActiveFormSubmission || isNewlyCreatedThread;
     const resumptionRoundNumber = validatedResumptionRoundNumber;
 
+    // ✅ FIX B2: Validate nextParticipantToTrigger after config change
+    // If stored as object with participantId, verify the index still points to same participant
+    // Participant config can change during resumption, causing indices to shift
+    // NOTE: Use enabledParticipants since streaming only iterates over enabled participants
+    let validatedNextParticipantToTrigger = currentState.nextParticipantToTrigger;
+    const rawNextP = currentState.nextParticipantToTrigger;
+    if (preserveStreamingState && typeof rawNextP === 'object' && rawNextP !== null && 'participantId' in rawNextP) {
+      const expectedParticipant = enabledParticipants[rawNextP.index];
+      if (!expectedParticipant || expectedParticipant.id !== rawNextP.participantId) {
+        // Participant config changed - find correct index or invalidate
+        const correctIndex = enabledParticipants.findIndex(p => p.id === rawNextP.participantId);
+        validatedNextParticipantToTrigger = correctIndex >= 0 ? correctIndex : null;
+        rlog.init('nextP-validate', `stale: idx ${rawNextP.index} -> ${correctIndex}`);
+      }
+    }
+
     set({
       // ✅ CONDITIONAL: Only reset streaming state if NOT resuming or active submission
       // ✅ FIX v4: For newly created threads, FORCE waitingToStartStreaming=true
@@ -1506,7 +1614,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       streamingRoundNumber: preserveStreamingState
         ? (currentState.streamingRoundNumber ?? resumptionRoundNumber)
         : null,
-      nextParticipantToTrigger: preserveStreamingState ? currentState.nextParticipantToTrigger : null,
+      nextParticipantToTrigger: preserveStreamingState ? validatedNextParticipantToTrigger : null,
       isModeratorStreaming: preserveStreamingState ? currentState.isModeratorStreaming : false,
       // ✅ FIX: Also preserve changelog-related flags during active submission
       isWaitingForChangelog: preserveStreamingState ? currentState.isWaitingForChangelog : false,
@@ -1658,6 +1766,11 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
     const needsNewPendingAnimations = currentState.pendingAnimations.size > 0;
     const needsNewAnimationResolvers = currentState.animationResolvers.size > 0;
 
+    // ✅ FIX A1: Resolve animation promises before clearing
+    if (needsNewAnimationResolvers) {
+      resolveAllPendingAnimations(currentState.animationResolvers);
+    }
+
     // ✅ DEBUG: Track when completeStreaming clears pendingMessage
     rlog.stream('end', `completeStreaming clearing pendingMessage=${currentState.pendingMessage ? 1 : 0}`);
 
@@ -1667,6 +1780,14 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       ...PENDING_MESSAGE_STATE_RESET,
       ...REGENERATION_STATE_RESET,
       ...STREAM_RESUMPTION_STATE_RESET,
+      // ✅ FIX A2: Clear moderator tracking Sets after round completes
+      // Prevents stale tracking from blocking re-triggers in subsequent rounds
+      createdModeratorRounds: new Set<number>(),
+      triggeredModeratorRounds: new Set<number>(),
+      triggeredModeratorIds: new Set<string>(),
+      triggeredPreSearchRounds: new Set<number>(),
+      // ✅ FIX A3: Clear pre-search activity times
+      preSearchActivityTimes: new Map<number, number>(),
       ...(needsNewPendingAnimations ? { pendingAnimations: new Set<number>() } : {}),
       ...(needsNewAnimationResolvers ? { animationResolvers: new Map<number, () => void>() } : {}),
     }, false, 'operations/completeStreaming');
@@ -1677,10 +1798,11 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
   },
 
   startRegeneration: (roundNumber: number) => {
-    const { clearModeratorTracking, clearPreSearchTracking, clearModeratorStreamTracking, selectedParticipants } = get();
+    const { clearModeratorTracking, clearPreSearchTracking, clearModeratorStreamTracking, clearPreSearchActivity, selectedParticipants } = get();
     clearModeratorTracking(roundNumber);
     clearPreSearchTracking(roundNumber);
     clearModeratorStreamTracking(roundNumber);
+    clearPreSearchActivity(roundNumber);
     const participantIds = selectedParticipants.map(p => p.modelId);
     set({
       ...STREAMING_STATE_RESET,
@@ -1733,6 +1855,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       triggeredPreSearchRounds: new Set(),
       triggeredModeratorRounds: new Set(),
       triggeredModeratorIds: new Set(),
+      preSearchActivityTimes: new Map<number, number>(),
     }, false, 'operations/resetToNewChat');
   },
 
@@ -1776,6 +1899,7 @@ export function createChatStore() {
           ...createAnimationSlice(...args),
           ...createAttachmentsSlice(...args),
           ...createSidebarAnimationSlice(...args),
+          ...createNavigationSlice(...args),
           ...createOperationsSlice(...args),
         }),
       ),

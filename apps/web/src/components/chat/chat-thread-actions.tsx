@@ -169,12 +169,10 @@ export function ChatThreadActions({ thread, slug, onDeleteClick, isPublicMode = 
                 aria-label={t('chat.share')}
                 onClick={handleOpenShareDialog}
                 disabled={togglePublicMutation.isPending || isBusy}
-                className="gap-2"
+                loading={togglePublicMutation.isPending}
+                startIcon={<Icons.share />}
               >
-                {togglePublicMutation.isPending
-                  ? <Icons.loader className="size-4 animate-spin" />
-                  : <Icons.share className="size-4" />}
-                <span>{t('chat.share')}</span>
+                {t('chat.share')}
               </Button>
             </TooltipTrigger>
             <TooltipContent side="bottom">

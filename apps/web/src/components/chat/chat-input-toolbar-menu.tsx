@@ -89,8 +89,8 @@ export const ChatInputToolbarMenu = memo(({
                       'h-10 sm:h-9 gap-1.5 text-xs px-3 hover:bg-white/15',
                       hasNoModelsSelected && 'border-destructive text-destructive hover:bg-destructive/20',
                     )}
+                    startIcon={hasNoModelsSelected ? <Icons.alertCircle /> : undefined}
                   >
-                    {hasNoModelsSelected && <Icons.alertCircle className="size-3.5" />}
                     <span>{t('chat.models.models')}</span>
                     {!hasNoModelsSelected && (
                       <AvatarGroup
@@ -117,8 +117,8 @@ export const ChatInputToolbarMenu = memo(({
                     disabled={disabled}
                     onClick={onOpenModeModal}
                     className="h-10 sm:h-9 gap-1.5 text-xs px-3 hover:bg-white/15"
+                    startIcon={ModeIcon ? <ModeIcon /> : undefined}
                   >
-                    {ModeIcon && <ModeIcon className="size-4" />}
                     <span>{currentMode?.label || t('chat.modes.mode')}</span>
                   </Button>
                 </TooltipTrigger>
@@ -222,21 +222,19 @@ export const ChatInputToolbarMenu = memo(({
                     'h-10 px-2.5 gap-1',
                     hasNoModelsSelected && !isModelsLoading && 'border-destructive/50 bg-destructive/10',
                   )}
+                  loading={isModelsLoading}
+                  startIcon={hasNoModelsSelected && !isModelsLoading ? <Icons.alertCircle className="text-destructive" /> : undefined}
                 >
-                  {isModelsLoading
-                    ? <Icons.loader className="size-4 animate-spin text-muted-foreground" />
-                    : hasNoModelsSelected
-                      ? <Icons.alertCircle className="size-4 text-destructive" />
-                      : (
-                          <AvatarGroup
-                            participants={selectedParticipants}
-                            allModels={allModels}
-                            size={AvatarSizes.SM}
-                            maxVisible={3}
-                            showCount={false}
-                            showOverflow
-                          />
-                        )}
+                  {!isModelsLoading && !hasNoModelsSelected && (
+                    <AvatarGroup
+                      participants={selectedParticipants}
+                      allModels={allModels}
+                      size={AvatarSizes.SM}
+                      maxVisible={3}
+                      showCount={false}
+                      showOverflow
+                    />
+                  )}
                 </Button>
 
                 <Drawer>

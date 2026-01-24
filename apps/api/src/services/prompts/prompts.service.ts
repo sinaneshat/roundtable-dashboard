@@ -1370,3 +1370,75 @@ Example output:
 
 Return ONLY valid JSON array, no other text.`;
 }
+
+/**
+ * Build prompt for selective memory extraction from conversations (non-moderator threads)
+ * ✅ SINGLE SOURCE: Used by memory-extraction.service.ts for direct participant extraction
+ *
+ * More conservative than moderator-based extraction - only extracts truly memorable info:
+ * - User preferences/instructions
+ * - Important facts explicitly stated
+ * - Requests to remember something
+ *
+ * @param userQuestion - The user's question from this round
+ * @param participantResponses - Array of participant name and response pairs
+ * @param existingMemories - Summaries of existing memories to avoid duplicates
+ * @returns Formatted prompt for selective memory extraction
+ */
+export function buildSelectiveMemoryPrompt(
+  userQuestion: string,
+  participantResponses: Array<{ name: string; response: string }>,
+  existingMemories: string[],
+): string {
+  const existingList = existingMemories.length > 0
+    ? existingMemories.map((m, i) => `${i + 1}. ${m}`).join('\n')
+    : 'None';
+
+  const responsesText = participantResponses
+    .map(r => `**${r.name}:**\n${r.response}`)
+    .join('\n\n---\n\n');
+
+  return `Analyze this conversation and extract ONLY information worth remembering long-term.
+
+## User's Question:
+${userQuestion}
+
+## AI Responses:
+${responsesText}
+
+## Existing Memories (avoid duplicates):
+${existingList}
+
+## STRICT Extraction Rules:
+
+**ONLY extract memories for:**
+1. User preferences/instructions - "I prefer...", "Always use...", "Don't..."
+2. Important facts explicitly stated - names, dates, project details, key decisions
+3. Explicit requests to remember - "Remember that...", "Keep in mind..."
+4. Technical constraints - "We're using X framework", "Deadline is Y"
+
+**DO NOT extract:**
+- Generic Q&A responses
+- Explanations or tutorials (these are answerable again)
+- Opinions or suggestions (unless user requested to save them)
+- Temporary information (debugging, one-time issues)
+- Anything already in existing memories
+- Low-importance context (importance < 6)
+
+## Output Format:
+Return a JSON array. If nothing is worth remembering, return [].
+
+Each memory object must have:
+- "content": The full memory text (1-3 sentences, max 200 chars)
+- "summary": Ultra-short label for display (max 8 words)
+- "importance": Score 1-10 (only include if >= 6)
+- "category": One of "preference" | "fact" | "decision" | "context"
+
+Example output:
+[
+  {"content": "User prefers concise code examples without comments.", "summary": "No code comments", "importance": 7, "category": "preference"},
+  {"content": "Project uses Next.js 14 with App Router.", "summary": "Next.js 14 App Router", "importance": 8, "category": "fact"}
+]
+
+Return ONLY valid JSON array, no other text.`;
+}

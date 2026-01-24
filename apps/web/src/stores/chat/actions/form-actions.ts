@@ -13,7 +13,7 @@ import {
   useUpdateThreadMutation,
 } from '@/hooks/mutations';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config/participant-limits';
-import { isListOrSidebarQuery, queryKeys } from '@/lib/data/query-keys';
+import { isNonProjectListOrSidebarQuery, queryKeys } from '@/lib/data/query-keys';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { showApiErrorToast } from '@/lib/toast';
 import { calculateNextRoundNumber, chatMessagesToUIMessages, chatParticipantsToConfig, createPrefetchMeta, getEnabledParticipantModelIds, getRoundNumber, prepareParticipantUpdate, shouldUpdateParticipantConfig, toISOString, toISOStringOrNull, transformChatMessages, transformChatParticipants, transformChatThread, useMemoizedReturn } from '@/lib/utils';
@@ -318,7 +318,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         queryClient.setQueriesData(
           {
             queryKey: queryKeys.threads.all,
-            predicate: isListOrSidebarQuery,
+            predicate: isNonProjectListOrSidebarQuery,
           },
           (old: unknown) => {
             const parsedQuery = validateInfiniteQueryCache(old);

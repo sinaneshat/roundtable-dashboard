@@ -15,6 +15,7 @@
 
 import { infiniteQueryOptions, queryOptions } from '@tanstack/react-query';
 
+import { getAdminJobs } from '@/server/admin-jobs';
 import { getModels } from '@/server/models';
 import { getProducts } from '@/server/products';
 import { getProjectAttachments, getProjectById, getProjectMemories } from '@/server/project';
@@ -396,3 +397,51 @@ export function projectThreadsQueryOptions(projectId: string) {
     refetchOnMount: false,
   });
 }
+
+/**
+ * Admin jobs query options
+ *
+ * Used by:
+ * - _protected/admin/jobs/index.tsx loader (ensureQueryData)
+ * - useAdminJobsQuery hook (useQuery)
+ *
+ * Server function getAdminJobs() works both server-side and client-side:
+ * - Server: Runs directly, forwards cookies
+ * - Client: Makes RPC call to server function
+ */
+export const adminJobsQueryOptions = queryOptions({
+  queryKey: queryKeys.adminJobs.list(),
+  queryFn: () => getAdminJobs(),
+  staleTime: STALE_TIMES.adminJobs, // 5s - poll frequently for running jobs
+  gcTime: GC_TIMES.SHORT, // 1 min - admin data doesn't need long cache
+  refetchOnWindowFocus: true,
+  refetchOnMount: true,
+  retry: false,
+});
+
+/**
+ * Admin jobs infinite query options
+ *
+ * Used by:
+ * - _protected/admin/jobs/index.tsx loader (ensureInfiniteQueryData)
+ * - useAdminJobsInfiniteQuery hook (useInfiniteQuery)
+ *
+ * Note: Backend currently returns all jobs. Pagination structure is ready
+ * for when the backend supports cursor-based pagination.
+ */
+export const adminJobsInfiniteQueryOptions = infiniteQueryOptions({
+  queryKey: queryKeys.adminJobs.lists(),
+  queryFn: async () => {
+    const result = await getAdminJobs();
+    if (!result.success) {
+      throw new Error('Failed to fetch admin jobs');
+    }
+    return result;
+  },
+  initialPageParam: undefined as string | undefined,
+  getNextPageParam: lastPage => lastPage.data?.nextCursor ?? undefined,
+  staleTime: STALE_TIMES.adminJobs,
+  gcTime: GC_TIMES.SHORT,
+  refetchOnWindowFocus: true,
+  refetchOnMount: true,
+});

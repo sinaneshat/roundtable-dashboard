@@ -169,6 +169,15 @@ export const THREAD_DEFAULTS = {
 } satisfies ThreadState;
 
 // ============================================================================
+// NAVIGATION SLICE DEFAULTS
+// ============================================================================
+
+export const NAVIGATION_DEFAULTS = {
+  /** Target slug for pending navigation - set when navigating between threads */
+  pendingNavigationTargetSlug: null as string | null,
+};
+
+// ============================================================================
 // FLAGS SLICE DEFAULTS
 // ============================================================================
 
@@ -513,6 +522,8 @@ export const COMPLETE_RESET_STATE = {
   flowParticipantCount: ROUND_FLOW_DEFAULTS.flowParticipantCount,
   flowLastError: ROUND_FLOW_DEFAULTS.flowLastError,
   flowEventHistory: [],
+  // Navigation state
+  pendingNavigationTargetSlug: NAVIGATION_DEFAULTS.pendingNavigationTargetSlug,
 };
 
 /**
@@ -618,6 +629,8 @@ export const THREAD_NAVIGATION_RESET_STATE = {
   feedbackByRound: new Map(),
   pendingFeedback: FEEDBACK_DEFAULTS.pendingFeedback,
   hasLoadedFeedback: FEEDBACK_DEFAULTS.hasLoadedFeedback,
+  // ✅ ATOMIC SWITCH: Clear pending navigation target
+  pendingNavigationTargetSlug: null,
 };
 
 // ============================================================================

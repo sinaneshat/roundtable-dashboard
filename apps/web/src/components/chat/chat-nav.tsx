@@ -70,7 +70,12 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const [isProjectsCollapsed, setIsProjectsCollapsed] = useState(false);
   const [isFavoritesCollapsed, setIsFavoritesCollapsed] = useState(false);
   const [isChatsCollapsed, setIsChatsCollapsed] = useState(false);
-  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>({});
+  // Initialize with expanded project if on a project route (for SSR)
+  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>(() => {
+    const projectMatch = pathname.match(/^\/chat\/projects\/([^/]+)/);
+    const projectId = projectMatch?.[1];
+    return projectId ? { [projectId]: true } : {};
+  });
   const sidebarContentRef = useRef<HTMLDivElement>(null);
   const { isMobile, setOpenMobile } = useSidebar();
   const handleNavigationReset = useNavigationReset();

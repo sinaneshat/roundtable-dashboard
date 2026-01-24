@@ -373,6 +373,11 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
     setHasSentPendingMessage: (value) => {
       store.getState().setHasSentPendingMessage(value);
     },
+    // ✅ PRE-SEARCH RACE FIX: Get current pre-searches from store
+    // Used in continueFromParticipant as defense in depth
+    getPreSearches: () => {
+      return store.getState().preSearches;
+    },
   });
 
   const sendMessageRef = useRef(chat.sendMessage);

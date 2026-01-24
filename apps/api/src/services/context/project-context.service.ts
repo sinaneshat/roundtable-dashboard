@@ -34,9 +34,11 @@ import {
 } from '@/common/schemas/project-context';
 import * as tables from '@/db';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
+import { getExtractedText } from '@/lib/utils/metadata';
 import { PreSearchDataPayloadSchema } from '@/routes/chat/schema';
 import { deductCreditsForAction } from '@/services/billing/credit.service';
 import { generateTraceId, trackSpan } from '@/services/errors/posthog-llm-tracking.service';
+import { getFile } from '@/services/uploads';
 import type { CitableSource, CitationSourceMap } from '@/types/citations';
 
 // ============================================================================
@@ -348,57 +350,170 @@ export async function getProjectModeratorContext(
 // Attachment Context
 // ============================================================================
 
+// Max text content size for context (50KB per file)
+const MAX_ATTACHMENT_TEXT_SIZE = 50 * 1024;
+
+// Text file MIME types that can be decoded directly
+const TEXT_MIME_TYPES = new Set([
+  'text/plain',
+  'text/markdown',
+  'text/csv',
+  'text/html',
+  'text/css',
+  'text/javascript',
+  'application/json',
+  'application/xml',
+  'text/xml',
+  'text/x-python',
+  'text/x-java',
+  'text/x-c',
+  'text/x-c++',
+  'text/x-typescript',
+]);
+
 /**
- * Fetch uploads linked to threads in the project
- * Includes both current thread and other threads for cross-reference
+ * Load text content for an attachment
+ * - PDFs: use pre-extracted text from metadata
+ * - Text files: fetch from R2 and decode
  */
-export async function getProjectAttachmentContext(
-  params: Pick<ProjectContextParams, 'projectId' | 'db'> & { maxAttachments?: number },
-): Promise<ProjectAttachmentContext> {
-  const { projectId, maxAttachments = 10, db } = params;
-
-  // Get all threads in this project (including current for attachment citations)
-  const projectThreads = await db.query.chatThread.findMany({
-    where: eq(tables.chatThread.projectId, projectId),
-    columns: { id: true, title: true },
-  });
-
-  if (projectThreads.length === 0) {
-    return { attachments: [], totalCount: 0 };
+async function loadAttachmentTextContent(
+  upload: { r2Key: string; mimeType: string; fileSize: number; metadata: unknown },
+  r2Bucket: R2Bucket,
+): Promise<string | null> {
+  // 1. Check for pre-extracted text (PDFs and processed docs)
+  const extractedText = getExtractedText(upload.metadata);
+  if (extractedText) {
+    return extractedText.length > MAX_ATTACHMENT_TEXT_SIZE
+      ? `${extractedText.slice(0, MAX_ATTACHMENT_TEXT_SIZE)}... (truncated)`
+      : extractedText;
   }
 
-  const threadIds = projectThreads.map(t => t.id);
-  const threadTitleMap = new Map(projectThreads.map(t => [t.id, t.title]));
+  // 2. For text files, fetch and decode
+  if (TEXT_MIME_TYPES.has(upload.mimeType) && upload.fileSize <= MAX_ATTACHMENT_TEXT_SIZE) {
+    try {
+      const { data } = await getFile(r2Bucket, upload.r2Key);
+      if (data) {
+        const text = new TextDecoder().decode(data);
+        return text.length > MAX_ATTACHMENT_TEXT_SIZE
+          ? `${text.slice(0, MAX_ATTACHMENT_TEXT_SIZE)}... (truncated)`
+          : text;
+      }
+    } catch {
+      // Failed to load - return null
+    }
+  }
 
-  // Get uploads linked to these threads via threadUpload junction
-  // innerJoin returns nested objects: { thread_upload: {...}, upload: {...} }
-  const threadUploadsRaw = await db
+  return null;
+}
+
+/**
+ * Fetch uploads linked to the project
+ * Includes both project-level attachments and thread-level uploads
+ * Project attachments take priority over thread uploads when deduplicating
+ * When r2Bucket is provided, loads file text content for AI consumption
+ */
+export async function getProjectAttachmentContext(
+  params: Pick<ProjectContextParams, 'projectId' | 'db' | 'r2Bucket'> & { maxAttachments?: number },
+): Promise<ProjectAttachmentContext> {
+  const { projectId, maxAttachments = 10, db, r2Bucket } = params;
+
+  // 1. Get project-level attachments (directly attached to project)
+  const projectAttachmentsRaw = await db
     .select()
-    .from(tables.threadUpload)
-    .innerJoin(tables.upload, eq(tables.threadUpload.uploadId, tables.upload.id))
+    .from(tables.projectAttachment)
+    .innerJoin(tables.upload, eq(tables.projectAttachment.uploadId, tables.upload.id))
     .where(
       and(
-        inArray(tables.threadUpload.threadId, threadIds),
-        eq(tables.upload.status, 'uploaded'),
+        eq(tables.projectAttachment.projectId, projectId),
+        inArray(tables.upload.status, ['uploaded', 'ready']),
       ),
     )
     .orderBy(desc(tables.upload.createdAt))
     .limit(maxAttachments);
 
-  // Map nested result to flat structure
-  const attachments = threadUploadsRaw.map(row => ({
-    id: row.upload.id,
-    filename: row.upload.filename,
-    mimeType: row.upload.mimeType,
-    fileSize: row.upload.fileSize,
-    r2Key: row.upload.r2Key,
-    threadId: row.thread_upload.threadId,
-    threadTitle: threadTitleMap.get(row.thread_upload.threadId) || null,
-  }));
+  // Track uploadIds from project attachments for deduplication
+  const projectUploadIds = new Set(projectAttachmentsRaw.map(row => row.upload.id));
+
+  // 2. Get thread-level uploads
+  const projectThreads = await db.query.chatThread.findMany({
+    where: eq(tables.chatThread.projectId, projectId),
+    columns: { id: true, title: true },
+  });
+
+  const threadTitleMap = new Map(projectThreads.map(t => [t.id, t.title]));
+
+  let threadUploadsRaw: Array<{
+    thread_upload: { threadId: string; uploadId: string };
+    upload: { id: string; filename: string; mimeType: string; fileSize: number; r2Key: string; metadata: unknown };
+  }> = [];
+
+  if (projectThreads.length > 0) {
+    const threadIds = projectThreads.map(t => t.id);
+    threadUploadsRaw = await db
+      .select()
+      .from(tables.threadUpload)
+      .innerJoin(tables.upload, eq(tables.threadUpload.uploadId, tables.upload.id))
+      .where(
+        and(
+          inArray(tables.threadUpload.threadId, threadIds),
+          inArray(tables.upload.status, ['uploaded', 'ready']),
+        ),
+      )
+      .orderBy(desc(tables.upload.createdAt))
+      .limit(maxAttachments);
+  }
+
+  // 3. Load text content for attachments in parallel when r2Bucket available
+  const loadContent = async (
+    upload: { id: string; filename: string; mimeType: string; fileSize: number; r2Key: string; metadata: unknown },
+    threadId: string | null,
+    threadTitle: string | null,
+    source: 'project' | 'thread',
+  ) => {
+    let textContent: string | null = null;
+    if (r2Bucket) {
+      textContent = await loadAttachmentTextContent(upload, r2Bucket);
+    }
+    return {
+      id: upload.id,
+      filename: upload.filename,
+      mimeType: upload.mimeType,
+      fileSize: upload.fileSize,
+      r2Key: upload.r2Key,
+      threadId,
+      threadTitle,
+      source,
+      textContent,
+    };
+  };
+
+  // 4. Process project attachments
+  const projectAttachmentPromises = projectAttachmentsRaw.map(row =>
+    loadContent(row.upload, null, null, 'project'),
+  );
+
+  // 5. Process thread uploads (excluding duplicates)
+  const filteredThreadUploads = threadUploadsRaw.filter(row => !projectUploadIds.has(row.upload.id));
+  const threadAttachmentPromises = filteredThreadUploads.map(row =>
+    loadContent(
+      row.upload,
+      row.thread_upload.threadId,
+      threadTitleMap.get(row.thread_upload.threadId) || null,
+      'thread',
+    ),
+  );
+
+  // 6. Await all in parallel and merge
+  const [projectAttachments, threadAttachments] = await Promise.all([
+    Promise.all(projectAttachmentPromises),
+    Promise.all(threadAttachmentPromises),
+  ]);
+
+  const attachments = [...projectAttachments, ...threadAttachments].slice(0, maxAttachments);
 
   return {
     attachments,
-    totalCount: threadUploadsRaw.length,
+    totalCount: attachments.length,
   };
 }
 

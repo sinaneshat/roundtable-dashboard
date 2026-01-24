@@ -3,7 +3,7 @@ import { Link, useNavigate } from '@tanstack/react-router';
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
 import { Icons } from '@/components/icons';
-import { Dialog, DialogBody, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogDescription, DialogTitle } from '@/components/ui/dialog';
 import { LinkLoadingIndicator } from '@/components/ui/link-loading-indicator';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useSidebar } from '@/components/ui/sidebar';
@@ -228,7 +228,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
           </button>
         </div>
 
-        <DialogBody className="h-[400px] border-t border-border bg-card">
+        <div className="h-[400px] border-t border-border bg-card overflow-hidden">
           <ScrollArea ref={scrollAreaRef} className="h-full">
             {isLoading && !threads.length
               ? (
@@ -238,7 +238,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                 )
               : threads.length > 0
                 ? (
-                    <div className="flex flex-col px-3 py-3">
+                    <div className="flex flex-col p-2">
                       {threads.map((thread, index) => (
                         <SearchResultItem
                           key={thread.id}
@@ -263,9 +263,9 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
                     </div>
                   )}
           </ScrollArea>
-        </DialogBody>
+        </div>
 
-        <div className="flex items-center gap-4 px-4 sm:px-5 md:px-6 py-4 border-t border-border text-xs text-muted-foreground shrink-0 bg-card">
+        <div className="flex items-center gap-4 px-4 py-3 border-t border-border text-xs text-muted-foreground shrink-0 bg-card">
           <div className="flex items-center gap-1.5">
             <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↑</kbd>
             <kbd className="px-2 py-1 rounded-md bg-white/5 border border-white/10 text-white/70 font-mono text-xs">↓</kbd>

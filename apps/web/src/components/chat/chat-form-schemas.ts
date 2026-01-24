@@ -22,7 +22,7 @@ type CreateThreadPayload = {
   participants: CreateParticipantPayload[];
   firstMessage: string;
   attachmentIds?: string[];
-  projectId?: string;
+  projectId?: string | null;
 };
 
 // ============================================================================
@@ -59,6 +59,6 @@ export function toCreateThreadRequest(
     })),
     firstMessage: data.message,
     attachmentIds: attachmentIds && attachmentIds.length > 0 ? attachmentIds : undefined,
-    projectId,
+    projectId: projectId ?? null,
   };
 }

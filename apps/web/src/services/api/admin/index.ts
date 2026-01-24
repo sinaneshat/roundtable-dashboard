@@ -1,2 +1,26 @@
 export { type AdminClearUserCacheParams, type AdminClearUserCacheResponse, adminClearUserCacheService } from './clear-cache';
+export {
+  type AutomatedJob,
+  type CreateJobParams,
+  type CreateJobResponse,
+  createJobService,
+  type DeleteJobParams,
+  type DeleteJobResponse,
+  deleteJobService,
+  type DiscoverTrendsData,
+  type DiscoverTrendsParams,
+  type DiscoverTrendsResponse,
+  discoverTrendsService,
+  type GetJobParams,
+  type GetJobResponse,
+  getJobService,
+  type ListJobsData,
+  type ListJobsParams,
+  type ListJobsResponse,
+  listJobsService,
+  type TrendSuggestion,
+  type UpdateJobParams,
+  type UpdateJobResponse,
+  updateJobService,
+} from './jobs';
 export { type AdminSearchUserResult, adminSearchUserService, type AdminSearchUsersParams, type AdminSearchUsersResponse } from './user-search';

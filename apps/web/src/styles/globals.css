@@ -1,9 +1,10 @@
+/* Noto Sans: universal font supporting all languages (Latin, Arabic, Persian, etc.) */
+/* Must be first @import to comply with CSS spec */
+@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap');
+
 @import 'tailwindcss';
 @import 'tw-animate-css';
 @import 'shadcn/tailwind.css';
-
-/* Noto Sans: universal font supporting all languages (Latin, Arabic, Persian, etc.) */
-@import url('https://fonts.googleapis.com/css2?family=Noto+Sans:wght@400;500;600;700&family=Noto+Sans+Arabic:wght@400;500;600;700&display=swap');
 
 @custom-variant dark (&:is(.dark *));
 

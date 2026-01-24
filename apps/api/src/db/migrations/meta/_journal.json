@@ -15,6 +15,20 @@
       "when": 1737676800000,
       "tag": "0001_add_project_icon",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1737763200000,
+      "tag": "0002_add_automated_job",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "6",
+      "when": 1737849600000,
+      "tag": "0003_add_deleted_account_audit",
+      "breakpoints": true
     }
   ]
 }
