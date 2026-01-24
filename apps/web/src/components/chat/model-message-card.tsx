@@ -123,8 +123,13 @@ export const ModelMessageCard = memo(({
     part => part.type === MessagePartTypes.REASONING && isNonRenderableReasoningPart(part),
   );
 
+  // Compute error state early so we can use it for shimmer and status indicator
+  const isError = status === MessageStatuses.FAILED;
+  const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
+  const hasError = isError || assistantMetadata?.hasError;
+
   const isExpectingContent = status === MessageStatuses.PENDING || status === MessageStatuses.STREAMING;
-  const showShimmer = renderableParts.length === 0 && isExpectingContent;
+  const showShimmer = !hasError && renderableParts.length === 0 && isExpectingContent;
 
   // ✅ DEBUG: Track skeleton flashes - detect rapid shimmer on/off
   const shimmerStartRef = useRef<number | null>(null);
@@ -140,10 +145,10 @@ export const ModelMessageCard = memo(({
     }
   }, [showShimmer, participantIndex]);
 
-  const showStatusIndicator = (status === MessageStatuses.PENDING && parts.length === 0)
-    || hasActualStreamingParts;
-
-  const isError = status === MessageStatuses.FAILED;
+  const showStatusIndicator = !hasError && (
+    (status === MessageStatuses.PENDING && parts.length === 0)
+    || hasActualStreamingParts
+  );
 
   const isStreaming = hasActualStreamingParts;
   const hasRegisteredRef = useRef(false);
@@ -181,8 +186,6 @@ export const ModelMessageCard = memo(({
     };
   }, [participantIndex, completeAnimation]);
 
-  const assistantMetadata = metadata && isAssistantMessageMetadata(metadata) ? metadata : null;
-  const hasError = isError || assistantMetadata?.hasError;
   const modelName = model?.name || assistantMetadata?.model || 'AI Assistant';
   const requiredTierName = model?.required_tier_name;
 
