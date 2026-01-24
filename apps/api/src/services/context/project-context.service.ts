@@ -17,118 +17,42 @@
  * - Moderator context: Past moderator analyses provide insights
  */
 
+import { CLOUDFLARE_AI_SEARCH_COST_PER_QUERY } from '@roundtable/shared/constants';
 import { CitationSourcePrefixes, CitationSourceTypes, MessagePartTypes, MessageRoles, PreSearchStatuses } from '@roundtable/shared/enums';
 import { and, desc, eq, inArray, ne } from 'drizzle-orm';
-import * as z from 'zod';
+import type * as z from 'zod';
 
-import type { getDbAsync } from '@/db';
+import {
+  AggregatedProjectContextSchema,
+  ProjectAttachmentContextSchema,
+  ProjectChatContextSchema,
+  ProjectContextParamsSchema,
+  ProjectMemoryContextSchema,
+  ProjectModeratorContextSchema,
+  ProjectRagContextParamsSchema,
+  ProjectSearchContextSchema,
+} from '@/common/schemas/project-context';
 import * as tables from '@/db';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { PreSearchDataPayloadSchema } from '@/routes/chat/schema';
+import { deductCreditsForAction } from '@/services/billing/credit.service';
+import { generateTraceId, trackSpan } from '@/services/errors/posthog-llm-tracking.service';
 import type { CitableSource, CitationSourceMap } from '@/types/citations';
 
 // ============================================================================
-// ZOD SCHEMAS - SINGLE SOURCE OF TRUTH
+// RE-EXPORTS FOR BACKWARDS COMPATIBILITY
 // ============================================================================
 
-const ProjectMemoryItemSchema = z.object({
-  id: z.string().min(1),
-  content: z.string(),
-  summary: z.string().nullable(),
-  source: z.string(),
-  importance: z.number().int().nonnegative(),
-  sourceThreadId: z.string().nullable(),
-});
-
-export const ProjectMemoryContextSchema = z.object({
-  memories: z.array(ProjectMemoryItemSchema),
-  totalCount: z.number().int().nonnegative(),
-});
-
-const ProjectChatMessageSchema = z.object({
-  role: z.string(),
-  content: z.string(),
-  roundNumber: z.number().int().nonnegative(),
-});
-
-const ProjectChatThreadSchema = z.object({
-  id: z.string().min(1),
-  title: z.string(),
-  messages: z.array(ProjectChatMessageSchema),
-});
-
-export const ProjectChatContextSchema = z.object({
-  threads: z.array(ProjectChatThreadSchema),
-  totalThreads: z.number().int().nonnegative(),
-});
-
-const ProjectSearchResultSchema = z.object({
-  query: z.string(),
-  answer: z.string().nullable(),
-});
-
-const ProjectSearchItemSchema = z.object({
-  threadId: z.string().min(1),
-  threadTitle: z.string(),
-  roundNumber: z.number().int().nonnegative(),
-  userQuery: z.string(),
-  summary: z.string().nullable(),
-  results: z.array(ProjectSearchResultSchema),
-});
-
-export const ProjectSearchContextSchema = z.object({
-  searches: z.array(ProjectSearchItemSchema),
-  totalCount: z.number().int().nonnegative(),
-});
-
-const ProjectModeratorItemSchema = z.object({
-  threadId: z.string().min(1),
-  threadTitle: z.string(),
-  roundNumber: z.number().int().nonnegative(),
-  userQuestion: z.string(),
-  moderator: z.string(),
-  recommendations: z.array(z.string()),
-  keyThemes: z.string().nullable(),
-});
-
-export const ProjectModeratorContextSchema = z.object({
-  moderators: z.array(ProjectModeratorItemSchema),
-  totalCount: z.number().int().nonnegative(),
-});
-
-const ProjectAttachmentItemSchema = z.object({
-  id: z.string().min(1),
-  filename: z.string(),
-  mimeType: z.string(),
-  fileSize: z.number().int().nonnegative(),
-  r2Key: z.string(),
-  threadId: z.string().nullable(),
-  threadTitle: z.string().nullable(),
-});
-
-export const ProjectAttachmentContextSchema = z.object({
-  attachments: z.array(ProjectAttachmentItemSchema),
-  totalCount: z.number().int().nonnegative(),
-});
-
-export const AggregatedProjectContextSchema = z.object({
-  memories: ProjectMemoryContextSchema,
-  chats: ProjectChatContextSchema,
-  searches: ProjectSearchContextSchema,
-  moderators: ProjectModeratorContextSchema,
-  attachments: ProjectAttachmentContextSchema,
-});
-
-export const ProjectContextParamsSchema = z.object({
-  projectId: z.string().min(1),
-  currentThreadId: z.string().min(1),
-  userQuery: z.string(),
-  maxMemories: z.number().int().positive().optional(),
-  maxMessagesPerThread: z.number().int().positive().optional(),
-  maxSearchResults: z.number().int().positive().optional(),
-  maxModerators: z.number().int().positive().optional(),
-  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
-});
+export {
+  AggregatedProjectContextSchema,
+  ProjectAttachmentContextSchema,
+  ProjectChatContextSchema,
+  ProjectContextParamsSchema,
+  ProjectMemoryContextSchema,
+  ProjectModeratorContextSchema,
+  ProjectRagContextParamsSchema,
+  ProjectSearchContextSchema,
+};
 
 // ============================================================================
 // TYPE DEFINITIONS - INFERRED FROM ZOD SCHEMAS
@@ -141,6 +65,7 @@ export type ProjectSearchContext = z.infer<typeof ProjectSearchContextSchema>;
 export type ProjectModeratorContext = z.infer<typeof ProjectModeratorContextSchema>;
 export type ProjectAttachmentContext = z.infer<typeof ProjectAttachmentContextSchema>;
 export type AggregatedProjectContext = z.infer<typeof AggregatedProjectContextSchema>;
+export type ProjectRagContextParams = z.infer<typeof ProjectRagContextParamsSchema>;
 
 // ============================================================================
 // Memory Context
@@ -584,21 +509,12 @@ export type ProjectRagContextResult = {
   citationSourceMap: CitationSourceMap;
 };
 
-export const ProjectRagContextParamsSchema = z.object({
-  projectId: z.string().min(1),
-  query: z.string().min(1),
-  ai: z.custom<Ai | undefined>(),
-  db: z.custom<Awaited<ReturnType<typeof getDbAsync>>>(),
-  maxResults: z.number().int().positive().optional(),
-});
-
-export type ProjectRagContextParams = z.infer<typeof ProjectRagContextParamsSchema>;
-
 /**
  * Get project RAG context for moderator/pre-search
  *
  * Centralized helper that:
  * - Fetches project with customInstructions, autoragInstanceId, r2FolderPrefix
+ * - Fetches active project memories (including instruction memory)
  * - Queries AutoRAG with folder filtering for multitenancy
  * - Returns formatted context with citation support
  *
@@ -607,12 +523,12 @@ export type ProjectRagContextParams = z.infer<typeof ProjectRagContextParamsSche
  * - pre-search.handler.ts - Web search query generation
  *
  * @param params - Project ID, query, AI binding, database, optional max results
- * @returns Project instructions, RAG context, and citation mappings
+ * @returns Project instructions, RAG context, memories, and citation mappings
  */
 export async function getProjectRagContext(
   params: ProjectRagContextParams,
 ): Promise<ProjectRagContextResult> {
-  const { projectId, query, ai, db, maxResults = 5 } = params;
+  const { projectId, query, ai, db, maxResults = 5, userId } = params;
 
   const emptyResult: ProjectRagContextResult = {
     instructions: null,
@@ -643,8 +559,45 @@ export async function getProjectRagContext(
   // Include custom instructions if present
   const instructions = project.customInstructions || null;
 
+  // Fetch active project memories (including instruction memory)
+  const memories = await db.query.projectMemory.findMany({
+    where: and(
+      eq(tables.projectMemory.projectId, projectId),
+      eq(tables.projectMemory.isActive, true),
+    ),
+    orderBy: [desc(tables.projectMemory.importance), desc(tables.projectMemory.createdAt)],
+    limit: 10,
+    columns: {
+      id: true,
+      content: true,
+      summary: true,
+      source: true,
+      importance: true,
+    },
+  });
+
+  // Add memories as citable sources
+  for (const memory of memories) {
+    const citationId = `${CitationSourcePrefixes[CitationSourceTypes.MEMORY]}_${memory.id.slice(0, 8)}`;
+    const memorySource: CitableSource = {
+      id: citationId,
+      type: CitationSourceTypes.MEMORY,
+      sourceId: memory.id,
+      title: memory.summary || 'Project Memory',
+      content: memory.content.slice(0, 300) + (memory.content.length > 300 ? '...' : ''),
+      metadata: {
+        importance: memory.importance,
+      },
+    };
+    citableSources.push(memorySource);
+    citationSourceMap.set(citationId, memorySource);
+  }
+
   // Query AutoRAG if configured
   if (project.autoragInstanceId && ai) {
+    const ragStartTime = performance.now();
+    const ragTraceId = generateTraceId();
+
     try {
       const ragResponse = await ai.autorag(project.autoragInstanceId).aiSearch({
         query,
@@ -674,6 +627,28 @@ export async function getProjectRagContext(
           ],
         },
       });
+
+      // Track RAG query span for PostHog analytics
+      const ragLatencyMs = performance.now() - ragStartTime;
+      trackSpan(
+        { userId: userId || 'anonymous' },
+        {
+          traceId: ragTraceId,
+          spanName: 'rag_query',
+          inputState: { query, projectId, maxResults },
+          outputState: { resultsCount: ragResponse.data?.length || 0 },
+        },
+        ragLatencyMs,
+        {
+          additionalProperties: {
+            projectId,
+            operation_type: 'rag_query',
+            autorag_instance_id: project.autoragInstanceId,
+            estimated_cost_usd: CLOUDFLARE_AI_SEARCH_COST_PER_QUERY,
+            provider: 'cloudflare',
+          },
+        },
+      ).catch(() => {}); // Fire and forget
 
       if (ragResponse.data && ragResponse.data.length > 0) {
         const sourceFiles = ragResponse.data
@@ -705,12 +680,37 @@ export async function getProjectRagContext(
         ragContext = ragResponse.response
           ? `### AI Analysis\n${ragResponse.response}\n\n### Source Files\n${sourceFiles}`
           : `### Relevant Files\n${sourceFiles}`;
+
+        // Deduct credits for successful RAG query
+        if (userId) {
+          try {
+            await deductCreditsForAction(userId, 'ragQuery', {
+              description: `RAG query: ${ragResponse.data.length} results`,
+            });
+          } catch {
+            // Non-critical - don't fail RAG if billing fails
+          }
+        }
       } else if (ragResponse.response) {
         ragContext = ragResponse.response;
       }
     } catch {
       // AutoRAG retrieval failed - continue without RAG context
     }
+  }
+
+  // Format memories section if present (prepend to ragContext)
+  if (memories.length > 0) {
+    const memoryLines = memories.map((m) => {
+      const citationId = `${CitationSourcePrefixes[CitationSourceTypes.MEMORY]}_${m.id.slice(0, 8)}`;
+      const label = m.summary || 'Memory';
+      return `[${citationId}] **${label}**: ${m.content}`;
+    });
+    const memorySection = `### Project Memories\nThese are key facts and instructions from this project. Cite them using [mem_xxx] when referencing.\n\n${memoryLines.join('\n\n')}`;
+
+    ragContext = ragContext
+      ? `${memorySection}\n\n${ragContext}`
+      : memorySection;
   }
 
   return {

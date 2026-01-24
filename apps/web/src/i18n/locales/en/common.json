@@ -961,6 +961,8 @@
     "attachmentRemoved": "File removed from project",
     "attachmentRemoveError": "Failed to remove file",
     "removing": "Removing...",
+    "fromThread": "From chat",
+    "cannotDeleteThreadFile": "Cannot delete file used in a conversation",
     "proOnly": "Upgrade to Pro to create projects",
     "limitReached": "You've reached the limit of {{max}} projects",
     "threadLimitReached": "This project has reached its {{max}} thread limit",

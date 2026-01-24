@@ -25,7 +25,7 @@ export function ProjectDeleteDialog({ open, onOpenChange, project }: ProjectDele
   // Fetch threads when dialog opens
   const { data: threadsData, isLoading: isLoadingThreads } = useProjectThreadsQuery(
     project?.id ?? '',
-    open && !!project,
+    { enabled: open && !!project },
   );
 
   const threads = threadsData?.pages.flatMap(page =>

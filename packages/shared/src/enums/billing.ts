@@ -403,6 +403,10 @@ export const CREDIT_ACTIONS = [
   'monthly_renewal',
   'credit_purchase',
   'free_round_complete',
+  'memory_extraction',
+  'rag_query',
+  'project_file_link',
+  'project_storage',
 ] as const;
 
 // 2️⃣ DEFAULT VALUE
@@ -429,6 +433,10 @@ export const CreditActions = {
   MONTHLY_RENEWAL: 'monthly_renewal' as const,
   CREDIT_PURCHASE: 'credit_purchase' as const,
   FREE_ROUND_COMPLETE: 'free_round_complete' as const,
+  MEMORY_EXTRACTION: 'memory_extraction' as const,
+  RAG_QUERY: 'rag_query' as const,
+  PROJECT_FILE_LINK: 'project_file_link' as const,
+  PROJECT_STORAGE: 'project_storage' as const,
 } as const;
 
 // ============================================================================

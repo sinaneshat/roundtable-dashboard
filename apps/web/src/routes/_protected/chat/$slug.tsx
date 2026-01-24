@@ -223,8 +223,8 @@ function ChatThreadRoute() {
 
   // Show skeleton only when:
   // 1. No slug (invalid route state)
-  // 2. No thread data from loader AND currently fetching (initial client load without SSR)
-  if (!slug || (!threadResponse && isFetching)) {
+  // 2. No thread data AND fetching AND not in creation flow (store has data during creation)
+  if (!slug || (!threadResponse && isFetching && !isInCreationFlow)) {
     return <ThreadContentSkeleton />;
   }
 

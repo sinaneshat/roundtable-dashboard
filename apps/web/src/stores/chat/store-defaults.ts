@@ -126,6 +126,7 @@ export const UI_DEFAULTS = {
   waitingToStartStreaming: false,
   isCreatingThread: false,
   createdThreadId: null,
+  createdThreadProjectId: null, // Project ID for created thread - used for cache updates
   isAnalyzingPrompt: false, // ✅ True when AI is analyzing prompt for auto mode
 } satisfies UIState;
 
@@ -432,6 +433,7 @@ export const COMPLETE_RESET_STATE = {
   waitingToStartStreaming: UI_DEFAULTS.waitingToStartStreaming,
   isCreatingThread: UI_DEFAULTS.isCreatingThread,
   createdThreadId: UI_DEFAULTS.createdThreadId,
+  createdThreadProjectId: UI_DEFAULTS.createdThreadProjectId,
   isAnalyzingPrompt: UI_DEFAULTS.isAnalyzingPrompt,
   // Pre-search state
   preSearches: PRESEARCH_DEFAULTS.preSearches,
@@ -610,6 +612,7 @@ export const THREAD_NAVIGATION_RESET_STATE = {
   // because useSyncHydrateStore guard skips re-hydration for same thread (isInitialized && isSameThread)
   // Reset UI flags related to thread creation
   createdThreadId: UI_DEFAULTS.createdThreadId,
+  createdThreadProjectId: UI_DEFAULTS.createdThreadProjectId,
   isCreatingThread: UI_DEFAULTS.isCreatingThread,
   // Clear feedback state on thread navigation (thread-specific data)
   feedbackByRound: new Map(),

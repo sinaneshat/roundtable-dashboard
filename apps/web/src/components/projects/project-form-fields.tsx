@@ -1,6 +1,6 @@
 import type { ProjectColor, ProjectIcon } from '@roundtable/shared';
 import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, PROJECT_COLORS, PROJECT_ICONS, STRING_LIMITS } from '@roundtable/shared';
-import type { Control, FieldValues, Path } from 'react-hook-form';
+import type { Control } from 'react-hook-form';
 import { z } from 'zod';
 
 import { RHFTextarea, RHFTextField } from '@/components/forms';
@@ -46,17 +46,17 @@ export function getProjectFormDefaults(project?: {
   };
 }
 
-type ProjectFormFieldsProps<T extends FieldValues> = {
-  control: Control<T>;
+type ProjectFormFieldsProps = {
+  control: Control<ProjectFormValues>;
   disabled?: boolean;
   variant?: 'dialog' | 'page';
 };
 
-export function ProjectFormFields<T extends FieldValues = ProjectFormValues>({
+export function ProjectFormFields({
   control,
   disabled,
   variant = 'dialog',
-}: ProjectFormFieldsProps<T>) {
+}: ProjectFormFieldsProps) {
   const t = useTranslations();
 
   const isPage = variant === 'page';
@@ -65,15 +65,15 @@ export function ProjectFormFields<T extends FieldValues = ProjectFormValues>({
 
   return (
     <div className={cn(isPage ? 'space-y-6' : 'space-y-4')}>
-      <RHFTextField<T>
-        name={'name' as Path<T>}
+      <RHFTextField<ProjectFormValues>
+        name="name"
         title={t('projects.name')}
         placeholder={t('projects.namePlaceholder')}
         disabled={disabled}
       />
 
-      <RHFTextarea<T>
-        name={'description' as Path<T>}
+      <RHFTextarea<ProjectFormValues>
+        name="description"
         title={t('projects.description')}
         placeholder={t('projects.descriptionPlaceholder')}
         rows={descriptionRows}
@@ -81,18 +81,18 @@ export function ProjectFormFields<T extends FieldValues = ProjectFormValues>({
 
       <FormField
         control={control}
-        name={'icon' as Path<T>}
+        name="icon"
         render={({ field: iconField }) => (
           <FormField
             control={control}
-            name={'color' as Path<T>}
+            name="color"
             render={({ field: colorField }) => (
               <FormItem>
                 <FormLabel>{t('projects.appearance')}</FormLabel>
                 <FormControl>
                   <ProjectIconColorPicker
-                    icon={iconField.value as ProjectIcon}
-                    color={colorField.value as ProjectColor}
+                    icon={iconField.value}
+                    color={colorField.value}
                     onIconChange={iconField.onChange}
                     onColorChange={colorField.onChange}
                   />
@@ -103,8 +103,8 @@ export function ProjectFormFields<T extends FieldValues = ProjectFormValues>({
         )}
       />
 
-      <RHFTextarea<T>
-        name={'customInstructions' as Path<T>}
+      <RHFTextarea<ProjectFormValues>
+        name="customInstructions"
         title={t('projects.customInstructions')}
         placeholder={t('projects.customInstructionsPlaceholder')}
         description={t('projects.customInstructionsHint')}

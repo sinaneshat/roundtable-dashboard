@@ -13,6 +13,7 @@ import { ulid } from 'ulid';
 
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db/tables';
+import { deductCreditsForAction } from '@/services/billing/credit.service';
 import { generateProjectFileR2Key } from '@/services/search';
 import { copyFile } from '@/services/uploads';
 
@@ -23,6 +24,7 @@ export type AutoLinkParams = {
   userId: string;
   r2Bucket: R2Bucket | undefined;
   executionCtx?: { waitUntil: (promise: Promise<unknown>) => void };
+  threadId?: string;
 };
 
 /**
@@ -32,7 +34,7 @@ export type AutoLinkParams = {
  * Runs in background via waitUntil when executionCtx is provided.
  */
 export async function autoLinkUploadsToProject(params: AutoLinkParams): Promise<void> {
-  const { db, projectId, uploadIds, userId, r2Bucket, executionCtx } = params;
+  const { db, projectId, uploadIds, userId, r2Bucket, executionCtx, threadId } = params;
 
   if (uploadIds.length === 0)
     return;
@@ -77,6 +79,7 @@ export async function autoLinkUploadsToProject(params: AutoLinkParams): Promise<
     ragMetadata: {
       context: 'Auto-linked from chat upload',
       projectR2Key: generateProjectFileR2Key(projectId, upload.filename),
+      sourceThreadId: threadId,
     },
     createdAt: now,
     updatedAt: now,
@@ -96,6 +99,17 @@ export async function autoLinkUploadsToProject(params: AutoLinkParams): Promise<
     await db.insert(tables.projectAttachment)
       .values(attachments)
       .onConflictDoNothing();
+
+    // Deduct credits for each file linked
+    try {
+      await Promise.all(newUploads.map(upload =>
+        deductCreditsForAction(userId, 'projectFileLink', {
+          description: `File linked: ${upload.filename}`,
+        }).catch(() => {}), // Silent failure - don't block the flow
+      ));
+    } catch {
+      // Non-critical - don't fail auto-linking if billing fails
+    }
   };
 
   if (executionCtx) {

@@ -334,9 +334,11 @@ export function useDeleteThreadMutation() {
         queryClient.removeQueries({ queryKey: queryKeys.threads.public(slug) });
       }
 
-      // Invalidate project-related caches
+      // Invalidate project-related caches (thread deletion cascades to attachments/memories)
       if (projectId) {
         queryClient.invalidateQueries({ queryKey: queryKeys.projects.threads(projectId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.attachments(projectId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.memories(projectId) });
         queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
         queryClient.invalidateQueries({ queryKey: queryKeys.projects.sidebar() });
       }

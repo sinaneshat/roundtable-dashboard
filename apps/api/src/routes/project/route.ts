@@ -179,12 +179,6 @@ export const deleteProjectRoute = createRoute({
 // PROJECT THREADS ROUTES
 // ============================================================================
 
-// TODO: DEPRECATE - Migrate frontend to /chat/threads?projectId=X then remove
-// Action plan:
-// 1. Update apps/web/src/hooks/queries/projects.ts to use chatThreadsQueryOptions with projectId filter
-// 2. Update apps/web/src/services/api/projects/projects.ts to remove listProjectThreadsService
-// 3. Remove this route, handler, and schema after frontend migration
-// See: apps/api/src/routes/chat/handlers/thread.handler.ts listThreadsHandler (supports projectId query param)
 export const listProjectThreadsRoute = createRoute({
   method: 'get',
   path: '/projects/:id/threads',

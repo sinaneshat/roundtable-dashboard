@@ -67,6 +67,7 @@ import {
   getUserCreditBalance,
   releaseReservation,
   reserveCredits,
+  toModelForPricing,
   zeroOutFreeUserCredits,
 } from '@/services/billing';
 import {
@@ -164,31 +165,6 @@ const DEFAULT_MAX_CONTEXT_MESSAGES = 75;
  * Absolute maximum to prevent extreme memory usage
  */
 const ABSOLUTE_MAX_CONTEXT_MESSAGES = 100;
-
-// ============================================================================
-// Type Adapters
-// ============================================================================
-
-/**
- * Adapter to convert getModelById to ModelForPricing type expected by billing functions
- * Strips Zod .openapi() index signatures from model types
- */
-function getModelForPricing(modelId: string): import('@/services/billing').ModelForPricing | undefined {
-  const model = getModelById(modelId);
-  if (!model)
-    return undefined;
-
-  return {
-    id: model.id,
-    name: model.name,
-    pricing: model.pricing,
-    context_length: model.context_length,
-    pricing_display: model.pricing_display,
-    created: model.created,
-    provider: model.provider,
-    capabilities: model.capabilities,
-  };
-}
 
 // ============================================================================
 // Streaming Chat Handler
@@ -493,13 +469,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const earlyCheckFirstParticipant = participants[0];
       if ((participantIndex ?? 0) === 0 && earlyCheckFirstParticipant !== undefined) {
         let highestMultiplierModel = earlyCheckFirstParticipant;
-        let maxMultiplier = getModelCreditMultiplierById(earlyCheckFirstParticipant.modelId, getModelForPricing);
+        let maxMultiplier = getModelCreditMultiplierById(earlyCheckFirstParticipant.modelId, toModelForPricing);
         for (let i = 1; i < participants.length; i++) {
           const p = participants[i];
           if (p === undefined) {
             continue;
           }
-          const multiplier = getModelCreditMultiplierById(p.modelId, getModelForPricing);
+          const multiplier = getModelCreditMultiplierById(p.modelId, toModelForPricing);
           if (multiplier > maxMultiplier) {
             maxMultiplier = multiplier;
             highestMultiplierModel = p;
@@ -508,7 +484,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         const earlyEstimatedCredits = estimateWeightedCredits(
           participants.length,
           highestMultiplierModel.modelId,
-          getModelForPricing,
+          toModelForPricing,
         );
         // enforceCredits throws if insufficient - fail fast before loading messages
         await enforceCredits(user.id, earlyEstimatedCredits);
@@ -999,13 +975,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       }
       // ✅ PERF: Single pass to find highest multiplier (O(n) instead of O(2n))
       let highestMultiplierModel = firstParticipant;
-      let maxMultiplier = getModelCreditMultiplierById(firstParticipant.modelId, getModelForPricing);
+      let maxMultiplier = getModelCreditMultiplierById(firstParticipant.modelId, toModelForPricing);
       for (let i = 1; i < participants.length; i++) {
         const p = participants[i];
         if (p === undefined) {
           continue;
         }
-        const multiplier = getModelCreditMultiplierById(p.modelId, getModelForPricing);
+        const multiplier = getModelCreditMultiplierById(p.modelId, toModelForPricing);
         if (multiplier > maxMultiplier) {
           maxMultiplier = multiplier;
           highestMultiplierModel = p;
@@ -1014,7 +990,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       const estimatedCredits = estimateWeightedCredits(
         participants.length,
         highestMultiplierModel.modelId,
-        getModelForPricing,
+        toModelForPricing,
       );
 
       // ✅ ROUND ORCHESTRATION: Initialize round state when P0 starts
@@ -1029,6 +1005,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           attachmentIds,
           c.env,
         );
+        // NOTE: Auto-linking uploads to project is handled in thread.handler.ts
+        // to avoid race condition duplicates (both handlers were inserting)
       }
 
       const [existingMessage] = await Promise.all([

@@ -194,6 +194,8 @@ const createUISlice: SliceCreator<UISlice> = set => ({
     set({ isCreatingThread: creating }, false, 'ui/setIsCreatingThread'),
   setCreatedThreadId: (id: string | null) =>
     set({ createdThreadId: id }, false, 'ui/setCreatedThreadId'),
+  setCreatedThreadProjectId: (projectId: string | null) =>
+    set({ createdThreadProjectId: projectId }, false, 'ui/setCreatedThreadProjectId'),
   setIsAnalyzingPrompt: (analyzing: boolean) =>
     set({ isAnalyzingPrompt: analyzing }, false, 'ui/setIsAnalyzingPrompt'),
   resetUI: () =>

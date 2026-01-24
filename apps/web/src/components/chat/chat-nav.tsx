@@ -257,6 +257,20 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     prevPathnameRef.current = pathname;
   }, [pathname, isMobile, setOpenMobile]);
 
+  // Auto-expand project in sidebar when viewing a project route
+  useEffect(() => {
+    const projectMatch = pathname.match(/^\/chat\/projects\/([^/]+)/);
+    const projectId = projectMatch?.[1];
+    if (projectId) {
+      setExpandedProjects((prev) => {
+        if (prev[projectId]) {
+          return prev;
+        }
+        return { ...prev, [projectId]: true };
+      });
+    }
+  }, [pathname]);
+
   const handleShareClick = useCallback((chat: ChatSidebarItem) => {
     setChatToShare(chat);
     setIsShareDialogOpen(true);

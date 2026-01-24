@@ -853,7 +853,7 @@ export default function ChatOverviewScreen() {
     const result = await filterPresetParticipants(
       preset,
       incompatibleModelIdsRef.current,
-      t as (key: string, values?: { count: number }) => string,
+      t,
       ToastNamespaces.CHAT_MODELS,
     );
 

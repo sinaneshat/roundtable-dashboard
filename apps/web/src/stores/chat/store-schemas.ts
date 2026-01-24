@@ -95,6 +95,7 @@ import type {
   SetChatSetMessages,
   SetConfigChangeRoundNumber,
   SetCreatedThreadId,
+  SetCreatedThreadProjectId,
   SetCurrentParticipantIndex,
   SetCurrentRoundNumber,
   SetEnableWebSearch,
@@ -224,6 +225,8 @@ export const UIStateSchema = z.object({
   waitingToStartStreaming: z.boolean(),
   isCreatingThread: z.boolean(),
   createdThreadId: z.string().nullable(),
+  /** Project ID for the created thread - used for project-specific cache updates */
+  createdThreadProjectId: z.string().nullable(),
   isAnalyzingPrompt: z.boolean(),
 });
 
@@ -232,6 +235,7 @@ export const UIActionsSchema = z.object({
   setWaitingToStartStreaming: z.custom<SetWaitingToStartStreaming>(),
   setIsCreatingThread: z.custom<SetIsCreatingThread>(),
   setCreatedThreadId: z.custom<SetCreatedThreadId>(),
+  setCreatedThreadProjectId: z.custom<SetCreatedThreadProjectId>(),
   setIsAnalyzingPrompt: z.custom<SetIsAnalyzingPrompt>(),
   resetUI: z.custom<ResetUI>(),
 });

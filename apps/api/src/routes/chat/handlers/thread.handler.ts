@@ -1,9 +1,8 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { PROJECT_LIMITS, SUBSCRIPTION_TIER_NAMES } from '@roundtable/shared';
-import type { ChatMode, ThreadStatus } from '@roundtable/shared/enums';
 import { ChangelogChangeTypes, ChangelogTypes, MessagePartTypes, MessageRoles, MessageStatuses, PlanTypes, SubscriptionTiers, ThreadStatusSchema } from '@roundtable/shared/enums';
 import type { SQL } from 'drizzle-orm';
-import { and, asc, desc, eq, inArray, ne, notLike, or, sql } from 'drizzle-orm';
+import { and, asc, desc, eq, inArray, isNull, ne, notLike, or, sql } from 'drizzle-orm';
 import type { BatchItem } from 'drizzle-orm/batch';
 import Fuse from 'fuse.js';
 import { ulid } from 'ulid';
@@ -27,10 +26,10 @@ import {
 import * as tables from '@/db';
 import { getDbAsync } from '@/db';
 import { MessageCacheTags, PublicSlugsListCacheTags, PublicThreadCacheTags, ThreadCacheTags } from '@/db/cache/cache-tags';
-import type { DbThreadMetadata } from '@/db/schemas/chat-metadata';
 import { isModeChange, isWebSearchChange, safeParseChangelogData } from '@/db/schemas/chat-metadata';
 import type {
   ChatCustomRole,
+  ChatThreadUpdate,
 } from '@/db/validation';
 import { STALE_TIMES } from '@/lib/data/stale-times';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
@@ -45,14 +44,14 @@ import {
   getRequiredTierForModel,
   getUserCreditBalance,
   isFreeUserWithPendingRound,
+  toModelForPricing,
 } from '@/services/billing';
-import type { ModelForPricing } from '@/services/billing/product-logic.service';
 import { trackThreadCreated } from '@/services/errors';
 import { getModelById } from '@/services/models';
 import { autoLinkUploadsToProject } from '@/services/projects';
 import { generateTitleFromMessage, generateUniqueSlug, updateThreadTitleAndSlug } from '@/services/prompts';
 import { logModeChange, logWebSearchToggle } from '@/services/threads';
-import { cancelUploadCleanup, generateBatchSignedPaths, isCleanupSchedulerAvailable } from '@/services/uploads';
+import { cancelUploadCleanup, deleteFile, generateBatchSignedPaths, isCleanupSchedulerAvailable } from '@/services/uploads';
 import type { BatchSignOptions } from '@/services/uploads/signed-url.service';
 import {
   getUserTier,
@@ -71,29 +70,12 @@ import type {
   listThreadsRoute,
   updateThreadRoute,
 } from '../route';
+import type { MessageAttachment } from '../schema';
 import {
   CreateThreadRequestSchema,
   ThreadListQuerySchema,
   UpdateThreadRequestSchema,
 } from '../schema';
-
-// Helper to ensure getModelById returns correct type for enrichWithTierAccess
-function getModelForPricing(modelId: string): ModelForPricing | undefined {
-  const model = getModelById(modelId);
-  if (!model)
-    return undefined;
-  // Extract only the fields required by ModelForPricing to avoid type mismatch
-  return {
-    id: model.id,
-    name: model.name,
-    pricing: model.pricing,
-    pricing_display: model.pricing_display,
-    context_length: model.context_length,
-    created: model.created ?? null,
-    provider: model.provider,
-    capabilities: model.capabilities,
-  };
-}
 
 export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> = createHandler(
   {
@@ -127,6 +109,9 @@ export const listThreadsHandler: RouteHandler<typeof listThreadsRoute, ApiEnv> =
         });
       }
       filters.push(eq(tables.chatThread.projectId, query.projectId));
+    } else {
+      // Exclude project threads from main list when no projectId specified
+      filters.push(isNull(tables.chatThread.projectId));
     }
 
     const fetchLimit = query.search ? 200 : (query.limit + 1);
@@ -216,6 +201,9 @@ export const listSidebarThreadsHandler: RouteHandler<typeof listSidebarThreadsRo
         });
       }
       filters.push(eq(tables.chatThread.projectId, query.projectId));
+    } else {
+      // Exclude project threads from sidebar when no projectId specified
+      filters.push(isNull(tables.chatThread.projectId));
     }
 
     const fetchLimit = query.search ? 200 : (query.limit + 1);
@@ -388,7 +376,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
       }
       // Skip pricing check for free users on their first (free) round
       if (!skipPricingCheck) {
-        const modelForPricing = getModelForPricing(participant.modelId);
+        const modelForPricing = toModelForPricing(participant.modelId);
         if (!modelForPricing) {
           throw createError.badRequest(
             `Model "${participant.modelId}" pricing information not found`,
@@ -630,6 +618,7 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
           userId: user.id,
           r2Bucket: c.env.UPLOADS_R2_BUCKET,
           executionCtx: c.executionCtx,
+          threadId,
         });
       }
 
@@ -883,7 +872,7 @@ export const getThreadHandler: RouteHandler<typeof getThreadRoute, ApiEnv> = cre
     // ✅ DRY: Use enrichWithTierAccess helper (single source of truth)
     const participants = rawParticipants.map((participant: typeof tables.chatParticipant.$inferSelect) => ({
       ...participant,
-      ...enrichWithTierAccess(participant.modelId, userTier, getModelForPricing),
+      ...enrichWithTierAccess(participant.modelId, userTier, toModelForPricing),
     }));
     const threadOwner = threadOwnerResult[0];
     if (!threadOwner) {
@@ -1345,19 +1334,8 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
       }
     }
 
-    // ✅ TYPE-SAFE: Use properly typed update data derived from validated body
-    // Body is already typed by UpdateThreadRequestSchema, no force casts needed
-    const updateData: {
-      title?: string;
-      mode?: ChatMode;
-      status?: ThreadStatus;
-      isFavorite?: boolean;
-      isPublic?: boolean;
-      enableWebSearch?: boolean;
-      metadata?: DbThreadMetadata;
-      projectId?: string | null;
-      updatedAt: Date;
-    } = {
+    // Build update object using schema-derived type
+    const updateData: ChatThreadUpdate = {
       updatedAt: now,
     };
     if (body.title !== undefined && body.title !== null && typeof body.title === 'string') {
@@ -1550,6 +1528,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
             userId: user.id,
             r2Bucket: c.env.UPLOADS_R2_BUCKET,
             executionCtx: c.executionCtx,
+            threadId: id,
           });
         }
       }
@@ -1581,6 +1560,33 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
     const { id } = c.validated.params;
     const db = await getDbAsync();
     const thread = await verifyThreadOwnership(id, user.id, db);
+
+    // ✅ CASCADE CLEANUP: Delete thread-linked project attachments and deactivate memories
+    // Find all project attachments linked to this thread via ragMetadata.sourceThreadId
+    const linkedAttachments = await db.query.projectAttachment.findMany({
+      where: sql`json_extract(${tables.projectAttachment.ragMetadata}, '$.sourceThreadId') = ${id}`,
+    });
+
+    // Delete R2 files for each attachment
+    for (const attachment of linkedAttachments) {
+      const ragMetadata = attachment.ragMetadata;
+      if (ragMetadata?.projectR2Key) {
+        await deleteFile(c.env.UPLOADS_R2_BUCKET, ragMetadata.projectR2Key);
+      }
+    }
+
+    // Delete projectAttachment records
+    if (linkedAttachments.length > 0) {
+      await db.delete(tables.projectAttachment)
+        .where(sql`json_extract(${tables.projectAttachment.ragMetadata}, '$.sourceThreadId') = ${id}`);
+    }
+
+    // Deactivate memories from this thread
+    await db.update(tables.projectMemory)
+      .set({ isActive: false, updatedAt: new Date() })
+      .where(eq(tables.projectMemory.sourceThreadId, id));
+
+    // Soft-delete the thread
     await db
       .update(tables.chatThread)
       .set({
@@ -1950,22 +1956,13 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     // ✅ DRY: Use enrichWithTierAccess helper (single source of truth)
     const participants = rawParticipants.map((participant: typeof tables.chatParticipant.$inferSelect) => ({
       ...participant,
-      ...enrichWithTierAccess(participant.modelId, userTier, getModelForPricing),
+      ...enrichWithTierAccess(participant.modelId, userTier, toModelForPricing),
     }));
 
     // ✅ ATTACHMENT SUPPORT: Load message attachments for user messages
     const userMessageIds = rawMessages
       .filter((m: typeof tables.chatMessage.$inferSelect) => m.role === MessageRoles.USER)
       .map((m: typeof tables.chatMessage.$inferSelect) => m.id);
-
-    type MessageAttachment = {
-      messageId: string;
-      displayOrder: number;
-      uploadId: string;
-      filename: string;
-      mimeType: string;
-      fileSize: number;
-    };
 
     // Get all attachments for user messages in one query (with cache)
     const messageAttachmentsRaw = userMessageIds.length > 0

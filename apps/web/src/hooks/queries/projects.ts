@@ -8,6 +8,7 @@
  */
 
 import type { ProjectIndexStatus, ProjectMemorySource } from '@roundtable/shared';
+import type { InfiniteData } from '@tanstack/react-query';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { LIMITS } from '@/constants';
@@ -18,7 +19,10 @@ import { GC_TIMES, STALE_TIMES } from '@/lib/data/stale-times';
 import { getSidebarProjects } from '@/server/sidebar-projects';
 import type {
   ListProjectAttachmentsQuery,
+  ListProjectAttachmentsResponse,
   ListProjectMemoriesQuery,
+  ListProjectMemoriesResponse,
+  ListThreadsResponse,
 } from '@/services/api';
 import {
   getProjectContextService,
@@ -142,21 +146,26 @@ export function useProjectQuery(projectId: string, options?: UseProjectQueryOpti
   });
 }
 
+type UseProjectAttachmentsOptions = {
+  indexStatus?: ProjectIndexStatus;
+  enabled?: boolean;
+  initialData?: InfiniteData<ListProjectAttachmentsResponse, string | undefined>;
+};
+
 /**
  * Hook to fetch attachments for a project
  * S3/R2 Best Practice: Attachments are references to centralized uploads
  * Protected endpoint - requires authentication
  *
  * @param projectId - Project ID
- * @param indexStatus - Optional filter by RAG indexing status
- * @param enabled - Optional control over whether to fetch (default: based on projectId and auth)
+ * @param options - Optional query options (indexStatus, enabled, initialData)
  */
 export function useProjectAttachmentsQuery(
   projectId: string,
-  indexStatus?: ProjectIndexStatus,
-  enabled?: boolean,
+  options?: UseProjectAttachmentsOptions,
 ) {
   const { isAuthenticated } = useAuthCheck();
+  const { indexStatus, enabled, initialData } = options ?? {};
 
   return useInfiniteQuery({
     queryKey: [...queryKeys.projects.attachments(projectId), indexStatus],
@@ -181,29 +190,34 @@ export function useProjectAttachmentsQuery(
       return lastPage.data.pagination.nextCursor;
     },
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
-    staleTime: STALE_TIMES.threadDetail, // 10 seconds
+    staleTime: initialData ? 10_000 : STALE_TIMES.threadDetail, // 10 seconds
     gcTime: GC_TIMES.STANDARD, // 5 minutes
+    initialData,
     retry: false,
     throwOnError: false,
   });
 }
+
+type UseProjectMemoriesOptions = {
+  source?: ProjectMemorySource;
+  isActive?: 'true' | 'false';
+  enabled?: boolean;
+  initialData?: InfiniteData<ListProjectMemoriesResponse, string | undefined>;
+};
 
 /**
  * Hook to fetch memories for a project
  * Protected endpoint - requires authentication
  *
  * @param projectId - Project ID
- * @param source - Optional filter by memory source
- * @param isActive - Optional filter by active status ('true' | 'false' string for query param)
- * @param enabled - Optional control over whether to fetch (default: based on projectId and auth)
+ * @param options - Optional query options (source, isActive, enabled, initialData)
  */
 export function useProjectMemoriesQuery(
   projectId: string,
-  source?: ProjectMemorySource,
-  isActive?: 'true' | 'false',
-  enabled?: boolean,
+  options?: UseProjectMemoriesOptions,
 ) {
   const { isAuthenticated } = useAuthCheck();
+  const { source, isActive, enabled, initialData } = options ?? {};
 
   return useInfiniteQuery({
     queryKey: [...queryKeys.projects.memories(projectId), source, isActive],
@@ -229,12 +243,18 @@ export function useProjectMemoriesQuery(
       return lastPage.data.pagination.nextCursor;
     },
     enabled: enabled !== undefined ? enabled : (isAuthenticated && !!projectId),
-    staleTime: STALE_TIMES.threadDetail, // 10 seconds
+    staleTime: initialData ? 10_000 : STALE_TIMES.threadDetail, // 10 seconds
     gcTime: GC_TIMES.STANDARD, // 5 minutes
+    initialData,
     retry: false,
     throwOnError: false,
   });
 }
+
+type UseProjectThreadsOptions = {
+  enabled?: boolean;
+  initialData?: InfiniteData<ListThreadsResponse, string | undefined>;
+};
 
 /**
  * Hook to fetch threads for a project
@@ -244,15 +264,17 @@ export function useProjectMemoriesQuery(
  * Note: Project threads exclude isFavorite from response (favoriting not supported).
  *
  * @param projectId - Project ID
- * @param enabled - Optional control over whether to fetch (default: based on projectId)
+ * @param options - Optional query options (enabled, initialData)
  */
 export function useProjectThreadsQuery(
   projectId: string,
-  enabled?: boolean,
+  options?: UseProjectThreadsOptions,
 ) {
+  const { enabled, initialData } = options ?? {};
   return useThreadsQuery({
     projectId,
     enabled: enabled !== undefined ? enabled : !!projectId,
+    initialData,
   });
 }
 

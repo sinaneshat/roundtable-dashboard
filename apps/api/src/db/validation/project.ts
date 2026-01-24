@@ -58,6 +58,8 @@ export const ProjectAttachmentRagMetadataSchema = z.object({
   // R2 key in project folder for AI Search indexing
   // Format: projects/{projectId}/{filename}
   projectR2Key: z.string().optional(),
+  // Thread ID if file was auto-linked from a chat upload (non-deletable)
+  sourceThreadId: z.string().optional(),
 }).strict();
 
 export type ProjectAttachmentRagMetadata = z.infer<typeof ProjectAttachmentRagMetadataSchema>;
@@ -109,6 +111,8 @@ export type ProjectAttachmentInsert = z.infer<typeof projectAttachmentInsertSche
  */
 export const projectMemorySelectSchema = createSelectSchema(projectMemory);
 export const projectMemoryInsertSchema = createInsertSchema(projectMemory);
+export const projectMemoryUpdateSchema = createUpdateSchema(projectMemory);
 
 export type ProjectMemory = z.infer<typeof projectMemorySelectSchema>;
 export type ProjectMemoryInsert = z.infer<typeof projectMemoryInsertSchema>;
+export type ProjectMemoryUpdate = z.infer<typeof projectMemoryUpdateSchema>;

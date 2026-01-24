@@ -1,9 +1,11 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { ComponentVariants, DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, getFileTypeColorClass, UploadStatuses } from '@roundtable/shared';
+import type { InfiniteData } from '@tanstack/react-query';
 import { Link } from '@tanstack/react-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
+import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
 import { ChatInputDropzoneOverlay, FileTypeIcon } from '@/components/chat/chat-input-attachments';
 import { FormProvider } from '@/components/forms';
 import { Icons } from '@/components/icons';
@@ -25,24 +27,34 @@ import { SmartImage } from '@/components/ui/smart-image';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAddAttachmentToProjectMutation, useUpdateProjectMutation } from '@/hooks/mutations';
 import { useDownloadUrlQuery, useProjectAttachmentsQuery, useProjectMemoriesQuery, useProjectQuery, useProjectThreadsQuery } from '@/hooks/queries';
-import { useChatAttachments, useDragDrop } from '@/hooks/utils';
+import { useChatAttachments, useDragDrop, useThreadNavigation } from '@/hooks/utils';
 import { formatFileSize } from '@/lib/format';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
-import type { GetProjectResponse, ListProjectAttachmentsResponse } from '@/services/api';
+import { createSuccessResponse, isAttachmentFromThread } from '@/lib/utils';
+import type { GetProjectResponse, ListProjectAttachmentsResponse, ListProjectMemoriesResponse, ListThreadsResponse } from '@/services/api';
 
 type ProjectDetailScreenProps = {
   projectId: string;
   initialProject: GetProjectResponse['data'] | null;
+  initialAttachments?: InfiniteData<ListProjectAttachmentsResponse, string | undefined>;
+  initialMemories?: InfiniteData<ListProjectMemoriesResponse, string | undefined>;
+  initialThreads?: InfiniteData<ListThreadsResponse, string | undefined>;
 };
 
-export function ProjectDetailScreen({ projectId, initialProject }: ProjectDetailScreenProps) {
+export function ProjectDetailScreen({
+  projectId,
+  initialProject,
+  initialAttachments,
+  initialMemories,
+  initialThreads,
+}: ProjectDetailScreenProps) {
   const t = useTranslations();
 
   // Use initialProject as initialData to prevent skeleton flash and immediate refetch
   const { data: projectResponse, isLoading } = useProjectQuery(projectId, {
     initialData: initialProject
-      ? { success: true as const, data: initialProject }
+      ? createSuccessResponse(initialProject)
       : undefined,
   });
   const {
@@ -51,8 +63,8 @@ export function ProjectDetailScreen({ projectId, initialProject }: ProjectDetail
     hasNextPage: hasMoreAttachments,
     fetchNextPage: fetchMoreAttachments,
     isFetchingNextPage: isFetchingMoreAttachments,
-  } = useProjectAttachmentsQuery(projectId);
-  const { data: memoriesData, isFetching: isMemoriesFetching } = useProjectMemoriesQuery(projectId);
+  } = useProjectAttachmentsQuery(projectId, { initialData: initialAttachments });
+  const { data: memoriesData, isFetching: isMemoriesFetching } = useProjectMemoriesQuery(projectId, { initialData: initialMemories });
 
   // Get project from query response
   const project = projectResponse?.success ? projectResponse.data : null;
@@ -179,7 +191,7 @@ export function ProjectDetailScreen({ projectId, initialProject }: ProjectDetail
             </TabsContent>
 
             <TabsContent value="threads">
-              <ProjectThreadsSection projectId={projectId} />
+              <ProjectThreadsSection projectId={projectId} initialData={initialThreads} />
             </TabsContent>
           </Tabs>
         </div>
@@ -327,8 +339,9 @@ function ProjectFileItem({
   onDelete: () => void;
 }) {
   const t = useTranslations();
-  const { upload } = attachment;
+  const { upload, ragMetadata } = attachment;
   const isImage = upload.mimeType?.startsWith('image/');
+  const isFromThread = isAttachmentFromThread(ragMetadata);
 
   // Fetch download URL (used for both download and image preview)
   const { data: downloadUrlResult, isLoading: isLoadingUrl } = useDownloadUrlQuery(upload.id, true);
@@ -376,7 +389,15 @@ function ProjectFileItem({
 
       {/* File info */}
       <div className="flex-1 min-w-0">
-        <p className="text-sm font-medium truncate">{upload.filename}</p>
+        <div className="flex items-center gap-2">
+          <p className="text-sm font-medium truncate">{upload.filename}</p>
+          {isFromThread && (
+            <span className="shrink-0 inline-flex items-center gap-1 px-1.5 py-0.5 text-[10px] font-medium rounded bg-muted text-muted-foreground">
+              <Icons.messageSquare className="size-2.5" />
+              {t('projects.fromThread')}
+            </span>
+          )}
+        </div>
         <p className="text-xs text-muted-foreground">
           {formatFileSize(upload.fileSize)}
         </p>
@@ -395,14 +416,25 @@ function ProjectFileItem({
             ? <Icons.loader className="size-4 animate-spin" />
             : <Icons.download className="size-4" />}
         </button>
-        <button
-          type="button"
-          onClick={onDelete}
-          className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
-          title={t('actions.remove')}
-        >
-          <Icons.x className="size-4" />
-        </button>
+        {isFromThread
+          ? (
+              <span
+                className="p-1.5 text-muted-foreground/40 cursor-not-allowed"
+                title={t('projects.cannotDeleteThreadFile')}
+              >
+                <Icons.x className="size-4" />
+              </span>
+            )
+          : (
+              <button
+                type="button"
+                onClick={onDelete}
+                className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+                title={t('actions.remove')}
+              >
+                <Icons.x className="size-4" />
+              </button>
+            )}
       </div>
     </div>
   );
@@ -667,17 +699,20 @@ function ProjectMemoriesSection({ memories, isLoading }: ProjectMemoriesSectionP
 
 type ProjectThreadsSectionProps = {
   projectId: string;
+  initialData?: InfiniteData<ListThreadsResponse, string | undefined>;
 };
 
-function ProjectThreadsSection({ projectId }: ProjectThreadsSectionProps) {
+function ProjectThreadsSection({ projectId, initialData }: ProjectThreadsSectionProps) {
   const t = useTranslations();
+  const { createClickHandler } = useThreadNavigation();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; slug: string } | null>(null);
   const {
     data,
     isLoading,
     hasNextPage,
     fetchNextPage,
     isFetchingNextPage,
-  } = useProjectThreadsQuery(projectId);
+  } = useProjectThreadsQuery(projectId, { initialData });
 
   const threads = data?.pages.flatMap(page => (page.success ? page.data.items : [])) ?? [];
 
@@ -704,60 +739,94 @@ function ProjectThreadsSection({ projectId }: ProjectThreadsSectionProps) {
   }
 
   return (
-    <Card>
-      <CardHeader className="flex flex-row items-center justify-between">
-        <CardTitle>{t('projects.threads')}</CardTitle>
-        <Button asChild size="sm" startIcon={<Icons.plus className="size-4" />}>
-          <Link to="/chat/projects/$projectId/new" params={{ projectId }}>
-            {t('projects.newChat')}
-          </Link>
-        </Button>
-      </CardHeader>
-      <CardContent>
-        {threads.length === 0
-          ? (
-              <div className="text-center py-8">
-                <Icons.messagesSquare className="size-12 mx-auto text-muted-foreground/50" />
-                <p className="mt-2 text-sm font-medium">{t('projects.threadsEmpty')}</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  {t('projects.threadsEmptyDescription')}
-                </p>
-              </div>
-            )
-          : (
-              <div className="space-y-1">
-                {threads.map(thread => (
-                  <Link
-                    key={thread.id}
-                    to="/chat/$slug"
-                    params={{ slug: thread.slug }}
-                    className={cn(
-                      'flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors',
-                    )}
-                  >
-                    <Icons.messageSquare className="size-4 text-muted-foreground shrink-0" />
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{thread.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {new Date(thread.updatedAt).toLocaleDateString()}
-                      </p>
+    <>
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between">
+          <CardTitle>{t('projects.threads')}</CardTitle>
+          <Button asChild size="sm" startIcon={<Icons.plus className="size-4" />}>
+            <Link to="/chat/projects/$projectId/new" params={{ projectId }}>
+              {t('projects.newChat')}
+            </Link>
+          </Button>
+        </CardHeader>
+        <CardContent>
+          {threads.length === 0
+            ? (
+                <div className="text-center py-8">
+                  <Icons.messagesSquare className="size-12 mx-auto text-muted-foreground/50" />
+                  <p className="mt-2 text-sm font-medium">{t('projects.threadsEmpty')}</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    {t('projects.threadsEmptyDescription')}
+                  </p>
+                </div>
+              )
+            : (
+                <div className="space-y-1">
+                  {threads.map(thread => (
+                    <div
+                      key={thread.id}
+                      className={cn(
+                        'flex items-center gap-3 p-3 rounded-md hover:bg-accent transition-colors group',
+                      )}
+                    >
+                      <Link
+                        to="/chat/$slug"
+                        params={{ slug: thread.slug }}
+                        onClick={createClickHandler({
+                          id: thread.id,
+                          slug: thread.slug,
+                          title: thread.title,
+                          createdAt: thread.createdAt,
+                          updatedAt: thread.updatedAt,
+                        })}
+                        preload={false}
+                        className="flex items-center gap-3 flex-1 min-w-0"
+                      >
+                        <Icons.messageSquare className="size-4 text-muted-foreground shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{thread.title}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(thread.updatedAt).toLocaleDateString()}
+                          </p>
+                        </div>
+                      </Link>
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          setDeleteTarget({ id: thread.id, slug: thread.slug });
+                        }}
+                        className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity shrink-0"
+                        title={t('chat.deleteThread')}
+                      >
+                        <Icons.trash className="size-4" />
+                      </button>
                     </div>
-                  </Link>
-                ))}
-                {hasNextPage && (
-                  <Button
-                    variant={ComponentVariants.GHOST}
-                    size="sm"
-                    className="w-full mt-2"
-                    onClick={() => fetchNextPage()}
-                    disabled={isFetchingNextPage}
-                  >
-                    {isFetchingNextPage ? t('actions.loading') : t('actions.loadMore')}
-                  </Button>
-                )}
-              </div>
-            )}
-      </CardContent>
-    </Card>
+                  ))}
+                  {hasNextPage && (
+                    <Button
+                      variant={ComponentVariants.GHOST}
+                      size="sm"
+                      className="w-full mt-2"
+                      onClick={() => fetchNextPage()}
+                      disabled={isFetchingNextPage}
+                    >
+                      {isFetchingNextPage ? t('actions.loading') : t('actions.loadMore')}
+                    </Button>
+                  )}
+                </div>
+              )}
+        </CardContent>
+      </Card>
+
+      <ChatDeleteDialog
+        isOpen={!!deleteTarget}
+        onOpenChange={open => !open && setDeleteTarget(null)}
+        threadId={deleteTarget?.id ?? ''}
+        threadSlug={deleteTarget?.slug}
+        projectId={projectId}
+      />
+    </>
   );
 }

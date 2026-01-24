@@ -9,6 +9,7 @@
 
 import { LogTypes } from '@roundtable/shared/enums';
 
+import { simpleHash } from '@/common/cache-utils';
 import type { WebSearchResult } from '@/routes/chat/schema';
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
@@ -48,16 +49,6 @@ const CACHE_SCENARIOS = {
 // ============================================================================
 // Cache Key Generation
 // ============================================================================
-
-function simpleHash(str: string): string {
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(36);
-}
 
 function normalizeQuery(query: string): string {
   return query

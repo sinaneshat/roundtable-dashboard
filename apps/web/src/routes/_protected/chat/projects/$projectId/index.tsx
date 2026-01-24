@@ -24,13 +24,17 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/')({
     const projectId = params.projectId;
     const options = projectQueryOptions(projectId);
 
+    let initialAttachments;
+    let initialMemories;
+    let initialThreads;
+
     try {
       // Always prefetch project data
       await queryClient.ensureQueryData(options);
 
       // SSR: Prefetch all tab data in parallel for hydration
       if (isServer) {
-        await Promise.all([
+        [initialAttachments, initialMemories, initialThreads] = await Promise.all([
           queryClient.ensureInfiniteQueryData(projectAttachmentsQueryOptions(projectId)),
           queryClient.ensureInfiniteQueryData(projectMemoriesQueryOptions(projectId)),
           queryClient.ensureInfiniteQueryData(projectThreadsQueryOptions(projectId)),
@@ -47,6 +51,9 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/')({
     return {
       project,
       projectName: project?.name ?? null,
+      initialAttachments,
+      initialMemories,
+      initialThreads,
     };
   },
 
@@ -78,6 +85,9 @@ function ProjectDetailRoute() {
     <ProjectDetailScreen
       projectId={projectId}
       initialProject={loaderData?.project ?? null}
+      initialAttachments={loaderData?.initialAttachments}
+      initialMemories={loaderData?.initialMemories}
+      initialThreads={loaderData?.initialThreads}
     />
   );
 }

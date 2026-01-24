@@ -28,13 +28,17 @@ type UseTitlePollingOptions = {
 };
 
 export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOptions) {
-  const { createdThreadId } = useStore(store, useShallow(s => ({
+  const { createdThreadId, createdThreadProjectId } = useStore(store, useShallow(s => ({
     createdThreadId: s.createdThreadId,
+    createdThreadProjectId: s.createdThreadProjectId,
   })));
 
   // CRITICAL: Track pending title thread ID in ref - persists across navigation
   // Store's createdThreadId gets cleared on navigation, but we need to keep polling
   const pendingTitleThreadIdRef = useRef<string | null>(null);
+
+  // Track project ID for created thread - used for cache updates
+  const pendingProjectIdRef = useRef<string | null>(null);
 
   // Track if we've already handled the AI title for this thread
   const handledTitleRef = useRef<string | null>(null);
@@ -48,10 +52,11 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
     if (createdThreadId && createdThreadId !== handledTitleRef.current) {
       if (pollingStartedForRef.current !== createdThreadId) {
         pendingTitleThreadIdRef.current = createdThreadId;
+        pendingProjectIdRef.current = createdThreadProjectId;
         pollingStartedForRef.current = createdThreadId;
       }
     }
-  }, [createdThreadId]);
+  }, [createdThreadId, createdThreadProjectId]);
 
   // Use the persistent ref for polling - NOT the store's createdThreadId
   const pendingThreadId = pendingTitleThreadIdRef.current;
@@ -78,8 +83,11 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
       return;
     }
     handledTitleRef.current = pendingThreadId;
-    // Clear pending ref now that we've handled it
+    // Capture project ID before clearing refs
+    const projectId = pendingProjectIdRef.current;
+    // Clear pending refs now that we've handled it
     pendingTitleThreadIdRef.current = null;
+    pendingProjectIdRef.current = null;
 
     const queryClient = queryClientRef.current;
     if (!queryClient)
@@ -174,11 +182,52 @@ export function useTitlePolling({ store, queryClientRef }: UseTitlePollingOption
       },
     );
 
+    // Update project threads cache if this is a project thread
+    if (projectId) {
+      queryClient.setQueryData(
+        queryKeys.projects.threads(projectId),
+        (old: unknown) => {
+          const parsedQuery = validateInfiniteQueryCache(old);
+          if (!parsedQuery)
+            return old;
+
+          return {
+            ...parsedQuery,
+            pages: parsedQuery.pages.map(page => ({
+              ...page,
+              data: {
+                ...page.data,
+                items: page.data?.items?.map((thread) => {
+                  if (thread.id !== pendingThreadId)
+                    return thread;
+
+                  const previousSlug = thread.slug !== slugData.slug ? thread.slug : thread.previousSlug;
+                  return {
+                    ...thread,
+                    title: slugData.title,
+                    slug: slugData.slug,
+                    previousSlug,
+                    isAiGeneratedTitle: true,
+                  };
+                }) ?? [],
+              },
+            })),
+          };
+        },
+      );
+    }
+
     // Delayed invalidation to fetch fresh data
     const invalidationTimeout = setTimeout(() => {
       queryClient.invalidateQueries({
         queryKey: queryKeys.threads.all,
       });
+      // Also invalidate project threads cache if applicable
+      if (projectId) {
+        queryClient.invalidateQueries({
+          queryKey: queryKeys.projects.threads(projectId),
+        });
+      }
     }, 3000);
 
     return () => {

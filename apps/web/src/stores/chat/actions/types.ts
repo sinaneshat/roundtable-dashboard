@@ -139,6 +139,9 @@ export const PaginatedPageCacheSchema = z.object({
   data: z
     .object({
       items: z.array(ChatThreadCacheSchema).optional(),
+      pagination: z.object({
+        nextCursor: z.string().nullable().optional(),
+      }).optional(),
     })
     .optional(),
 });

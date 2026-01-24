@@ -797,7 +797,7 @@ export function ChatView({
     const result = await filterPresetParticipants(
       preset,
       incompatibleModelIdsRef.current,
-      t as (key: string, values?: { count: number }) => string,
+      t,
       ToastNamespaces.MODELS,
     );
 

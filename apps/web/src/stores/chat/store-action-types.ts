@@ -85,6 +85,7 @@ export type SetShowInitialUI = (show: boolean) => void;
 export type SetWaitingToStartStreaming = (waiting: boolean) => void;
 export type SetIsCreatingThread = (creating: boolean) => void;
 export type SetCreatedThreadId = (id: string | null) => void;
+export type SetCreatedThreadProjectId = (projectId: string | null) => void;
 export type SetIsAnalyzingPrompt = (analyzing: boolean) => void;
 export type ResetUI = () => void;
 

@@ -15,6 +15,28 @@ import {
 } from '@/db/cache/cache-tags';
 import { deleteOgImageFromCache } from '@/services/og-cache';
 
+// ============================================================================
+// Hash Utilities
+// ============================================================================
+
+/**
+ * Simple hash function for cache key generation
+ * Produces deterministic, short hash strings for KV key deduplication
+ */
+export function simpleHash(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    const char = str.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash;
+  }
+  return Math.abs(hash).toString(36);
+}
+
+// ============================================================================
+// Cache Tag Management
+// ============================================================================
+
 export async function invalidateThreadCache(
   db: Awaited<ReturnType<typeof getDbAsync>>,
   userId: string,

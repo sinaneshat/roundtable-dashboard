@@ -24,180 +24,40 @@ import type { LanguageModelUsage } from 'ai';
 import { ulid } from 'ulid';
 import * as z from 'zod';
 
+import {
+  LLMGenerationResultSchema,
+  LLMInputMessageSchema,
+  LLMTrackingContextSchema,
+  LLMTrackingResultSchema,
+  LLMTrackingUsageSchema,
+  ToolCallSchema,
+  ToolResultSchema,
+} from '@/common/schemas/llm-tracking';
 import { getPostHogClient } from '@/lib/analytics/posthog-server';
 import { isObject, isTransientErrorFromObject } from '@/lib/utils';
 
 // ============================================================================
-// TYPE DEFINITIONS (Using AI SDK Types)
+// RE-EXPORTS FOR BACKWARDS COMPATIBILITY
 // ============================================================================
 
-/**
- * ✅ AI SDK V6 TYPE REUSE: Use LanguageModelUsage from AI SDK
- * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/language-model-usage
- *
- * Import LanguageModelUsage directly from 'ai' package for single source of truth
- * Example: import { type LanguageModelUsage } from 'ai';
- */
+export {
+  LLMGenerationResultSchema,
+  LLMInputMessageSchema,
+  LLMTrackingContextSchema,
+  LLMTrackingResultSchema,
+  LLMTrackingUsageSchema,
+  ToolCallSchema,
+  ToolResultSchema,
+};
 
-/**
- * ✅ AI SDK V6 TOOL TYPES: Use official AI SDK tool types
- * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/tool-call-part
- *
- * Import tool types directly from 'ai' package for single source of truth
- * Example: import { type ToolCallPart, type ToolResultPart } from 'ai';
- */
-
-/**
- * LLM tracking context schema - captures all relevant context for PostHog event enrichment
- *
- * ✅ Better Auth Integration: Uses Better Auth session ID for distinct ID
- * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
- */
-export const LLMTrackingContextSchema = z.object({
-  // User identification (Better Auth session ID for distinct ID)
-  userId: z.string(),
-  sessionId: z.string().optional(), // Better Auth session.id - used as PostHog distinct ID
-
-  // Conversation context
-  threadId: z.string(),
-  roundNumber: z.number().int().nonnegative(),
-  threadMode: z.string(),
-
-  // Participant context
-  participantId: z.string(),
-  participantIndex: z.number().int().nonnegative(),
-  participantRole: z.string().nullable().optional(),
-
-  // Model context
-  modelId: z.string(),
-  modelName: z.string().optional(),
-
-  // Request metadata
-  isRegeneration: z.boolean().optional(),
-  userTier: z.string().optional(),
-});
-
+// Types inferred from centralized schemas
 export type LLMTrackingContext = z.infer<typeof LLMTrackingContextSchema>;
-
-/**
- * Input token details schema for cache metrics
- */
-const InputTokenDetailsSchema = z.object({
-  noCacheTokens: z.number().int().nonnegative().optional(),
-  cacheReadTokens: z.number().int().nonnegative().optional(),
-  cacheWriteTokens: z.number().int().nonnegative().optional(),
-});
-
-/**
- * Output token details schema for reasoning metrics
- */
-const OutputTokenDetailsSchema = z.object({
-  textTokens: z.number().int().nonnegative().optional(),
-  reasoningTokens: z.number().int().nonnegative().optional(),
-});
-
-/**
- * Simplified usage schema for tracking purposes
- * AI SDK v6 LanguageModelUsage requires inputTokenDetails/outputTokenDetails
- * We use a subset for PostHog tracking which only needs token counts
- *
- * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
- */
-export const LLMTrackingUsageSchema = z.object({
-  inputTokens: z.number().int().nonnegative().optional(),
-  outputTokens: z.number().int().nonnegative().optional(),
-  totalTokens: z.number().int().nonnegative().optional(),
-  inputTokenDetails: InputTokenDetailsSchema.optional(),
-  outputTokenDetails: OutputTokenDetailsSchema.optional(),
-});
-
 export type LLMTrackingUsage = z.infer<typeof LLMTrackingUsageSchema>;
-
-/**
- * AI SDK v6 Tool Call structure
- * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/tool-call-part
- *
- * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
- */
-export const ToolCallSchema = z.object({
-  type: z.literal('tool-call'),
-  toolCallId: z.string(),
-  toolName: z.string(),
-  input: z.unknown(),
-});
-
 export type ToolCall = z.infer<typeof ToolCallSchema>;
-
-/**
- * AI SDK v6 Tool Result structure
- * Reference: https://sdk.vercel.ai/docs/reference/ai-sdk-core/tool-result-part
- * Note: result is optional to match AI SDK's DynamicToolResult
- *
- * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
- */
-export const ToolResultSchema = z.object({
-  type: z.literal('tool-result'),
-  toolCallId: z.string(),
-  toolName: z.string(),
-  result: z.unknown().optional(),
-});
-
 export type ToolResult = z.infer<typeof ToolResultSchema>;
-
-/**
- * Reasoning part schema
- */
-const ReasoningPartSchema = z.object({
-  type: z.literal('reasoning'),
-  text: z.string(),
-});
-
-/**
- * LLM response metadata schema
- */
-const LLMResponseMetadataSchema = z.object({
-  id: z.string().optional(),
-  modelId: z.string().optional(),
-  timestamp: z.date().optional(),
-});
-
-/**
- * LLM generation result schema from AI SDK v6
- *
- * ✅ AI SDK TYPE SAFETY: Uses explicit types from AI SDK patterns
- * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
- */
-export const LLMGenerationResultSchema = z.object({
-  text: z.string(),
-  finishReason: z.string(),
-  usage: LLMTrackingUsageSchema.optional(),
-  reasoning: z.array(ReasoningPartSchema).optional(),
-  toolCalls: z.array(ToolCallSchema).optional(),
-  toolResults: z.array(ToolResultSchema).optional(),
-  response: LLMResponseMetadataSchema.optional(),
-});
-
 export type LLMGenerationResult = z.infer<typeof LLMGenerationResultSchema>;
-
-/**
- * Content part schema for message content
- */
-const ContentPartSchema = z.object({
-  type: z.string(),
-  text: z.string(),
-});
-
-/**
- * Input message schema for PostHog tracking
- *
- * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
- */
-export const LLMInputMessageSchema = z.object({
-  role: z.string(),
-  content: z.union([z.string(), z.array(ContentPartSchema)]),
-});
-
 export type LLMInputMessage = z.infer<typeof LLMInputMessageSchema>;
+export type LLMTrackingResult = z.infer<typeof LLMTrackingResultSchema>;
 
 // ============================================================================
 // TYPES FOR POSTHOG INTEGRATION
@@ -266,19 +126,6 @@ export type LLMTrackingOptions = {
   };
   additionalProperties?: Record<string, unknown>;
 };
-
-/**
- * Result from LLM generation tracking schema
- *
- * ✅ ZOD-FIRST PATTERN: Type inferred from schema for maximum type safety
- */
-export const LLMTrackingResultSchema = z.object({
-  traceId: z.string(),
-  success: z.boolean(),
-  errorMessage: z.string().optional(),
-});
-
-export type LLMTrackingResult = z.infer<typeof LLMTrackingResultSchema>;
 
 // ============================================================================
 // POSTHOG PROPERTIES SCHEMA
@@ -394,6 +241,43 @@ type LLMGenerationProperties = {
 // ============================================================================
 // COST CALCULATION UTILITIES
 // ============================================================================
+
+/**
+ * Model pricing structure for PostHog tracking
+ * Prices are in USD per million tokens
+ */
+export type ModelPricingPerMillion = {
+  input: number;
+  output: number;
+};
+
+/**
+ * Extract pricing from OpenRouter model config for PostHog tracking
+ *
+ * Converts per-token pricing (e.g., '0.00000030') to per-million format
+ * for consistent cost tracking across all providers.
+ *
+ * @param model - Model object with pricing.prompt and pricing.completion
+ * @returns Pricing per million tokens, or undefined if pricing not available
+ */
+export function extractModelPricing(
+  model: { pricing: { prompt: string; completion: string } } | undefined,
+): ModelPricingPerMillion | undefined {
+  if (!model?.pricing)
+    return undefined;
+
+  const inputPerToken = Number.parseFloat(model.pricing.prompt);
+  const outputPerToken = Number.parseFloat(model.pricing.completion);
+
+  if (Number.isNaN(inputPerToken) || Number.isNaN(outputPerToken)) {
+    return undefined;
+  }
+
+  return {
+    input: inputPerToken * 1_000_000,
+    output: outputPerToken * 1_000_000,
+  };
+}
 
 /**
  * Calculate LLM cost based on token usage and pricing

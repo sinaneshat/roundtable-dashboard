@@ -13,3 +13,4 @@ export * from './error-types';
 export * from './fetch-utilities';
 export * from './memory-safety';
 export * from './permissions';
+export * from './schemas';

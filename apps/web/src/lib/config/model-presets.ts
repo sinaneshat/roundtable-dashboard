@@ -11,6 +11,7 @@ import { ChatModes, ChatModeSchema, ModelIds, SUBSCRIPTION_TIERS, SubscriptionTi
 
 import type { Icon } from '@/components/icons';
 import { Icons } from '@/components/icons';
+import type { TranslationFunction } from '@/lib/i18n/use-translations';
 import { ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
 
 // ============================================================================
@@ -354,8 +355,6 @@ export function getModelIdsForPreset(preset: ModelPreset): string[] {
   return preset.modelRoles.map(mr => mr.modelId);
 }
 
-type TranslationFn = (key: string, values?: { count: number }) => string;
-
 /**
  * Filter preset participants by model compatibility
  *
@@ -366,7 +365,7 @@ type TranslationFn = (key: string, values?: { count: number }) => string;
 export async function filterPresetParticipants(
   preset: ModelPreset,
   incompatibleModelIds: Set<string>,
-  t: TranslationFn,
+  t: TranslationFunction,
   toastNamespace: ToastNamespace = DEFAULT_TOAST_NAMESPACE,
 ): Promise<PresetFilterResult> {
   // Dynamic import to avoid bundling React (via toastManager) into API routes

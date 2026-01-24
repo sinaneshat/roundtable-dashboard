@@ -17,12 +17,21 @@ import {
 } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import type { ChatProjectUpdate, ProjectAttachmentRagMetadata, ProjectMemoryUpdate } from '@/db/validation/project';
+import { deductCreditsForAction } from '@/services/billing/credit.service';
 import {
   getAggregatedProjectContext,
 } from '@/services/context';
+import { syncInstructionMemory } from '@/services/projects';
 import { generateProjectFileR2Key } from '@/services/search';
 import { cancelUploadCleanup, copyFile, deleteFile, isCleanupSchedulerAvailable } from '@/services/uploads';
 import { getUserTier } from '@/services/usage';
+import {
+  enrichProjectWithCounts,
+  omitUploadR2Key,
+  verifyProjectOwnership,
+  verifyUploadOwnership,
+} from '@/shared-operations';
 import type { ApiEnv } from '@/types';
 
 import type {
@@ -172,39 +181,14 @@ export const getProjectHandler: RouteHandler<typeof getProjectRoute, ApiEnv> = c
   async (c) => {
     const { user } = c.auth();
     const { id } = c.validated.params;
-
     const db = await getDbAsync();
 
-    // Fetch project
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, id),
-        eq(tables.chatProject.userId, user.id),
-      ),
+    const project = await verifyProjectOwnership(id, user.id, db, {
+      includeAttachments: true,
+      includeThreads: true,
     });
 
-    if (!project) {
-      throw createError.notFound(`Project not found: ${id}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: id,
-      });
-    }
-
-    // Get counts
-    const attachments = await db.query.projectAttachment.findMany({
-      where: eq(tables.projectAttachment.projectId, project.id),
-    });
-
-    const threads = await db.query.chatThread.findMany({
-      where: eq(tables.chatThread.projectId, project.id),
-    });
-
-    return Responses.ok(c, {
-      ...project,
-      attachmentCount: attachments.length,
-      threadCount: threads.length,
-    });
+    return Responses.ok(c, enrichProjectWithCounts(project));
   },
 );
 
@@ -274,6 +258,16 @@ export const createProjectHandler: RouteHandler<typeof createProjectRoute, ApiEn
       })
       .returning();
 
+    // Sync custom instructions to project memory if provided
+    if (body.customInstructions) {
+      await syncInstructionMemory({
+        db,
+        projectId,
+        customInstructions: body.customInstructions,
+        userId: user.id,
+      });
+    }
+
     return Responses.created(c, {
       ...project,
       attachmentCount: 0,
@@ -295,37 +289,12 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
   async (c) => {
     const { user } = c.auth();
     const { id } = c.validated.params;
-
     const body = c.validated.body;
     const db = await getDbAsync();
 
-    // Verify ownership
-    const existing = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, id),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
+    await verifyProjectOwnership(id, user.id, db);
 
-    if (!existing) {
-      throw createError.notFound(`Project not found: ${id}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: id,
-      });
-    }
-
-    // Update project - explicitly construct update object for type safety
-    const updateData: {
-      name?: string;
-      description?: string | null;
-      color?: typeof body.color;
-      icon?: typeof body.icon;
-      customInstructions?: string | null;
-      autoragInstanceId?: string | null;
-      settings?: typeof body.settings;
-      updatedAt: Date;
-    } = { updatedAt: new Date() };
+    const updateData: ChatProjectUpdate = { updatedAt: new Date() };
 
     if (body.name !== undefined)
       updateData.name = body.name;
@@ -348,19 +317,25 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
       .where(eq(tables.chatProject.id, id))
       .returning();
 
-    // Get counts
-    const attachments = await db.query.projectAttachment.findMany({
-      where: eq(tables.projectAttachment.projectId, id),
-    });
+    if (body.customInstructions !== undefined) {
+      await syncInstructionMemory({
+        db,
+        projectId: id,
+        customInstructions: body.customInstructions || null,
+        userId: user.id,
+      });
+    }
 
-    const threads = await db.query.chatThread.findMany({
-      where: eq(tables.chatThread.projectId, id),
+    // Fetch counts for response
+    const projectWithCounts = await verifyProjectOwnership(id, user.id, db, {
+      includeAttachments: true,
+      includeThreads: true,
     });
 
     return Responses.ok(c, {
       ...updated,
-      attachmentCount: attachments.length,
-      threadCount: threads.length,
+      attachmentCount: projectWithCounts.attachments.length,
+      threadCount: projectWithCounts.threads.length,
     });
   },
 );
@@ -377,38 +352,21 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
   async (c) => {
     const { user } = c.auth();
     const { id } = c.validated.params;
-
     const db = await getDbAsync();
 
-    // Verify ownership
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, id),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
+    await verifyProjectOwnership(id, user.id, db);
 
-    if (!project) {
-      throw createError.notFound(`Project not found: ${id}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: id,
-      });
-    }
-
-    // Get all threads in this project for cache invalidation
+    // Get all threads for cache invalidation
     const threads = await db.query.chatThread.findMany({
       where: eq(tables.chatThread.projectId, id),
       columns: { id: true, slug: true, isPublic: true, previousSlug: true },
     });
 
-    // Soft-delete all threads (matches deleteThreadHandler behavior)
     if (threads.length > 0) {
       await db.update(tables.chatThread)
         .set({ status: ThreadStatuses.DELETED, updatedAt: new Date() })
         .where(eq(tables.chatThread.projectId, id));
 
-      // Invalidate caches for public threads (non-blocking)
       const cacheInvalidationTasks = threads
         .filter((thread): thread is typeof thread & { slug: string } => thread.isPublic && !!thread.slug)
         .flatMap((thread) => {
@@ -426,8 +384,6 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
       }
     }
 
-    // Delete project from DB (cascade will handle projectAttachment and projectMemory)
-    // Note: We don't delete R2 files here since they're managed via the upload table
     await db.delete(tables.chatProject).where(eq(tables.chatProject.id, id));
 
     return Responses.ok(c, {
@@ -442,8 +398,6 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
 // PROJECT THREADS HANDLERS
 // ============================================================================
 
-// TODO: DEPRECATE - Remove after frontend migrates to /chat/threads?projectId=X
-// See route.ts for full action plan
 /**
  * List threads for a project
  */
@@ -460,24 +414,8 @@ export const listProjectThreadsHandler: RouteHandler<typeof listProjectThreadsRo
     const query = c.validated.query;
     const db = await getDbAsync();
 
-    // Verify project ownership
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, projectId),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
+    await verifyProjectOwnership(projectId, user.id, db);
 
-    if (!project) {
-      throw createError.notFound(`Project not found: ${projectId}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: projectId,
-      });
-    }
-
-    // Get threads for this project using query API (consistent with other handlers)
-    // Note: isFavorite/pin is NOT supported for project threads
     const threads = await db.query.chatThread.findMany({
       where: eq(tables.chatThread.projectId, projectId),
       columns: {
@@ -528,30 +466,13 @@ export const listProjectAttachmentsHandler: RouteHandler<typeof listProjectAttac
     const query = c.validated.query;
     const db = await getDbAsync();
 
-    // Verify project ownership
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, projectId),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
+    await verifyProjectOwnership(projectId, user.id, db);
 
-    if (!project) {
-      throw createError.notFound(`Project not found: ${projectId}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: projectId,
-      });
-    }
-
-    // Build filters
     const filters = [eq(tables.projectAttachment.projectId, projectId)];
-
     if (query.indexStatus) {
       filters.push(eq(tables.projectAttachment.indexStatus, query.indexStatus));
     }
 
-    // Fetch attachments with cursor pagination
     const attachments = await db.query.projectAttachment.findMany({
       where: buildCursorWhereWithFilters(
         tables.projectAttachment.createdAt,
@@ -564,25 +485,13 @@ export const listProjectAttachmentsHandler: RouteHandler<typeof listProjectAttac
       with: {
         upload: true,
         addedByUser: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-          },
+          columns: { id: true, name: true, email: true },
         },
       },
     });
 
-    // Transform to response format (omit r2Key from nested upload)
-    const transformedAttachments = attachments.map((pa) => {
-      const { r2Key: _r2Key, ...uploadWithoutR2Key } = pa.upload;
-      return {
-        ...pa,
-        upload: uploadWithoutR2Key,
-      };
-    });
+    const transformedAttachments = attachments.map(omitUploadR2Key);
 
-    // Apply pagination
     const { items, pagination } = applyCursorPagination(
       transformedAttachments,
       query.limit,
@@ -610,37 +519,8 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
     const body = c.validated.body;
     const db = await getDbAsync();
 
-    // Verify project ownership
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, projectId),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
-
-    if (!project) {
-      throw createError.notFound(`Project not found: ${projectId}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: projectId,
-      });
-    }
-
-    // Verify upload exists and user has access
-    const existingUpload = await db.query.upload.findFirst({
-      where: and(
-        eq(tables.upload.id, body.uploadId),
-        eq(tables.upload.userId, user.id),
-      ),
-    });
-
-    if (!existingUpload) {
-      throw createError.notFound(`Upload not found: ${body.uploadId}`, {
-        errorType: 'resource',
-        resource: 'upload',
-        resourceId: body.uploadId,
-      });
-    }
+    await verifyProjectOwnership(projectId, user.id, db);
+    const existingUpload = await verifyUploadOwnership(body.uploadId, user.id, db);
 
     // Check if upload is already in project
     const existingProjectAttachment = await db.query.projectAttachment.findFirst({
@@ -659,8 +539,6 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
     }
 
     // Copy file to project folder for AI Search indexing
-    // AI Search uses folder-based multitenancy: projects/{projectId}/
-    // Files must be in this folder for the folder filter to find them
     const projectR2Key = generateProjectFileR2Key(projectId, existingUpload.filename);
     const copyResult = await copyFile(
       c.env.UPLOADS_R2_BUCKET,
@@ -670,10 +548,8 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
 
     if (!copyResult.success) {
       console.error(`[Project] Failed to copy file to project folder: ${copyResult.error}`);
-      // Continue anyway - file may still be accessible, just not via AI Search
     }
 
-    // Create project attachment reference with project-specific R2 key
     const projectAttachmentId = ulid();
     const [projectAttachment] = await db
       .insert(tables.projectAttachment)
@@ -687,7 +563,6 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
           context: body.context,
           description: body.description,
           tags: body.tags,
-          // Store project-specific R2 key for AI Search
           projectR2Key: copyResult.success ? projectR2Key : undefined,
         },
         createdAt: new Date(),
@@ -695,7 +570,15 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
       })
       .returning();
 
-    // Cancel scheduled cleanup for the attached upload (non-blocking)
+    // Deduct credits for file attachment
+    try {
+      await deductCreditsForAction(user.id, 'projectFileLink', {
+        description: `File linked: ${existingUpload.filename}`,
+      });
+    } catch {
+      // Non-critical - don't fail attachment if billing fails
+    }
+
     if (isCleanupSchedulerAvailable(c.env)) {
       const cancelTask = cancelUploadCleanup(c.env.UPLOAD_CLEANUP_SCHEDULER, body.uploadId).catch(() => {});
       if (c.executionCtx) {
@@ -703,17 +586,12 @@ export const addAttachmentToProjectHandler: RouteHandler<typeof addAttachmentToP
       }
     }
 
-    // Get the upload details for response
     const { r2Key: _r2Key, ...uploadWithoutR2Key } = existingUpload;
 
     return Responses.created(c, {
       ...projectAttachment,
       upload: uploadWithoutR2Key,
-      addedByUser: {
-        id: user.id,
-        name: user.name,
-        email: user.email,
-      },
+      addedByUser: { id: user.id, name: user.name, email: user.email },
     });
   },
 );
@@ -732,23 +610,8 @@ export const getProjectAttachmentHandler: RouteHandler<typeof getProjectAttachme
     const { id: projectId, attachmentId } = c.validated.params;
     const db = await getDbAsync();
 
-    // Verify project ownership
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, projectId),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
+    await verifyProjectOwnership(projectId, user.id, db);
 
-    if (!project) {
-      throw createError.notFound(`Project not found: ${projectId}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: projectId,
-      });
-    }
-
-    // Get project attachment with related data
     const projectAttachment = await db.query.projectAttachment.findFirst({
       where: and(
         eq(tables.projectAttachment.id, attachmentId),
@@ -757,11 +620,7 @@ export const getProjectAttachmentHandler: RouteHandler<typeof getProjectAttachme
       with: {
         upload: true,
         addedByUser: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-          },
+          columns: { id: true, name: true, email: true },
         },
       },
     });
@@ -774,13 +633,7 @@ export const getProjectAttachmentHandler: RouteHandler<typeof getProjectAttachme
       });
     }
 
-    // Transform to response format (omit r2Key)
-    const { r2Key: _r2Key, ...uploadWithoutR2Key } = projectAttachment.upload;
-
-    return Responses.ok(c, {
-      ...projectAttachment,
-      upload: uploadWithoutR2Key,
-    });
+    return Responses.ok(c, omitUploadR2Key(projectAttachment));
   },
 );
 
@@ -800,23 +653,8 @@ export const updateProjectAttachmentHandler: RouteHandler<typeof updateProjectAt
     const body = c.validated.body;
     const db = await getDbAsync();
 
-    // Verify project ownership
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, projectId),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
+    await verifyProjectOwnership(projectId, user.id, db);
 
-    if (!project) {
-      throw createError.notFound(`Project not found: ${projectId}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: projectId,
-      });
-    }
-
-    // Get existing project attachment
     const existing = await db.query.projectAttachment.findFirst({
       where: and(
         eq(tables.projectAttachment.id, attachmentId),
@@ -825,11 +663,7 @@ export const updateProjectAttachmentHandler: RouteHandler<typeof updateProjectAt
       with: {
         upload: true,
         addedByUser: {
-          columns: {
-            id: true,
-            name: true,
-            email: true,
-          },
+          columns: { id: true, name: true, email: true },
         },
       },
     });
@@ -842,15 +676,8 @@ export const updateProjectAttachmentHandler: RouteHandler<typeof updateProjectAt
       });
     }
 
-    // Update ragMetadata - explicitly typed to match schema
     const currentMetadata = existing.ragMetadata || {};
-    const updatedMetadata: {
-      context?: string;
-      description?: string;
-      tags?: string[];
-      indexedAt?: string;
-      errorMessage?: string;
-    } = { ...currentMetadata };
+    const updatedMetadata: ProjectAttachmentRagMetadata = { ...currentMetadata };
 
     if (body.context !== undefined)
       updatedMetadata.context = body.context ?? undefined;
@@ -861,14 +688,10 @@ export const updateProjectAttachmentHandler: RouteHandler<typeof updateProjectAt
 
     const [updated] = await db
       .update(tables.projectAttachment)
-      .set({
-        ragMetadata: updatedMetadata,
-        updatedAt: new Date(),
-      })
+      .set({ ragMetadata: updatedMetadata, updatedAt: new Date() })
       .where(eq(tables.projectAttachment.id, attachmentId))
       .returning();
 
-    // Transform response (omit r2Key)
     const { r2Key: _r2Key, ...uploadWithoutR2Key } = existing.upload;
 
     return Responses.ok(c, {
@@ -894,23 +717,8 @@ export const removeAttachmentFromProjectHandler: RouteHandler<typeof removeAttac
     const { id: projectId, attachmentId } = c.validated.params;
     const db = await getDbAsync();
 
-    // Verify project ownership
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, projectId),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
+    await verifyProjectOwnership(projectId, user.id, db);
 
-    if (!project) {
-      throw createError.notFound(`Project not found: ${projectId}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: projectId,
-      });
-    }
-
-    // Verify attachment exists in project
     const projectAttachment = await db.query.projectAttachment.findFirst({
       where: and(
         eq(tables.projectAttachment.id, attachmentId),
@@ -926,9 +734,24 @@ export const removeAttachmentFromProjectHandler: RouteHandler<typeof removeAttac
       });
     }
 
-    // Clean up copied file from project folder (if it exists)
-    // This removes the file from AI Search's scope
-    // ✅ TYPE-SAFE: ragMetadata is already typed via $type<ProjectAttachmentRagMetadata>() in schema
+    // ✅ VALIDATION: Prevent deletion of files linked to active threads
+    if (projectAttachment.ragMetadata?.sourceThreadId) {
+      const sourceThread = await db.query.chatThread.findFirst({
+        where: and(
+          eq(tables.chatThread.id, projectAttachment.ragMetadata.sourceThreadId),
+          eq(tables.chatThread.status, ThreadStatuses.ACTIVE),
+        ),
+        columns: { id: true },
+      });
+
+      if (sourceThread) {
+        throw createError.badRequest(
+          'Cannot delete file linked to active thread. Delete the thread first.',
+          { errorType: 'validation', resource: 'projectAttachment' },
+        );
+      }
+    }
+
     if (projectAttachment.ragMetadata?.projectR2Key) {
       const deleteTask = deleteFile(c.env.UPLOADS_R2_BUCKET, projectAttachment.ragMetadata.projectR2Key)
         .then((result) => {
@@ -936,22 +759,16 @@ export const removeAttachmentFromProjectHandler: RouteHandler<typeof removeAttac
             console.error(`[Project] Failed to delete project file copy: ${result.error}`);
           }
         })
-        .catch(() => {}); // Non-blocking, best-effort cleanup
+        .catch(() => {});
 
       if (c.executionCtx) {
         c.executionCtx.waitUntil(deleteTask);
       }
     }
 
-    // Remove reference (not the underlying original file)
-    await db
-      .delete(tables.projectAttachment)
-      .where(eq(tables.projectAttachment.id, attachmentId));
+    await db.delete(tables.projectAttachment).where(eq(tables.projectAttachment.id, attachmentId));
 
-    return Responses.ok(c, {
-      id: attachmentId,
-      deleted: true,
-    });
+    return Responses.ok(c, { id: attachmentId, deleted: true });
   },
 );
 
@@ -975,34 +792,16 @@ export const listProjectMemoriesHandler: RouteHandler<typeof listProjectMemories
     const query = c.validated.query;
     const db = await getDbAsync();
 
-    // Verify project ownership
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, projectId),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
+    await verifyProjectOwnership(projectId, user.id, db);
 
-    if (!project) {
-      throw createError.notFound(`Project not found: ${projectId}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: projectId,
-      });
-    }
-
-    // Build filters
     const filters = [eq(tables.projectMemory.projectId, projectId)];
-
     if (query.source) {
       filters.push(eq(tables.projectMemory.source, query.source));
     }
-
     if (query.isActive !== undefined) {
       filters.push(eq(tables.projectMemory.isActive, query.isActive === 'true'));
     }
 
-    // Fetch memories with cursor pagination
     const memories = await db.query.projectMemory.findMany({
       where: buildCursorWhereWithFilters(
         tables.projectMemory.createdAt,
@@ -1013,25 +812,15 @@ export const listProjectMemoriesHandler: RouteHandler<typeof listProjectMemories
       orderBy: getCursorOrderBy(tables.projectMemory.createdAt, 'desc'),
       limit: query.limit + 1,
       with: {
-        sourceThread: {
-          columns: {
-            id: true,
-            title: true,
-          },
-        },
+        sourceThread: { columns: { id: true, title: true } },
       },
     });
 
-    // Transform to include sourceThreadTitle
     const transformedMemories = memories.map((memory) => {
       const { sourceThread, ...rest } = memory;
-      return {
-        ...rest,
-        sourceThreadTitle: sourceThread?.title || null,
-      };
+      return { ...rest, sourceThreadTitle: sourceThread?.title || null };
     });
 
-    // Apply pagination
     const { items, pagination } = applyCursorPagination(
       transformedMemories,
       query.limit,
@@ -1058,21 +847,7 @@ export const createProjectMemoryHandler: RouteHandler<typeof createProjectMemory
     const body = c.validated.body;
     const db = await getDbAsync();
 
-    // Verify project ownership
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, projectId),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
-
-    if (!project) {
-      throw createError.notFound(`Project not found: ${projectId}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: projectId,
-      });
-    }
+    await verifyProjectOwnership(projectId, user.id, db);
 
     const memoryId = ulid();
     const [memory] = await db
@@ -1092,10 +867,7 @@ export const createProjectMemoryHandler: RouteHandler<typeof createProjectMemory
       })
       .returning();
 
-    return Responses.created(c, {
-      ...memory,
-      sourceThreadTitle: null,
-    });
+    return Responses.created(c, { ...memory, sourceThreadTitle: null });
   },
 );
 
@@ -1113,35 +885,15 @@ export const getProjectMemoryHandler: RouteHandler<typeof getProjectMemoryRoute,
     const { id: projectId, memoryId } = c.validated.params;
     const db = await getDbAsync();
 
-    // Verify project ownership
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, projectId),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
+    await verifyProjectOwnership(projectId, user.id, db);
 
-    if (!project) {
-      throw createError.notFound(`Project not found: ${projectId}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: projectId,
-      });
-    }
-
-    // Get memory with source thread
     const memory = await db.query.projectMemory.findFirst({
       where: and(
         eq(tables.projectMemory.id, memoryId),
         eq(tables.projectMemory.projectId, projectId),
       ),
       with: {
-        sourceThread: {
-          columns: {
-            id: true,
-            title: true,
-          },
-        },
+        sourceThread: { columns: { id: true, title: true } },
       },
     });
 
@@ -1154,10 +906,7 @@ export const getProjectMemoryHandler: RouteHandler<typeof getProjectMemoryRoute,
     }
 
     const { sourceThread, ...rest } = memory;
-    return Responses.ok(c, {
-      ...rest,
-      sourceThreadTitle: sourceThread?.title || null,
-    });
+    return Responses.ok(c, { ...rest, sourceThreadTitle: sourceThread?.title || null });
   },
 );
 
@@ -1177,23 +926,8 @@ export const updateProjectMemoryHandler: RouteHandler<typeof updateProjectMemory
     const body = c.validated.body;
     const db = await getDbAsync();
 
-    // Verify project ownership
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, projectId),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
+    await verifyProjectOwnership(projectId, user.id, db);
 
-    if (!project) {
-      throw createError.notFound(`Project not found: ${projectId}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: projectId,
-      });
-    }
-
-    // Verify memory exists
     const existing = await db.query.projectMemory.findFirst({
       where: and(
         eq(tables.projectMemory.id, memoryId),
@@ -1209,16 +943,7 @@ export const updateProjectMemoryHandler: RouteHandler<typeof updateProjectMemory
       });
     }
 
-    // Build update object
-    const updateData: {
-      content?: string;
-      summary?: string | null;
-      importance?: number;
-      isActive?: boolean;
-      metadata?: typeof body.metadata;
-      updatedAt: Date;
-    } = { updatedAt: new Date() };
-
+    const updateData: ProjectMemoryUpdate = { updatedAt: new Date() };
     if (body.content !== undefined)
       updateData.content = body.content;
     if (body.summary !== undefined)
@@ -1244,7 +969,6 @@ export const updateProjectMemoryHandler: RouteHandler<typeof updateProjectMemory
       });
     }
 
-    // Get source thread for response
     let sourceThreadTitle: string | null = null;
     if (updated.sourceThreadId) {
       const thread = await db.query.chatThread.findFirst({
@@ -1254,10 +978,7 @@ export const updateProjectMemoryHandler: RouteHandler<typeof updateProjectMemory
       sourceThreadTitle = thread?.title || null;
     }
 
-    return Responses.ok(c, {
-      ...updated,
-      sourceThreadTitle,
-    });
+    return Responses.ok(c, { ...updated, sourceThreadTitle });
   },
 );
 
@@ -1275,23 +996,8 @@ export const deleteProjectMemoryHandler: RouteHandler<typeof deleteProjectMemory
     const { id: projectId, memoryId } = c.validated.params;
     const db = await getDbAsync();
 
-    // Verify project ownership
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, projectId),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
+    await verifyProjectOwnership(projectId, user.id, db);
 
-    if (!project) {
-      throw createError.notFound(`Project not found: ${projectId}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: projectId,
-      });
-    }
-
-    // Verify memory exists
     const memory = await db.query.projectMemory.findFirst({
       where: and(
         eq(tables.projectMemory.id, memoryId),
@@ -1307,15 +1013,9 @@ export const deleteProjectMemoryHandler: RouteHandler<typeof deleteProjectMemory
       });
     }
 
-    // Delete memory
-    await db
-      .delete(tables.projectMemory)
-      .where(eq(tables.projectMemory.id, memoryId));
+    await db.delete(tables.projectMemory).where(eq(tables.projectMemory.id, memoryId));
 
-    return Responses.ok(c, {
-      id: memoryId,
-      deleted: true,
-    });
+    return Responses.ok(c, { id: memoryId, deleted: true });
   },
 );
 
@@ -1338,27 +1038,12 @@ export const getProjectContextHandler: RouteHandler<typeof getProjectContextRout
     const { id: projectId } = c.validated.params;
     const db = await getDbAsync();
 
-    // Verify project ownership
-    const project = await db.query.chatProject.findFirst({
-      where: and(
-        eq(tables.chatProject.id, projectId),
-        eq(tables.chatProject.userId, user.id),
-      ),
-    });
+    await verifyProjectOwnership(projectId, user.id, db);
 
-    if (!project) {
-      throw createError.notFound(`Project not found: ${projectId}`, {
-        errorType: 'resource',
-        resource: 'project',
-        resourceId: projectId,
-      });
-    }
-
-    // Get aggregated context (using empty thread ID for all threads)
     const context = await getAggregatedProjectContext({
       projectId,
-      currentThreadId: '', // Get context from all threads
-      userQuery: '', // Not filtering by query
+      currentThreadId: '',
+      userQuery: '',
       db,
     });
 

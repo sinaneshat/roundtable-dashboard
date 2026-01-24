@@ -1,4 +1,5 @@
 export * from './ai-display';
+export * from './api-helpers';
 export * from './cache-helpers';
 export * from './citation-parser';
 export * from './clipboard';
@@ -15,6 +16,7 @@ export * from './metadata-builder';
 export * from './moderator-utils';
 export * from './participant';
 export * from './participant-message-lookup';
+export * from './project-metadata';
 export * from './role-colors';
 export * from './round-utils';
 export * from './safe-storage';

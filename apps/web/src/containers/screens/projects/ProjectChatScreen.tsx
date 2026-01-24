@@ -518,7 +518,7 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
     const result = await filterPresetParticipants(
       preset,
       incompatibleModelIdsRef.current,
-      t as (key: string, values?: { count: number }) => string,
+      t,
       ToastNamespaces.CHAT_MODELS,
     );
 
@@ -631,8 +631,8 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
         {showInitialUI && (
           <>
             {/* Center content area */}
-            <div className="flex-1 relative">
-              <div className="container max-w-4xl mx-auto px-5 md:px-6 relative flex flex-col items-center pt-6 sm:pt-8 pb-4">
+            <div className="flex-1 relative flex flex-col items-center justify-center">
+              <div className="container max-w-4xl mx-auto px-5 md:px-6 relative flex flex-col items-center">
                 <div className="w-full">
                   <div className="flex flex-col items-center gap-3 text-center relative">
                     {/* Project icon */}

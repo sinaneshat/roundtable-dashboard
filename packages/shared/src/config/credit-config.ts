@@ -41,6 +41,11 @@ export const CREDIT_CONFIG = {
     analysisGeneration: 2000,
     customRoleCreation: 50,
     autoModeAnalysis: 500,
+    // Project feature costs
+    memoryExtraction: 100,
+    ragQuery: 150,
+    projectFileLink: 25,
+    projectStoragePer10MB: 10,
   },
 
   RESERVATION_MULTIPLIER: 1.5,

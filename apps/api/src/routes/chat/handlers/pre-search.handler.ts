@@ -12,8 +12,10 @@
  */
 
 import type { RouteHandler } from '@hono/zod-openapi';
+import { TAVILY_COST_PER_SEARCH } from '@roundtable/shared/constants';
 import { CreditActions, FinishReasons, IMAGE_MIME_TYPES, MessagePartTypes, MessageRoles, MessageStatuses, PollingStatuses, PreSearchQueryStatuses, PreSearchSseEvents, UIMessageRoles, WebSearchComplexities, WebSearchDepths } from '@roundtable/shared/enums';
 import { eq } from 'drizzle-orm';
+import type { ExecutionContext } from 'hono';
 import { streamSSE } from 'hono/streaming';
 import { ulid } from 'ulid';
 
@@ -26,7 +28,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { formatAgeMs, getTimestampAge, hasTimestampExceededTimeout } from '@/db/utils/timestamps';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
-import type { BillingContext } from '@/services/billing';
+import type { ImageAnalysisBillingContext } from '@/services/billing';
 import {
   deductCreditsForAction,
   enforceCredits,
@@ -34,9 +36,9 @@ import {
 } from '@/services/billing';
 import { getProjectRagContext } from '@/services/context';
 import type { PreSearchTrackingContext } from '@/services/errors';
-import { buildEmptyResponseError, extractErrorMetadata, initializePreSearchTracking, trackPreSearchComplete, trackQueryGeneration, trackWebSearchExecution } from '@/services/errors';
+import { buildEmptyResponseError, extractErrorMetadata, extractModelPricing, generateTraceId, initializePreSearchTracking, trackLLMGeneration, trackPreSearchComplete, trackQueryGeneration, trackWebSearchExecution } from '@/services/errors';
 import { loadAttachmentContent, loadAttachmentContentUrl } from '@/services/messages';
-import { initializeOpenRouter, openRouterService } from '@/services/models';
+import { getModelById, initializeOpenRouter, openRouterService } from '@/services/models';
 import { analyzeQueryComplexity, IMAGE_ANALYSIS_FOR_SEARCH_PROMPT, simpleOptimizeQuery } from '@/services/prompts';
 import {
   createSearchCache,
@@ -66,14 +68,6 @@ import { PreSearchRequestSchema } from '../schema';
 // ============================================================================
 // IMAGE ANALYSIS FOR SEARCH CONTEXT
 // ============================================================================
-
-/**
- * Extended billing context for image analysis with execution context
- * ✅ EXTENDS: BillingContext from @/api/services/billing
- */
-type ImageAnalysisBillingContext = BillingContext & {
-  executionCtx: ExecutionContext;
-};
 
 /**
  * Analyze images using vision model to extract searchable context
@@ -171,6 +165,7 @@ async function analyzeImagesForSearchContext(
       .filter((part): part is NonNullable<typeof part> => part !== null);
 
     // Call vision model to analyze images
+    const imageAnalysisStartTime = performance.now();
     const result = await openRouterService.generateText({
       modelId: AIModels.IMAGE_ANALYSIS,
       messages: [
@@ -186,13 +181,14 @@ async function analyzeImagesForSearchContext(
 
     const description = result.text.trim();
 
-    // ✅ BILLING: Deduct credits for image analysis AI call
+    // ✅ BILLING + POSTHOG: Track image analysis costs
     if (billingContext && result.usage) {
       const rawInput = result.usage.inputTokens ?? 0;
       const rawOutput = result.usage.outputTokens ?? 0;
       const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
       const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
       if (safeInputTokens > 0 || safeOutputTokens > 0) {
+        // Credit deduction
         billingContext.executionCtx.waitUntil(
           finalizeCredits(billingContext.userId, `presearch-img-analysis-${ulid()}`, {
             inputTokens: safeInputTokens,
@@ -201,6 +197,43 @@ async function analyzeImagesForSearchContext(
             threadId: billingContext.threadId,
             modelId: AIModels.IMAGE_ANALYSIS,
           }),
+        );
+
+        // PostHog LLM tracking with actual provider cost
+        const imageModel = getModelById(AIModels.IMAGE_ANALYSIS);
+        const imagePricing = extractModelPricing(imageModel);
+        const traceId = generateTraceId();
+
+        billingContext.executionCtx.waitUntil(
+          trackLLMGeneration(
+            {
+              userId: billingContext.userId,
+              threadId: billingContext.threadId,
+              roundNumber: 0,
+              threadMode: 'image_analysis',
+              participantId: 'system',
+              participantIndex: 0,
+              modelId: AIModels.IMAGE_ANALYSIS,
+            },
+            {
+              text: description,
+              finishReason: result.finishReason,
+              usage: {
+                inputTokens: safeInputTokens,
+                outputTokens: safeOutputTokens,
+              },
+            },
+            [{ role: 'user', content: IMAGE_ANALYSIS_FOR_SEARCH_PROMPT }],
+            traceId,
+            imageAnalysisStartTime,
+            {
+              modelPricing: imagePricing,
+              additionalProperties: {
+                operation_type: 'image_analysis',
+                image_count: imageFileParts.length,
+              },
+            },
+          ),
         );
       }
     }
@@ -436,6 +469,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
           ai: c.env.AI,
           db,
           maxResults: 3, // Fewer results for pre-search (focus on query generation)
+          userId: user.id,
         });
         if (ragResult.instructions || ragResult.ragContext) {
           projectContext = {
@@ -1012,7 +1046,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
 
             allResults.push({ query: generatedQuery, result, duration: searchDuration });
 
-            // ✅ POSTHOG TRACKING: Track successful web search execution
+            // ✅ POSTHOG TRACKING: Track successful web search execution with actual cost
             c.executionCtx.waitUntil(
               trackWebSearchExecution(
                 trackingContext,
@@ -1026,7 +1060,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                   searchDepth: generatedQuery.searchDepth || 'basic',
                 },
                 searchDuration,
-                { cacheHit: false },
+                { cacheHit: false, searchCostUsd: TAVILY_COST_PER_SEARCH },
               ),
             );
 
@@ -1185,7 +1219,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
             data: JSON.stringify(searchData),
           });
 
-          // ✅ POSTHOG TRACKING: Track successful pre-search completion
+          // ✅ POSTHOG TRACKING: Track successful pre-search completion with total cost
           c.executionCtx.waitUntil(
             trackPreSearchComplete(
               trackingContext,
@@ -1196,6 +1230,7 @@ export const executePreSearchHandler: RouteHandler<typeof executePreSearchRoute,
                 successfulSearches: successfulResults.length,
                 failedSearches: totalQueries - successfulResults.length,
                 totalResults: allSearchResults.length,
+                totalWebSearchCostUsd: successfulResults.length * TAVILY_COST_PER_SEARCH,
               },
               totalTime,
             ),

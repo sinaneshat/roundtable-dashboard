@@ -1,6 +1,7 @@
 import type { ChatMode } from '@roundtable/shared';
 import { MessagePartTypes, MessageRoles } from '@roundtable/shared';
 import { useQueryClient } from '@tanstack/react-query';
+import { useRouter } from '@tanstack/react-router';
 import { useCallback } from 'react';
 import { z } from 'zod';
 import { useShallow } from 'zustand/react/shallow';
@@ -59,6 +60,7 @@ export type UseChatFormActionsReturn = {
  */
 export function useChatFormActions(): UseChatFormActionsReturn {
   const queryClient = useQueryClient();
+  const router = useRouter();
   const storeApi = useChatStoreApi();
 
   const formState = useChatStore(useShallow(s => ({
@@ -78,6 +80,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     setIsCreatingThread: s.setIsCreatingThread,
     setWaitingToStartStreaming: s.setWaitingToStartStreaming,
     setCreatedThreadId: s.setCreatedThreadId,
+    setCreatedThreadProjectId: s.setCreatedThreadProjectId,
     setHasPendingConfigChanges: s.setHasPendingConfigChanges,
     prepareForNewMessage: s.prepareForNewMessage,
     setExpectedParticipantIds: s.setExpectedParticipantIds,
@@ -158,7 +161,8 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
       actions.setShowInitialUI(false);
       actions.setCreatedThreadId(thread.id);
-      rlog.flow('create', `1-setCreatedThreadId id=${thread.id.slice(-8)}`);
+      actions.setCreatedThreadProjectId(projectId ?? null);
+      rlog.flow('create', `1-setCreatedThreadId id=${thread.id.slice(-8)} projectId=${projectId ?? 'none'}`);
 
       const uiMessages = chatMessagesToUIMessages(messagesWithDates);
 
@@ -184,18 +188,76 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         lastMessageAt: thread.lastMessageAt,
       };
 
-      if (projectId) {
-        // Update project threads cache
-        queryClient.setQueriesData(
-          { queryKey: queryKeys.projects.threads(projectId) },
-          (old: unknown) => {
-            const parsedQuery = validateInfiniteQueryCache(old);
-            if (!parsedQuery)
-              return old;
+      // ✅ STEP 1: Pre-populate thread detail caches BEFORE navigation
+      // This prevents skeleton flash when route loader runs
+      queryClient.setQueryData(queryKeys.threads.bySlug(thread.slug), {
+        success: true,
+        data: {
+          thread: {
+            ...thread,
+            createdAt: toISOString(thread.createdAt),
+            updatedAt: toISOString(thread.updatedAt),
+            lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
+          },
+          participants: participantsWithDates.map(p => ({
+            ...p,
+            createdAt: toISOString(p.createdAt),
+            updatedAt: toISOString(p.updatedAt),
+          })),
+          messages: messagesWithDates,
+        },
+        meta: createPrefetchMeta(),
+      });
 
-            return {
-              ...parsedQuery,
-              pages: parsedQuery.pages.map((page, index) => {
+      queryClient.setQueryData(queryKeys.threads.detail(thread.id), {
+        success: true,
+        data: {
+          thread: {
+            ...thread,
+            createdAt: toISOString(thread.createdAt),
+            updatedAt: toISOString(thread.updatedAt),
+            lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
+          },
+          participants: participantsWithDates.map(p => ({
+            ...p,
+            createdAt: toISOString(p.createdAt),
+            updatedAt: toISOString(p.updatedAt),
+          })),
+          messages: messagesWithDates,
+        },
+        meta: createPrefetchMeta(),
+      });
+
+      // ✅ STEP 2: Navigate BEFORE sidebar cache updates
+      // This ensures URL is updated when sidebar re-renders from cache change
+      rlog.flow('create', `3-navigate slug=${thread.slug} projectId=${projectId ?? 'none'}`);
+      if (projectId) {
+        router.navigate({
+          to: '/chat/projects/$projectId/$slug',
+          params: { projectId, slug: thread.slug },
+          replace: true,
+        });
+      } else {
+        router.navigate({
+          to: '/chat/$slug',
+          params: { slug: thread.slug },
+          replace: true,
+        });
+      }
+
+      // ✅ STEP 3: Update sidebar list caches AFTER navigation
+      // When React re-renders sidebar, URL already reflects new thread
+      if (projectId) {
+        const projectThreadsKey = ['threads', 'list', { search: undefined, projectId }] as const;
+        const existingData = queryClient.getQueryData(projectThreadsKey);
+        const parsedExisting = validateInfiniteQueryCache(existingData);
+
+        if (parsedExisting) {
+          queryClient.setQueryData(
+            projectThreadsKey,
+            {
+              ...parsedExisting,
+              pages: parsedExisting.pages.map((page, index) => {
                 if (index !== 0 || !page.success || !page.data?.items)
                   return page;
 
@@ -207,9 +269,21 @@ export function useChatFormActions(): UseChatFormActionsReturn {
                   },
                 };
               }),
-            };
-          },
-        );
+            },
+          );
+        } else {
+          queryClient.setQueryData(
+            projectThreadsKey,
+            {
+              pages: [{
+                success: true,
+                data: { items: [threadItem], pagination: { nextCursor: null } },
+                meta: createPrefetchMeta(),
+              }],
+              pageParams: [undefined],
+            },
+          );
+        }
 
         // Increment thread count in sidebar projects cache
         queryClient.setQueriesData(
@@ -241,7 +315,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
           },
         );
       } else {
-        // Update general threads cache (existing behavior)
         queryClient.setQueriesData(
           {
             queryKey: queryKeys.threads.all,
@@ -271,69 +344,12 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         );
       }
 
-      // ✅ FIX: Pre-populate thread-by-slug cache BEFORE URL update
-      // This prevents skeleton flash when navigating to /chat/{slug} later
-      // The cache entry includes prefetch meta so loader knows data is fresh
-      queryClient.setQueryData(queryKeys.threads.bySlug(thread.slug), {
-        success: true,
-        data: {
-          thread: {
-            ...thread,
-            createdAt: toISOString(thread.createdAt),
-            updatedAt: toISOString(thread.updatedAt),
-            lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
-          },
-          participants: participantsWithDates.map(p => ({
-            ...p,
-            createdAt: toISOString(p.createdAt),
-            updatedAt: toISOString(p.updatedAt),
-          })),
-          messages: messagesWithDates,
-        },
-        meta: createPrefetchMeta(),
-      });
-
-      // Also pre-populate by thread ID for consistency
-      queryClient.setQueryData(queryKeys.threads.detail(thread.id), {
-        success: true,
-        data: {
-          thread: {
-            ...thread,
-            createdAt: toISOString(thread.createdAt),
-            updatedAt: toISOString(thread.updatedAt),
-            lastMessageAt: toISOStringOrNull(thread.lastMessageAt),
-          },
-          participants: participantsWithDates.map(p => ({
-            ...p,
-            createdAt: toISOString(p.createdAt),
-            updatedAt: toISOString(p.updatedAt),
-          })),
-          messages: messagesWithDates,
-        },
-        meta: createPrefetchMeta(),
-      });
-
-      // ✅ FIX v9: Use window.history.replaceState for URL updates
-      // ChatView is already rendering - full navigation is unnecessary and causes context loss
-      // This matches the pattern in flow-controller.ts (line 218-228)
-      rlog.flow('create', `3-queueMicrotask replaceState slug=${thread.slug} projectId=${projectId ?? 'none'}`);
-      queueMicrotask(() => {
-        if (projectId) {
-          rlog.flow('create', `4-MICROTASK-FIRE replaceState /chat/projects/${projectId}/${thread.slug}`);
-          window.history.replaceState(
-            window.history.state,
-            '',
-            `/chat/projects/${projectId}/${thread.slug}`,
-          );
-        } else {
-          rlog.flow('create', `4-MICROTASK-FIRE replaceState /chat/${thread.slug}`);
-          window.history.replaceState(
-            window.history.state,
-            '',
-            `/chat/${thread.slug}`,
-          );
-        }
-      });
+      // ✅ DELAYED INVALIDATION: Auto-link runs async on backend, refresh attachments after delay
+      if (projectId && attachmentIds?.length) {
+        setTimeout(() => {
+          queryClient.invalidateQueries({ queryKey: queryKeys.projects.attachments(projectId) });
+        }, 2000);
+      }
 
       actions.setInputValue('');
       actions.clearAttachments();
@@ -374,6 +390,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     createThreadMutation,
     actions,
     queryClient,
+    router,
   ]);
 
   const handleUpdateThreadAndSend = useCallback(async (threadId: string, attachmentIds?: string[], attachmentInfos?: AttachmentInfo[]) => {

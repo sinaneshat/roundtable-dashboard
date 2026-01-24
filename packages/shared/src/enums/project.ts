@@ -67,6 +67,7 @@ export const PROJECT_MEMORY_SOURCES = [
   'explicit',
   'moderator',
   'search',
+  'instruction',
 ] as const;
 
 export const DEFAULT_PROJECT_MEMORY_SOURCE: ProjectMemorySource = 'chat';
@@ -83,6 +84,7 @@ export const ProjectMemorySources = {
   EXPLICIT: 'explicit' as const,
   MODERATOR: 'moderator' as const,
   SEARCH: 'search' as const,
+  INSTRUCTION: 'instruction' as const,
 } as const;
 
 // ============================================================================

@@ -41,14 +41,15 @@ import {
   finalizeCredits,
   MAX_MODELS_BY_TIER,
 } from '@/services/billing';
-import { HARDCODED_MODELS, initializeOpenRouter, openRouterService } from '@/services/models';
+import { extractModelPricing, generateTraceId, trackLLMGeneration } from '@/services/errors/posthog-llm-tracking.service';
+import { getModelById, HARDCODED_MODELS, initializeOpenRouter, openRouterService } from '@/services/models';
 import type { AnalyzeModelInfo } from '@/services/prompts';
 import { buildAnalyzeSystemPrompt } from '@/services/prompts';
 import { getUserTier } from '@/services/usage';
 import type { ApiEnv } from '@/types';
 
 import type { analyzePromptRoute } from '../route';
-import type { AnalyzePromptPayload, RecommendedParticipant } from '../schema';
+import type { AnalyzePromptPayload, PartialAnalysisConfig, RecommendedParticipant } from '../schema';
 import { AnalyzePromptRequestSchema } from '../schema';
 
 // ============================================================================
@@ -118,13 +119,6 @@ function getModelInfo(accessibleModelIds: string[]): AnalyzeModelInfo[] {
 // ============================================================================
 // Validation Helpers
 // ============================================================================
-
-// Type for partial object from AI SDK streaming (handles undefined values)
-type PartialAnalysisConfig = {
-  participants?: Array<{ modelId?: string; role?: string | null } | undefined>;
-  mode?: string;
-  enableWebSearch?: boolean;
-};
 
 /**
  * Type guard for ShortRoleName validation using Zod schema
@@ -341,29 +335,68 @@ export const analyzePromptHandler: RouteHandler<typeof analyzePromptRoute, ApiEn
           finalConfig = bestConfig ?? AUTO_MODE_FALLBACK_CONFIG;
         }
 
-        // ✅ BILLING: Deduct credits based on actual token usage (not fixed cost)
-        if (shouldBill) {
-          try {
-            const usage = await analysisStream.usage;
-            if (usage) {
-              const rawInput = usage.inputTokens ?? 0;
-              const rawOutput = usage.outputTokens ?? 0;
-              const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
-              const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
-              if (safeInputTokens > 0 || safeOutputTokens > 0) {
-                c.executionCtx.waitUntil(
-                  finalizeCredits(user.id, `analyze-prompt-${ulid()}`, {
+        // ✅ BILLING + POSTHOG: Track costs based on actual token usage
+        try {
+          const usage = await analysisStream.usage;
+          if (usage) {
+            const rawInput = usage.inputTokens ?? 0;
+            const rawOutput = usage.outputTokens ?? 0;
+            const safeInputTokens = Number.isFinite(rawInput) ? rawInput : 0;
+            const safeOutputTokens = Number.isFinite(rawOutput) ? rawOutput : 0;
+
+            // Billing deduction
+            if (shouldBill && (safeInputTokens > 0 || safeOutputTokens > 0)) {
+              c.executionCtx.waitUntil(
+                finalizeCredits(user.id, `analyze-prompt-${ulid()}`, {
+                  inputTokens: safeInputTokens,
+                  outputTokens: safeOutputTokens,
+                  action: CreditActions.AI_RESPONSE,
+                  modelId: PROMPT_ANALYSIS_MODEL_ID,
+                }),
+              );
+            }
+
+            // PostHog LLM tracking with actual provider cost
+            const analysisModel = getModelById(PROMPT_ANALYSIS_MODEL_ID);
+            const analysisPricing = extractModelPricing(analysisModel);
+            const traceId = generateTraceId();
+
+            c.executionCtx.waitUntil(
+              trackLLMGeneration(
+                {
+                  userId: user.id,
+                  threadId: `analyze-${ulid()}`,
+                  roundNumber: 0,
+                  threadMode: 'prompt_analysis',
+                  participantId: 'system',
+                  participantIndex: 0,
+                  modelId: PROMPT_ANALYSIS_MODEL_ID,
+                  userTier,
+                },
+                {
+                  text: JSON.stringify(finalConfig),
+                  finishReason: 'stop',
+                  usage: {
                     inputTokens: safeInputTokens,
                     outputTokens: safeOutputTokens,
-                    action: CreditActions.AI_RESPONSE,
-                    modelId: PROMPT_ANALYSIS_MODEL_ID,
-                  }),
-                );
-              }
-            }
-          } catch (billingError) {
-            console.error('[Analyze] Billing failed:', billingError);
+                  },
+                },
+                [{ role: 'user', content: prompt }],
+                traceId,
+                startTime,
+                {
+                  modelPricing: analysisPricing,
+                  additionalProperties: {
+                    operation_type: 'prompt_analysis',
+                    has_image_files: hasImageFiles,
+                    has_document_files: hasDocumentFiles,
+                  },
+                },
+              ),
+            );
           }
+        } catch (billingError) {
+          console.error('[Analyze] Billing/tracking failed:', billingError);
         }
 
         // Send final done event with complete config

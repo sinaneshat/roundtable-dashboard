@@ -20,33 +20,16 @@ import {
 } from '@roundtable/shared/enums';
 import * as z from 'zod';
 
+import { ModelForPricingSchema } from '@/common/schemas/model-pricing';
 // Direct import to avoid barrel export pulling in server-only slug-generator.service.ts
 import { TITLE_GENERATION_PROMPT } from '@/services/prompts/prompts.service';
 
-const _ModelForPricingSchema = z.object({
-  id: z.string(),
-  name: z.string(),
-  pricing: z.object({
-    prompt: z.string(),
-    completion: z.string(),
-  }),
-  pricing_display: z.object({
-    input: z.string().nullable(),
-    output: z.string().nullable(),
-  }).nullable().optional(),
-  context_length: z.number(),
-  created: z.number().nullable().optional(),
-  provider: z.string().optional(),
-  capabilities: z.object({
-    vision: z.boolean(),
-    file: z.boolean(),
-    reasoning: z.boolean(),
-    streaming: z.boolean(),
-    tools: z.boolean(),
-  }).optional(),
-});
+// ============================================================================
+// RE-EXPORTS FOR BACKWARDS COMPATIBILITY
+// ============================================================================
 
-export type ModelForPricing = z.infer<typeof _ModelForPricingSchema>;
+export { ModelForPricingSchema };
+export type ModelForPricing = z.infer<typeof ModelForPricingSchema>;
 
 const _TierConfigurationSchema = z.object({
   name: z.string(),

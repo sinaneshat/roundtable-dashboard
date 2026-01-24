@@ -35,12 +35,14 @@ import {
 } from '@/services/billing';
 import { getProjectRagContext } from '@/services/context';
 import {
+  extractModelPricing,
   generateTraceId,
   trackLLMError,
   trackLLMGeneration,
 } from '@/services/errors';
 import { filterDbToParticipantMessages } from '@/services/messages';
-import { extractModeratorModelName, initializeOpenRouter, openRouterService } from '@/services/models';
+import { extractModeratorModelName, getModelById, initializeOpenRouter, openRouterService } from '@/services/models';
+import { extractMemoriesFromRound } from '@/services/projects';
 import {
   buildCouncilModeratorSystemPrompt,
 } from '@/services/prompts';
@@ -58,7 +60,7 @@ import {
 import type { ApiEnv } from '@/types';
 
 import type { councilModeratorRoundRoute } from '../route';
-import type { ModeratorPromptConfig, ParticipantResponse } from '../schema';
+import type { ModeratorGenerationConfig, ModeratorProjectContext, ParticipantResponse } from '../schema';
 import { RoundModeratorRequestSchema } from '../schema';
 
 // ============================================================================
@@ -94,36 +96,6 @@ const MODERATOR_PARTICIPANT_INDEX = NO_PARTICIPANT_SENTINEL;
 // ============================================================================
 
 /**
- * Minimal ExecutionContext type for waitUntil operations
- * (cloudflare-env.d.ts has a stricter type, but Hono's c.executionCtx is simpler)
- */
-type MinimalExecutionContext = {
-  waitUntil: (promise: Promise<unknown>) => void;
-};
-
-/**
- * Project context for moderator synthesis
- */
-type ModeratorProjectContext = {
-  instructions?: string | null;
-  ragContext?: string;
-};
-
-/**
- * Extended config for council moderator generation
- * Combines schema-validated prompt config with runtime context
- */
-type ModeratorGenerationConfig = {
-  env: ApiEnv['Bindings'];
-  messageId: string;
-  threadId: string;
-  userId: string;
-  sessionId?: string;
-  executionCtx?: MinimalExecutionContext;
-  projectContext?: ModeratorProjectContext;
-} & ModeratorPromptConfig;
-
-/**
  * Generate council moderator using text streaming
  *
  * ✅ SCHEMA-DRIVEN: Uses ModeratorPromptConfig for prompt data
@@ -138,7 +110,7 @@ async function generateCouncilModerator(
   // ✅ LAZY LOAD AI SDK: Load at invocation, not module startup
   const { streamText } = await getAiSdk();
 
-  const { roundNumber, mode, userQuestion, participantResponses, env, messageId, threadId, userId, sessionId, executionCtx, projectContext } = config;
+  const { roundNumber, mode, userQuestion, participantResponses, env, messageId, threadId, userId, sessionId, executionCtx, projectContext, projectId } = config;
 
   const llmTraceId = generateTraceId();
   const llmStartTime = performance.now();
@@ -288,7 +260,7 @@ async function generateCouncilModerator(
           }
         }
 
-        // Track analytics
+        // Track analytics with actual provider cost
         const finishData = {
           text: finishResult.text,
           finishReason: finishResult.finishReason,
@@ -298,6 +270,10 @@ async function generateCouncilModerator(
             totalTokens: safeTotalTokens,
           },
         };
+
+        // Get model pricing for actual cost tracking in PostHog
+        const moderatorModel = getModelById(moderatorModelId);
+        const moderatorPricing = extractModelPricing(moderatorModel);
 
         const trackAnalytics = async () => {
           try {
@@ -319,6 +295,7 @@ async function generateCouncilModerator(
               llmTraceId,
               llmStartTime,
               {
+                modelPricing: moderatorPricing,
                 modelConfig: { temperature: 0.3 },
                 promptTracking: { promptId: 'moderator_summary', promptVersion: 'v3.0' },
                 additionalProperties: {
@@ -337,6 +314,42 @@ async function generateCouncilModerator(
           executionCtx.waitUntil(trackAnalytics());
         } else {
           trackAnalytics().catch(() => {});
+        }
+
+        // =========================================================================
+        // ✅ MEMORY EXTRACTION: Auto-extract memories from project conversations
+        // Runs in background after moderator completes successfully
+        // =========================================================================
+        if (projectId && finishResult.text) {
+          const extractMemoriesTask = async () => {
+            try {
+              console.error('[Memory Extraction] Starting extraction:', {
+                projectId,
+                threadId,
+                roundNumber,
+                summaryLength: finishResult.text.length,
+              });
+              const extractionResult = await extractMemoriesFromRound({
+                projectId,
+                threadId,
+                roundNumber,
+                userQuestion,
+                moderatorSummary: finishResult.text,
+                userId,
+                ai: env.AI,
+                db: await getDbAsync(),
+              });
+              console.error('[Memory Extraction] Completed:', extractionResult);
+            } catch (error) {
+              console.error('[Memory Extraction] Failed:', error);
+            }
+          };
+
+          if (executionCtx) {
+            executionCtx.waitUntil(extractMemoriesTask());
+          } else {
+            extractMemoriesTask().catch(() => {});
+          }
         }
       } catch (error) {
         // Stream already completed successfully - log persistence error
@@ -682,6 +695,7 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
         ai: c.env.AI,
         db,
         maxResults: 5,
+        userId: session.userId,
       });
       if (ragResult.instructions || ragResult.ragContext) {
         projectContext = {
@@ -706,6 +720,7 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
         executionCtx: c.executionCtx,
         sessionId: session?.id,
         projectContext,
+        projectId: thread.projectId,
       },
       c,
     );

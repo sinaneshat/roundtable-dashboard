@@ -8,6 +8,7 @@
  * See: docs/react-query-ssr-patterns.md
  */
 
+import type { InfiniteData } from '@tanstack/react-query';
 import { useInfiniteQuery, useQuery } from '@tanstack/react-query';
 
 import { LIMITS } from '@/constants';
@@ -15,6 +16,7 @@ import { useAuthCheck } from '@/hooks/utils';
 import { queryKeys } from '@/lib/data/query-keys';
 import { threadBySlugQueryOptions } from '@/lib/data/query-options';
 import { POLLING_INTERVALS, STALE_TIMES } from '@/lib/data/stale-times';
+import type { ListThreadsResponse } from '@/services/api';
 import {
   getPublicThreadService,
   getThreadService,
@@ -33,6 +35,8 @@ type UseThreadsQueryOptions = {
   projectId?: string;
   /** Optional control over whether to fetch */
   enabled?: boolean;
+  /** Optional initial data for SSR hydration */
+  initialData?: InfiniteData<ListThreadsResponse, string | undefined>;
 };
 
 /**
@@ -48,7 +52,7 @@ type UseThreadsQueryOptions = {
  */
 export function useThreadsQuery(options?: UseThreadsQueryOptions) {
   const { isAuthenticated } = useAuthCheck();
-  const { search, projectId, enabled: explicitEnabled } = options ?? {};
+  const { search, projectId, enabled: explicitEnabled, initialData } = options ?? {};
 
   return useInfiniteQuery({
     // ✅ QUERY KEY: Include all dependencies for proper cache separation
@@ -78,7 +82,8 @@ export function useThreadsQuery(options?: UseThreadsQueryOptions) {
       return lastPage.data.pagination.nextCursor;
     },
     enabled: explicitEnabled !== undefined ? explicitEnabled : isAuthenticated,
-    staleTime: STALE_TIMES.threads, // 30 seconds - match server-side prefetch
+    staleTime: initialData ? 10_000 : STALE_TIMES.threads, // 30 seconds - match server-side prefetch
+    initialData,
     retry: false,
     throwOnError: false,
   });

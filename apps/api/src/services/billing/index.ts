@@ -7,6 +7,7 @@
 
 export * from './credit.service';
 export * from './product-logic.service';
+export * from './storage-billing.service';
 export * from './stripe-kv-cache';
 export * from './stripe-sync-schemas';
 export * from './stripe-sync.service';

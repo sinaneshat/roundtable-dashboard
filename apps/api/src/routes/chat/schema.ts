@@ -27,6 +27,7 @@ import {
   WebSearchTimeRangeSchema,
   WebSearchTopicSchema,
 } from '@roundtable/shared/enums';
+import type { ExecutionContext } from 'hono';
 
 import { STRING_LIMITS } from '@/constants';
 import { CursorPaginationQuerySchema } from '@/core/pagination';
@@ -55,6 +56,7 @@ import {
 } from '@/db/validation/chat';
 import { ChatParticipantSchema } from '@/lib/schemas/participant-schemas';
 import { RoundNumberSchema } from '@/lib/schemas/round-schemas';
+import type { ApiEnv } from '@/types';
 import { StreamStateSchema } from '@/types/streaming';
 
 export const MessageContentSchema = z.string()
@@ -987,6 +989,46 @@ export const ModeratorPromptConfigSchema = z.object({
 
 export type ModeratorPromptConfig = z.infer<typeof ModeratorPromptConfigSchema>;
 
+export const ModeratorProjectContextSchema = z.object({
+  instructions: z.string().nullable().optional().openapi({
+    description: 'Project instructions to incorporate in moderator synthesis',
+  }),
+  ragContext: z.string().optional().openapi({
+    description: 'RAG context retrieved from project documents',
+  }),
+}).openapi('ModeratorProjectContext');
+
+export type ModeratorProjectContext = z.infer<typeof ModeratorProjectContextSchema>;
+
+export const ModeratorGenerationConfigSchema = ModeratorPromptConfigSchema.extend({
+  env: z.custom<ApiEnv['Bindings']>().openapi({
+    description: 'Cloudflare Workers environment bindings',
+  }),
+  messageId: z.string().openapi({
+    description: 'Unique message ID for the moderator response',
+  }),
+  threadId: z.string().openapi({
+    description: 'Thread ID being moderated',
+  }),
+  userId: z.string().openapi({
+    description: 'User ID who owns the thread',
+  }),
+  sessionId: z.string().optional().openapi({
+    description: 'Session ID for authentication',
+  }),
+  executionCtx: z.custom<ExecutionContext>().optional().openapi({
+    description: 'Cloudflare Workers execution context for waitUntil',
+  }),
+  projectContext: ModeratorProjectContextSchema.optional().openapi({
+    description: 'Project context for moderator synthesis',
+  }),
+  projectId: z.string().nullable().optional().openapi({
+    description: 'Project ID if thread is linked to a project',
+  }),
+}).openapi('ModeratorGenerationConfig');
+
+export type ModeratorGenerationConfig = z.infer<typeof ModeratorGenerationConfigSchema>;
+
 export const CouncilModeratorSectionsSchema = z.object({
   // Required sections
   summaryConclusion: z.object({
@@ -1876,3 +1918,51 @@ export const ExistingModeratorMessageSchema = z.object({
 }).openapi('ExistingModeratorMessage');
 
 export type ExistingModeratorMessage = z.infer<typeof ExistingModeratorMessageSchema>;
+
+// ============================================================================
+// MESSAGE ATTACHMENT SCHEMAS
+// ============================================================================
+
+export const MessageAttachmentSchema = z.object({
+  messageId: z.string().openapi({
+    description: 'ID of the message this attachment belongs to',
+  }),
+  displayOrder: z.number().int().nonnegative().openapi({
+    description: 'Display order for attachment within the message',
+  }),
+  uploadId: z.string().openapi({
+    description: 'ID of the underlying upload',
+  }),
+  filename: z.string().openapi({
+    description: 'Original filename of the uploaded file',
+  }),
+  mimeType: z.string().openapi({
+    description: 'MIME type of the file',
+  }),
+  fileSize: z.number().int().nonnegative().openapi({
+    description: 'File size in bytes',
+  }),
+}).openapi('MessageAttachment');
+
+export type MessageAttachment = z.infer<typeof MessageAttachmentSchema>;
+
+// ============================================================================
+// STREAMING ANALYSIS SCHEMAS
+// ============================================================================
+
+export const PartialAnalysisConfigSchema = z.object({
+  participants: z.array(z.object({
+    modelId: z.string().optional(),
+    role: z.string().nullable().optional(),
+  }).optional()).optional().openapi({
+    description: 'Partial participant config from streaming AI SDK response',
+  }),
+  mode: z.string().optional().openapi({
+    description: 'Partial mode from streaming AI SDK response',
+  }),
+  enableWebSearch: z.boolean().optional().openapi({
+    description: 'Partial web search flag from streaming AI SDK response',
+  }),
+}).openapi('PartialAnalysisConfig');
+
+export type PartialAnalysisConfig = z.infer<typeof PartialAnalysisConfigSchema>;

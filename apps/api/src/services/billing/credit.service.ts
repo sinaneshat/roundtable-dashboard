@@ -26,6 +26,10 @@ import * as z from 'zod';
 
 import { invalidateCreditBalanceCache } from '@/common/cache-utils';
 import { createError } from '@/common/error-handling';
+import {
+  BillingContextSchema,
+  ImageAnalysisBillingContextSchema,
+} from '@/common/schemas/billing-context';
 import type { ErrorContext } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -42,14 +46,21 @@ import {
 } from './product-logic.service';
 
 // ============================================================================
+// RE-EXPORTS FOR BACKWARDS COMPATIBILITY
+// ============================================================================
+
+export { BillingContextSchema, ImageAnalysisBillingContextSchema };
+
+// ============================================================================
 // TYPE HELPERS
 // ============================================================================
 
 /**
  * Convert getModelById result to ModelForPricing type
  * HardcodedModel has all required fields but needs type adaptation
+ * Single source of truth - use this instead of inline converters in handlers
  */
-function toModelForPricing(modelId: string): ModelForPricing | undefined {
+export function toModelForPricing(modelId: string): ModelForPricing | undefined {
   const model = getModelById(modelId);
   if (!model)
     return undefined;
@@ -177,16 +188,9 @@ const _TokenUsageSchema = z.object({
 
 export type TokenUsage = z.infer<typeof _TokenUsageSchema>;
 
-/**
- * Billing context for AI operations that deduct credits
- * ✅ ZOD-FIRST: Single source of truth for all billing context types
- */
-export const BillingContextSchema = z.object({
-  userId: z.string(),
-  threadId: z.string(),
-});
-
+// Types inferred from centralized schemas
 export type BillingContext = z.infer<typeof BillingContextSchema>;
+export type ImageAnalysisBillingContext = z.infer<typeof ImageAnalysisBillingContextSchema>;
 
 const _EnforceCreditsOptionsSchema = z.object({
   skipRoundCheck: z.boolean().optional(),
@@ -783,7 +787,12 @@ const ACTION_COST_TO_CREDIT_ACTION_MAP: Record<keyof typeof CREDIT_CONFIG.ACTION
   fileReading: CreditActions.FILE_READING,
   analysisGeneration: CreditActions.ANALYSIS_GENERATION,
   customRoleCreation: CreditActions.THREAD_CREATION,
-  autoModeAnalysis: CreditActions.ANALYSIS_GENERATION, // Uses same action type for tracking
+  autoModeAnalysis: CreditActions.ANALYSIS_GENERATION,
+  // Project feature billing
+  memoryExtraction: CreditActions.MEMORY_EXTRACTION,
+  ragQuery: CreditActions.RAG_QUERY,
+  projectFileLink: CreditActions.PROJECT_FILE_LINK,
+  projectStoragePer10MB: CreditActions.PROJECT_STORAGE,
 } as const;
 
 export async function deductCreditsForAction(

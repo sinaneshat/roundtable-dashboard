@@ -1,6 +1,6 @@
 import type { ProjectColor, ProjectIcon } from '@roundtable/shared';
 import { DEFAULT_PROJECT_COLOR, DEFAULT_PROJECT_ICON, PROJECT_LIMITS } from '@roundtable/shared';
-import { Link, useLocation } from '@tanstack/react-router';
+import { Link, useRouterState } from '@tanstack/react-router';
 import { memo, useCallback, useState } from 'react';
 
 import { ChatDeleteDialog } from '@/components/chat/chat-delete-dialog';
@@ -55,13 +55,15 @@ function ProjectThreadItem({
   projectId,
   onShare,
 }: {
-  thread: { id: string; title: string; slug: string };
+  thread: { id: string; title: string; slug: string; previousSlug?: string | null };
   projectId: string;
   onShare?: (thread: { id: string; slug: string }) => void;
 }) {
   const t = useTranslations();
-  const { pathname } = useLocation();
-  const isActive = pathname === `/chat/projects/${projectId}/${thread.slug}` || pathname === `/chat/${thread.slug}`;
+  const pathname = useRouterState({ select: s => s.location.pathname });
+  const slugMatches = (slug: string | null | undefined) =>
+    !!slug && (pathname === `/chat/projects/${projectId}/${slug}` || pathname === `/chat/${slug}`);
+  const isActive = slugMatches(thread.slug) || slugMatches(thread.previousSlug);
   const [isEditing, setIsEditing] = useState(false);
   const [threadToDelete, setThreadToDelete] = useState<typeof thread | null>(null);
 
@@ -150,12 +152,12 @@ function ProjectListItemComponent({
   onNewThread,
 }: ProjectListItemProps) {
   const t = useTranslations();
-  const { pathname } = useLocation();
+  const pathname = useRouterState({ select: s => s.location.pathname });
   const isActive = pathname.includes(`/projects/${project.id}`);
 
   const { data: threadsData, isLoading: isLoadingThreads } = useProjectThreadsQuery(
     project.id,
-    isExpanded,
+    { enabled: isExpanded },
   );
 
   const threads = threadsData?.pages.flatMap(page =>
@@ -273,6 +275,7 @@ function ProjectListItemComponent({
                           id: thread.id,
                           title: thread.title,
                           slug: thread.slug,
+                          previousSlug: thread.previousSlug,
                         }}
                         projectId={project.id}
                       />
