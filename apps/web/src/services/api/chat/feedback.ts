@@ -5,10 +5,8 @@
  * All types automatically inferred from backend Hono routes
  */
 
-import type { FeedbackType } from '@roundtable/shared';
 import type { InferRequestType, InferResponseType } from 'hono/client';
 import { parseResponse } from 'hono/client';
-import { z } from 'zod';
 
 import type { ApiClientType } from '@/lib/api/client';
 import { createApiClient } from '@/lib/api/client';
@@ -25,12 +23,26 @@ type GetThreadFeedbackEndpoint = ApiClientType['chat']['threads'][':id']['feedba
 export type GetThreadFeedbackRequest = InferRequestType<GetThreadFeedbackEndpoint>;
 export type GetThreadFeedbackResponse = InferResponseType<GetThreadFeedbackEndpoint, 200>;
 
-// Schema-based type for RoundFeedbackData (matches API response item structure)
-export const RoundFeedbackDataSchema = z.object({
-  roundNumber: z.number(),
-  feedbackType: z.custom<FeedbackType>(),
-});
-export type RoundFeedbackData = z.infer<typeof RoundFeedbackDataSchema>;
+// ============================================================================
+// Derived Types - RPC Inference (SINGLE SOURCE OF TRUTH)
+// ============================================================================
+
+/**
+ * Success response extracted from GetThreadFeedbackResponse
+ */
+type FeedbackSuccessResponse = Extract<GetThreadFeedbackResponse, { success: true }>;
+
+/**
+ * Full feedback item from API response
+ * The response data is directly an array: { success: true, data: FeedbackItem[] }
+ */
+type FeedbackItem = FeedbackSuccessResponse['data'][number];
+
+/**
+ * RoundFeedbackData - Minimal feedback data (roundNumber + feedbackType)
+ * Derived from RPC response for type consistency
+ */
+export type RoundFeedbackData = Pick<FeedbackItem, 'roundNumber' | 'feedbackType'>;
 
 // ============================================================================
 // Service Functions

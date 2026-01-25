@@ -1,18 +1,13 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { memo } from 'react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/forms';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTranslations } from '@/lib/i18n';
-
-const customRoleSchema = z.object({
-  roleName: z.string().min(1).max(100),
-});
-
-type CustomRoleFormValues = z.infer<typeof customRoleSchema>;
+import type { CustomRoleFormValues } from '@/lib/schemas/forms';
+import { CustomRoleFormSchema } from '@/lib/schemas/forms';
 
 type CustomRoleFormProps = {
   onSubmit: (roleName: string) => Promise<void>;
@@ -28,7 +23,7 @@ export const CustomRoleForm = memo(({
   const t = useTranslations();
 
   const form = useForm<CustomRoleFormValues>({
-    resolver: zodResolver(customRoleSchema),
+    resolver: zodResolver(CustomRoleFormSchema),
     defaultValues: { roleName: '' },
   });
 

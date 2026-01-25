@@ -6,15 +6,24 @@
  * 2. NO .passthrough() - only explicitly defined fields allowed
  * 3. NO .nullable() on schemas - use explicit null types for optional fields
  * 4. User messages have minimal required metadata (only roundNumber)
+ *
+ * Re-exports shared schemas where applicable.
+ * Web-specific schemas remain here for UI streaming state.
  */
 
+import type {
+  PreSearchResult as SharedPreSearchResult,
+  WebSearchResultItem,
+} from '@roundtable/shared';
 import {
   ErrorTypeSchema,
   FinishReasonSchema,
   MessageRoles,
   PreSearchQueryStateStatusSchema,
-  WebSearchContentTypeSchema,
+  // Re-export shared pre-search schemas
+  PreSearchResultSchema as SharedPreSearchResultSchema,
   WebSearchDepthSchema,
+  WebSearchResultItemSchema,
 } from '@roundtable/shared';
 import { z } from 'zod';
 
@@ -25,7 +34,17 @@ import {
 } from '@/services/api';
 
 // ============================================================================
-// Pre-search query metadata
+// Re-export shared schemas for convenience
+// ============================================================================
+
+// Full pre-search result from shared (includes all fields)
+export { SharedPreSearchResultSchema as PreSearchResultSchema };
+export type { SharedPreSearchResult as PreSearchResult };
+export { WebSearchResultItemSchema as PreSearchResultItemSchema };
+export type { WebSearchResultItem as PreSearchResultItem };
+
+// ============================================================================
+// Pre-search query metadata (web-specific: omits 'total' field for UI usage)
 // ============================================================================
 
 export const PreSearchQueryMetadataSchema = z.object({
@@ -40,48 +59,14 @@ export type PreSearchQueryMetadata = z.infer<
 >;
 
 // ============================================================================
-// Individual search result item
+// Pre-Search Streaming State Schemas (Web-Specific)
 // ============================================================================
 
-export const PreSearchResultItemSchema = z.object({
-  title: z.string(),
-  url: z.string().url(),
-  content: z.string(),
-  score: z.number().min(0).max(1),
-  publishedDate: z.string().nullable().optional(),
-});
-
-export type PreSearchResultItem = z.infer<typeof PreSearchResultItemSchema>;
-
-// ============================================================================
-// Complete search result for a query
-// ============================================================================
-
-export const PreSearchResultSchema = z.object({
-  query: z.string(),
-  answer: z.string().nullable(),
-  results: z.array(PreSearchResultItemSchema),
-  responseTime: z.number(),
-});
-
-export type PreSearchResult = z.infer<typeof PreSearchResultSchema>;
-
-// ============================================================================
-// Pre-Search Streaming State Schemas
-// ============================================================================
-
-export const PreSearchResultItemSchemaEnhanced = z.object({
-  title: z.string(),
-  url: z.string().url(),
-  content: z.string(),
-  score: z.number().min(0).max(1),
-  publishedDate: z.string().nullable().optional(),
-  domain: z.string().optional(),
-  fullContent: z.string().optional(),
-  contentType: WebSearchContentTypeSchema.optional(),
-  keyPoints: z.array(z.string()).optional(),
-  wordCount: z.number().optional(),
-});
+/**
+ * Enhanced pre-search result item for UI streaming state
+ * Uses shared WebSearchResultItemSchema as base
+ */
+export const PreSearchResultItemSchemaEnhanced = WebSearchResultItemSchema;
 
 export const PreSearchQueryStateSchema = z.object({
   index: z.number().int().nonnegative(),

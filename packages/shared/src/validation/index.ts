@@ -81,17 +81,21 @@ export function ApiSuccessResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) 
 }
 
 /**
- * Standard API error response wrapper
- */
-/**
  * Error details schema - structured error context
+ * Single source of truth for error details record type
  */
-const ErrorDetailsSchema = z.record(z.string(), z.union([
+export const ErrorDetailsSchema = z.record(z.string(), z.union([
   z.string(),
   z.number(),
   z.boolean(),
   z.null(),
 ]));
+
+export type ErrorDetails = z.infer<typeof ErrorDetailsSchema>;
+
+/**
+ * Standard API error response wrapper
+ */
 
 export const ApiErrorResponseSchema = z.object({
   success: z.literal(false),

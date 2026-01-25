@@ -1,17 +1,11 @@
 /**
- * Hono RPC Client for TanStack Start
+ * Hono RPC Client
  *
- * This client provides type-safe access to the backend API using Hono's RPC functionality.
- * It connects to the separate @roundtable/api worker.
+ * Type-safe API client following Hono's RPC pattern for large applications.
+ * https://hono.dev/docs/guides/rpc#split-your-application
  *
- * Type Safety:
- * - Route group types are imported from @roundtable/api (dev dependency for types only)
- * - hc<RouteType>() provides end-to-end type safety per route group
- * - Service functions use InferRequestType/InferResponseType from hono/client
- *
- * Architecture:
- * Due to TypeScript's TS7056 limit on type serialization, we use separate clients
- * for each route group. This is the recommended pattern from Hono docs for large APIs.
+ * Due to TypeScript TS7056 limits, we can't use a single intersection type.
+ * Instead, we create individual typed clients that share the same base URL.
  */
 
 import type {
@@ -31,251 +25,178 @@ import { hc } from 'hono/client';
 import { getApiBaseUrl } from '@/lib/config/base-urls';
 
 // ============================================================================
-// Type Definitions - Per Route Group
+// Types
 // ============================================================================
 
-/** Health & Auth routes client type */
-export type HealthAuthClientType = ReturnType<typeof hc<HealthAuthRoutesType>>;
-
-/** Billing routes client type */
-export type BillingClientType = ReturnType<typeof hc<BillingRoutesType>>;
-
-/** Chat thread routes client type */
-export type ChatThreadClientType = ReturnType<typeof hc<ChatThreadRoutesType>>;
-
-/** Chat message routes client type */
-export type ChatMessageClientType = ReturnType<typeof hc<ChatMessageRoutesType>>;
-
-/** Chat feature routes client type */
-export type ChatFeatureClientType = ReturnType<typeof hc<ChatFeatureRoutesType>>;
-
-/** Project routes client type */
-export type ProjectClientType = ReturnType<typeof hc<ProjectRoutesType>>;
-
-/** Admin routes client type */
-export type AdminClientType = ReturnType<typeof hc<AdminRoutesType>>;
-
-/** Utility routes client type */
-export type UtilityClientType = ReturnType<typeof hc<UtilityRoutesType>>;
-
-/** Upload routes client type */
-export type UploadClientType = ReturnType<typeof hc<UploadRoutesType>>;
-
-/** Test routes client type */
-export type TestClientType = ReturnType<typeof hc<TestRoutesType>>;
-
-/**
- * Combined API client type - Union of all route group clients
- *
- * This provides access to all routes through a single client interface.
- * The intersection combines route paths from all groups.
- */
-export type ApiClientType
-  = & HealthAuthClientType
-    & BillingClientType
-    & ChatThreadClientType
-    & ChatMessageClientType
-    & ChatFeatureClientType
-    & ProjectClientType
-    & AdminClientType
-    & UtilityClientType
-    & UploadClientType
-    & TestClientType;
-
-// ============================================================================
-// Client Options Type
-// ============================================================================
-
-type ClientOptions = {
-  bypassCache?: boolean;
+export type ClientOptions = {
   cookieHeader?: string;
   signal?: AbortSignal;
+  bypassCache?: boolean;
 };
 
+// Individual client types for each route group
+type HealthAuthClient = ReturnType<typeof hc<HealthAuthRoutesType>>;
+type BillingClient = ReturnType<typeof hc<BillingRoutesType>>;
+type ChatThreadClient = ReturnType<typeof hc<ChatThreadRoutesType>>;
+type ChatMessageClient = ReturnType<typeof hc<ChatMessageRoutesType>>;
+type ChatFeatureClient = ReturnType<typeof hc<ChatFeatureRoutesType>>;
+type ProjectClient = ReturnType<typeof hc<ProjectRoutesType>>;
+type AdminClient = ReturnType<typeof hc<AdminRoutesType>>;
+type UtilityClient = ReturnType<typeof hc<UtilityRoutesType>>;
+type UploadClient = ReturnType<typeof hc<UploadRoutesType>>;
+type TestClient = ReturnType<typeof hc<TestRoutesType>>;
+
+/**
+ * Combined API client type - intersection of all route group clients
+ * Used for type inference in service files
+ */
+export type ApiClientType
+  = HealthAuthClient
+    & BillingClient
+    & ChatThreadClient
+    & ChatMessageClient
+    & ChatFeatureClient
+    & ProjectClient
+    & AdminClient
+    & UtilityClient
+    & UploadClient
+    & TestClient;
+
 // ============================================================================
-// Internal Client Factory
+// Client Factory
 // ============================================================================
 
-function createFetch(options?: ClientOptions): typeof fetch {
-  return (input, init) => {
-    return fetch(input, {
+// Cache for client instances per config
+const clientCache = new WeakMap<object, ApiClientType>();
+const defaultKey = {};
+
+/**
+ * Create type-safe API client
+ *
+ * Creates typed clients for each route group and merges them via Proxy.
+ * Hono's hc() returns Proxy objects - we need a meta-proxy to delegate.
+ */
+export function createApiClient(options?: ClientOptions): ApiClientType {
+  // Use cached client for default options
+  const cacheKey = options ?? defaultKey;
+  const cached = !options ? clientCache.get(cacheKey) : undefined;
+  if (cached) {
+    return cached;
+  }
+
+  const baseUrl = getApiBaseUrl();
+  const config = {
+    headers: buildHeaders(options),
+    fetch: buildFetch(options),
+  };
+
+  // Create typed clients for each route group
+  const clients = {
+    healthAuth: hc<HealthAuthRoutesType>(baseUrl, config),
+    billing: hc<BillingRoutesType>(baseUrl, config),
+    chatThread: hc<ChatThreadRoutesType>(baseUrl, config),
+    chatMessage: hc<ChatMessageRoutesType>(baseUrl, config),
+    chatFeature: hc<ChatFeatureRoutesType>(baseUrl, config),
+    project: hc<ProjectRoutesType>(baseUrl, config),
+    admin: hc<AdminRoutesType>(baseUrl, config),
+    utility: hc<UtilityRoutesType>(baseUrl, config),
+    upload: hc<UploadRoutesType>(baseUrl, config),
+    test: hc<TestRoutesType>(baseUrl, config),
+  };
+
+  // Route namespace to client mapping
+  const namespaceMap: Record<string, keyof typeof clients> = {
+    health: 'healthAuth',
+    system: 'healthAuth',
+    og: 'healthAuth',
+    auth: 'healthAuth',
+    billing: 'billing',
+    chat: 'chatThread', // Primary, will check others too
+    projects: 'project',
+    admin: 'admin',
+    usage: 'utility',
+    credits: 'utility',
+    models: 'utility',
+    mcp: 'utility',
+    uploads: 'upload',
+    test: 'test',
+  };
+
+  // Chat namespace needs special handling (spans 3 clients)
+  const chatClients = [clients.chatThread, clients.chatMessage, clients.chatFeature];
+
+  const proxy = new Proxy({} as ApiClientType, {
+    get(_, prop: string) {
+      // Handle chat namespace - try all chat clients
+      if (prop === 'chat') {
+        return new Proxy({}, {
+          get(_, chatProp: string) {
+            for (const client of chatClients) {
+              const chatNs = (client as Record<string, unknown>).chat as Record<string, unknown> | undefined;
+              if (chatNs?.[chatProp] !== undefined) {
+                return chatNs[chatProp];
+              }
+            }
+            return undefined;
+          },
+        });
+      }
+
+      // Direct namespace mapping
+      const clientKey = namespaceMap[prop];
+      if (clientKey) {
+        return (clients[clientKey] as Record<string, unknown>)[prop];
+      }
+
+      // Fallback: search all clients
+      for (const client of Object.values(clients)) {
+        const val = (client as Record<string, unknown>)[prop];
+        if (val !== undefined)
+          return val;
+      }
+
+      return undefined;
+    },
+  });
+
+  if (!options) {
+    clientCache.set(cacheKey, proxy);
+  }
+
+  return proxy;
+}
+
+export const createPublicApiClient = createApiClient;
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+function buildHeaders(options?: ClientOptions): Record<string, string> {
+  const headers: Record<string, string> = { Accept: 'application/json' };
+  if (options?.cookieHeader)
+    headers.Cookie = options.cookieHeader;
+  if (options?.bypassCache) {
+    headers['Cache-Control'] = 'no-cache';
+    headers.Pragma = 'no-cache';
+  }
+  return headers;
+}
+
+function buildFetch(options?: ClientOptions): typeof fetch {
+  return (input, init) =>
+    fetch(input, {
       ...init,
       credentials: 'include',
       ...(options?.bypassCache && { cache: 'no-cache' as RequestCache }),
       ...(options?.signal && { signal: options.signal }),
     });
-  };
-}
-
-function createHeaders(options?: ClientOptions): Record<string, string> {
-  const headers: Record<string, string> = {
-    Accept: 'application/json',
-  };
-
-  if (options?.bypassCache) {
-    headers['Cache-Control'] = 'no-cache';
-    headers.Pragma = 'no-cache';
-  }
-
-  if (options?.cookieHeader) {
-    headers.Cookie = options.cookieHeader;
-  }
-
-  return headers;
 }
 
 // ============================================================================
-// Per-Group Client Factories
+// Non-RPC Fetch (multipart/binary)
 // ============================================================================
 
-/** Create health/auth routes client */
-export function createHealthAuthClient(options?: ClientOptions): HealthAuthClientType {
-  return hc<HealthAuthRoutesType>(getApiBaseUrl(), {
-    headers: createHeaders(options),
-    fetch: createFetch(options),
-  });
-}
-
-/** Create billing routes client */
-export function createBillingClient(options?: ClientOptions): BillingClientType {
-  return hc<BillingRoutesType>(getApiBaseUrl(), {
-    headers: createHeaders(options),
-    fetch: createFetch(options),
-  });
-}
-
-/** Create chat thread routes client */
-export function createChatThreadClient(options?: ClientOptions): ChatThreadClientType {
-  return hc<ChatThreadRoutesType>(getApiBaseUrl(), {
-    headers: createHeaders(options),
-    fetch: createFetch(options),
-  });
-}
-
-/** Create chat message routes client */
-export function createChatMessageClient(options?: ClientOptions): ChatMessageClientType {
-  return hc<ChatMessageRoutesType>(getApiBaseUrl(), {
-    headers: createHeaders(options),
-    fetch: createFetch(options),
-  });
-}
-
-/** Create chat feature routes client */
-export function createChatFeatureClient(options?: ClientOptions): ChatFeatureClientType {
-  return hc<ChatFeatureRoutesType>(getApiBaseUrl(), {
-    headers: createHeaders(options),
-    fetch: createFetch(options),
-  });
-}
-
-/** Create project routes client */
-export function createProjectClient(options?: ClientOptions): ProjectClientType {
-  return hc<ProjectRoutesType>(getApiBaseUrl(), {
-    headers: createHeaders(options),
-    fetch: createFetch(options),
-  });
-}
-
-/** Create admin routes client */
-export function createAdminClient(options?: ClientOptions): AdminClientType {
-  return hc<AdminRoutesType>(getApiBaseUrl(), {
-    headers: createHeaders(options),
-    fetch: createFetch(options),
-  });
-}
-
-/** Create utility routes client */
-export function createUtilityClient(options?: ClientOptions): UtilityClientType {
-  return hc<UtilityRoutesType>(getApiBaseUrl(), {
-    headers: createHeaders(options),
-    fetch: createFetch(options),
-  });
-}
-
-/** Create upload routes client */
-export function createUploadClient(options?: ClientOptions): UploadClientType {
-  return hc<UploadRoutesType>(getApiBaseUrl(), {
-    headers: createHeaders(options),
-    fetch: createFetch(options),
-  });
-}
-
-/** Create test routes client */
-export function createTestClient(options?: ClientOptions): TestClientType {
-  return hc<TestRoutesType>(getApiBaseUrl(), {
-    headers: createHeaders(options),
-    fetch: createFetch(options),
-  });
-}
-
-// ============================================================================
-// Combined Client Factory
-//
-// Returns an object with all route clients merged. Services access
-// routes through this unified interface.
-// ============================================================================
-
-/**
- * Create a combined API client with all route groups
- *
- * Provides type-safe access to all routes through a single client.
- * Internally creates separate typed clients and merges them.
- *
- * @param options - Client options
- * @returns Combined client with access to all routes
- */
-export function createApiClient(options?: ClientOptions): ApiClientType {
-  const baseUrl = getApiBaseUrl();
-  const clientOptions = {
-    headers: createHeaders(options),
-    fetch: createFetch(options),
-  };
-
-  // Create all clients and merge them
-  // The types are combined via intersection, routes are accessed on same base URL
-  const healthAuth = hc<HealthAuthRoutesType>(baseUrl, clientOptions);
-  const billing = hc<BillingRoutesType>(baseUrl, clientOptions);
-  const chatThread = hc<ChatThreadRoutesType>(baseUrl, clientOptions);
-  const chatMessage = hc<ChatMessageRoutesType>(baseUrl, clientOptions);
-  const chatFeature = hc<ChatFeatureRoutesType>(baseUrl, clientOptions);
-  const project = hc<ProjectRoutesType>(baseUrl, clientOptions);
-  const admin = hc<AdminRoutesType>(baseUrl, clientOptions);
-  const utility = hc<UtilityRoutesType>(baseUrl, clientOptions);
-  const upload = hc<UploadRoutesType>(baseUrl, clientOptions);
-  const test = hc<TestRoutesType>(baseUrl, clientOptions);
-
-  // Merge all clients into one object
-  // TypeScript will see this as the intersection type
-  return {
-    ...healthAuth,
-    ...billing,
-    ...chatThread,
-    ...chatMessage,
-    ...chatFeature,
-    ...project,
-    ...admin,
-    ...utility,
-    ...upload,
-    ...test,
-  } as ApiClientType;
-}
-
-/**
- * Create a public API client without authentication
- *
- * For public endpoints that don't require authentication.
- */
-export function createPublicApiClient(): ApiClientType {
-  return createApiClient();
-}
-
-// ============================================================================
-// Authenticated Fetch Utility - For non-RPC requests (multipart, binary)
-// ============================================================================
-
-/**
- * Service fetch error with structured information
- */
 export class ServiceFetchError extends Error {
   constructor(
     message: string,
@@ -287,60 +208,29 @@ export class ServiceFetchError extends Error {
   }
 }
 
-/**
- * Authenticated fetch for non-RPC requests
- *
- * Use this for special cases where Hono RPC client doesn't work:
- * - multipart/form-data uploads
- * - application/octet-stream binary uploads
- *
- * @param path - API path (e.g., '/uploads/ticket/upload')
- * @param init - Fetch init options (method, body, headers)
- * @returns Response object
- * @throws ServiceFetchError if response is not ok
- */
 export async function authenticatedFetch(
   path: string,
   init: RequestInit & { searchParams?: Record<string, string> },
 ): Promise<Response> {
   const baseUrl = getApiBaseUrl();
-  const isRelativeUrl = baseUrl.startsWith('/');
-  const fullBaseUrl = isRelativeUrl && typeof window !== 'undefined'
+  const fullBaseUrl = baseUrl.startsWith('/') && typeof window !== 'undefined'
     ? `${window.location.origin}${baseUrl}`
     : baseUrl;
+
   const url = new URL(`${fullBaseUrl}${path}`);
-
-  // Add search params if provided
   if (init.searchParams) {
-    for (const [key, value] of Object.entries(init.searchParams)) {
-      url.searchParams.set(key, value);
-    }
+    Object.entries(init.searchParams).forEach(([k, v]) => url.searchParams.set(k, v));
   }
 
-  const response = await fetch(url.toString(), {
-    ...init,
-    credentials: 'include',
-  });
-
+  const response = await fetch(url.toString(), { ...init, credentials: 'include' });
   if (!response.ok) {
-    throw new ServiceFetchError(
-      `Request failed: ${response.statusText}`,
-      response.status,
-      response.statusText,
-    );
+    throw new ServiceFetchError(`Request failed: ${response.statusText}`, response.status, response.statusText);
   }
-
   return response;
 }
 
 // ============================================================================
-// Singleton Client Instance
+// Default Instance
 // ============================================================================
 
-/**
- * Default API client instance
- *
- * Use this for most API calls. Create a new client with createApiClient()
- * if you need custom options like cache bypassing.
- */
 export const apiClient = createApiClient();

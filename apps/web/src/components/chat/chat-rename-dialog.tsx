@@ -1,20 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod';
-import { ComponentVariants, STRING_LIMITS } from '@roundtable/shared';
+import { ComponentVariants } from '@roundtable/shared';
 import { useCallback, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 
 import { FormProvider, RHFTextField } from '@/components/forms';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { useUpdateThreadMutation } from '@/hooks';
 import { useTranslations } from '@/lib/i18n';
-
-const RenameFormSchema = z.object({
-  title: z.string().min(STRING_LIMITS.TITLE_MIN).max(STRING_LIMITS.TITLE_MAX).transform(val => val.trim()),
-});
-
-type RenameFormValues = z.infer<typeof RenameFormSchema>;
+import type { ChatRenameFormValues } from '@/lib/schemas/forms';
+import { ChatRenameFormSchema } from '@/lib/schemas/forms';
 
 type ChatRenameDialogProps = {
   open: boolean;
@@ -32,8 +27,8 @@ export function ChatRenameDialog({
   const t = useTranslations();
   const updateThreadMutation = useUpdateThreadMutation();
 
-  const methods = useForm<RenameFormValues>({
-    resolver: zodResolver(RenameFormSchema),
+  const methods = useForm<ChatRenameFormValues>({
+    resolver: zodResolver(ChatRenameFormSchema),
     defaultValues: { title: currentTitle },
     mode: 'onChange',
   });
@@ -51,7 +46,7 @@ export function ChatRenameDialog({
   }, [open, currentTitle, reset]);
 
   const onSubmit = useCallback(
-    (values: RenameFormValues) => {
+    (values: ChatRenameFormValues) => {
       const trimmedTitle = values.title.trim();
 
       if (trimmedTitle && trimmedTitle !== currentTitle) {
@@ -91,7 +86,7 @@ export function ChatRenameDialog({
 
         <FormProvider methods={methods} onSubmit={handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
           <DialogBody>
-            <RHFTextField<RenameFormValues>
+            <RHFTextField<ChatRenameFormValues>
               name="title"
               placeholder={t('chat.rename')}
               disabled={isPending}

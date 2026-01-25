@@ -6,28 +6,34 @@
  */
 
 import type { Context } from 'hono';
+import { z } from 'zod';
 
 import type { ApiEnv } from '@/types';
 
 const SITEVERIFY_URL = 'https://challenges.cloudflare.com/turnstile/v0/siteverify';
 
-export type TurnstileValidationResult = {
-  'success': boolean;
-  'challenge_ts'?: string;
-  'hostname'?: string;
-  'action'?: string;
-  'cdata'?: string;
-  'error-codes'?: string[];
-  'metadata'?: {
-    ephemeral_id?: string;
-  };
-};
+// Internal schemas with .strict() for Cloudflare Turnstile API responses
+const _TurnstileValidationResultSchema = z.object({
+  'success': z.boolean(),
+  'challenge_ts': z.string().optional(),
+  'hostname': z.string().optional(),
+  'action': z.string().optional(),
+  'cdata': z.string().optional(),
+  'error-codes': z.array(z.string()).optional(),
+  'metadata': z.object({
+    ephemeral_id: z.string().optional(),
+  }).strict().optional(),
+}).strict();
 
-export type TurnstileValidationOptions = {
-  expectedAction?: string;
-  expectedHostname?: string;
-  timeout?: number;
-};
+export type TurnstileValidationResult = z.infer<typeof _TurnstileValidationResultSchema>;
+
+const _TurnstileValidationOptionsSchema = z.object({
+  expectedAction: z.string().optional(),
+  expectedHostname: z.string().optional(),
+  timeout: z.number().optional(),
+}).strict();
+
+export type TurnstileValidationOptions = z.infer<typeof _TurnstileValidationOptionsSchema>;
 
 /**
  * Validate a Turnstile token against Cloudflare's Siteverify API

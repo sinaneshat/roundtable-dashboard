@@ -10,26 +10,18 @@
 
 import { z } from '@hono/zod-openapi';
 
+import { ErrorDetailsSchema } from '../validation';
+
 // ============================================================================
 // API ERROR RESPONSE
 // ============================================================================
-
-/**
- * Error details schema - structured error context
- */
-const ApiErrorDetailsSchema = z.record(z.string(), z.union([
-  z.string(),
-  z.number(),
-  z.boolean(),
-  z.null(),
-]));
 
 export const ApiErrorSchema = z.object({
   success: z.literal(false),
   error: z.object({
     message: z.string(),
     code: z.string().optional(),
-    details: ApiErrorDetailsSchema.optional(),
+    details: ErrorDetailsSchema.optional(),
   }).strict(),
 }).strict().openapi({
   description: 'API error response',

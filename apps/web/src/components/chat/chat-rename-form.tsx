@@ -1,20 +1,15 @@
 import { zodResolver } from '@hookform/resolvers/zod';
 import { memo, useEffect, useRef } from 'react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 
 import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/forms';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { useTranslations } from '@/lib/i18n';
+import type { ChatRenameFormValues } from '@/lib/schemas/forms';
+import { ChatRenameFormSchema } from '@/lib/schemas/forms';
 import { cn } from '@/lib/ui/cn';
-
-const RenameFormSchema = z.object({
-  title: z.string().min(1).max(255),
-});
-
-type RenameFormValues = z.infer<typeof RenameFormSchema>;
 
 type ChatRenameFormProps = {
   initialTitle: string;
@@ -34,8 +29,8 @@ export const ChatRenameForm = memo(({
   const t = useTranslations();
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const form = useForm<RenameFormValues>({
-    resolver: zodResolver(RenameFormSchema),
+  const form = useForm<ChatRenameFormValues>({
+    resolver: zodResolver(ChatRenameFormSchema),
     defaultValues: { title: initialTitle },
     mode: 'onChange',
   });
