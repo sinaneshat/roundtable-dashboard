@@ -22,6 +22,9 @@ apps/api/dist-test/
 packages/shared/dist/
 .output/
 
+# Remotion video outputs
+apps/web/out/
+
 # TanStack Start cache
 apps/web/.tanstack/
 
