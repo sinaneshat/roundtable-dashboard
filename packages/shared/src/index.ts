@@ -13,6 +13,9 @@ export * from './constants';
 // Enums - All domain enums shared between API and web
 export * from './enums';
 
+// Lib utilities
+export * from './lib';
+
 // Types (note: AppType should be imported from @roundtable/api directly)
 export * from './types';
 
