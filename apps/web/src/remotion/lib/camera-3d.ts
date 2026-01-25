@@ -33,7 +33,7 @@ export type SpringConfig = {
 // Spring Presets for Camera
 // ============================================================================
 
-export const CAMERA_SPRINGS: Record<string, SpringConfig> = {
+export const CAMERA_SPRINGS = {
   // Smooth cinematic movement
   cinematic: { damping: 200, stiffness: 100, mass: 1 },
   // Quick snap to position
@@ -42,7 +42,7 @@ export const CAMERA_SPRINGS: Record<string, SpringConfig> = {
   float: { damping: 100, stiffness: 50, mass: 2 },
   // Bouncy landing
   bounce: { damping: 15, stiffness: 200, mass: 0.8 },
-};
+} as const satisfies Record<string, SpringConfig>;
 
 // ============================================================================
 // Depth Layer Configuration
@@ -69,7 +69,7 @@ export function getCameraPosition(
   to: CameraPosition,
   startFrame: number,
   durationFrames: number,
-  springConfig: SpringConfig = CAMERA_SPRINGS.cinematic!,
+  springConfig: SpringConfig = CAMERA_SPRINGS.cinematic,
 ): CameraPosition {
   const progress = spring({
     frame: frame - startFrame,
@@ -247,7 +247,7 @@ export function createCameraPath(
   frame: number,
   fps: number,
   transitionDuration: number = 30,
-  springConfig: SpringConfig = CAMERA_SPRINGS.cinematic!,
+  springConfig: SpringConfig = CAMERA_SPRINGS.cinematic,
 ): CameraPosition {
   // Find current segment
   let fromIdx = 0;

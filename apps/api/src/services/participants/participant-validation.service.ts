@@ -1,9 +1,12 @@
 import { SUBSCRIPTION_TIER_NAMES } from '@roundtable/shared';
 import type { SubscriptionTier } from '@roundtable/shared/enums';
-import * as z from 'zod';
 
 import { createError } from '@/common/error-handling';
 import type { getDbAsync } from '@/db';
+import type {
+  ParticipantForValidation,
+  ValidateModelAccessOptions,
+} from '@/lib/schemas/participant-schemas';
 import type { ModelForPricing } from '@/services/billing';
 import {
   canAccessModelByPricing,
@@ -13,6 +16,9 @@ import {
 import { getModelById } from '@/services/models';
 
 import { getEnabledParticipantCount } from './participant-query.service';
+
+// Re-export types for consumers that import from this file
+export type { ParticipantForValidation, ValidateModelAccessOptions };
 
 // ============================================================================
 // HELPERS
@@ -38,24 +44,6 @@ function getModelForPricing(modelId: string): ModelForPricing | undefined {
     capabilities: model.capabilities,
   };
 }
-
-// ============================================================================
-// SCHEMAS
-// ============================================================================
-
-const _ParticipantForValidationSchema = z.object({
-  id: z.string(),
-  modelId: z.string(),
-  isEnabled: z.boolean().optional(),
-});
-
-export type ParticipantForValidation = z.infer<typeof _ParticipantForValidationSchema>;
-
-const _ValidateModelAccessOptionsSchema = z.object({
-  skipPricingCheck: z.boolean().optional(),
-});
-
-export type ValidateModelAccessOptions = z.infer<typeof _ValidateModelAccessOptionsSchema>;
 
 // ============================================================================
 // VALIDATION - UNIQUENESS

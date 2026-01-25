@@ -68,7 +68,6 @@ export async function selectModelsForPrompt(
     // Parse the JSON response
     const jsonMatch = result.text.match(/\{[\s\S]*\}/);
     if (!jsonMatch) {
-      console.warn('[model-selection] Failed to parse JSON, using defaults');
       return getDefaultSelection();
     }
 
@@ -81,7 +80,6 @@ export async function selectModelsForPrompt(
     );
 
     if (validModels.length < 2) {
-      console.warn('[model-selection] Not enough valid models, using defaults');
       return getDefaultSelection();
     }
 
@@ -89,8 +87,7 @@ export async function selectModelsForPrompt(
       modelIds: validModels.slice(0, 3),
       reasoning: parsed.reasoning || 'Models selected for diverse perspectives.',
     };
-  } catch (error) {
-    console.error('[model-selection] Error selecting models:', error);
+  } catch {
     return getDefaultSelection();
   }
 }

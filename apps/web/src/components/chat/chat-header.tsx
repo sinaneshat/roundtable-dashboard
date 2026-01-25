@@ -25,6 +25,7 @@ import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import { useNavigationReset } from '@/stores/chat';
 
+import type { ChatPageHeaderProps, NavigationHeaderProps, PageHeaderProps } from './chat-header.types';
 import { ChatScrollButton } from './chat-scroll-button';
 import { ChatSection } from './chat-states';
 import { ChatThreadActions } from './chat-thread-actions';
@@ -98,15 +99,6 @@ function extractSlugFromParams(params: unknown): string | null {
   return result.data.slug;
 }
 
-type NavigationHeaderProps = {
-  className?: string;
-  threadTitle?: string;
-  threadActions?: ReactNode;
-  showSidebarTrigger?: boolean;
-  showLogo?: boolean;
-  maxWidth?: boolean;
-  showScrollButton?: boolean;
-};
 function NavigationHeaderComponent({
   className,
   threadTitle: threadTitleProp,
@@ -398,15 +390,6 @@ function MinimalHeaderComponent({ className }: { className?: string } = {}) {
 }
 export const MinimalHeader = memo(MinimalHeaderComponent);
 
-type PageHeaderProps = {
-  title: string;
-  description?: string;
-  action?: ReactNode;
-  children?: ReactNode;
-  showSeparator?: boolean;
-  size?: 'sm' | 'md' | 'lg';
-  className?: string;
-};
 export function PageHeader({
   title,
   description,
@@ -451,13 +434,6 @@ export function PageHeader({
   );
 }
 
-type ChatPageHeaderProps = {
-  title: string;
-  description: string;
-  action?: ReactNode;
-  size?: 'sm' | 'md' | 'lg';
-  className?: string;
-};
 export function ChatPageHeader({
   title,
   description,

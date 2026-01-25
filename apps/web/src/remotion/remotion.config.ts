@@ -10,6 +10,9 @@ const srcDir = path.join(webRoot, 'src');
 
 Config.setEntryPoint(path.join(remotionDir, 'index.ts'));
 
+// Enable angle for WebGL/Three.js rendering
+Config.setChromiumOpenGlRenderer('angle');
+
 Config.overrideWebpackConfig((config) => {
   return enableTailwind({
     ...config,

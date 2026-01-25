@@ -105,8 +105,6 @@ export async function analyzePromptForJob(
   prompt: string,
   env: ApiEnv['Bindings'],
 ): Promise<JobPromptAnalysisResult> {
-  console.log('[prompt-analysis] Analyzing prompt for job configuration');
-
   try {
     const { generateObject } = await getAiSdk();
 
@@ -158,7 +156,6 @@ export async function analyzePromptForJob(
 
     // Ensure minimum participants
     if (validParticipants.length < MIN_PARTICIPANTS_REQUIRED) {
-      console.warn('[prompt-analysis] Insufficient valid participants, using defaults');
       return DEFAULT_JOB_CONFIG;
     }
 
@@ -172,15 +169,8 @@ export async function analyzePromptForJob(
       reasoning: `AI analysis: Selected ${validParticipants.length} models for ${validatedMode} mode. Web search: ${output.enableWebSearch ? 'enabled' : 'disabled'}.`,
     };
 
-    console.log('[prompt-analysis] Analysis complete:', {
-      models: analysisResult.modelIds,
-      mode: analysisResult.mode,
-      webSearch: analysisResult.enableWebSearch,
-    });
-
     return analysisResult;
-  } catch (error) {
-    console.error('[prompt-analysis] Analysis failed, using defaults:', error);
+  } catch {
     return DEFAULT_JOB_CONFIG;
   }
 }
@@ -197,8 +187,6 @@ export async function analyzeRoundPrompt(
   prompt: string,
   env: ApiEnv['Bindings'],
 ): Promise<{ enableWebSearch: boolean; mode: ChatMode }> {
-  console.log('[prompt-analysis] Analyzing round prompt');
-
   try {
     const { generateObject } = await getAiSdk();
 
@@ -243,17 +231,11 @@ Respond with JSON.`;
 
     const validatedMode = isValidChatMode(result.object.mode) ? result.object.mode : 'analyzing';
 
-    console.log('[prompt-analysis] Round analysis:', {
-      webSearch: result.object.enableWebSearch,
-      mode: validatedMode,
-    });
-
     return {
       enableWebSearch: result.object.enableWebSearch ?? false,
       mode: validatedMode,
     };
-  } catch (error) {
-    console.error('[prompt-analysis] Round analysis failed:', error);
+  } catch {
     return {
       enableWebSearch: false,
       mode: 'analyzing',

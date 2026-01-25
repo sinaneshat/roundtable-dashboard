@@ -1,6 +1,5 @@
 import type { AutomatedJobStatus } from '@roundtable/shared/enums';
 import { createFileRoute, Link } from '@tanstack/react-router';
-import type { LucideIcon } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import { Icons } from '@/components/icons';
@@ -15,6 +14,7 @@ import { useAdminJobsInfiniteQuery } from '@/hooks/queries';
 import { adminJobsInfiniteQueryOptions } from '@/lib/data/query-options';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
+import { getJobStatusConfig } from '@/lib/ui/job-status-config';
 import type { AutomatedJob } from '@/services/api';
 
 import { JobCreateDialog } from './-components/job-create-dialog';
@@ -38,29 +38,12 @@ export const Route = createFileRoute('/_protected/admin/jobs/')({
   component: JobsListPage,
 });
 
-type BadgeVariant = 'default' | 'secondary' | 'destructive' | 'outline';
-
-const STATUS_ICONS: Record<AutomatedJobStatus, LucideIcon> = {
-  pending: Icons.clock,
-  running: Icons.loader,
-  completed: Icons.checkCircle,
-  failed: Icons.alertCircle,
-};
-
-const STATUS_VARIANTS: Record<AutomatedJobStatus, BadgeVariant> = {
-  pending: 'outline',
-  running: 'default',
-  completed: 'secondary',
-  failed: 'destructive',
-};
-
 function JobStatusBadge({ status }: { status: AutomatedJobStatus }) {
-  const StatusIcon = STATUS_ICONS[status];
-  const variant = STATUS_VARIANTS[status];
+  const { icon: StatusIcon, variant, isAnimated } = getJobStatusConfig(status);
 
   return (
     <Badge variant={variant} className="flex items-center gap-1 shrink-0">
-      <StatusIcon className={cn('size-3', status === 'running' && 'animate-spin')} />
+      <StatusIcon className={cn('size-3', isAnimated && 'animate-spin')} />
       {status}
     </Badge>
   );

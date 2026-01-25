@@ -35,7 +35,7 @@ import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { CustomerCacheTags, PriceCacheTags, SubscriptionCacheTags, UserCacheTags } from '@/db/cache/cache-tags';
 import type { UserChatUsage } from '@/db/validation';
-import { checkFreeUserHasCompletedRound, getTierFromProductId, getUserCreditBalance, TIER_QUOTAS, upgradeToPaidPlan } from '@/services/billing';
+import { checkFreeUserHasCompletedRound, getTierFromProductId, getUserCreditBalance, MAX_MODELS_BY_TIER, TIER_QUOTAS, upgradeToPaidPlan } from '@/services/billing';
 
 import type { UsageStatsPayload } from '../../routes/usage/schema';
 
@@ -591,19 +591,14 @@ export async function syncUserQuotaFromSubscription(
 
 /**
  * Get maximum models allowed for a tier
- * ✅ CODE-DRIVEN: Returns value from TIER_QUOTAS or defaults
+ * ✅ CODE-DRIVEN: Returns value from MAX_MODELS_BY_TIER (derived from TIER_CONFIG)
  *
  * @param tier - Subscription tier
  * @param _isAnnual - Whether it's an annual subscription (default: false) - reserved for future use
  * @returns Maximum number of models allowed
  */
 export async function getMaxModels(tier: SubscriptionTier, _isAnnual = false): Promise<number> {
-  // For now, return hardcoded defaults until we add maxAiModels to TIER_QUOTAS
-  const fallbackMaxModels: Record<SubscriptionTier, number> = {
-    free: 5,
-    pro: 7,
-  };
-  return fallbackMaxModels[tier] ?? 5;
+  return MAX_MODELS_BY_TIER[tier] ?? 3;
 }
 
 /**

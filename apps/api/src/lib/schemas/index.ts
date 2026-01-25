@@ -80,9 +80,11 @@ export type {
   ParticipantConfig,
   ParticipantConfigInput,
   ParticipantContext,
+  ParticipantForValidation,
   ParticipantIndex,
   ParticipantIndexWithSentinel,
   ParticipantUpdatePayload,
+  ValidateModelAccessOptions,
 } from './participant-schemas';
 export {
   ChatParticipantSchema,
@@ -96,6 +98,8 @@ export {
   isParticipantConfigArray,
   isParticipantConfigInput,
   isParticipantContext,
+  isParticipantForValidation,
+  isParticipantForValidationArray,
   isParticipantUpdatePayload,
   MinimalParticipantSchema,
   ModelIdReferenceSchema,
@@ -105,12 +109,14 @@ export {
   ParticipantConfigInputSchema,
   ParticipantConfigSchema,
   ParticipantContextSchema,
+  ParticipantForValidationSchema,
   ParticipantIdSchema,
   ParticipantIndexSchema,
   ParticipantIndexWithSentinelSchema,
   ParticipantRoleSchema,
   ParticipantsArraySchema,
   ParticipantUpdatePayloadSchema,
+  ValidateModelAccessOptionsSchema,
 } from './participant-schemas';
 
 // Round schemas

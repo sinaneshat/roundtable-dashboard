@@ -21,6 +21,8 @@ import * as tables from '@/db';
 import type { DbAutomatedJobMetadata } from '@/db/tables/job';
 import { buildSessionAuthHeaders, getBaseUrl } from '@/lib/utils/internal-api';
 import type { ApiEnv } from '@/types';
+import type { TypedLogger } from '@/types/logger';
+import { LogHelpers } from '@/types/logger';
 import type {
   CompleteAutomatedJobQueueMessage,
   ContinueAutomatedJobQueueMessage,
@@ -28,6 +30,16 @@ import type {
 
 import { analyzePromptForJob, analyzeRoundPrompt } from './prompt-analysis.service';
 import { generateNextRoundPrompt } from './prompt-generation.service';
+
+// Module-level logger for job orchestration (set by caller)
+let logger: TypedLogger | undefined;
+
+/**
+ * Set the logger for job orchestration service
+ */
+export function setJobOrchestrationLogger(l: TypedLogger | undefined): void {
+  logger = l;
+}
 
 /**
  * Start an automated job
@@ -51,7 +63,7 @@ export async function startAutomatedJob(
   env: ApiEnv['Bindings'],
   queue: Queue,
 ): Promise<void> {
-  console.log(`[job-orchestration] Starting job ${jobId}`);
+  logger?.info(`Starting job ${jobId}`, LogHelpers.operation({ operationName: 'startAutomatedJob' }));
 
   // Load job
   const job = await db.query.automatedJob.findFirst({
@@ -59,12 +71,12 @@ export async function startAutomatedJob(
   });
 
   if (!job) {
-    console.error(`[job-orchestration] Job not found: ${jobId}`);
+    logger?.error(`Job not found: ${jobId}`, LogHelpers.operation({ operationName: 'startAutomatedJob' }));
     return;
   }
 
   if (job.status !== 'pending') {
-    console.warn(`[job-orchestration] Job ${jobId} is not pending, status: ${job.status}`);
+    logger?.warn(`Job ${jobId} is not pending, status: ${job.status}`, LogHelpers.operation({ operationName: 'startAutomatedJob', status: job.status }));
     return;
   }
 
@@ -84,11 +96,7 @@ export async function startAutomatedJob(
     // Analyze prompt to determine optimal configuration (models, mode, web search)
     const analysis = await analyzePromptForJob(job.initialPrompt, env);
 
-    console.log(`[job-orchestration] Prompt analysis for job ${jobId}:`, {
-      models: analysis.modelIds,
-      mode: analysis.mode,
-      webSearch: analysis.enableWebSearch,
-    });
+    logger?.info(`Prompt analysis for job ${jobId}`, LogHelpers.operation({ operationName: 'startAutomatedJob' }));
 
     // Call thread creation API to leverage existing credit/tier enforcement
     const baseUrl = getBaseUrl(env);
@@ -157,9 +165,9 @@ export async function startAutomatedJob(
       queuedAt: new Date().toISOString(),
     });
 
-    console.log(`[job-orchestration] Job ${jobId} started with thread ${threadId}`);
+    logger?.info(`Job ${jobId} started with thread ${threadId}`, LogHelpers.operation({ operationName: 'startAutomatedJob', threadId }));
   } catch (error) {
-    console.error(`[job-orchestration] Failed to start job ${jobId}:`, error);
+    logger?.error(`Failed to start job ${jobId}`, LogHelpers.operation({ operationName: 'startAutomatedJob', error: error instanceof Error ? error.message : 'Unknown error' }));
     await db
       .update(tables.automatedJob)
       .set({
@@ -190,14 +198,14 @@ export async function continueAutomatedJob(
   env: ApiEnv['Bindings'],
   queue: Queue,
 ): Promise<void> {
-  console.log(`[job-orchestration] Continuing job ${jobId}, round ${currentRound + 1}`);
+  logger?.info(`Continuing job ${jobId}, round ${currentRound + 1}`, LogHelpers.operation({ operationName: 'continueAutomatedJob', roundNumber: currentRound + 1 }));
 
   const job = await db.query.automatedJob.findFirst({
     where: eq(tables.automatedJob.id, jobId),
   });
 
   if (!job || job.status !== 'running') {
-    console.warn(`[job-orchestration] Job ${jobId} not running, skipping continue`);
+    logger?.warn(`Job ${jobId} not running, skipping continue`, LogHelpers.operation({ operationName: 'continueAutomatedJob' }));
     return;
   }
 
@@ -205,7 +213,7 @@ export async function continueAutomatedJob(
 
   // Check if we've completed all rounds
   if (nextRound >= job.totalRounds) {
-    console.log(`[job-orchestration] Job ${jobId} completed all ${job.totalRounds} rounds`);
+    logger?.info(`Job ${jobId} completed all ${job.totalRounds} rounds`, LogHelpers.operation({ operationName: 'continueAutomatedJob' }));
     await queue.send({
       type: RoundOrchestrationMessageTypes.COMPLETE_AUTOMATED_JOB,
       messageId: `complete-${jobId}`,
@@ -230,10 +238,7 @@ export async function continueAutomatedJob(
     // Analyze the generated prompt to determine round-specific config
     const roundConfig = await analyzeRoundPrompt(nextPrompt, env);
 
-    console.log(`[job-orchestration] Round ${nextRound} analysis:`, {
-      mode: roundConfig.mode,
-      webSearch: roundConfig.enableWebSearch,
-    });
+    logger?.info(`Round ${nextRound} analysis`, LogHelpers.operation({ operationName: 'continueAutomatedJob', roundNumber: nextRound }));
 
     // Update thread settings for this round (web search and mode)
     await db
@@ -300,9 +305,9 @@ export async function continueAutomatedJob(
       queuedAt: new Date().toISOString(),
     });
 
-    console.log(`[job-orchestration] Job ${jobId} continuing to round ${nextRound}`);
+    logger?.info(`Job ${jobId} continuing to round ${nextRound}`, LogHelpers.operation({ operationName: 'continueAutomatedJob', threadId, roundNumber: nextRound }));
   } catch (error) {
-    console.error(`[job-orchestration] Failed to continue job ${jobId}:`, error);
+    logger?.error(`Failed to continue job ${jobId}`, LogHelpers.operation({ operationName: 'continueAutomatedJob', threadId, error: error instanceof Error ? error.message : 'Unknown error' }));
     await db
       .update(tables.automatedJob)
       .set({
@@ -328,14 +333,14 @@ export async function completeAutomatedJob(
   autoPublish: boolean,
   db: Awaited<ReturnType<typeof getDbAsync>>,
 ): Promise<void> {
-  console.log(`[job-orchestration] Completing job ${jobId}`);
+  logger?.info(`Completing job ${jobId}`, LogHelpers.operation({ operationName: 'completeAutomatedJob' }));
 
   const job = await db.query.automatedJob.findFirst({
     where: eq(tables.automatedJob.id, jobId),
   });
 
   if (!job) {
-    console.warn(`[job-orchestration] Job ${jobId} not found`);
+    logger?.warn(`Job ${jobId} not found`, LogHelpers.operation({ operationName: 'completeAutomatedJob' }));
     return;
   }
 
@@ -358,12 +363,12 @@ export async function completeAutomatedJob(
         .update(tables.chatThread)
         .set({ isPublic: true, updatedAt: new Date() })
         .where(eq(tables.chatThread.id, threadId));
-      console.log(`[job-orchestration] Thread ${threadId} published`);
+      logger?.info(`Thread ${threadId} published`, LogHelpers.operation({ operationName: 'completeAutomatedJob', threadId }));
     }
 
-    console.log(`[job-orchestration] Job ${jobId} completed successfully`);
+    logger?.info(`Job ${jobId} completed successfully`, LogHelpers.operation({ operationName: 'completeAutomatedJob' }));
   } catch (error) {
-    console.error(`[job-orchestration] Failed to complete job ${jobId}:`, error);
+    logger?.error(`Failed to complete job ${jobId}`, LogHelpers.operation({ operationName: 'completeAutomatedJob', error: error instanceof Error ? error.message : 'Unknown error' }));
   }
 }
 

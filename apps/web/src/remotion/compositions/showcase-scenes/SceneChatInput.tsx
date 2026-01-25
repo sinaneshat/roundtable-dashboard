@@ -11,6 +11,8 @@
  * - Frame 170-210: Voice recording activates (RED mic, waveform)
  * - Frame 210-260: Text types in input
  * - Frame 260-300: Send button pulses, message sends
+ *
+ * Camera: Static with subtle breathing motion, simple fade transitions
  */
 
 import {
@@ -95,6 +97,14 @@ export function SceneChatInput() {
     typing: { start: 210, end: 260 },
     send: { start: 260, end: 300 },
   };
+
+  // ============================================================================
+  // CAMERA SYSTEM - SIMPLIFIED (NO 3D TILTS)
+  // ============================================================================
+
+  // ============================================================================
+  // ORIGINAL ANIMATIONS (preserved)
+  // ============================================================================
 
   // Input container animation
   const inputProgress = spring({
@@ -181,7 +191,7 @@ export function SceneChatInput() {
     ? interpolate(frame, [290, 300], [1, 0], { extrapolateRight: 'clamp' })
     : 1;
 
-  // Unified entrance zoom - same timing across all scenes
+  // Unified entrance zoom - same timing across all scenes (now includes 3D entrance)
   const entranceZoom = interpolate(
     spring({ frame, fps, config: { damping: 25, stiffness: 150 }, durationInFrames: 25 }),
     [0, 1],
@@ -201,17 +211,18 @@ export function SceneChatInput() {
         justifyContent: 'center',
         overflow: 'hidden',
         padding: SPACING.lg,
-        perspective: 1200,
         fontFamily: '\'Noto Sans\', system-ui, sans-serif',
       }}
     >
       {/* Background particles */}
       <div
         style={{
+          position: 'absolute',
+          inset: 0,
           transform: `translate(${breathingOffset.x * 0.25}px, ${breathingOffset.y * 0.25}px)`,
         }}
       >
-        <DepthParticles frame={frame} baseOpacity={0.35} count={18} />
+        <DepthParticles frame={frame} baseOpacity={0.12} count={18} />
       </div>
 
       <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
@@ -231,8 +242,14 @@ export function SceneChatInput() {
         ]}
       />
 
-      {/* Browser Frame with Chat Input */}
-      <div style={{ transform: `scale(${entranceZoom})`, transformOrigin: 'center center', opacity: exitFade }}>
+      {/* Browser Frame Container - NO 3D transforms */}
+      <div
+        style={{
+          transform: `scale(${entranceZoom})`,
+          transformOrigin: 'center center',
+          opacity: exitFade,
+        }}
+      >
         <BrowserFrame url="roundtable.ai">
           <div
             style={{
@@ -287,7 +304,7 @@ export function SceneChatInput() {
                   marginTop: -1,
                   backgroundColor: '#282828',
                   boxShadow: autoModeGlow > 0
-                    ? `0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 0 ${20 * autoModeGlow}px rgba(168, 85, 247, ${0.4 * autoModeGlow})`
+                    ? `0 10px 15px -3px rgba(0, 0, 0, 0.3), 0 0 ${20 * autoModeGlow}px rgba(255, 255, 255, ${0.15 * autoModeGlow})`
                     : '0 10px 15px -3px rgba(0, 0, 0, 0.3)',
                   display: 'flex',
                   flexDirection: 'column',
@@ -344,6 +361,7 @@ export function SceneChatInput() {
                       padding: '12px 16px',
                       borderBottom: '1px solid rgba(255, 255, 255, 0.08)',
                       overflow: 'hidden',
+                      backgroundColor: 'transparent',
                     }}
                   >
                     {DEMO_FILES.map((file, i) => {
@@ -420,6 +438,7 @@ export function SceneChatInput() {
                           fontSize: 12,
                           fontWeight: 500,
                           color: TEXT.primary,
+                          boxShadow: 'none',
                         }}
                       >
                         {/* Avatar group */}
@@ -519,7 +538,9 @@ export function SceneChatInput() {
                         display: 'flex',
                         alignItems: 'center',
                         justifyContent: 'center',
-                        boxShadow: isVoiceActive ? '0 0 20px rgba(220, 38, 38, 0.4)' : 'none',
+                        boxShadow: isVoiceActive
+                          ? '0 0 20px rgba(220, 38, 38, 0.4)'
+                          : 'none',
                       }}
                     >
                       {isVoiceActive
@@ -538,7 +559,9 @@ export function SceneChatInput() {
                         alignItems: 'center',
                         justifyContent: 'center',
                         transform: `scale(${sendPulse})`,
-                        boxShadow: isSending ? '0 0 20px rgba(255, 255, 255, 0.3)' : 'none',
+                        boxShadow: isSending
+                          ? '0 0 20px rgba(255, 255, 255, 0.3)'
+                          : 'none',
                       }}
                     >
                       <svg width={20} height={20} viewBox="0 0 24 24" fill="none" stroke={HEX_COLORS.black} strokeWidth={2.5}>

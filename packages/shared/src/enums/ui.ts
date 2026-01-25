@@ -7,6 +7,40 @@
 import { z } from '@hono/zod-openapi';
 
 // ============================================================================
+// BADGE VARIANT
+// ============================================================================
+
+// 1️⃣ ARRAY CONSTANT
+export const BADGE_VARIANTS = ['default', 'secondary', 'destructive', 'outline', 'success', 'warning', 'glass'] as const;
+
+// 2️⃣ DEFAULT VALUE
+export const DEFAULT_BADGE_VARIANT: BadgeVariant = 'default';
+
+// 3️⃣ ZOD SCHEMA
+export const BadgeVariantSchema = z.enum(BADGE_VARIANTS).openapi({
+  description: 'Badge component visual variant',
+  example: 'default',
+});
+
+// 4️⃣ TYPESCRIPT TYPE
+export type BadgeVariant = z.infer<typeof BadgeVariantSchema>;
+
+// 5️⃣ CONSTANT OBJECT
+export const BadgeVariants = {
+  DEFAULT: 'default' as const,
+  SECONDARY: 'secondary' as const,
+  DESTRUCTIVE: 'destructive' as const,
+  OUTLINE: 'outline' as const,
+  SUCCESS: 'success' as const,
+  WARNING: 'warning' as const,
+  GLASS: 'glass' as const,
+} as const;
+
+export function isValidBadgeVariant(value: unknown): value is BadgeVariant {
+  return BadgeVariantSchema.safeParse(value).success;
+}
+
+// ============================================================================
 // CARD VARIANT
 // ============================================================================
 

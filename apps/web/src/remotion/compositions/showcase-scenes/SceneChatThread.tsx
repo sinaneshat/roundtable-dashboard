@@ -10,13 +10,15 @@
  * - Frame 130-250: Claude streams first
  * - Frame 260-380: GPT-4o streams second
  * - Frame 390-510: Gemini streams third
- * - Frame 520-660: Moderator streams last (after all participants done)
- * - Frame 660+: Hold on complete thread
+ * - Frame 520-560: Moderator streams (faster duration: 90 frames)
+ * - Frame 560+: Hold on complete thread
  *
  * Key behaviors:
  * - overflow: hidden with translateY for auto-scroll (no scrollbar)
- * - Camera zoom effect on currently streaming participant
  * - Web search integrated in same scene
+ * - Basic scrolling animation
+ * - Entrance zoom (scale-based)
+ * - Exit fade
  */
 
 import type { CSSProperties } from 'react';
@@ -38,12 +40,70 @@ import {
   VideoUserMessage,
 } from '../../components/ui-replicas';
 import { TypewriterText } from '../../components/video-primitives';
-import { useCameraPan, useCinematicCamera, useFocusPull } from '../../hooks';
+import { useCinematicCamera, useFocusPull } from '../../hooks';
 import { BACKGROUNDS, FONTS, SPACING } from '../../lib/design-tokens';
 
-// Cinematic spring config
+// Spring configs
 const CINEMATIC_SPRING = { damping: 40, stiffness: 100, mass: 1.2 };
-const SMOOTH_SPRING = { damping: 30, stiffness: 80, mass: 1 };
+const SMOOTH_SPRING = { damping: 200 }; // No bounce
+
+// Camera constants - simplified, no 3D
+const INACTIVE_BLUR = 2; // Blur for non-streaming messages
+const STREAMING_SCALE = 1.02; // Slight zoom in during streaming
+
+// Simple entrance animation - scale only, no 3D transforms
+function getMessageEntrance(
+  currentFrame: number,
+  startFrame: number,
+  fps: number,
+): number {
+  const elapsed = currentFrame - startFrame;
+  if (elapsed < 0)
+    return 0;
+
+  return spring({
+    frame: elapsed,
+    fps,
+    config: SMOOTH_SPRING,
+    durationInFrames: 20,
+  });
+}
+
+// Streaming scale - zoom in when streaming, zoom back when done
+// NO pulse, just static scale
+function getStreamingScale(
+  currentFrame: number,
+  streamStart: number,
+  streamDuration: number,
+  fps: number,
+  isCurrentlyStreaming: boolean,
+): number {
+  if (!isCurrentlyStreaming) {
+    // If was streaming but now done, animate scale back to 1.0
+    const streamEnd = streamStart + streamDuration;
+    if (currentFrame >= streamEnd && currentFrame < streamEnd + 15) {
+      const exitProgress = spring({
+        frame: currentFrame - streamEnd,
+        fps,
+        config: SMOOTH_SPRING,
+        durationInFrames: 15,
+      });
+      return interpolate(exitProgress, [0, 1], [STREAMING_SCALE, 1]);
+    }
+    return 1;
+  }
+
+  // Animate scale up at start of streaming
+  const streamingElapsed = currentFrame - streamStart;
+  const zoomInProgress = spring({
+    frame: streamingElapsed,
+    fps,
+    config: SMOOTH_SPRING,
+    durationInFrames: 15,
+  });
+
+  return interpolate(zoomInProgress, [0, 1], [1, STREAMING_SCALE]);
+}
 
 // The user's question - technology focused (no SaaS)
 const USER_QUESTION = 'Compare approaches for building real-time collaborative features';
@@ -137,7 +197,7 @@ const MODERATOR_CONFIG = {
 This layered approach gives you the best of all worlds: consistency, performance, and developer experience.`,
   placeholderStart: 90,
   streamStart: 450,
-  streamDuration: 110,
+  streamDuration: 90,
 };
 
 // Timeline constants
@@ -180,16 +240,13 @@ export function SceneChatThread() {
     maxBlur: 5,
   });
 
-  // Camera pan as content scrolls (smooth follow)
-  const { y: cameraPanY } = useCameraPan({
-    segments: [
-      { frame: 0, y: 0 },
-      { frame: 150, y: -20 },
-      { frame: 280, y: -40 },
-      { frame: 420, y: -60 },
-    ],
-    transitionDuration: 60,
-  });
+  // === SCROLL OFFSET ===
+  const scrollOffset = interpolate(
+    frame,
+    [0, 80, 130, 220, 320, 420, 550],
+    [0, 0, -150, -450, -700, -950, -1300],
+    { extrapolateRight: 'clamp' },
+  );
 
   // Exit fade in last 10 frames
   const exitFade = frame > 710
@@ -218,14 +275,14 @@ export function SceneChatThread() {
     [0.96, 1],
   );
 
-  // === AUTO-SCROLL via translateY (no scrollbar) ===
-  // Content scrolls up as conversation grows beyond 750px viewport
-  const scrollOffset = interpolate(
-    frame,
-    [0, 80, 130, 220, 320, 420, 550],
-    [0, 0, -150, -450, -700, -950, -1300],
-    { extrapolateRight: 'clamp' },
-  );
+  // === DEPTH BLUR HELPER ===
+  // Returns blur amount for messages based on streaming state
+  const getMessageDepthBlur = (isStreaming: boolean): number => {
+    // Only apply blur when someone is streaming
+    if (currentStreamingIndex === -1)
+      return 0;
+    return isStreaming ? 0 : INACTIVE_BLUR;
+  };
 
   // === USER MESSAGE ===
   const userMsgProgress = spring({
@@ -265,18 +322,10 @@ export function SceneChatThread() {
       if (frame < response.placeholderStart)
         return null;
 
-      // Placeholder entrance animation
-      const placeholderProgress = spring({
-        frame: frame - response.placeholderStart,
-        fps,
-        config: CINEMATIC_SPRING,
-        durationInFrames: 20,
-      });
-
-      const placeholderOpacity = interpolate(placeholderProgress, [0, 0.5], [0, 1], {
-        extrapolateRight: 'clamp',
-      });
-      const placeholderY = interpolate(placeholderProgress, [0, 1], [30, 0]);
+      // Entrance animation - simple opacity + Y translate
+      const entranceProgress = getMessageEntrance(frame, response.placeholderStart, fps);
+      const opacity = interpolate(entranceProgress, [0, 0.5], [0, 1], { extrapolateRight: 'clamp' });
+      const translateY = interpolate(entranceProgress, [0, 1], [30, 0]);
 
       // Is showing placeholder vs streaming content?
       const isPlaceholder = frame < response.streamStart;
@@ -286,19 +335,24 @@ export function SceneChatThread() {
       // Calculate streaming progress for text
       const charsPerFrame = response.text.length / response.streamDuration;
 
-      // Zoom highlight for currently streaming participant
-      const highlightScale = isCurrentlyStreaming
-        ? interpolate(
-            spring({ frame: 5, fps, config: SMOOTH_SPRING, durationInFrames: 15 }),
-            [0, 1],
-            [1, 1.01],
-          )
-        : 1;
+      // Blur non-streaming messages when someone is streaming
+      const messageBlur = getMessageDepthBlur(isCurrentlyStreaming);
+
+      // Streaming scale - zoom in during streaming, zoom back when done (NO PULSE)
+      const scale = getStreamingScale(
+        frame,
+        response.streamStart,
+        response.streamDuration,
+        fps,
+        isCurrentlyStreaming,
+      );
 
       const wrapperStyle: CSSProperties = {
-        opacity: placeholderOpacity,
-        transform: `translateY(${placeholderY}px) scale(${highlightScale})`,
-        transformOrigin: 'top left',
+        opacity,
+        transform: `translateY(${translateY}px) scale(${scale})`,
+        transformOrigin: 'center center',
+        filter: messageBlur > 0 ? `blur(${messageBlur}px)` : undefined,
+        transition: 'filter 0.3s ease-out',
       };
 
       return (
@@ -334,17 +388,10 @@ export function SceneChatThread() {
     if (frame < MODERATOR_CONFIG.placeholderStart)
       return null;
 
-    const modPlaceholderProgress = spring({
-      frame: frame - MODERATOR_CONFIG.placeholderStart,
-      fps,
-      config: CINEMATIC_SPRING,
-      durationInFrames: 25,
-    });
-
-    const modOpacity = interpolate(modPlaceholderProgress, [0, 0.5], [0, 1], {
-      extrapolateRight: 'clamp',
-    });
-    const modY = interpolate(modPlaceholderProgress, [0, 1], [40, 0]);
+    // Entrance animation - simple opacity + Y translate
+    const entranceProgress = getMessageEntrance(frame, MODERATOR_CONFIG.placeholderStart, fps);
+    const opacity = interpolate(entranceProgress, [0, 0.5], [0, 1], { extrapolateRight: 'clamp' });
+    const translateY = interpolate(entranceProgress, [0, 1], [40, 0]);
 
     const isModPlaceholder = frame < MODERATOR_CONFIG.streamStart;
     const isModStreaming = frame >= MODERATOR_CONFIG.streamStart
@@ -353,19 +400,24 @@ export function SceneChatThread() {
 
     const modCharsPerFrame = MODERATOR_CONFIG.text.length / MODERATOR_CONFIG.streamDuration;
 
-    // Zoom highlight for moderator when streaming
-    const modHighlightScale = isModCurrentlyStreaming
-      ? interpolate(
-          spring({ frame: 5, fps, config: SMOOTH_SPRING, durationInFrames: 15 }),
-          [0, 1],
-          [1, 1.01],
-        )
-      : 1;
+    // Blur when not currently streaming
+    const modBlur = getMessageDepthBlur(isModCurrentlyStreaming);
+
+    // Streaming scale - zoom in during streaming, zoom back when done (NO PULSE)
+    const scale = getStreamingScale(
+      frame,
+      MODERATOR_CONFIG.streamStart,
+      MODERATOR_CONFIG.streamDuration,
+      fps,
+      isModCurrentlyStreaming,
+    );
 
     const modStyle: CSSProperties = {
-      opacity: modOpacity,
-      transform: `translateY(${modY}px) scale(${modHighlightScale})`,
-      transformOrigin: 'top left',
+      opacity,
+      transform: `translateY(${translateY}px) scale(${scale})`,
+      transformOrigin: 'center center',
+      filter: modBlur > 0 ? `blur(${modBlur}px)` : undefined,
+      transition: 'filter 0.3s ease-out',
     };
 
     return (
@@ -404,19 +456,20 @@ export function SceneChatThread() {
         alignItems: 'center',
         justifyContent: 'center',
         padding: SPACING.lg,
-        perspective: 1200,
-        perspectiveOrigin: 'center center',
         fontFamily: FONTS.sans,
         overflow: 'hidden', // No scrollbar
       }}
     >
-      {/* Background depth particles - with camera pan parallax */}
+      {/* Background particles - subtle parallax */}
       <div
         style={{
-          transform: `translate(${breathingOffset.x * 0.2}px, ${cameraPanY * 0.1 + breathingOffset.y * 0.2}px)`,
+          position: 'absolute',
+          inset: 0,
+          transform: `translate(${breathingOffset.x * 0.15}px, ${breathingOffset.y * 0.15}px)`,
+          pointerEvents: 'none',
         }}
       >
-        <DepthParticles frame={frame} baseOpacity={0.35} count={20} />
+        <DepthParticles frame={frame} baseOpacity={0.12} count={20} />
       </div>
 
       {/* Edge vignette */}
@@ -434,7 +487,7 @@ export function SceneChatThread() {
         ]}
       />
 
-      {/* Browser Frame with Messages Container */}
+      {/* Browser Frame with Messages Container - NO 3D TILT */}
       <div
         style={{
           transform: `scale(${entranceZoom})`,
@@ -497,7 +550,7 @@ export function SceneChatThread() {
                 </div>
               )}
 
-              {/* ALL participants in a sub-container with space-y-4 (16px) */}
+              {/* ALL participants */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 {renderParticipants()}
               </div>

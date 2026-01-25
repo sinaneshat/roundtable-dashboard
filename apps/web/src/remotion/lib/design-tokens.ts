@@ -4,17 +4,17 @@
  * Plus video-specific additions for 1920x1080 compositions
  */
 
-import { BRAND } from '@/constants/brand';
+import { BRAND } from '../../constants/brand';
 
 // Re-export brand for use in compositions
 export { BRAND };
 
-// Background colors (video-optimized dark theme using OKLCH)
+// Background colors (video-optimized dark theme using hex for Remotion compatibility)
 export const BACKGROUNDS = {
-  primary: 'oklch(0.18 0 0)', // --background
-  secondary: 'oklch(0.22 0 0)', // --card
-  card: 'oklch(0.269 0 0)', // --muted
-  elevated: 'oklch(0.3 0 0)', // slightly lighter for elevated elements
+  primary: '#1a1a1a', // oklch(0.18 0 0) - neutral dark gray
+  secondary: '#282828', // oklch(0.22 0 0) - card background
+  card: '#3a3a3a', // oklch(0.269 0 0) - muted
+  elevated: '#444444', // oklch(0.3 0 0) - slightly lighter for elevated elements
 } as const;
 
 // Dark theme colors from globals.css (OKLCH values)
@@ -37,8 +37,6 @@ export const COLORS = {
   ring: 'oklch(0.65 0 0)', // --ring
   // Feature-specific colors
   blue500: '#3b82f6', // Voice recording theme
-  purple500: '#a855f7', // Auto mode gradient
-  purpleGradient: 'linear-gradient(to right, rgba(139, 92, 246, 0.2), rgba(168, 85, 247, 0.2), rgba(217, 70, 239, 0.2))',
 } as const;
 
 // Hex equivalents for Remotion (OKLCH not supported in all contexts)
@@ -63,7 +61,6 @@ export const HEX_COLORS = {
   black: '#000000',
   blue500: '#3b82f6',
   blue300: '#93c5fd', // Web search icon
-  purple500: '#a855f7',
   destructive: '#dc2626', // Mic recording red (hsl(0, 84.2%, 60.2%))
 } as const;
 

@@ -2,6 +2,7 @@ import { useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
+import { RETRY_LIMITS } from '@/constants';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatStoreApi } from '@/stores/chat';
 import { getParticipantCompletionStatus, isRoundComplete } from '@/stores/chat';
@@ -18,13 +19,6 @@ const CLEANUP_CHECK_INTERVAL_MS = 2000;
  * This handles edge cases where participant messages have empty parts or no finishReason.
  */
 const FORCE_CLEANUP_TIMEOUT_MS = 10000;
-
-/**
- * Max handoff resets: If participantHandoffInProgress stays true for this many
- * timer resets (each 10s), force clear it. This prevents infinite loop when
- * handoff flag is stuck.
- */
-const MAX_HANDOFF_RESETS = 3;
 
 export function useStaleStreamingCleanup({
   store,
@@ -113,16 +107,16 @@ export function useStaleStreamingCleanup({
           }
 
           // ✅ FIX 5: Handoff flag check with max reset counter
-          // If handoff flag stuck for MAX_HANDOFF_RESETS cycles (30s), force clear it
+          // If handoff flag stuck for RETRY_LIMITS.MAX_HANDOFF_RESETS cycles (30s), force clear it
           if (freshState.participantHandoffInProgress) {
             handoffResetCountRef.current++;
-            if (handoffResetCountRef.current >= MAX_HANDOFF_RESETS) {
-              rlog.sync('stale-cleanup', `r${streamingRoundNumber} handoff stuck, forcing clear after ${MAX_HANDOFF_RESETS} resets`);
+            if (handoffResetCountRef.current >= RETRY_LIMITS.MAX_HANDOFF_RESETS) {
+              rlog.sync('stale-cleanup', `r${streamingRoundNumber} handoff stuck, forcing clear after ${RETRY_LIMITS.MAX_HANDOFF_RESETS} resets`);
               freshState.setParticipantHandoffInProgress(false);
               handoffResetCountRef.current = 0;
               // Continue to cleanup logic below
             } else {
-              rlog.sync('stale-cleanup', `r${streamingRoundNumber} skipping - handoff in progress (reset ${handoffResetCountRef.current}/${MAX_HANDOFF_RESETS})`);
+              rlog.sync('stale-cleanup', `r${streamingRoundNumber} skipping - handoff in progress (reset ${handoffResetCountRef.current}/${RETRY_LIMITS.MAX_HANDOFF_RESETS})`);
               staleStateStartTimeRef.current = Date.now();
               return;
             }

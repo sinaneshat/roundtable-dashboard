@@ -5,13 +5,13 @@ import { useCallback, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 
 import { FormProvider } from '@/components/forms';
-import type { ProjectFormValues } from '@/components/projects/project-form-fields';
+import type { ProjectFormValues } from '@/components/projects/project-form-constants';
 import {
   getProjectFormDefaults,
   PROJECT_FORM_DEFAULTS,
-  ProjectFormFields,
   ProjectFormSchema,
-} from '@/components/projects/project-form-fields';
+} from '@/components/projects/project-form-constants';
+import { ProjectFormFields } from '@/components/projects/project-form-fields';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,

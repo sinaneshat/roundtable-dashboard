@@ -7,8 +7,7 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { interpolate, spring, useCurrentFrame, useVideoConfig } from 'remotion';
 
-import { cn } from '@/lib/ui/cn';
-
+import { cn } from '../../lib/ui/cn';
 import { SPRING_CONFIGS } from '../lib/easing';
 
 type FadeInProps = {

@@ -13,6 +13,7 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
+import { RETRY_LIMITS } from '@/constants';
 import { getRoundNumber, isObject } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import { streamModeratorService } from '@/services/api';
@@ -59,8 +60,6 @@ function parseAiSdkStreamLine(line: string): string | null {
 
   return null;
 }
-
-const MAX_202_RETRIES = 5;
 
 export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
   const { threadId, createdThreadId } = useStore(store, useShallow(s => ({
@@ -176,7 +175,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
 
         if (response.status === 202 || jsonData?.data?.status === 'pending') {
           retryCountRef.current += 1;
-          if (retryCountRef.current >= MAX_202_RETRIES) {
+          if (retryCountRef.current >= RETRY_LIMITS.MAX_202_RETRIES) {
             console.error('[Moderator] MAX RETRIES REACHED - messages never appeared in D1', {
               roundNumber,
               retryCount: retryCountRef.current,
@@ -189,7 +188,7 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
           }
           // 202 Accepted - messages not persisted yet, retry after delay
           const retryAfterMs = jsonData?.data?.retryAfterMs || 1000;
-          rlog.sync('moderator-retry', `202 poll ${retryCountRef.current}/${MAX_202_RETRIES}: ${jsonData?.data?.message ?? 'no message'}, retry in ${retryAfterMs}ms`);
+          rlog.sync('moderator-retry', `202 poll ${retryCountRef.current}/${RETRY_LIMITS.MAX_202_RETRIES}: ${jsonData?.data?.message ?? 'no message'}, retry in ${retryAfterMs}ms`);
           await new Promise(resolve => setTimeout(resolve, retryAfterMs));
           // Retry the request - clear tracking and reset ref so we can trigger again
           triggeringRoundRef.current = null;

@@ -43,16 +43,7 @@ export function ChatDeleteDialog({
           t('chat.threadDeleted'),
           t('chat.threadDeletedDescription'),
         );
-        // DEBUG - remove after testing
-        console.log('[ChatDeleteDialog] redirect check:', {
-          redirectIfCurrent,
-          threadSlug,
-          pathname,
-          effectiveProjectId,
-          endsWithSlug: pathname.endsWith(`/${threadSlug}`),
-        });
         if (redirectIfCurrent && threadSlug && pathname.endsWith(`/${threadSlug}`)) {
-          console.log('[ChatDeleteDialog] navigating to:', effectiveProjectId ? `/chat/projects/${effectiveProjectId}/new` : '/chat');
           if (effectiveProjectId) {
             navigate({ to: '/chat/projects/$projectId/new', params: { projectId: effectiveProjectId } });
           } else {

@@ -4,13 +4,23 @@
  *
  * Camera: Slow dolly right across homepage with subtle zoom
  * Content: Homepage hero section with gradient mesh background
- * 3D Effect: Floating UI cards at different z-depths with blur
  *
  * Cinematic Effects:
  * - Dolly right camera movement with breathing
  * - Multi-depth parallax layers (0.3x, 0.5x, 0.8x, 1.0x)
  * - Focus pull on hero content
  * - Subtle zoom during dolly
+ *
+ * 3D Camera Effects (CSS 3D transforms):
+ * - 3D perspective wrapper (perspective: 1200px)
+ * - Camera dolly effect (translateZ animation: -200px -> 0)
+ * - Depth blur - elements further from camera get blurry
+ * - Parallax depth layers with different translateZ values:
+ *   - Background: translateZ(-100px)
+ *   - Mid-far: translateZ(-60px)
+ *   - Mid-near: translateZ(-30px)
+ *   - Foreground: translateZ(50px)
+ * - Camera tilt entrance (rotateX: -5deg -> 0deg)
  */
 
 import {
@@ -74,9 +84,41 @@ const DEEPSEEK_CARD: FloatingParticipant = {
   message: 'Here\'s an innovative alternative...',
 };
 
+// 3D depth layer z-offsets for parallax effect
+const DEPTH_LAYERS = {
+  background: -100, // Furthest from camera
+  midFar: -60, // Mid-far layer
+  midNear: -30, // Mid-near layer
+  foreground: 50, // Closest to camera, in front of main content
+} as const;
+
+// Calculate depth blur based on z-position distance from camera
+function getDepthBlur(zOffset: number, cameraZ: number): string {
+  const effectiveDistance = Math.abs(zOffset - cameraZ);
+  // Scale blur: further objects get more blur (max 8px)
+  const blurAmount = Math.min(effectiveDistance * 0.04, 8);
+  return blurAmount > 0.5 ? `blur(${blurAmount}px)` : 'none';
+}
+
 export function Scene02Homepage() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
+
+  // === 3D CAMERA EFFECTS ===
+  // Camera tilt entrance: starts tilted down, rotates to level
+  const cameraTiltX = interpolate(frame, [0, 40], [-5, 0], {
+    extrapolateRight: 'clamp',
+  });
+
+  // Camera dolly Z: pull back then push in (creates depth reveal)
+  const cameraZ = interpolate(frame, [0, 60], [-200, 0], {
+    extrapolateRight: 'clamp',
+  });
+
+  // Subtle camera Y rotation for added dimension
+  const cameraRotateY = interpolate(frame, [0, 90], [-2, 2], {
+    extrapolateRight: 'clamp',
+  });
 
   // === CINEMATIC CAMERA ===
   // Dolly right with subtle zoom
@@ -137,246 +179,304 @@ export function Scene02Homepage() {
   // Feature cards floating effect - enhanced with breathing
   const cardFloatY = Math.sin(frame * 0.08) * 8 + breathingOffset.y * 0.5;
 
+  // Card entrance stagger for 3D depth reveal
+  const cardEntranceProgress = (delay: number) =>
+    spring({
+      frame: frame - delay,
+      fps,
+      config: { damping: 35, stiffness: 120 },
+      durationInFrames: 30,
+    });
+
   return (
     <AbsoluteFill
       style={{
         backgroundColor: BACKGROUNDS.primary,
         overflow: 'hidden',
+        // 3D perspective setup for camera effects
         perspective: 1200,
-        perspectiveOrigin: 'center center',
+        perspectiveOrigin: '50% 50%',
       }}
     >
-      {/* Background depth particles - far layer with parallax */}
-      <div
-        style={{
-          transform: `translate(${breathingOffset.x * 0.2}px, ${breathingOffset.y * 0.2}px)`,
-        }}
-      >
-        <DepthParticles frame={frame} baseOpacity={0.35} count={20} />
-      </div>
-
-      {/* Edge vignette */}
-      <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
-
-      {/* Main content with camera transform + dolly movement */}
+      {/* 3D Camera Wrapper - applies tilt and dolly Z */}
       <div
         style={{
           position: 'absolute',
           inset: 0,
-          transform: `translateX(${dollyX}px) scale(${zoomScale})`,
           transformStyle: 'preserve-3d',
-          filter: focusFilter,
-          display: 'flex',
-          flexDirection: 'column',
-          alignItems: 'center',
-          justifyContent: 'center',
-          padding: SPACING.lg,
-          opacity: exitFade,
+          transform: `
+            rotateX(${cameraTiltX}deg)
+            rotateY(${cameraRotateY}deg)
+            translateZ(${cameraZ}px)
+          `,
+          transformOrigin: '50% 50%',
         }}
       >
-        {/* Logo */}
+        {/* Background depth particles - far layer with parallax + 3D depth */}
         <div
           style={{
-            opacity: heroOpacity,
-            transform: `translateY(${heroY}px)`,
-            marginBottom: SPACING.xl,
+            position: 'absolute',
+            inset: 0,
+            transform: `
+              translate(${breathingOffset.x * 0.2}px, ${breathingOffset.y * 0.2}px)
+              translateZ(${DEPTH_LAYERS.background}px)
+            `,
+            filter: getDepthBlur(DEPTH_LAYERS.background, cameraZ),
+            transformStyle: 'preserve-3d',
           }}
         >
-          <VideoLogo size="lg" showText />
+          <DepthParticles frame={frame} baseOpacity={0.12} count={20} />
         </div>
 
-        {/* Hero headline */}
+        {/* Edge vignette - stays at camera plane */}
+        <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
+
+        {/* Main content with camera transform + dolly movement */}
         <div
           style={{
-            opacity: heroOpacity,
-            transform: `translateY(${heroY}px)`,
+            position: 'absolute',
+            inset: 0,
+            transform: `translateX(${dollyX}px) scale(${zoomScale}) translateZ(0px)`,
+            transformStyle: 'preserve-3d',
+            filter: focusFilter,
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'center',
+            justifyContent: 'center',
+            padding: SPACING.lg,
+            opacity: exitFade,
           }}
         >
-          <h1
+          {/* Logo */}
+          <div
             style={{
-              fontSize: 64,
-              fontWeight: 700,
-              color: TEXT.primary,
-              textAlign: 'center',
-              margin: 0,
-              fontFamily: FONTS.sans,
-              lineHeight: 1.2,
+              opacity: heroOpacity,
+              transform: `translateY(${heroY}px)`,
+              marginBottom: SPACING.xl,
             }}
           >
-            Meet the AI Council
-          </h1>
-        </div>
+            <VideoLogo size="lg" showText />
+          </div>
 
-        {/* Subtitle */}
-        <div
-          style={{
-            marginTop: SPACING.lg,
-            opacity: subtitleOpacity,
-          }}
-        >
-          <p
+          {/* Hero headline */}
+          <div
             style={{
-              fontSize: 24,
-              color: TEXT.secondary,
-              textAlign: 'center',
-              margin: 0,
-              fontFamily: FONTS.sans,
+              opacity: heroOpacity,
+              transform: `translateY(${heroY}px)`,
             }}
           >
-            Multiple AI models. One conversation. Better answers.
-          </p>
+            <h1
+              style={{
+                fontSize: 64,
+                fontWeight: 700,
+                color: TEXT.primary,
+                textAlign: 'center',
+                margin: 0,
+                fontFamily: FONTS.sans,
+                lineHeight: 1.2,
+              }}
+            >
+              Meet the AI Council
+            </h1>
+          </div>
+
+          {/* Subtitle */}
+          <div
+            style={{
+              marginTop: SPACING.lg,
+              opacity: subtitleOpacity,
+            }}
+          >
+            <p
+              style={{
+                fontSize: 24,
+                color: TEXT.secondary,
+                textAlign: 'center',
+                margin: 0,
+                fontFamily: FONTS.sans,
+              }}
+            >
+              Multiple AI models. One conversation. Better answers.
+            </p>
+          </div>
+        </div>
+
+        {/* Floating participant chat cards at different 3D depths with enhanced parallax */}
+        {/* Far depth layer - Claude (top-left) - translateZ(-100px) */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '12%',
+            left: '4%',
+            filter: getDepthBlur(DEPTH_LAYERS.background, cameraZ),
+            opacity: interpolate(cardEntranceProgress(5), [0, 1], [0, 0.5]),
+            transform: `
+              translateY(${cardFloatY * 0.4}px)
+              translateX(${dollyX * 0.2 + breathingOffset.x * 0.2}px)
+              translateZ(${DEPTH_LAYERS.background}px)
+              scale(${interpolate(cardEntranceProgress(5), [0, 1], [0.8, 1])})
+            `,
+            transformStyle: 'preserve-3d',
+          }}
+        >
+          <VideoGlassCard variant="subtle" style={{ padding: 14, width: 220 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <VideoAvatar provider={CLAUDE_CARD.provider} fallback={CLAUDE_CARD.name} size={32} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.muted }}>{CLAUDE_CARD.name}</span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 500,
+                      padding: '2px 8px',
+                      borderRadius: 9999,
+                      backgroundColor: ROLE_COLORS[CLAUDE_CARD.role].bg,
+                      color: ROLE_COLORS[CLAUDE_CARD.role].text,
+                      border: `1px solid ${ROLE_COLORS[CLAUDE_CARD.role].border}`,
+                    }}
+                  >
+                    {CLAUDE_CARD.role}
+                  </span>
+                </div>
+                <span style={{ fontSize: 11, color: TEXT.muted, lineHeight: 1.4 }}>{CLAUDE_CARD.message}</span>
+              </div>
+            </div>
+          </VideoGlassCard>
+        </div>
+
+        {/* Mid-far depth layer - GPT-4o (bottom-right) - translateZ(-60px) */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '18%',
+            right: '6%',
+            filter: getDepthBlur(DEPTH_LAYERS.midFar, cameraZ),
+            opacity: interpolate(cardEntranceProgress(10), [0, 1], [0, 0.7]),
+            transform: `
+              translateY(${cardFloatY * 0.6}px)
+              translateX(${dollyX * 0.45 + breathingOffset.x * 0.4}px)
+              translateZ(${DEPTH_LAYERS.midFar}px)
+              scale(${interpolate(cardEntranceProgress(10), [0, 1], [0.85, 1])})
+            `,
+            transformStyle: 'preserve-3d',
+          }}
+        >
+          <VideoGlassCard variant="medium" style={{ padding: 14, width: 240 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <VideoAvatar provider={GPT4O_CARD.provider} fallback={GPT4O_CARD.name} size={32} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.muted }}>{GPT4O_CARD.name}</span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 500,
+                      padding: '2px 8px',
+                      borderRadius: 9999,
+                      backgroundColor: ROLE_COLORS[GPT4O_CARD.role].bg,
+                      color: ROLE_COLORS[GPT4O_CARD.role].text,
+                      border: `1px solid ${ROLE_COLORS[GPT4O_CARD.role].border}`,
+                    }}
+                  >
+                    {GPT4O_CARD.role}
+                  </span>
+                </div>
+                <span style={{ fontSize: 11, color: TEXT.muted, lineHeight: 1.4 }}>{GPT4O_CARD.message}</span>
+              </div>
+            </div>
+          </VideoGlassCard>
+        </div>
+
+        {/* Mid-near depth layer - Gemini (top-right) - translateZ(-30px) */}
+        <div
+          style={{
+            position: 'absolute',
+            top: '22%',
+            right: '10%',
+            filter: getDepthBlur(DEPTH_LAYERS.midNear, cameraZ),
+            opacity: interpolate(cardEntranceProgress(15), [0, 1], [0, 0.88]),
+            transform: `
+              translateY(${cardFloatY * 0.85}px)
+              translateX(${dollyX * 0.7 + breathingOffset.x * 0.6}px)
+              translateZ(${DEPTH_LAYERS.midNear}px)
+              scale(${interpolate(cardEntranceProgress(15), [0, 1], [0.9, 1])})
+            `,
+            transformStyle: 'preserve-3d',
+          }}
+        >
+          <VideoGlassCard variant="strong" style={{ padding: 14, width: 250 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <VideoAvatar provider={GEMINI_CARD.provider} fallback={GEMINI_CARD.name} size={32} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.muted }}>{GEMINI_CARD.name}</span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 500,
+                      padding: '2px 8px',
+                      borderRadius: 9999,
+                      backgroundColor: ROLE_COLORS[GEMINI_CARD.role].bg,
+                      color: ROLE_COLORS[GEMINI_CARD.role].text,
+                      border: `1px solid ${ROLE_COLORS[GEMINI_CARD.role].border}`,
+                    }}
+                  >
+                    {GEMINI_CARD.role}
+                  </span>
+                </div>
+                <span style={{ fontSize: 11, color: TEXT.muted, lineHeight: 1.4 }}>{GEMINI_CARD.message}</span>
+              </div>
+            </div>
+          </VideoGlassCard>
+        </div>
+
+        {/* Foreground layer - DeepSeek (bottom-left) - translateZ(+50px) - in front of camera */}
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '32%',
+            left: '8%',
+            // Foreground gets slight blur as it's "too close" to camera
+            filter: getDepthBlur(DEPTH_LAYERS.foreground, cameraZ),
+            opacity: interpolate(cardEntranceProgress(20), [0, 1], [0, 0.98]),
+            transform: `
+              translateY(${cardFloatY}px)
+              translateX(${dollyX * 0.9 + breathingOffset.x * 0.8}px)
+              translateZ(${DEPTH_LAYERS.foreground}px)
+              scale(${interpolate(cardEntranceProgress(20), [0, 1], [0.95, 1])})
+            `,
+            transformStyle: 'preserve-3d',
+          }}
+        >
+          <VideoGlassCard variant="strong" style={{ padding: 14, width: 260 }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+              <VideoAvatar provider={DEEPSEEK_CARD.provider} fallback={DEEPSEEK_CARD.name} size={32} />
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.muted }}>{DEEPSEEK_CARD.name}</span>
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 500,
+                      padding: '2px 8px',
+                      borderRadius: 9999,
+                      backgroundColor: ROLE_COLORS[DEEPSEEK_CARD.role].bg,
+                      color: ROLE_COLORS[DEEPSEEK_CARD.role].text,
+                      border: `1px solid ${ROLE_COLORS[DEEPSEEK_CARD.role].border}`,
+                    }}
+                  >
+                    {DEEPSEEK_CARD.role}
+                  </span>
+                </div>
+                <span style={{ fontSize: 11, color: TEXT.muted, lineHeight: 1.4 }}>{DEEPSEEK_CARD.message}</span>
+              </div>
+            </div>
+          </VideoGlassCard>
         </div>
       </div>
 
-      {/* Floating participant chat cards at different depths with enhanced parallax */}
-      {/* Far depth layer - Claude (top-left) */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '12%',
-          left: '4%',
-          filter: 'blur(6px)',
-          opacity: 0.45,
-          transform: `translateY(${cardFloatY * 0.4}px) translateX(${dollyX * 0.2 + breathingOffset.x * 0.2}px)`,
-        }}
-      >
-        <VideoGlassCard variant="subtle" style={{ padding: 14, width: 220 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <VideoAvatar provider={CLAUDE_CARD.provider} fallback={CLAUDE_CARD.name} size={32} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.muted }}>{CLAUDE_CARD.name}</span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 500,
-                    padding: '2px 8px',
-                    borderRadius: 9999,
-                    backgroundColor: ROLE_COLORS[CLAUDE_CARD.role].bg,
-                    color: ROLE_COLORS[CLAUDE_CARD.role].text,
-                    border: `1px solid ${ROLE_COLORS[CLAUDE_CARD.role].border}`,
-                  }}
-                >
-                  {CLAUDE_CARD.role}
-                </span>
-              </div>
-              <span style={{ fontSize: 11, color: TEXT.muted, lineHeight: 1.4 }}>{CLAUDE_CARD.message}</span>
-            </div>
-          </div>
-        </VideoGlassCard>
-      </div>
-
-      {/* Mid depth layer - GPT-4o (bottom-right) */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '18%',
-          right: '6%',
-          filter: 'blur(3px)',
-          opacity: 0.65,
-          transform: `translateY(${cardFloatY * 0.6}px) translateX(${dollyX * 0.45 + breathingOffset.x * 0.4}px)`,
-        }}
-      >
-        <VideoGlassCard variant="medium" style={{ padding: 14, width: 240 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <VideoAvatar provider={GPT4O_CARD.provider} fallback={GPT4O_CARD.name} size={32} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.muted }}>{GPT4O_CARD.name}</span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 500,
-                    padding: '2px 8px',
-                    borderRadius: 9999,
-                    backgroundColor: ROLE_COLORS[GPT4O_CARD.role].bg,
-                    color: ROLE_COLORS[GPT4O_CARD.role].text,
-                    border: `1px solid ${ROLE_COLORS[GPT4O_CARD.role].border}`,
-                  }}
-                >
-                  {GPT4O_CARD.role}
-                </span>
-              </div>
-              <span style={{ fontSize: 11, color: TEXT.muted, lineHeight: 1.4 }}>{GPT4O_CARD.message}</span>
-            </div>
-          </div>
-        </VideoGlassCard>
-      </div>
-
-      {/* Near depth layer - Gemini (top-right) */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '22%',
-          right: '10%',
-          filter: 'blur(1px)',
-          opacity: 0.85,
-          transform: `translateY(${cardFloatY * 0.85}px) translateX(${dollyX * 0.7 + breathingOffset.x * 0.6}px)`,
-        }}
-      >
-        <VideoGlassCard variant="strong" style={{ padding: 14, width: 250 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <VideoAvatar provider={GEMINI_CARD.provider} fallback={GEMINI_CARD.name} size={32} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.muted }}>{GEMINI_CARD.name}</span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 500,
-                    padding: '2px 8px',
-                    borderRadius: 9999,
-                    backgroundColor: ROLE_COLORS[GEMINI_CARD.role].bg,
-                    color: ROLE_COLORS[GEMINI_CARD.role].text,
-                    border: `1px solid ${ROLE_COLORS[GEMINI_CARD.role].border}`,
-                  }}
-                >
-                  {GEMINI_CARD.role}
-                </span>
-              </div>
-              <span style={{ fontSize: 11, color: TEXT.muted, lineHeight: 1.4 }}>{GEMINI_CARD.message}</span>
-            </div>
-          </div>
-        </VideoGlassCard>
-      </div>
-
-      {/* Foreground layer - DeepSeek (bottom-left) */}
-      <div
-        style={{
-          position: 'absolute',
-          bottom: '32%',
-          left: '8%',
-          opacity: 0.95,
-          transform: `translateY(${cardFloatY}px) translateX(${dollyX * 0.9 + breathingOffset.x * 0.8}px)`,
-        }}
-      >
-        <VideoGlassCard variant="strong" style={{ padding: 14, width: 260 }}>
-          <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
-            <VideoAvatar provider={DEEPSEEK_CARD.provider} fallback={DEEPSEEK_CARD.name} size={32} />
-            <div style={{ flex: 1, minWidth: 0 }}>
-              <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginBottom: 4 }}>
-                <span style={{ fontSize: 12, fontWeight: 600, color: TEXT.muted }}>{DEEPSEEK_CARD.name}</span>
-                <span
-                  style={{
-                    fontSize: 12,
-                    fontWeight: 500,
-                    padding: '2px 8px',
-                    borderRadius: 9999,
-                    backgroundColor: ROLE_COLORS[DEEPSEEK_CARD.role].bg,
-                    color: ROLE_COLORS[DEEPSEEK_CARD.role].text,
-                    border: `1px solid ${ROLE_COLORS[DEEPSEEK_CARD.role].border}`,
-                  }}
-                >
-                  {DEEPSEEK_CARD.role}
-                </span>
-              </div>
-              <span style={{ fontSize: 11, color: TEXT.muted, lineHeight: 1.4 }}>{DEEPSEEK_CARD.message}</span>
-            </div>
-          </div>
-        </VideoGlassCard>
-      </div>
-
-      {/* Feature captions overlay */}
+      {/* Feature captions overlay - outside 3D wrapper */}
       <VideoFeatureCaptions
         position="bottom-left"
         captions={[

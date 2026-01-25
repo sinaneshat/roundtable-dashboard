@@ -87,6 +87,17 @@ export const STRING_LIMITS = {
   PROJECT_NAME_MAX: 200,
   PROJECT_DESCRIPTION_MAX: 400,
   CUSTOM_INSTRUCTIONS_MAX: 4000,
+
+  // Role names (custom-role-form.tsx)
+  ROLE_NAME_MIN: 1,
+  ROLE_NAME_MAX: 100,
+
+  // Chat titles (chat-rename-form.tsx)
+  CHAT_TITLE_MIN: 1,
+  CHAT_TITLE_MAX: 255,
+
+  // Feedback messages (feedback-modal.tsx)
+  FEEDBACK_MESSAGE_MIN: 10,
 };
 
 // =============================================================================

@@ -32,6 +32,8 @@ import { useProjectThreadsQuery } from '@/hooks/queries';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
+import type { ProjectThreadItemProps } from './project-list-item.types';
+
 export type ProjectListItemData = {
   id: string;
   name: string;
@@ -54,11 +56,7 @@ function ProjectThreadItem({
   thread,
   projectId,
   onShare,
-}: {
-  thread: { id: string; title: string; slug: string; previousSlug?: string | null };
-  projectId: string;
-  onShare?: (thread: { id: string; slug: string }) => void;
-}) {
+}: ProjectThreadItemProps) {
   const t = useTranslations();
   const pathname = useRouterState({ select: s => s.location.pathname });
   const slugMatches = (slug: string | null | undefined) =>

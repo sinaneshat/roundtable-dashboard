@@ -127,9 +127,8 @@ async function triggerModeratorStream(
     const db = await getDbAsync();
 
     await checkJobContinuation(threadId, roundNumber, sessionToken, db, env.ROUND_ORCHESTRATION_QUEUE);
-  } catch (err) {
-    // Log but don't fail - job continuation is optional
-    console.warn('[triggerModeratorStream] Job continuation check failed:', err);
+  } catch {
+    // Job continuation check failed - non-critical, continue
   }
 }
 

@@ -4,7 +4,8 @@
  * Streamlined production video with unified scenes:
  * - 7 scenes using TransitionSeries
  * - Exact component replicas from the app
- * - Cinematic camera movements
+ * - Simple fade transitions between scenes
+ * - Enhanced chromatic aberration at transition peaks
  * - Background music support
  *
  * Scene Structure:
@@ -19,9 +20,9 @@
 
 import { linearTiming, TransitionSeries } from '@remotion/transitions';
 import { fade } from '@remotion/transitions/fade';
-import { slide } from '@remotion/transitions/slide';
-import { AbsoluteFill, Audio, interpolate, staticFile, useCurrentFrame } from 'remotion';
+import { Audio, interpolate, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
 
+import { ChromaticAberration } from '../components/ChromaticAberration';
 import { VideoProgressIndicator } from '../components/VideoProgressIndicator';
 // Scene imports
 import { Scene01Intro } from './showcase-scenes/Scene01Intro';
@@ -33,9 +34,12 @@ import { SceneChatThread } from './showcase-scenes/SceneChatThread';
 import { SceneModelModal } from './showcase-scenes/SceneModelModal';
 
 // Transition timing presets
-const FAST_TRANSITION = linearTiming({ durationInFrames: 12 });
-const NORMAL_TRANSITION = linearTiming({ durationInFrames: 18 });
-const SLOW_TRANSITION = linearTiming({ durationInFrames: 30 });
+const FAST_TRANSITION = linearTiming({ durationInFrames: 15 });
+const NORMAL_TRANSITION = linearTiming({ durationInFrames: 24 });
+const SLOW_TRANSITION = linearTiming({ durationInFrames: 36 });
+
+// Transition frame positions for chromatic aberration
+const TRANSITION_FRAMES = [90, 165, 231, 531, 813, 1521];
 
 /**
  * Scene durations in frames at 30fps
@@ -61,94 +65,93 @@ const SCENE_DURATIONS = {
   finale: 150, // 5s - Grand finale with CTA
 } as const;
 
-export function RoundtableShowcase() {
-  const frame = useCurrentFrame();
+/**
+ * Audio component for ODESZA "A Moment Apart"
+ * Trims the song to start at the melodic build (~1:00) and syncs
+ * key musical moments with scene transitions
+ */
+function ShowcaseAudio() {
+  const { fps } = useVideoConfig();
+  const total = getShowcaseDuration();
 
-  // RGB shift flash at transitions
-  const transitionFrames = [90, 162, 225, 513, 795, 1497];
-  const rgbShiftOpacity = transitionFrames.reduce((opacity, transFrame) => {
-    const dist = frame - transFrame;
-    if (dist >= 0 && dist < 3) {
-      return Math.max(opacity, interpolate(dist, [0, 3], [0.02, 0], { extrapolateRight: 'clamp' }));
-    }
-    return opacity;
-  }, 0);
+  // Start at 1:00 (60 seconds) into the song - skip ambient intro
+  // This aligns the melodic piano build with our intro
+  const AUDIO_START_OFFSET = 60 * fps; // 1800 frames
+
+  return (
+    <Audio
+      src={staticFile('static/music/showcase-bg.mp3')}
+      startFrom={AUDIO_START_OFFSET}
+      volume={(f) => {
+        // Volume envelope optimized for "A Moment Apart" structure
+        // The song builds from piano to full synth around 30s into our clip
+        const baseVolume = interpolate(
+          f,
+          [
+            0, // Start
+            30, // Quick fade in
+            231, // End of navigation scenes
+            531, // ChatInput done, about to hit ModelModal
+            813, // ChatThread starts - main drop should hit here
+            870, // Deep into ChatThread
+            total - 120, // Start fade out
+            total, // End
+          ],
+          [0, 0.35, 0.4, 0.45, 0.55, 0.55, 0.45, 0],
+          { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
+        );
+
+        // Boost at scene transitions for impact
+        const transitionBoost = TRANSITION_FRAMES.reduce((boost, transFrame) => {
+          const dist = Math.abs(f - transFrame);
+          if (dist < 20) {
+            return Math.max(boost, interpolate(dist, [0, 20], [0.15, 0], { extrapolateRight: 'clamp' }));
+          }
+          return boost;
+        }, 0);
+
+        return Math.min(baseVolume + transitionBoost, 0.65);
+      }}
+    />
+  );
+}
+
+export function RoundtableShowcase() {
+  useCurrentFrame();
 
   return (
     <>
-      {/* RGB shift overlay at transitions */}
-      {rgbShiftOpacity > 0 && (
-        <AbsoluteFill style={{
-          backgroundColor: `rgba(100, 100, 255, ${rgbShiftOpacity})`,
-          zIndex: 1000,
-          pointerEvents: 'none',
-        }}
-        />
-      )}
+      {/* Enhanced chromatic aberration at transitions */}
+      <ChromaticAberration
+        transitionFrames={TRANSITION_FRAMES}
+        maxShift={8}
+        duration={15}
+        baseOpacity={0.2}
+      />
+
       {/* Progress dots indicator */}
       <VideoProgressIndicator
-        sceneStarts={[0, 90, 162, 225, 513, 795, 1497]}
+        sceneStarts={[0, 90, 165, 231, 531, 813, 1521]}
         totalDuration={getShowcaseDuration()}
       />
 
-      {/* Background music - place showcase-bg.mp3 in public/static/music/ */}
-      <Audio
-        src={staticFile('static/music/showcase-bg.mp3')}
-        volume={(f) => {
-          const total = getShowcaseDuration();
-
-          // Base volume envelope: fast ramp, sustain with scene-specific levels, long fade
-          const baseVolume = interpolate(
-            f,
-            [0, 30, 225, 513, 795, 850, total - 120, total],
-            [0, 0.4, 0.4, 0.45, 0.45, 0.55, 0.5, 0],
-            { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
-          );
-
-          // Scene transition boosts
-          const transitionBoost = [90, 162, 225, 513, 795, 1497].reduce(
-            (boost, transFrame) => {
-              const dist = Math.abs(f - transFrame);
-              if (dist < 20) {
-                return Math.max(
-                  boost,
-                  interpolate(dist, [0, 20], [0.25, 0], {
-                    extrapolateRight: 'clamp',
-                  }),
-                );
-              }
-              return boost;
-            },
-            0,
-          );
-
-          // Beat-sync boosts at key content frames
-          const contentBoost = [200, 500, 850].reduce(
-            (boost, contentFrame, i) => {
-              const dist = Math.abs(f - contentFrame);
-              const peakAmount = i === 2 ? 0.15 : 0.1; // biggest boost at moderator
-              if (dist < 15) {
-                return Math.max(
-                  boost,
-                  interpolate(dist, [0, 15], [peakAmount, 0], {
-                    extrapolateRight: 'clamp',
-                  }),
-                );
-              }
-              return boost;
-            },
-            0,
-          );
-
-          return Math.min(baseVolume + transitionBoost + contentBoost, 0.65);
-        }}
-      />
+      {/* Background music - ODESZA "A Moment Apart"
+          Trim starts at ~1:00 to skip slow intro, get melodic build
+          Scene mapping:
+          - 0-8.5s (Intro/Homepage/Sidebar): Melodic piano build
+          - 8.5-18.5s (ChatInput): Rising progression
+          - 18.5-28.5s (ModelModal): Energy building
+          - 28.5-52.5s (ChatThread): Main drop aligned with core feature
+          - 52.5-57.5s (Finale): Emotional peak for CTA
+      */}
+      <ShowcaseAudio />
       <TransitionSeries>
         {/* Scene 1: Epic Intro with Logo */}
         <TransitionSeries.Sequence durationInFrames={SCENE_DURATIONS.intro}>
           <Scene01Intro />
         </TransitionSeries.Sequence>
 
+        {/* Transition 1: Intro → Homepage */}
         <TransitionSeries.Transition
           presentation={fade()}
           timing={NORMAL_TRANSITION}
@@ -159,8 +162,9 @@ export function RoundtableShowcase() {
           <Scene02Homepage />
         </TransitionSeries.Sequence>
 
+        {/* Transition 2: Homepage → Sidebar */}
         <TransitionSeries.Transition
-          presentation={slide({ direction: 'from-right' })}
+          presentation={fade()}
           timing={FAST_TRANSITION}
         />
 
@@ -169,8 +173,9 @@ export function RoundtableShowcase() {
           <Scene03Sidebar />
         </TransitionSeries.Sequence>
 
+        {/* Transition 3: Sidebar → ChatInput */}
         <TransitionSeries.Transition
-          presentation={slide({ direction: 'from-bottom' })}
+          presentation={fade()}
           timing={FAST_TRANSITION}
         />
 
@@ -179,8 +184,9 @@ export function RoundtableShowcase() {
           <SceneChatInput />
         </TransitionSeries.Sequence>
 
+        {/* Transition 4: ChatInput → ModelModal */}
         <TransitionSeries.Transition
-          presentation={slide({ direction: 'from-right' })}
+          presentation={fade()}
           timing={NORMAL_TRANSITION}
         />
 
@@ -189,6 +195,7 @@ export function RoundtableShowcase() {
           <SceneModelModal />
         </TransitionSeries.Sequence>
 
+        {/* Transition 5: ModelModal → ChatThread */}
         <TransitionSeries.Transition
           presentation={fade()}
           timing={NORMAL_TRANSITION}
@@ -199,6 +206,7 @@ export function RoundtableShowcase() {
           <SceneChatThread />
         </TransitionSeries.Sequence>
 
+        {/* Transition 6: ChatThread → Finale */}
         <TransitionSeries.Transition
           presentation={fade()}
           timing={SLOW_TRANSITION}
@@ -220,13 +228,13 @@ export function getShowcaseDuration(): number {
   const sceneDurations = Object.values(SCENE_DURATIONS);
   const totalSceneDuration = sceneDurations.reduce((a, b) => a + b, 0);
 
-  // 6 transitions between 7 scenes
+  // 6 transitions between 7 scenes (updated for 3D transitions)
   // Transition breakdown:
-  // - 2 FAST_TRANSITION (12 frames each) = 24 frames
-  // - 3 NORMAL_TRANSITION (18 frames each) = 54 frames
-  // - 1 SLOW_TRANSITION (30 frames) = 30 frames
-  // Total transition overlap: ~108 frames
-  const transitionOverlap = 108;
+  // - 2 FAST_TRANSITION (15 frames each) = 30 frames
+  // - 3 NORMAL_TRANSITION (24 frames each) = 72 frames
+  // - 1 SLOW_TRANSITION (36 frames) = 36 frames
+  // Total transition overlap: ~138 frames
+  const transitionOverlap = 138;
 
   return totalSceneDuration - transitionOverlap;
 }

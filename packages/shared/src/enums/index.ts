@@ -665,11 +665,13 @@ export {
 
 // Automated jobs enums
 export {
+  AUTOMATED_JOB_STATUS_TO_BADGE_VARIANT,
   AUTOMATED_JOB_STATUSES,
   type AutomatedJobStatus,
   AutomatedJobStatuses,
   AutomatedJobStatusSchema,
   DEFAULT_AUTOMATED_JOB_STATUS,
+  getJobStatusBadgeVariant,
 } from './jobs';
 
 // Logging enums
@@ -999,6 +1001,11 @@ export {
   AvatarSizeMetadata,
   AvatarSizes,
   AvatarSizeSchema,
+  // Badge variant
+  BADGE_VARIANTS,
+  type BadgeVariant,
+  BadgeVariants,
+  BadgeVariantSchema,
   // Base toast variant (subset for shadcn component)
   BASE_TOAST_VARIANTS,
   type BaseToastVariant,
@@ -1040,6 +1047,7 @@ export {
   CopyIconVariantSchema,
   DEFAULT_API_KEYS_MODAL_TAB,
   DEFAULT_AVATAR_SIZE,
+  DEFAULT_BADGE_VARIANT,
   DEFAULT_BASE_TOAST_VARIANT,
   DEFAULT_BORDER_VARIANT,
   DEFAULT_CARD_VARIANT,
@@ -1144,6 +1152,7 @@ export {
   ImageStateSchema,
   isValidApiKeysModalTab,
   isValidAvatarSize,
+  isValidBadgeVariant,
   isValidBaseToastVariant,
   isValidBorderVariant,
   isValidCardVariant,

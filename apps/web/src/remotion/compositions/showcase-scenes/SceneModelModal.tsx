@@ -36,7 +36,7 @@ import { BACKGROUNDS, SPACING, TEXT } from '../../lib/design-tokens';
 type RoleName = 'Researcher' | 'Writer' | 'Analyst' | 'Critic' | 'Creator';
 const ROLE_COLORS: Record<RoleName, { bg: string; text: string; border: string }> = {
   Researcher: { bg: 'rgba(59, 130, 246, 0.2)', text: '#93c5fd', border: 'rgba(59, 130, 246, 0.3)' },
-  Writer: { bg: 'rgba(168, 85, 247, 0.2)', text: '#c4b5fd', border: 'rgba(168, 85, 247, 0.3)' },
+  Writer: { bg: 'rgba(100, 116, 139, 0.2)', text: '#94a3b8', border: 'rgba(100, 116, 139, 0.3)' },
   Analyst: { bg: 'rgba(34, 197, 94, 0.2)', text: '#86efac', border: 'rgba(34, 197, 94, 0.3)' },
   Critic: { bg: 'rgba(239, 68, 68, 0.2)', text: '#fca5a5', border: 'rgba(239, 68, 68, 0.3)' },
   Creator: { bg: 'rgba(251, 146, 60, 0.2)', text: '#fdba74', border: 'rgba(251, 146, 60, 0.3)' },
@@ -329,16 +329,6 @@ export function SceneModelModal() {
   // Tab state - Presets first, then Custom
   const activeTab = frame < PHASE.tabSwitch.start ? 'presets' : 'custom';
 
-  // Tab switch animation
-  const tabSwitchProgress = frame >= PHASE.tabSwitch.start
-    ? spring({
-        frame: frame - PHASE.tabSwitch.start,
-        fps,
-        config: { damping: 25, stiffness: 200 },
-        durationInFrames: 20,
-      })
-    : 0;
-
   // Selected preset (frame 50-90)
   const selectedPresetIndex = frame >= 50 && frame < PHASE.tabSwitch.start ? 0 : -1;
 
@@ -396,6 +386,20 @@ export function SceneModelModal() {
   // Selected capability tag in custom view
   const selectedTagIndex = frame >= PHASE.modelsAppear.start + 15 ? 0 : -1;
 
+  // Simple tab crossfade animation
+  const tabFadeProgress = spring({
+    frame: frame >= PHASE.tabSwitch.start ? frame - PHASE.tabSwitch.start : 0,
+    fps,
+    config: { damping: 20, stiffness: 150 },
+    durationInFrames: 20,
+  });
+
+  // Outgoing tab (Presets) fades out
+  const outgoingOpacity = interpolate(tabFadeProgress, [0, 0.5], [1, 0], { extrapolateRight: 'clamp' });
+
+  // Incoming tab (Custom) fades in
+  const incomingOpacity = interpolate(tabFadeProgress, [0.5, 1], [0, 1], { extrapolateLeft: 'clamp' });
+
   return (
     <AbsoluteFill
       style={{
@@ -406,7 +410,6 @@ export function SceneModelModal() {
         justifyContent: 'center',
         overflow: 'hidden',
         padding: SPACING.lg,
-        perspective: 1200,
         fontFamily: '\'Noto Sans\', system-ui, sans-serif',
       }}
     >
@@ -416,7 +419,7 @@ export function SceneModelModal() {
           transform: `translate(${breathingOffset.x * 0.2}px, ${breathingOffset.y * 0.2}px)`,
         }}
       >
-        <DepthParticles frame={frame} baseOpacity={0.3} count={15} />
+        <DepthParticles frame={frame} baseOpacity={0.1} count={15} />
       </div>
 
       <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
@@ -432,7 +435,7 @@ export function SceneModelModal() {
         ]}
       />
 
-      {/* Browser Frame with Modal - with orbit and zoom pulse */}
+      {/* Browser Frame with Modal */}
       <div
         style={{
           transform: `scale(${entranceZoom})`,
@@ -450,8 +453,25 @@ export function SceneModelModal() {
               justifyContent: 'center',
               backgroundColor: BACKGROUNDS.primary,
               overflow: 'hidden',
+              position: 'relative',
             }}
           >
+            {/* Blurred Background Layer */}
+            <div
+              style={{
+                position: 'absolute',
+                inset: 0,
+                filter: 'blur(8px)',
+                opacity: 0.4,
+                background: `
+                  radial-gradient(ellipse 80% 50% at 30% 30%, rgba(255, 255, 255, 0.08) 0%, transparent 50%),
+                  radial-gradient(ellipse 60% 40% at 70% 70%, rgba(255, 255, 255, 0.06) 0%, transparent 50%),
+                  radial-gradient(ellipse 50% 30% at 50% 50%, rgba(255, 255, 255, 0.05) 0%, transparent 40%)
+                `,
+                pointerEvents: 'none',
+              }}
+            />
+
             {/* Modal Container */}
             <div
               style={{
@@ -471,7 +491,12 @@ export function SceneModelModal() {
                   backgroundColor: 'rgba(40, 40, 40, 0.95)',
                   backdropFilter: 'blur(40px)',
                   border: '1px solid rgba(255, 255, 255, 0.15)',
-                  boxShadow: '0 40px 80px -20px rgba(0, 0, 0, 0.6)',
+                  boxShadow: `
+                    0 40px 80px -20px rgba(0, 0, 0, 0.6),
+                    0 0 0 1px rgba(255, 255, 255, 0.05),
+                    0 20px 40px -10px rgba(0, 0, 0, 0.4),
+                    inset 0 1px 0 rgba(255, 255, 255, 0.1)
+                  `,
                   overflow: 'hidden',
                 }}
               >
@@ -517,14 +542,21 @@ export function SceneModelModal() {
                   />
                 </div>
 
-                {/* Tab Content - Flex grow */}
-                <div style={{ flex: 1, overflow: 'hidden', position: 'relative', minHeight: 0 }}>
+                {/* Tab Content */}
+                <div
+                  style={{
+                    flex: 1,
+                    overflow: 'hidden',
+                    position: 'relative',
+                    minHeight: 0,
+                  }}
+                >
                   {/* Presets Tab Content */}
                   {activeTab === 'presets' && (
                     <div
                       style={{
                         padding: '16px 24px 24px',
-                        opacity: interpolate(tabSwitchProgress, [0, 1], [1, 0], { extrapolateRight: 'clamp' }),
+                        opacity: outgoingOpacity,
                         position: 'absolute',
                         inset: 0,
                         overflow: 'hidden',
@@ -539,26 +571,33 @@ export function SceneModelModal() {
                         }}
                       >
                         {PRESETS.map((preset, i) => {
-                          const presetDelay = 15 + i * 8;
-                          const presetProgress = spring({
-                            frame: frame - presetDelay,
+                          // Simple fade + slide up entrance
+                          const cardDelay = 60 + i * 8;
+                          const cardProgress = spring({
+                            frame: frame - cardDelay,
                             fps,
-                            config: { damping: 25, stiffness: 180 },
-                            durationInFrames: 20,
+                            config: { damping: 20, stiffness: 120 },
+                            durationInFrames: 25,
                           });
-                          const presetOpacity = interpolate(presetProgress, [0, 0.5], [0, 1], {
-                            extrapolateRight: 'clamp',
-                          });
-                          const presetY = interpolate(presetProgress, [0, 1], [25, 0]);
+
+                          const cardTranslateY = interpolate(cardProgress, [0, 1], [30, 0]);
+                          const cardOpacity = cardProgress;
 
                           return (
-                            <VideoPresetCard
+                            <div
                               key={preset.id}
-                              preset={preset}
-                              isSelected={i === selectedPresetIndex}
-                              opacity={presetOpacity}
-                              translateY={presetY}
-                            />
+                              style={{
+                                transform: `translateY(${cardTranslateY}px)`,
+                                opacity: cardOpacity,
+                              }}
+                            >
+                              <VideoPresetCard
+                                preset={preset}
+                                isSelected={i === selectedPresetIndex}
+                                opacity={1}
+                                translateY={0}
+                              />
+                            </div>
                           );
                         })}
                       </div>
@@ -570,7 +609,7 @@ export function SceneModelModal() {
                     <div
                       style={{
                         padding: '16px 24px 24px',
-                        opacity: interpolate(tabSwitchProgress, [0, 1], [0, 1], { extrapolateLeft: 'clamp' }),
+                        opacity: incomingOpacity,
                         position: 'absolute',
                         inset: 0,
                         overflow: 'hidden',

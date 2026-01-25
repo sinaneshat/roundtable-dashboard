@@ -24,7 +24,7 @@ import {
   getDepthLayerStyles,
   getParticlePosition,
 } from '../lib/camera-3d';
-import { BACKGROUNDS, BRAND } from '../lib/design-tokens';
+import { BACKGROUNDS } from '../lib/design-tokens';
 
 // ============================================================================
 // Unified Depth Particles Background
@@ -44,8 +44,8 @@ type DepthParticlesProps = {
 };
 
 /**
- * Unified rainbow depth particles background.
- * Uses BRAND.logoGradient colors for consistent visual treatment across all scenes.
+ * Unified depth particles background.
+ * Uses neutral white/gray colors for subtle depth without color tinting.
  */
 export function DepthParticles({
   frame,
@@ -54,14 +54,19 @@ export function DepthParticles({
   blur = 25,
   intensity = 1.0,
 }: DepthParticlesProps) {
-  const rainbowColors = BRAND.logoGradient;
+  // Neutral white/gray colors to avoid color tinting
+  const neutralColors = [
+    'rgba(255, 255, 255, 1)',
+    'rgba(200, 200, 200, 1)',
+    'rgba(180, 180, 180, 1)',
+  ];
   const particles = [];
 
   for (let i = 0; i < count; i++) {
     const baseX = (i * 137.5) % 100;
     const baseY = (i * 73.3) % 100;
     const size = 4 + (i % 5) * 2;
-    const colorIndex = i % rainbowColors.length;
+    const colorIndex = i % neutralColors.length;
     const speed = (0.3 + (i % 4) * 0.15) * intensity;
 
     const x = baseX + Math.sin(frame * 0.012 * speed + i) * 4;
@@ -77,7 +82,7 @@ export function DepthParticles({
           width: size,
           height: size,
           borderRadius: '50%',
-          backgroundColor: rainbowColors[colorIndex],
+          backgroundColor: neutralColors[colorIndex],
           opacity: baseOpacity * intensity,
         }}
       />,
@@ -642,7 +647,7 @@ type GlowProps = {
 
 export function Glow({
   children,
-  color = 'rgba(168, 85, 247, 0.6)',
+  color = 'rgba(100, 116, 139, 0.6)',
   intensity = 20,
   delay = 0,
   pulse = false,

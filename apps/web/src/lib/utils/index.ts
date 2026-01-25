@@ -7,6 +7,7 @@ export * from './date-transforms';
 export * from './dev-logger';
 export * from './error-handling';
 export * from './file-capability';
+export * from './job-metadata';
 export * from './memo-utils';
 export * from './message-formatting';
 export * from './message-status';

@@ -3,12 +3,10 @@ import type { UserFeedbackType } from '@roundtable/shared';
 import {
   DEFAULT_USER_FEEDBACK_TYPE,
   USER_FEEDBACK_TYPES,
-  UserFeedbackTypeSchema,
 } from '@roundtable/shared';
 import { usePostHog } from 'posthog-js/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
-import { z } from 'zod';
 
 import { FormProvider } from '@/components/forms/form-provider';
 import { RHFSelect } from '@/components/forms/rhf-select';
@@ -16,22 +14,11 @@ import { RHFTextarea } from '@/components/forms/rhf-textarea';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { POSTHOG_SURVEYS } from '@/constants';
 import { useTranslations } from '@/lib/i18n';
 import type { FormOptions } from '@/lib/schemas';
-
-const POSTHOG_FEEDBACK_SURVEY_ID = '019432a1-feedback-0000-survey-roundtable';
-const POSTHOG_FEEDBACK_SURVEY_NAME = 'Roundtable User Feedback';
-const POSTHOG_FEEDBACK_MESSAGE_QUESTION_ID = 'd8462827-1575-4e1e-ab1d-b5fddd9f829c';
-const POSTHOG_FEEDBACK_TYPE_QUESTION_ID = 'a3071551-d599-4eeb-9ffe-69e93dc647b6';
-
-const MIN_MESSAGE_LENGTH = 10;
-
-const FeedbackFormSchema = z.object({
-  feedbackType: UserFeedbackTypeSchema,
-  message: z.string().min(MIN_MESSAGE_LENGTH),
-});
-
-type FeedbackFormValues = z.infer<typeof FeedbackFormSchema>;
+import type { FeedbackFormValues } from '@/lib/schemas/forms';
+import { FeedbackFormSchema } from '@/lib/schemas/forms';
 
 export type FeedbackModalProps = {
   open: boolean;
@@ -65,8 +52,8 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
   useEffect(() => {
     if (open && posthog && !hasCapturedShownRef.current) {
       posthog.capture('survey shown', {
-        $survey_id: POSTHOG_FEEDBACK_SURVEY_ID,
-        $survey_name: POSTHOG_FEEDBACK_SURVEY_NAME,
+        $survey_id: POSTHOG_SURVEYS.FEEDBACK.ID,
+        $survey_name: POSTHOG_SURVEYS.FEEDBACK.NAME,
       });
       hasCapturedShownRef.current = true;
     }
@@ -84,22 +71,22 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
     hasSubmittedRef.current = true;
 
     posthog.capture('survey sent', {
-      $survey_id: POSTHOG_FEEDBACK_SURVEY_ID,
-      $survey_name: POSTHOG_FEEDBACK_SURVEY_NAME,
+      $survey_id: POSTHOG_SURVEYS.FEEDBACK.ID,
+      $survey_name: POSTHOG_SURVEYS.FEEDBACK.NAME,
       $survey_questions: [
         {
-          id: POSTHOG_FEEDBACK_MESSAGE_QUESTION_ID,
+          id: POSTHOG_SURVEYS.FEEDBACK.QUESTIONS.MESSAGE,
           question: 'Share your thoughts, report bugs, or request features',
           type: 'open_text',
         },
         {
-          id: POSTHOG_FEEDBACK_TYPE_QUESTION_ID,
+          id: POSTHOG_SURVEYS.FEEDBACK.QUESTIONS.TYPE,
           question: 'What type of feedback is this?',
           type: 'multiple_choice',
         },
       ],
-      [`$survey_response_${POSTHOG_FEEDBACK_MESSAGE_QUESTION_ID}`]: values.message,
-      [`$survey_response_${POSTHOG_FEEDBACK_TYPE_QUESTION_ID}`]: values.feedbackType,
+      [`$survey_response_${POSTHOG_SURVEYS.FEEDBACK.QUESTIONS.MESSAGE}`]: values.message,
+      [`$survey_response_${POSTHOG_SURVEYS.FEEDBACK.QUESTIONS.TYPE}`]: values.feedbackType,
     });
 
     setShowSuccess(true);
@@ -116,8 +103,8 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
 
     if (posthog && !hasSubmittedRef.current && !showSuccess) {
       posthog.capture('survey dismissed', {
-        $survey_id: POSTHOG_FEEDBACK_SURVEY_ID,
-        $survey_name: POSTHOG_FEEDBACK_SURVEY_NAME,
+        $survey_id: POSTHOG_SURVEYS.FEEDBACK.ID,
+        $survey_name: POSTHOG_SURVEYS.FEEDBACK.NAME,
       });
     }
 

@@ -53,7 +53,6 @@ const COLORS = {
   white: '#ffffff',
   black: '#000000',
   blue500: '#3b82f6', // Voice recording
-  purple500: '#a855f7', // Auto mode
 } as const;
 
 // ============================================================================
@@ -158,10 +157,10 @@ export function VideoParticipantPlaceholder({ modelName, provider, isModerator, 
     <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
       {/* Header: flex items-center gap-3 mb-5 flex-wrap */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' as const }}>
-        {/* Avatar: real model icon */}
+        {/* Avatar: provider icon for AI participants, static logo for moderator */}
         {isModerator
           ? <VideoAvatar src={staticFile('static/logo.webp')} fallback="RT" size={32} />
-          : <VideoAvatar provider={provider} fallback={modelName} size={32} />}
+          : <VideoAvatar provider={provider} fallback={modelName?.charAt(0) || 'A'} size={32} />}
         {/* Model name: text-xl font-semibold text-muted-foreground */}
         <span style={{ fontSize: 20, fontWeight: 600, color: COLORS.mutedForeground }}>
           {modelName}
@@ -939,10 +938,10 @@ export function VideoParticipantMessage({ modelName, provider, role, isModerator
     >
       {/* Header: flex items-center gap-3 mb-5 flex-wrap */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 20, flexWrap: 'wrap' as const }}>
-        {/* Avatar: real model icon */}
+        {/* Avatar: provider icon for AI participants, static logo for moderator */}
         {isModerator
           ? <VideoAvatar src={staticFile('static/logo.webp')} fallback="RT" size={32} />
-          : <VideoAvatar provider={provider} fallback={modelName} size={32} />}
+          : <VideoAvatar provider={provider} fallback={modelName?.charAt(0) || 'A'} size={32} />}
         {/* Model name */}
         <span style={{ fontSize: 20, fontWeight: 600, color: isModerator ? 'rgba(255,255,255,0.95)' : '#a3a3a3' }}>
           {modelName}
@@ -1268,8 +1267,8 @@ export function VideoAutoModeToggle({ value }: VideoAutoModeToggleProps) {
         color: isAuto ? '#dedede' : 'rgba(163, 163, 163, 0.7)',
         ...(isAuto
           ? {
-              background: 'linear-gradient(135deg, rgba(139,92,246,0.2), rgba(168,85,247,0.2), rgba(217,70,239,0.2))',
-              border: '1px solid rgba(168, 85, 247, 0.3)',
+              background: 'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.12), rgba(255,255,255,0.08))',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
             }
           : {}),
       }}
@@ -1405,9 +1404,48 @@ type VideoFileChipProps = {
 const FILE_TYPE_COLORS = {
   image: 'rgba(56, 189, 248, 0.2)', // cyan
   pdf: 'rgba(239, 68, 68, 0.2)', // red
-  code: 'rgba(139, 92, 246, 0.2)', // purple
+  code: 'rgba(100, 100, 120, 0.2)', // neutral gray-blue, not purple
   text: 'rgba(163, 163, 163, 0.2)', // gray
 };
+
+function VideoFileIcon({ fileType }: { fileType: 'image' | 'pdf' | 'code' | 'text' }) {
+  const iconColor = COLORS.foreground;
+  if (fileType === 'image') {
+    return (
+      <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
+        <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
+        <circle cx="9" cy="9" r="2" />
+        <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
+      </svg>
+    );
+  }
+  if (fileType === 'pdf') {
+    return (
+      <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
+        <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+        <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      </svg>
+    );
+  }
+  if (fileType === 'code') {
+    return (
+      <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
+        <path d="m18 16 4-4-4-4" />
+        <path d="m6 8-4 4 4 4" />
+        <path d="m14.5 4-5 16" />
+      </svg>
+    );
+  }
+  return (
+    <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
+      <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
+      <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+      <path d="M10 9H8" />
+      <path d="M16 13H8" />
+      <path d="M16 17H8" />
+    </svg>
+  );
+}
 
 export function VideoFileChip({ filename, fileType, previewUrl }: VideoFileChipProps) {
   const chipStyles: CSSProperties = {
@@ -1470,46 +1508,6 @@ export function VideoFileChip({ filename, fileType, previewUrl }: VideoFileChipP
     color: COLORS.mutedForeground,
   };
 
-  // File icons
-  const FileIcon = () => {
-    const iconColor = COLORS.foreground;
-    if (fileType === 'image') {
-      return (
-        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
-          <rect width="18" height="18" x="3" y="3" rx="2" ry="2" />
-          <circle cx="9" cy="9" r="2" />
-          <path d="m21 15-3.086-3.086a2 2 0 0 0-2.828 0L6 21" />
-        </svg>
-      );
-    }
-    if (fileType === 'pdf') {
-      return (
-        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
-          <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
-          <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-        </svg>
-      );
-    }
-    if (fileType === 'code') {
-      return (
-        <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
-          <path d="m18 16 4-4-4-4" />
-          <path d="m6 8-4 4 4 4" />
-          <path d="m14.5 4-5 16" />
-        </svg>
-      );
-    }
-    return (
-      <svg width={18} height={18} viewBox="0 0 24 24" fill="none" stroke={iconColor} strokeWidth={2}>
-        <path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z" />
-        <path d="M14 2v4a2 2 0 0 0 2 2h4" />
-        <path d="M10 9H8" />
-        <path d="M16 13H8" />
-        <path d="M16 17H8" />
-      </svg>
-    );
-  };
-
   const extension = filename.split('.').pop() || '';
 
   return (
@@ -1520,7 +1518,7 @@ export function VideoFileChip({ filename, fileType, previewUrl }: VideoFileChipP
               <Img src={previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
             )
           : (
-              <FileIcon />
+              <VideoFileIcon fileType={fileType} />
             )}
       </div>
       <div style={textStyles}>

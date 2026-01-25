@@ -1,4 +1,3 @@
-import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,23 +10,9 @@ import {
 import { Label } from '@/components/ui/label';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
+import { getJobStatusConfig } from '@/lib/ui/job-status-config';
+import { getJobCompletedAt, getJobErrorMessage, getJobStartedAt } from '@/lib/utils/job-metadata';
 import type { AutomatedJob } from '@/services/api';
-
-const STATUS_ICONS = {
-  pending: Icons.clock,
-  running: Icons.loader,
-  completed: Icons.checkCircle,
-  failed: Icons.alertCircle,
-  cancelled: Icons.x,
-} as const;
-
-const STATUS_VARIANTS: Record<string, 'default' | 'secondary' | 'destructive' | 'outline'> = {
-  pending: 'outline',
-  running: 'default',
-  completed: 'secondary',
-  failed: 'destructive',
-  cancelled: 'outline',
-};
 
 type JobDetailDialogProps = {
   job: AutomatedJob | null;
@@ -41,19 +26,18 @@ export function JobDetailDialog({ job, open, onOpenChange }: JobDetailDialogProp
   if (!job)
     return null;
 
-  const StatusIcon = STATUS_ICONS[job.status] ?? Icons.circle;
-  const statusVariant = STATUS_VARIANTS[job.status] ?? 'outline';
-  const errorMessage = job.metadata?.errorMessage as string | undefined;
-  const startedAt = job.metadata?.startedAt as string | undefined;
-  const completedAt = job.metadata?.completedAt as string | undefined;
+  const statusConfig = getJobStatusConfig(job.status);
+  const errorMessage = getJobErrorMessage(job);
+  const startedAt = getJobStartedAt(job);
+  const completedAt = getJobCompletedAt(job);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Badge variant={statusVariant} className="flex items-center gap-1">
-              <StatusIcon className={cn('size-3', job.status === 'running' && 'animate-spin')} />
+            <Badge variant={statusConfig.variant} className="flex items-center gap-1">
+              <statusConfig.icon className={cn('size-3', statusConfig.isAnimated && 'animate-spin')} />
               {job.status}
             </Badge>
             {t('admin.jobs.details')}

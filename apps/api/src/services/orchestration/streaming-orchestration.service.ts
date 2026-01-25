@@ -128,6 +128,46 @@ const ImagePartExtractSchema = z.object({
 }).passthrough();
 
 /**
+ * UI-compatible file part type
+ * Matches AI SDK's UIMessage file part structure
+ */
+type UIFilePart = {
+  type: 'file';
+  url: string;
+  mediaType: string;
+  filename?: string;
+};
+
+/**
+ * UI-compatible image part type
+ * Matches AI SDK's UIMessage image part structure
+ */
+type UIImagePart = {
+  type: 'image';
+  image: string;
+  mimeType: string;
+};
+
+/**
+ * Union of all convertible UI part types
+ */
+type UIConvertedPart = UIFilePart | UIImagePart;
+
+/**
+ * Type guard for file parts with URL
+ */
+function isFilePartWithUrl(part: ModelFilePart | UrlFilePart): part is ModelFilePart | UrlFilePart {
+  return part.type === 'file' && 'url' in part && typeof part.url === 'string';
+}
+
+/**
+ * Type guard for image parts
+ */
+function isImagePartWithData(part: ModelFilePart | UrlFilePart): part is UrlFilePart & { type: 'image'; image: string; mimeType: string } {
+  return part.type === 'image' && 'image' in part && 'mimeType' in part;
+}
+
+/**
  * Convert model file parts (with data/mimeType fields) to UI message parts (with url/mediaType fields)
  *
  * This handles the type conversion between:
@@ -137,7 +177,7 @@ const ImagePartExtractSchema = z.object({
  * The AI SDK's UIMessage expects parts with { type, url, mediaType, filename }
  * Our backend file parts include extra fields (data, mimeType) for internal processing
  *
- * Uses Zod .safeParse() for type-safe property extraction without any casts.
+ * Uses type guards and Zod schemas for type-safe conversion.
  *
  * @param fileParts - Array of model file parts from attachment loading
  * @returns Array of UI-compatible file parts suitable for UIMessage.parts
@@ -145,34 +185,60 @@ const ImagePartExtractSchema = z.object({
 function convertFilePartsToUIMessageParts<T extends UIMessage>(
   fileParts: (ModelFilePart | UrlFilePart)[],
 ): Array<T['parts'][number]> {
-  return fileParts.map((part): T['parts'][number] => {
-    if (part.type === 'file') {
-      const fileParseResult = FilePartWithUrlExtractSchema.safeParse(part);
-      if (fileParseResult.success) {
-        const { url, mediaType, mimeType, filename } = fileParseResult.data;
-        const converted = {
-          type: 'file' as const,
+  const result: UIConvertedPart[] = [];
+
+  for (const part of fileParts) {
+    if (part.type === 'file' && isFilePartWithUrl(part)) {
+      const parseResult = FilePartWithUrlExtractSchema.safeParse(part);
+      if (parseResult.success) {
+        const { url, mediaType, mimeType, filename } = parseResult.data;
+        const converted: UIFilePart = {
+          type: 'file',
           url,
           mediaType: mediaType ?? mimeType ?? '',
           filename,
         };
-        return converted as unknown as T['parts'][number];
+        result.push(converted);
+        continue;
       }
     }
-    if (part.type === 'image') {
-      const imageParseResult = ImagePartExtractSchema.safeParse(part);
-      if (imageParseResult.success) {
-        const { image, mimeType } = imageParseResult.data;
-        const converted = {
-          type: 'image' as const,
+
+    if (part.type === 'image' && isImagePartWithData(part)) {
+      const parseResult = ImagePartExtractSchema.safeParse(part);
+      if (parseResult.success) {
+        const { image, mimeType } = parseResult.data;
+        const converted: UIImagePart = {
+          type: 'image',
           image,
           mimeType,
         };
-        return converted as unknown as T['parts'][number];
+        result.push(converted);
+        continue;
       }
     }
-    return part as unknown as T['parts'][number];
-  });
+
+    // For unhandled parts, try to extract minimal valid structure
+    if (part.type === 'file' && 'url' in part) {
+      const url = typeof part.url === 'string' ? part.url : '';
+      const mediaType = ('mediaType' in part && typeof part.mediaType === 'string')
+        ? part.mediaType
+        : ('mimeType' in part && typeof part.mimeType === 'string')
+            ? part.mimeType
+            : '';
+      const filename = ('filename' in part && typeof part.filename === 'string')
+        ? part.filename
+        : undefined;
+      result.push({ type: 'file', url, mediaType, filename });
+    } else if (part.type === 'image' && 'image' in part && 'mimeType' in part) {
+      const image = typeof part.image === 'string' ? part.image : '';
+      const mimeType = typeof part.mimeType === 'string' ? part.mimeType : '';
+      result.push({ type: 'image', image, mimeType });
+    }
+  }
+
+  // UIConvertedPart is compatible with UIMessage['parts'][number] since both
+  // include file and image part types with the same structure
+  return result as Array<T['parts'][number]>;
 }
 
 // ============================================================================

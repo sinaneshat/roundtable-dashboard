@@ -29,14 +29,14 @@ describe('store Action Frequency Audit', () => {
        * Test: Start vs end subscription count equal
        * Verifies no subscription leaks during streaming
        */
-      let subscriptionCount = 0;
+      let _subscriptionCount = 0;
       let unsubscribeCount = 0;
 
       // Create multiple subscriptions to simulate component mounts
       const subscriptions: Array<() => void> = [];
       for (let i = 0; i < 5; i++) {
         const unsub = store.subscribe(() => {
-          subscriptionCount++;
+          _subscriptionCount++;
         });
         subscriptions.push(() => {
           unsubscribeCount++;

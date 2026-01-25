@@ -77,7 +77,7 @@ export function useUpdateProjectMutation() {
                   data: {
                     ...page.data,
                     items: page.data.items.map(
-                      project => (project.id === updatedProject.id ? updatedProject : project),
+                      (project: typeof updatedProject) => (project.id === updatedProject.id ? updatedProject : project),
                     ),
                   },
                 };
@@ -289,7 +289,7 @@ export function useRemoveAttachmentFromProjectMutation() {
                 ...page,
                 data: {
                   ...page.data,
-                  items: page.data.items.filter(item => item.id !== attachmentId),
+                  items: page.data.items.filter((item: typeof page.data.items[number]) => item.id !== attachmentId),
                 },
               };
             }),

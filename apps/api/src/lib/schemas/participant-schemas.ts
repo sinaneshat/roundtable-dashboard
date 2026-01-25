@@ -506,3 +506,85 @@ export function isParticipantConfigArray(
   const result = z.array(ParticipantConfigSchema).safeParse(data);
   return result.success;
 }
+
+// ============================================================================
+// PARTICIPANT VALIDATION SCHEMAS - SERVICE LAYER
+// ============================================================================
+
+/**
+ * ✅ ParticipantForValidation schema - Lightweight validation input
+ *
+ * SINGLE SOURCE OF TRUTH for participant validation inputs.
+ * Used in:
+ * - participant-validation.service.ts (validateParticipantUniqueness, validateParticipantModels)
+ * - Tier limit validation
+ * - Model access validation
+ *
+ * Minimal schema for validation operations - only fields needed for checks.
+ *
+ * @example
+ * ```typescript
+ * import { ParticipantForValidationSchema } from '@/lib/schemas/participant-schemas';
+ *
+ * const participants = z.array(ParticipantForValidationSchema).parse(input);
+ * validateParticipantUniqueness(participants);
+ * ```
+ */
+export const ParticipantForValidationSchema = z.object({
+  id: z.string(),
+  modelId: z.string(),
+  isEnabled: z.boolean().optional(),
+});
+
+export type ParticipantForValidation = z.infer<
+  typeof ParticipantForValidationSchema
+>;
+
+/**
+ * ✅ ValidateModelAccessOptions schema - Model access validation options
+ *
+ * SINGLE SOURCE OF TRUTH for model access validation options.
+ * Used in:
+ * - participant-validation.service.ts (validateModelAccess)
+ *
+ * Configures behavior of model access validation.
+ *
+ * @example
+ * ```typescript
+ * import { ValidateModelAccessOptionsSchema } from '@/lib/schemas/participant-schemas';
+ *
+ * const options = ValidateModelAccessOptionsSchema.parse({ skipPricingCheck: true });
+ * await validateModelAccess(modelId, userTier, options);
+ * ```
+ */
+export const ValidateModelAccessOptionsSchema = z.object({
+  skipPricingCheck: z.boolean().optional(),
+});
+
+export type ValidateModelAccessOptions = z.infer<
+  typeof ValidateModelAccessOptionsSchema
+>;
+
+/**
+ * ✅ TYPE GUARD: Check if value is ParticipantForValidation
+ *
+ * @param data - Data to validate
+ * @returns True if data matches ParticipantForValidationSchema
+ */
+export function isParticipantForValidation(
+  data: unknown,
+): data is ParticipantForValidation {
+  return ParticipantForValidationSchema.safeParse(data).success;
+}
+
+/**
+ * ✅ TYPE GUARD: Check if array contains valid ParticipantForValidation entries
+ *
+ * @param data - Data to validate
+ * @returns True if data is array of ParticipantForValidation
+ */
+export function isParticipantForValidationArray(
+  data: unknown,
+): data is ParticipantForValidation[] {
+  return z.array(ParticipantForValidationSchema).safeParse(data).success;
+}

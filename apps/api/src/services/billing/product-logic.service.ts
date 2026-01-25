@@ -88,15 +88,16 @@ export const TIER_CONFIG: Record<SubscriptionTier, TierConfiguration> = {
 function deriveTierRecord<T>(
   extractor: (config: TierConfiguration) => T,
 ): Record<SubscriptionTier, T> {
-  return Object.fromEntries(
-    SUBSCRIPTION_TIERS.map((tier: SubscriptionTier) => {
-      const config = TIER_CONFIG[tier];
-      if (!config) {
-        throw new Error(`Missing tier configuration for ${tier}`);
-      }
-      return [tier, extractor(config)];
-    }),
-  ) as Record<SubscriptionTier, T>;
+  const result: Partial<Record<SubscriptionTier, T>> = {};
+  for (const tier of SUBSCRIPTION_TIERS) {
+    const config = TIER_CONFIG[tier];
+    if (!config) {
+      throw new Error(`Missing tier configuration for ${tier}`);
+    }
+    result[tier] = extractor(config);
+  }
+  // Safe cast: all tiers are assigned above since SUBSCRIPTION_TIERS is exhaustive
+  return result as Record<SubscriptionTier, T>;
 }
 
 export const MAX_OUTPUT_TOKENS_BY_TIER: Record<SubscriptionTier, number>

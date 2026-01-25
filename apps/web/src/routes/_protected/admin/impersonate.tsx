@@ -177,7 +177,7 @@ function ImpersonatePage() {
                             )
                           : (
                               <CommandGroup className="p-1.5">
-                                {users.map(user => (
+                                {users.map((user: UserResult) => (
                                   <CommandItem
                                     key={user.id}
                                     value={user.id}

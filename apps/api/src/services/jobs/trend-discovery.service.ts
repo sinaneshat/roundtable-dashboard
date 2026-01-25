@@ -9,7 +9,6 @@ import { ModelIds } from '@roundtable/shared/enums';
 import { generateObject } from 'ai';
 import { z } from 'zod';
 
-import { normalizeError } from '@/common/error-handling';
 import type { TrendSuggestion } from '@/routes/admin/jobs/trends/schema';
 import type { WebSearchParameters } from '@/routes/chat/schema';
 import { performWebSearch } from '@/services/search/web-search.service';
@@ -90,10 +89,6 @@ export async function discoverTrends(
   maxSuggestions: number,
   env: ApiEnv['Bindings'],
 ): Promise<TrendDiscoveryResult> {
-  const startTime = performance.now();
-
-  console.log('[TrendDiscovery] Starting', { keyword, platforms });
-
   // Search each platform in parallel
   const searchPromises = platforms.map(async (platform) => {
     const config = PLATFORM_SEARCH_CONFIGS[platform];
@@ -122,8 +117,7 @@ export async function discoverTrends(
         snippet: r.content || r.excerpt || '',
         url: r.url,
       }));
-    } catch (err) {
-      console.error(`[TrendDiscovery] Search failed for ${platform}:`, normalizeError(err).message);
+    } catch {
       return [];
     }
   });
@@ -132,7 +126,6 @@ export async function discoverTrends(
   const allResults = searchResults.flat();
 
   if (allResults.length === 0) {
-    console.log('[TrendDiscovery] No search results found');
     return {
       suggestions: [],
       searchSummary: {
@@ -171,11 +164,6 @@ export async function discoverTrends(
         reasoning: s.reasoning,
       }));
 
-    console.log('[TrendDiscovery] Completed', {
-      duration: performance.now() - startTime,
-      suggestionsCount: suggestions.length,
-    });
-
     return {
       suggestions,
       searchSummary: {
@@ -184,9 +172,7 @@ export async function discoverTrends(
         keyword,
       },
     };
-  } catch (err) {
-    console.error('[TrendDiscovery] AI extraction failed:', normalizeError(err).message);
-
+  } catch {
     // Return empty suggestions on AI failure
     return {
       suggestions: [],
