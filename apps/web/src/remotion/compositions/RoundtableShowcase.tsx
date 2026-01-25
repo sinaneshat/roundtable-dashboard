@@ -19,12 +19,19 @@
  * 07 Finale (5s)       - Grand finale with CTA
  */
 
-import { linearTiming, TransitionSeries } from '@remotion/transitions';
-import { fade } from '@remotion/transitions/fade';
-import { Audio, interpolate, staticFile, useCurrentFrame, useVideoConfig } from 'remotion';
+import { springTiming, TransitionSeries } from '@remotion/transitions';
+import { Audio, interpolate, staticFile, useCurrentFrame } from 'remotion';
 
 import { ChromaticAberration } from '../components/ChromaticAberration';
-import { VideoProgressIndicator } from '../components/VideoProgressIndicator';
+import { CINEMATIC_SPRINGS, TRANSITION_SPRINGS } from '../lib/cinematic-springs';
+import {
+  chromaticZoom,
+  depthFade,
+  depthZoom,
+  parallaxPush,
+  spatialCameraOrbit,
+  zoomThrough,
+} from '../transitions';
 // Scene imports
 import { Scene01Intro } from './showcase-scenes/Scene01Intro';
 import { Scene02Homepage } from './showcase-scenes/Scene02Homepage';
@@ -34,10 +41,28 @@ import { SceneChatInput } from './showcase-scenes/SceneChatInput';
 import { SceneChatThread } from './showcase-scenes/SceneChatThread';
 import { SceneModelModal } from './showcase-scenes/SceneModelModal';
 
-// Transition timing presets
-const FAST_TRANSITION = linearTiming({ durationInFrames: 15 });
-const NORMAL_TRANSITION = linearTiming({ durationInFrames: 24 });
-const SLOW_TRANSITION = linearTiming({ durationInFrames: 36 });
+// Transition timing presets - using spring timing for cinematic feel
+const FAST_TRANSITION = springTiming({
+  config: TRANSITION_SPRINGS.depthFade,
+  durationInFrames: 18,
+});
+const NORMAL_TRANSITION = springTiming({
+  config: TRANSITION_SPRINGS.depthZoom,
+  durationInFrames: 28,
+});
+const SLOW_TRANSITION = springTiming({
+  config: TRANSITION_SPRINGS.chromaticZoom,
+  durationInFrames: 36,
+});
+// Special transitions for key moments
+const ORBIT_TRANSITION = springTiming({
+  config: TRANSITION_SPRINGS.cameraOrbit,
+  durationInFrames: 30,
+});
+const DRAMATIC_TRANSITION = springTiming({
+  config: CINEMATIC_SPRINGS.impactMoment,
+  durationInFrames: 32,
+});
 
 // Transition frame positions for chromatic aberration
 // Updated: intro extended to 150 frames (5s), chatInput to 1080 frames (36s)
@@ -68,165 +93,42 @@ const SCENE_DURATIONS = {
 } as const;
 
 /**
- * Audio - Single continuous track with volume automation
+ * Audio - Minimal Cut Splice at Natural Phrase Boundaries
  *
- * IMPORTANT: This plays ONE continuous audio stream (no cuts/gaps)
- * Volume is automated to match scene energy levels
+ * Structure (ONE crossfade at ~64s):
+ *   0-64s:  Building energy (track 16.6s-82.8s, phrases 2-5)
+ *   64-87s: THE DROP! Peak energy (track 165.5s-199s, phrases 11-12)
  *
- * To adjust timing:
- * - Change AUDIO_START_OFFSET to start from a different point in the track
- * - Adjust the volume keyframes below to match your music's energy
- *
- * Scene Timeline (frames @ 30fps):
- * - 0-150: Intro (5s)
- * - 150-276: Homepage (4.2s)
- * - 276-381: Sidebar (3.5s)
- * - 381-1446: ChatInput (35.5s) - longest section
- * - 1446-1812: ModelModal (12.2s)
- * - 1812-2418: ChatThread (20.2s) - PEAK ENERGY
- * - 2418-2532: Finale (3.8s)
+ * The audio has natural dynamics - minimal volume automation needed.
+ * Crossfade at 64s is at phrase boundary where patterns align.
  */
 function ShowcaseAudio() {
-  const { fps } = useVideoConfig();
   const total = getShowcaseDuration();
-
-  // ============================================================================
-  // MUSIC START POINT - Change this to start from a different part of the track
-  // ============================================================================
-  const AUDIO_START_SECONDS = 60; // Start at 1:00 into the track
-  const AUDIO_START_OFFSET = AUDIO_START_SECONDS * fps;
 
   return (
     <Audio
-      src={staticFile('static/music/showcase-bg.mp3')}
-      startFrom={AUDIO_START_OFFSET}
+      src={staticFile('static/music/showcase-spliced.mp3')}
       volume={(f: number) => {
-        // ====================================================================
-        // VOLUME KEYFRAMES - Adjust these to match your music's energy!
-        // Format: [frame] → [volume]
-        // ====================================================================
+        // Minimal volume automation - let the spliced audio's natural dynamics shine
+        // Quick fade in, late gentle fade out
         const baseVolume = interpolate(
           f,
           [
-            // INTRO - Soft fade in
             0, // Start
-            45, // Fade in complete
-            140, // Before transition
-
-            // HOMEPAGE - Building
-            150, // Scene start
-            270, // Before transition
-
-            // SIDEBAR - Steady
-            276, // Scene start
-            375, // Before transition
-
-            // CHAT INPUT - Long section, gradual build
-            381, // Scene start - features begin
-            600, // Model selection
-            800, // File features
-            1000, // Voice recording
-            1200, // Typing
-            1400, // Pre-send buildup
-            1440, // Before transition
-
-            // MODEL MODAL - High energy
-            1446, // Scene start
-            1600, // Tabs shown
-            1800, // Before transition
-
-            // CHAT THREAD - PEAK (THE DROP!)
-            1812, // THE DROP - scene start
-            1900, // First responses
-            2100, // All models active - PEAK
-            2300, // Moderator synthesis
-            2410, // Before transition
-
-            // FINALE - Resolution
-            2418, // Scene start
-            2480, // CTA moment
-            total - 45, // Start fade out
-            total, // End - silence
+            45, // Fade in done (1.5s)
+            total - 45, // Begin fade (last 1.5s only)
+            total, // End
           ],
           [
-            // INTRO
             0, // Silence
-            0.32, // Soft intro
-            0.35, // Established
-
-            // HOMEPAGE
-            0.38, // Building energy
-            0.40, // Ready for next
-
-            // SIDEBAR
-            0.40, // Steady
-            0.42, // Ready for features
-
-            // CHAT INPUT - Gradual build through long section
-            0.42, // Start
-            0.44, // Model selection
-            0.46, // Files
-            0.50, // Voice - rising
-            0.52, // Typing
-            0.55, // Building anticipation
-            0.58, // Pre-transition peak
-
-            // MODEL MODAL
-            0.55, // Scene start
-            0.58, // Tabs
-            0.60, // Before drop
-
-            // CHAT THREAD - PEAK
-            0.62, // THE DROP!
-            0.65, // Responses starting
-            0.68, // PEAK ENERGY - all models
-            0.62, // Moderator - slight pullback
-            0.58, // Winding down
-
-            // FINALE
-            0.55, // Resolution begins
-            0.58, // CTA boost
-            0.45, // Fading
+            0.65, // Full volume
+            0.65, // Full volume
             0, // Silence
           ],
           { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
         );
 
-        // ====================================================================
-        // TRANSITION BOOSTS - Punch at scene changes
-        // ====================================================================
-        let transitionBoost = 0;
-        for (const transFrame of TRANSITION_FRAMES) {
-          const dist = Math.abs(f - transFrame);
-          if (dist < 12) {
-            const boost = interpolate(dist, [0, 6, 12], [0.10, 0.05, 0], {
-              extrapolateRight: 'clamp',
-            });
-            transitionBoost = Math.max(transitionBoost, boost);
-          }
-        }
-
-        // ====================================================================
-        // KEY MOMENT ACCENTS
-        // ====================================================================
-        // Send button moment (end of ChatInput)
-        const sendBoost = f >= 1380 && f < 1420
-          ? interpolate(f - 1380, [0, 20, 40], [0, 0.06, 0], { extrapolateRight: 'clamp' })
-          : 0;
-
-        // THE DROP moment (ChatThread start)
-        const dropBoost = f >= 1812 && f < 1860
-          ? interpolate(f - 1812, [0, 24, 48], [0, 0.08, 0], { extrapolateRight: 'clamp' })
-          : 0;
-
-        // CTA reveal (Finale)
-        const ctaBoost = f >= 2450 && f < 2500
-          ? interpolate(f - 2450, [0, 25, 50], [0, 0.06, 0], { extrapolateRight: 'clamp' })
-          : 0;
-
-        // Combine and clamp
-        const finalVolume = baseVolume + transitionBoost + sendBoost + dropBoost + ctaBoost;
-        return Math.max(0, Math.min(finalVolume, 0.72));
+        return baseVolume;
       }}
     />
   );
@@ -245,11 +147,7 @@ export function RoundtableShowcase() {
         baseOpacity={0.2}
       />
 
-      {/* Progress dots indicator */}
-      <VideoProgressIndicator
-        sceneStarts={[0, 150, 276, 381, 1446, 1812, 2418]}
-        totalDuration={getShowcaseDuration()}
-      />
+      {/* Progress dots indicator removed per user request */}
 
       {/* Background music with cinematic volume automation
           Emotional arc:
@@ -272,9 +170,9 @@ export function RoundtableShowcase() {
           <Scene01Intro />
         </TransitionSeries.Sequence>
 
-        {/* Transition 1: Intro → Homepage */}
+        {/* Transition 1: Intro → Homepage - Depth zoom with 3D perspective */}
         <TransitionSeries.Transition
-          presentation={fade()}
+          presentation={depthZoom({ perspective: 1400, maxDepth: 350 })}
           timing={NORMAL_TRANSITION}
         />
 
@@ -283,10 +181,10 @@ export function RoundtableShowcase() {
           <Scene02Homepage />
         </TransitionSeries.Sequence>
 
-        {/* Transition 2: Homepage → Sidebar */}
+        {/* Transition 2: Homepage → Sidebar - Camera orbits left */}
         <TransitionSeries.Transition
-          presentation={fade()}
-          timing={FAST_TRANSITION}
+          presentation={spatialCameraOrbit({ direction: 'counterclockwise', rotationDegrees: 35 })}
+          timing={ORBIT_TRANSITION}
         />
 
         {/* Scene 3: Sidebar Navigation */}
@@ -294,9 +192,9 @@ export function RoundtableShowcase() {
           <Scene03Sidebar />
         </TransitionSeries.Sequence>
 
-        {/* Transition 3: Sidebar → ChatInput */}
+        {/* Transition 3: Sidebar → ChatInput - Subtle depth fade */}
         <TransitionSeries.Transition
-          presentation={fade()}
+          presentation={depthFade({ depth: 250 })}
           timing={FAST_TRANSITION}
         />
 
@@ -305,9 +203,9 @@ export function RoundtableShowcase() {
           <SceneChatInput />
         </TransitionSeries.Sequence>
 
-        {/* Transition 4: ChatInput → ModelModal */}
+        {/* Transition 4: ChatInput → ModelModal - Zoom through */}
         <TransitionSeries.Transition
-          presentation={fade()}
+          presentation={zoomThrough({ maxZoom: 450 })}
           timing={NORMAL_TRANSITION}
         />
 
@@ -316,10 +214,10 @@ export function RoundtableShowcase() {
           <SceneModelModal />
         </TransitionSeries.Sequence>
 
-        {/* Transition 5: ModelModal → ChatThread */}
+        {/* Transition 5: ModelModal → ChatThread - THE DROP! Parallax push */}
         <TransitionSeries.Transition
-          presentation={fade()}
-          timing={NORMAL_TRANSITION}
+          presentation={parallaxPush({ layers: 5, maxDepth: 500, aperture: 2.0 })}
+          timing={DRAMATIC_TRANSITION}
         />
 
         {/* Scene 6: Unified Chat Thread - THE CORE FEATURE */}
@@ -327,9 +225,9 @@ export function RoundtableShowcase() {
           <SceneChatThread />
         </TransitionSeries.Sequence>
 
-        {/* Transition 6: ChatThread → Finale */}
+        {/* Transition 6: ChatThread → Finale - Chromatic zoom for finale */}
         <TransitionSeries.Transition
-          presentation={fade()}
+          presentation={chromaticZoom({ maxZoom: 1.8, maxRgbSeparation: 12 })}
           timing={SLOW_TRANSITION}
         />
 
@@ -349,13 +247,15 @@ export function getShowcaseDuration(): number {
   const sceneDurations = Object.values(SCENE_DURATIONS);
   const totalSceneDuration = sceneDurations.reduce((a, b) => a + b, 0);
 
-  // 6 transitions between 7 scenes (updated for 3D transitions)
+  // 6 transitions between 7 scenes (cinematic 3D transitions)
   // Transition breakdown:
-  // - 2 FAST_TRANSITION (15 frames each) = 30 frames
-  // - 3 NORMAL_TRANSITION (24 frames each) = 72 frames
+  // - 1 FAST_TRANSITION (18 frames) = 18 frames
+  // - 2 NORMAL_TRANSITION (28 frames each) = 56 frames
+  // - 1 ORBIT_TRANSITION (30 frames) = 30 frames
+  // - 1 DRAMATIC_TRANSITION (32 frames) = 32 frames
   // - 1 SLOW_TRANSITION (36 frames) = 36 frames
-  // Total transition overlap: ~138 frames
-  const transitionOverlap = 138;
+  // Total transition overlap: ~172 frames
+  const transitionOverlap = 172;
 
   return totalSceneDuration - transitionOverlap;
 }

@@ -6,27 +6,33 @@
   "exports": {
     ".": {
       "types": "./dist/index.d.ts",
-      "import": "./src/index.ts"
+      "import": "./src/index.ts",
+      "default": "./src/index.ts"
     },
     "./enums": {
       "types": "./dist/enums/index.d.ts",
-      "import": "./src/enums/index.ts"
+      "import": "./src/enums/index.ts",
+      "default": "./src/enums/index.ts"
     },
     "./types": {
       "types": "./dist/types/index.d.ts",
-      "import": "./src/types/index.ts"
+      "import": "./src/types/index.ts",
+      "default": "./src/types/index.ts"
     },
     "./validation": {
       "types": "./dist/validation/index.d.ts",
-      "import": "./src/validation/index.ts"
+      "import": "./src/validation/index.ts",
+      "default": "./src/validation/index.ts"
     },
     "./constants": {
       "types": "./dist/constants/index.d.ts",
-      "import": "./src/constants/index.ts"
+      "import": "./src/constants/index.ts",
+      "default": "./src/constants/index.ts"
     },
     "./config": {
       "types": "./dist/config/index.d.ts",
-      "import": "./src/config/index.ts"
+      "import": "./src/config/index.ts",
+      "default": "./src/config/index.ts"
     }
   },
   "main": "./src/index.ts",

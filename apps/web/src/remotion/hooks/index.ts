@@ -2,6 +2,7 @@
  * Remotion Hooks Index
  */
 
+// 3D Camera hooks
 export type {
   CameraOrbitConfig,
   CameraOrbitResult,
@@ -18,7 +19,38 @@ export {
   useDepthBlur,
   useParallaxLayers,
 } from './use3DCamera';
+
+// Advanced depth layer hooks
+export type {
+  UseDepthLayerConfig,
+  UseDepthLayersConfig,
+  UseParallaxPushConfig,
+  UseRackFocusConfig,
+} from './useAdvancedDepthLayer';
+export {
+  useDepthLayer,
+  useDepthLayers,
+  useLayerConfig,
+  useLayerDepth,
+  useLayerOrder,
+  useParallaxPush,
+  useRackFocus,
+} from './useAdvancedDepthLayer';
+
+// Camera hooks
 export { useCamera, usePanLeft, usePanRight, useZoomIn, useZoomOut } from './useCamera';
+
+// Camera orchestrator hooks
+export type { CameraOrchestratorResult, UseCameraOrchestratorConfig } from './useCameraOrchestrator';
+export {
+  createCameraOrchestrator,
+  useCameraMovement,
+  useCameraOrchestrator,
+  useDramaticEntrance,
+  useOrbitCamera,
+} from './useCameraOrchestrator';
+
+// Cinematic camera hooks
 export type { CameraMovement, CinematicCameraConfig, DepthParallaxConfig } from './useCinematicCamera';
 export {
   useCameraPan,
@@ -28,4 +60,6 @@ export {
   useSceneEntrance,
   useZoomFocus,
 } from './useCinematicCamera';
+
+// Focus transition hooks
 export { useFocusTransition } from './useFocusTransition';

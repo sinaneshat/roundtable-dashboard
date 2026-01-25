@@ -23,7 +23,7 @@ import {
 
 import { BrowserFrame } from '../../components/BrowserFrame';
 import { BrowserFrame3D } from '../../components/BrowserFrame3D';
-import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
+import { EdgeVignette } from '../../components/scene-primitives';
 import {
   VideoAvatar,
   VideoDragHandle,
@@ -292,7 +292,7 @@ export function SceneModelModal() {
   const { fps } = useVideoConfig();
 
   // Camera breathing
-  const { breathingOffset } = useCinematicCamera({
+  useCinematicCamera({
     movement: 'static',
     breathingEnabled: true,
     breathingIntensity: 2,
@@ -416,23 +416,9 @@ export function SceneModelModal() {
         fontFamily: FONTS.sans,
       }}
     >
-      {/* Background particles */}
-      <div
-        style={{
-          transform: `translate(${breathingOffset.x * 0.2}px, ${breathingOffset.y * 0.2}px)`,
-        }}
-      >
-        <DepthParticles frame={frame} baseOpacity={0.1} count={15} />
-      </div>
+      {/* Background effects removed for cleaner look */}
 
-      {/* Rainbow glow orbs */}
-      <RainbowGlowOrbs
-        frame={frame}
-        orbs={DEFAULT_GLOW_ORBS.centered}
-        breathingOffset={breathingOffset}
-      />
-
-      <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
+      <EdgeVignette innerRadius={70} edgeOpacity={0.3} />
 
       {/* Feature Label - updated for 390 frame duration with extended presets viewing */}
       <VideoFeatureCaptions
@@ -455,8 +441,8 @@ export function SceneModelModal() {
         <BrowserFrame url="roundtable.ai/chat">
           <div
             style={{
-              width: 1200,
-              height: 720,
+              width: 1600,
+              height: 900,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',

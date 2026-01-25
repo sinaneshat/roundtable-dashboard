@@ -1925,11 +1925,13 @@ export function VideoFeatureLabel({ text, subtitle, position = 'top-left' }: Vid
   const opacity = interpolate(progress, [0, 1], [0, 1]);
   const translateY = interpolate(progress, [0, 1], [15, 0]);
 
+  // Consistent positioning that doesn't clip text
+  // All text is LEFT aligned regardless of position (user preference)
   const positionStyles: CSSProperties = {
-    'top-left': { top: 40, left: 60 },
-    'top-right': { top: 40, right: 60 },
-    'bottom-left': { bottom: 90, left: 60 },
-    'bottom-right': { bottom: 90, right: 60 },
+    'top-left': { top: 48, left: 48, right: 'auto' },
+    'top-right': { top: 48, right: 48, left: 'auto' },
+    'bottom-left': { bottom: 80, left: 48, right: 'auto' },
+    'bottom-right': { bottom: 80, right: 48, left: 'auto' },
   }[position];
 
   return (
@@ -1941,29 +1943,33 @@ export function VideoFeatureLabel({ text, subtitle, position = 'top-left' }: Vid
       zIndex: 100,
       display: 'flex',
       flexDirection: 'column',
+      alignItems: 'flex-start', // Always left-aligned
       gap: 6,
+      maxWidth: 420,
     }}
     >
       <span style={{
-        fontSize: 22,
+        fontSize: 24,
         fontWeight: 700,
         color: '#ffffff',
         fontFamily: FONTS.sans,
         letterSpacing: '-0.01em',
-        textShadow: '0 2px 12px rgba(0,0,0,0.8), 0 0 40px rgba(0,0,0,0.4)',
+        textShadow: '0 2px 12px rgba(0,0,0,0.9), 0 0 40px rgba(0,0,0,0.5)',
+        textAlign: 'left', // Always left-aligned
       }}
       >
         {text}
       </span>
       {subtitle && (
         <span style={{
-          fontSize: 14,
+          fontSize: 13,
           fontWeight: 400,
           color: 'rgba(255, 255, 255, 0.7)',
           fontFamily: FONTS.sans,
-          textShadow: '0 1px 8px rgba(0,0,0,0.6)',
-          maxWidth: 280,
-          lineHeight: 1.4,
+          textShadow: '0 1px 8px rgba(0,0,0,0.7)',
+          maxWidth: 340,
+          lineHeight: 1.5,
+          textAlign: 'left', // Always left-aligned
         }}
         >
           {subtitle}
@@ -2014,46 +2020,56 @@ export function VideoFeatureCaptions({ captions, position = 'bottom-left' }: Vid
   const blurValue = localFrame < 5 ? interpolate(localFrame, [0, 5], [2, 0]) : 0;
   const opacity = interpolate(enterProgress, [0, 1], [0, 1]) * exitOpacity;
 
+  // Consistent positioning that doesn't clip text
+  // Using larger margin from edges to ensure text is visible
+  // All text is LEFT aligned regardless of position (user preference)
   const positionStyles: CSSProperties = {
-    'top-left': { top: 40, left: 60 },
-    'top-right': { top: 40, right: 60 },
-    'bottom-left': { bottom: 90, left: 60 },
-    'bottom-right': { bottom: 90, right: 60 },
+    'top-left': { top: 48, left: 48, right: 'auto' },
+    'top-right': { top: 48, right: 48, left: 'auto' },
+    'bottom-left': { bottom: 80, left: 48, right: 'auto' },
+    'bottom-right': { bottom: 80, right: 48, left: 'auto' },
   }[position];
+
+  const isRightPosition = position === 'top-right' || position === 'bottom-right';
 
   return (
     <div style={{
       position: 'absolute',
       ...positionStyles,
       opacity,
-      transform: `translateX(${translateX}px) scale(${scaleValue})`,
+      transform: `translateX(${isRightPosition ? -translateX : translateX}px) scale(${scaleValue})`,
+      transformOrigin: isRightPosition ? 'right center' : 'left center',
       filter: blurValue > 0 ? `blur(${blurValue}px)` : undefined,
       zIndex: 100,
       display: 'flex',
       flexDirection: 'column',
-      gap: 4,
+      alignItems: 'flex-start', // Always left-aligned
+      gap: 6,
+      maxWidth: 420,
     }}
     >
       <span style={{
-        fontSize: 28,
+        fontSize: 24,
         fontWeight: 700,
         color: '#ffffff',
         fontFamily: FONTS.sans,
-        letterSpacing: '-0.02em',
-        textShadow: '0 2px 12px rgba(0,0,0,0.8), 0 0 30px rgba(0,0,0,0.3)',
+        letterSpacing: '-0.01em',
+        textShadow: '0 2px 12px rgba(0,0,0,0.9), 0 0 40px rgba(0,0,0,0.5)',
+        textAlign: 'left', // Always left-aligned
       }}
       >
         {activeCaption.text}
       </span>
       {activeCaption.subtitle && (
         <span style={{
-          fontSize: 14,
+          fontSize: 13,
           fontWeight: 400,
-          color: 'rgba(255, 255, 255, 0.65)',
+          color: 'rgba(255, 255, 255, 0.7)',
           fontFamily: FONTS.sans,
-          textShadow: '0 1px 6px rgba(0,0,0,0.5)',
-          maxWidth: 360,
-          lineHeight: 1.4,
+          textShadow: '0 1px 8px rgba(0,0,0,0.7)',
+          maxWidth: 340,
+          lineHeight: 1.5,
+          textAlign: 'left', // Always left-aligned
         }}
         >
           {activeCaption.subtitle}

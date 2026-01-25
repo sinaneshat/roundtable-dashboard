@@ -35,7 +35,7 @@ import {
 
 import { BrowserFrame } from '../../components/BrowserFrame';
 import { BrowserFrame3D } from '../../components/BrowserFrame3D';
-import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
+import { EdgeVignette } from '../../components/scene-primitives';
 import { VideoFeatureCaptions } from '../../components/ui-replicas';
 import { useCinematicCamera } from '../../hooks';
 import { BACKGROUNDS, FONTS, RAINBOW, SPACING } from '../../lib/design-tokens';
@@ -79,7 +79,7 @@ export function Scene03Sidebar() {
 
   // === CINEMATIC CAMERA ===
   // Subtle pan right as sidebar reveals
-  const { breathingOffset } = useCinematicCamera({
+  useCinematicCamera({
     movement: 'static',
     breathingEnabled: true,
     breathingIntensity: 2.5,
@@ -262,24 +262,10 @@ export function Scene03Sidebar() {
         perspectiveOrigin: 'center center',
       }}
     >
-      {/* Background Depth Particles - with breathing parallax */}
-      <div
-        style={{
-          transform: `translate(${breathingOffset.x * 0.3}px, ${breathingOffset.y * 0.3}px)`,
-        }}
-      >
-        <DepthParticles frame={frame} baseOpacity={0.12} count={18} />
-      </div>
+      {/* Background effects removed for cleaner look */}
 
-      {/* Rainbow glow orbs (sidebar-focused) */}
-      <RainbowGlowOrbs
-        frame={frame}
-        orbs={DEFAULT_GLOW_ORBS.sidebar}
-        breathingOffset={breathingOffset}
-      />
-
-      {/* Edge Vignette */}
-      <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
+      {/* Edge Vignette - subtle */}
+      <EdgeVignette innerRadius={70} edgeOpacity={0.3} />
 
       {/* Feature Captions - updated for 120 frame duration */}
       <VideoFeatureCaptions
@@ -301,8 +287,8 @@ export function Scene03Sidebar() {
           <div
             style={{
               display: 'flex',
-              width: 1200,
-              height: 720,
+              width: 1600,
+              height: 900,
               overflow: 'hidden',
               backgroundColor: BACKGROUNDS.primary,
               transformStyle: 'preserve-3d',

@@ -32,6 +32,10 @@ type BrowserFrame3DProps = {
   entranceDelay?: number;
   /** Enable depth blur effect on edges */
   depthBlur?: boolean;
+  /** Enable floating/hovering animation */
+  floatingEnabled?: boolean;
+  /** Floating animation intensity (default: 1.0) */
+  floatingIntensity?: number;
   /** Custom style for the outer container */
   style?: CSSProperties;
   /** Custom style for the inner transform container */
@@ -210,6 +214,8 @@ export function BrowserFrame3D({
   cameraDistance = DEFAULT_CAMERA_DISTANCE,
   entranceDelay = 0,
   depthBlur = false,
+  floatingEnabled = true,
+  floatingIntensity = 1.0,
   style,
   innerStyle,
 }: BrowserFrame3DProps) {
@@ -226,6 +232,17 @@ export function BrowserFrame3D({
     config: SPRINGS.cinematic,
     durationInFrames: ENTRANCE_CONFIG.durationFrames,
   });
+
+  // Floating/hovering animation - gentle sine wave motion
+  const floatingY = floatingEnabled
+    ? Math.sin(frame * 0.03) * 6 * floatingIntensity * entranceProgress
+    : 0;
+  const floatingX = floatingEnabled
+    ? Math.cos(frame * 0.02) * 3 * floatingIntensity * entranceProgress
+    : 0;
+  const floatingRotateZ = floatingEnabled
+    ? Math.sin(frame * 0.015) * 0.003 * floatingIntensity * entranceProgress
+    : 0;
 
   // Scale animation: 0.85 -> 1
   const scale = interpolate(
@@ -274,16 +291,21 @@ export function BrowserFrame3D({
     ...style,
   };
 
+  // Add floating rotation to base rotation
+  const finalRotateZDeg = rotateZDeg + radToDeg(floatingRotateZ);
+
   // Inner transform container
   const transformStyle: CSSProperties = {
     width: '100%',
     height: '100%',
     transformStyle: 'preserve-3d',
     transform: `
+      translateX(${floatingX}px)
+      translateY(${floatingY}px)
       translateZ(${translateZ}px)
       rotateX(${rotateXDeg}deg)
       rotateY(${rotateYDeg}deg)
-      rotateZ(${rotateZDeg}deg)
+      rotateZ(${finalRotateZDeg}deg)
       scale(${scale})
     `,
     opacity,

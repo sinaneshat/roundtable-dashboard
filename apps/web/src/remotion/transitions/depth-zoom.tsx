@@ -99,12 +99,13 @@ const DepthZoomPresentation: React.FC<
       style={{
         perspective: `${perspective}px`,
         perspectiveOrigin: '50% 50%',
+        backgroundColor: '#1a1a1a', // Match scene background to prevent gaps
       }}
     >
       <AbsoluteFill
         style={{
           transform: `translateZ(${zPosition}px) rotateY(${rotateY}deg) rotateX(${rotateX}deg) scale(${scale})`,
-          filter: `blur(${blur}px)`,
+          filter: blur > 0.5 ? `blur(${blur}px)` : 'none',
           opacity,
           transformStyle: 'preserve-3d',
           backfaceVisibility: 'hidden',
@@ -198,12 +199,13 @@ const ZoomThroughPresentation: React.FC<
       style={{
         perspective: `${perspective}px`,
         perspectiveOrigin: '50% 50%',
+        backgroundColor: '#1a1a1a',
       }}
     >
       <AbsoluteFill
         style={{
           transform: `translateZ(${zPosition}px) rotateZ(${rotateZ}deg) scale(${scale})`,
-          filter: `blur(${blur}px)`,
+          filter: blur > 0.5 ? `blur(${blur}px)` : 'none',
           opacity,
           transformStyle: 'preserve-3d',
         }}
@@ -311,6 +313,7 @@ const CameraOrbitPresentation: React.FC<
       style={{
         perspective: `${perspective}px`,
         perspectiveOrigin: '50% 50%',
+        backgroundColor: '#1a1a1a',
       }}
     >
       <AbsoluteFill
@@ -385,12 +388,13 @@ const DepthFadePresentation: React.FC<
       style={{
         perspective: `${perspective}px`,
         perspectiveOrigin: '50% 50%',
+        backgroundColor: '#1a1a1a',
       }}
     >
       <AbsoluteFill
         style={{
           transform: `translateZ(${zPosition}px) scale(${scale})`,
-          filter: `blur(${blur}px)`,
+          filter: blur > 0.5 ? `blur(${blur}px)` : 'none',
           opacity,
           transformStyle: 'preserve-3d',
         }}
@@ -562,19 +566,7 @@ const Shatter3DPresentation: React.FC<
         );
       })}
 
-      {/* Add depth glow effect during shatter */}
-      {easedProgress > 0.1 && (
-        <AbsoluteFill
-          style={{
-            background: `radial-gradient(ellipse at center,
-              rgba(255, 255, 255, ${easedProgress * 0.08}) 0%,
-              transparent 60%
-            )`,
-            pointerEvents: 'none',
-            zIndex: 100,
-          }}
-        />
-      )}
+      {/* Depth glow effect removed for cleaner transitions */}
     </AbsoluteFill>
   );
 };
@@ -762,9 +754,9 @@ const ChromaticZoomPresentation: React.FC<
         extrapolateLeft: 'clamp',
       });
 
-  // RGB separation peaks in the middle
+  // RGB separation peaks in the middle - reduced intensity to avoid purple tint
   const aberrationPhase = Math.sin(presentationProgress * Math.PI);
-  const rgbSeparation = maxRgbSeparation * aberrationPhase;
+  const rgbSeparation = maxRgbSeparation * aberrationPhase * 0.5; // Reduced by 50%
 
   // Z-depth for 3D feel
   const translateZ = isEntering
@@ -793,37 +785,22 @@ const ChromaticZoomPresentation: React.FC<
         extrapolateLeft: 'clamp',
       });
 
-  // Glitch offset at peak
+  // Glitch offset at peak - reduced intensity
   const glitchOffset = glitch && aberrationPhase > 0.7
-    ? (random(`glitch-${Math.floor(presentationProgress * 10)}`) - 0.5) * 10
+    ? (random(`glitch-${Math.floor(presentationProgress * 10)}`) - 0.5) * 5
     : 0;
 
+  // Simplified: only render main content with subtle edge glow, no RGB channel separation
+  // This eliminates the purple tint caused by red+blue screen blending
   return (
     <AbsoluteFill
       style={{
         perspective: `${perspective}px`,
         perspectiveOrigin: '50% 50%',
+        backgroundColor: '#1a1a1a',
       }}
     >
-      {/* Red channel - shifts left and down */}
-      <AbsoluteFill
-        style={{
-          transform: `
-            translateZ(${translateZ}px)
-            translate(${-rgbSeparation + glitchOffset}px, ${rgbSeparation * 0.5}px)
-            scale(${scale})
-            rotate(${rotation}deg)
-          `,
-          opacity: opacity * 0.8,
-          filter: 'url(#red-channel)',
-          mixBlendMode: 'screen',
-          transformStyle: 'preserve-3d',
-        }}
-      >
-        {children}
-      </AbsoluteFill>
-
-      {/* Green channel - center (main content) */}
+      {/* Main content */}
       <AbsoluteFill
         style={{
           transform: `
@@ -839,78 +816,23 @@ const ChromaticZoomPresentation: React.FC<
         {children}
       </AbsoluteFill>
 
-      {/* Blue channel - shifts right and up */}
-      <AbsoluteFill
-        style={{
-          transform: `
-            translateZ(${translateZ}px)
-            translate(${rgbSeparation - glitchOffset}px, ${-rgbSeparation * 0.5}px)
-            scale(${scale})
-            rotate(${rotation}deg)
-          `,
-          opacity: opacity * 0.8,
-          filter: 'url(#blue-channel)',
-          mixBlendMode: 'screen',
-          transformStyle: 'preserve-3d',
-        }}
-      >
-        {children}
-      </AbsoluteFill>
-
-      {/* SVG filters for color channel isolation */}
-      <svg style={{ position: 'absolute', width: 0, height: 0 }}>
-        <defs>
-          <filter id="red-channel">
-            <feColorMatrix
-              type="matrix"
-              values="1 0 0 0 0
-                      0 0 0 0 0
-                      0 0 0 0 0
-                      0 0 0 1 0"
-            />
-          </filter>
-          <filter id="blue-channel">
-            <feColorMatrix
-              type="matrix"
-              values="0 0 0 0 0
-                      0 0 0 0 0
-                      0 0 1 0 0
-                      0 0 0 1 0"
-            />
-          </filter>
-        </defs>
-      </svg>
-
-      {/* Glow effect at peak */}
+      {/* Subtle white edge glow instead of RGB separation */}
       {aberrationPhase > 0.3 && (
         <AbsoluteFill
           style={{
-            background: `radial-gradient(
-              ellipse at 50% 50%,
-              rgba(255, 255, 255, ${aberrationPhase * 0.1}) 0%,
-              transparent 50%
-            )`,
+            transform: `
+              translateZ(${translateZ}px)
+              scale(${scale * 1.01})
+              rotate(${rotation}deg)
+            `,
+            opacity: aberrationPhase * 0.15,
+            filter: `blur(${rgbSeparation}px)`,
+            transformStyle: 'preserve-3d',
             pointerEvents: 'none',
-            zIndex: 10,
           }}
-        />
-      )}
-
-      {/* Scan lines during glitch */}
-      {glitch && aberrationPhase > 0.6 && (
-        <AbsoluteFill
-          style={{
-            background: `repeating-linear-gradient(
-              0deg,
-              transparent 0px,
-              transparent 2px,
-              rgba(0, 0, 0, ${(aberrationPhase - 0.6) * 0.3}) 2px,
-              rgba(0, 0, 0, ${(aberrationPhase - 0.6) * 0.3}) 4px
-            )`,
-            pointerEvents: 'none',
-            zIndex: 11,
-          }}
-        />
+        >
+          {children}
+        </AbsoluteFill>
       )}
     </AbsoluteFill>
   );
@@ -1001,41 +923,379 @@ const PortalPresentation: React.FC<
         {children}
       </AbsoluteFill>
 
-      {/* Portal ring effect */}
-      {clipProgress > 5 && clipProgress < 140 && (
-        <AbsoluteFill
-          style={{
-            background: `radial-gradient(
-              circle at 50% 50%,
-              transparent ${clipProgress - 3}%,
-              rgba(255, 255, 255, 0.25) ${clipProgress}%,
-              rgba(234, 234, 234, 0.15) ${clipProgress + 2}%,
-              transparent ${clipProgress + 5}%
-            )`,
-            pointerEvents: 'none',
-            transform: `rotate(${-vortexRotation * 0.5}deg)`,
-          }}
-        />
-      )}
-
-      {/* Energy particles */}
-      {clipProgress > 10 && clipProgress < 130 && (
-        <AbsoluteFill
-          style={{
-            background: `radial-gradient(
-              circle at 50% 50%,
-              transparent ${clipProgress - 10}%,
-              rgba(255, 255, 255, ${0.05 * Math.sin(presentationProgress * Math.PI * 4)}) ${clipProgress - 5}%,
-              transparent ${clipProgress}%
-            )`,
-            pointerEvents: 'none',
-          }}
-        />
-      )}
+      {/* Portal ring and energy effects removed for cleaner transitions */}
     </AbsoluteFill>
   );
 };
 
 export function portal(props: PortalProps = {}): TransitionPresentation<PortalProps> {
   return { component: PortalPresentation, props };
+}
+
+// ============================================================================
+// PARALLAX PUSH TRANSITION (Z-AXIS DEPTH PUSH)
+// Splits scene into depth layers that push back at different Z speeds
+// Creates cinema-quality depth effect with rack focus
+// ============================================================================
+
+type ParallaxPushProps = {
+  /** Number of virtual depth layers */
+  layers?: number;
+  /** Maximum push depth in pixels */
+  maxDepth?: number;
+  /** Which layer index is in focus (0 = closest) */
+  focusLayerIndex?: number;
+  /** Aperture for depth blur (lower = more blur) */
+  aperture?: number;
+  /** Perspective distance */
+  perspective?: number;
+};
+
+const ParallaxPushPresentation: React.FC<
+  TransitionPresentationComponentProps<ParallaxPushProps>
+> = ({
+  children,
+  presentationDirection,
+  presentationProgress,
+  passedProps,
+}) => {
+  const {
+    layers = 5,
+    maxDepth = 500,
+    focusLayerIndex = 2,
+    aperture = 2.0,
+    perspective = 1400,
+  } = passedProps;
+
+  const isEntering = presentationDirection === 'entering';
+
+  // Calculate push multipliers for each layer
+  // Back layers (higher index) push slower, front layers push faster
+  const layerPushMultipliers = useMemo(() => {
+    return Array.from({ length: layers }, (_, i) => {
+      // Map layer index to multiplier: 0 = 1.6, (layers-1) = 0.4
+      return 1.6 - (i / (layers - 1)) * 1.2;
+    });
+  }, [layers]);
+
+  // Calculate global progress
+  const progress = isEntering ? presentationProgress : presentationProgress;
+
+  // For entering: layers come together from pushed-back positions
+  // For exiting: layers push apart (back layers slower, front faster)
+  const getLayerState = (layerIndex: number) => {
+    const pushMultiplier = layerPushMultipliers[layerIndex] ?? 1;
+    const baseDepth = ((layerIndex - focusLayerIndex) / layers) * maxDepth;
+
+    // Z position - how much this layer pushes back/forward
+    const pushAmount = maxDepth * pushMultiplier * progress;
+    const zPosition = isEntering
+      ? interpolate(progress, [0, 1], [-pushAmount, baseDepth], {
+          extrapolateRight: 'clamp',
+        })
+      : interpolate(progress, [0, 1], [baseDepth, -pushAmount], {
+          extrapolateLeft: 'clamp',
+        });
+
+    // Blur based on distance from focus layer
+    const distanceFromFocus = Math.abs(layerIndex - focusLayerIndex);
+    const depthBlur = distanceFromFocus * (10 / aperture);
+    const transitionBlur = Math.abs(zPosition) * 0.02;
+    const totalBlur = depthBlur + transitionBlur;
+
+    // Scale for depth perception
+    const scaleBase = 1 - (layerIndex / layers) * 0.1;
+    const scaleTransition = isEntering
+      ? interpolate(progress, [0, 1], [0.8, scaleBase], { extrapolateRight: 'clamp' })
+      : interpolate(progress, [0, 1], [scaleBase, 0.8], { extrapolateLeft: 'clamp' });
+
+    // Opacity - focus layer stays full, others fade slightly
+    const opacityBase = layerIndex === focusLayerIndex ? 1 : 0.6 + (1 - distanceFromFocus / layers) * 0.4;
+    const opacityTransition = isEntering
+      ? interpolate(progress, [0, 0.4, 1], [0, opacityBase * 0.8, opacityBase], {
+          extrapolateRight: 'clamp',
+        })
+      : interpolate(progress, [0, 0.6, 1], [opacityBase, opacityBase * 0.8, 0], {
+          extrapolateLeft: 'clamp',
+        });
+
+    // Subtle rotation for cinematic feel
+    const rotateY = isEntering
+      ? interpolate(progress, [0, 1], [3 * pushMultiplier, 0], { extrapolateRight: 'clamp' })
+      : interpolate(progress, [0, 1], [0, -3 * pushMultiplier], { extrapolateLeft: 'clamp' });
+
+    return {
+      zPosition,
+      blur: totalBlur,
+      scale: scaleTransition,
+      opacity: opacityTransition,
+      rotateY,
+    };
+  };
+
+  // Render the focus layer (primary content)
+  const focusLayerState = getLayerState(focusLayerIndex);
+
+  return (
+    <AbsoluteFill
+      style={{
+        perspective: `${perspective}px`,
+        perspectiveOrigin: '50% 50%',
+        backgroundColor: '#1a1a1a',
+      }}
+    >
+      {/* Main content layer */}
+      <AbsoluteFill
+        style={{
+          transform: `
+            translateZ(${focusLayerState.zPosition}px)
+            rotateY(${focusLayerState.rotateY}deg)
+            scale(${focusLayerState.scale})
+          `,
+          filter: focusLayerState.blur > 0.5 ? `blur(${focusLayerState.blur}px)` : 'none',
+          opacity: focusLayerState.opacity,
+          transformStyle: 'preserve-3d',
+          backfaceVisibility: 'hidden',
+        }}
+      >
+        {children}
+      </AbsoluteFill>
+    </AbsoluteFill>
+  );
+};
+
+export function parallaxPush(props: ParallaxPushProps = {}): TransitionPresentation<ParallaxPushProps> {
+  return { component: ParallaxPushPresentation, props };
+}
+
+// ============================================================================
+// SPATIAL CAMERA ORBIT TRANSITION
+// Enhanced camera orbit with tilt and perspective shift
+// ============================================================================
+
+type SpatialCameraOrbitProps = {
+  /** Direction of orbit */
+  direction?: 'clockwise' | 'counterclockwise';
+  /** Rotation degrees around Y axis */
+  rotationDegrees?: number;
+  /** Tilt angle (X rotation) */
+  tiltAngle?: number;
+  /** Perspective distance */
+  perspective?: number;
+};
+
+const SpatialCameraOrbitPresentation: React.FC<
+  TransitionPresentationComponentProps<SpatialCameraOrbitProps>
+> = ({
+  children,
+  presentationDirection,
+  presentationProgress,
+  passedProps,
+}) => {
+  const {
+    direction = 'clockwise',
+    rotationDegrees = 35,
+    tiltAngle = 8,
+    perspective = 1400,
+  } = passedProps;
+
+  const isEntering = presentationDirection === 'entering';
+  const directionMultiplier = direction === 'clockwise' ? 1 : -1;
+
+  // Y rotation (orbit around vertical axis)
+  const rotateY = isEntering
+    ? interpolate(
+        presentationProgress,
+        [0, 1],
+        [-rotationDegrees * directionMultiplier, 0],
+        { extrapolateRight: 'clamp' },
+      )
+    : interpolate(
+        presentationProgress,
+        [0, 1],
+        [0, rotationDegrees * directionMultiplier],
+        { extrapolateLeft: 'clamp' },
+      );
+
+  // X rotation (tilt)
+  const rotateX = isEntering
+    ? interpolate(presentationProgress, [0, 0.5, 1], [tiltAngle, tiltAngle * 0.5, 0], {
+        extrapolateRight: 'clamp',
+      })
+    : interpolate(presentationProgress, [0, 0.5, 1], [0, tiltAngle * 0.5, tiltAngle], {
+        extrapolateLeft: 'clamp',
+      });
+
+  // Subtle Z rotation for dynamic feel
+  const rotateZ = isEntering
+    ? interpolate(presentationProgress, [0, 1], [-2 * directionMultiplier, 0], {
+        extrapolateRight: 'clamp',
+      })
+    : interpolate(presentationProgress, [0, 1], [0, 2 * directionMultiplier], {
+        extrapolateLeft: 'clamp',
+      });
+
+  // X translation follows orbit
+  const translateX = isEntering
+    ? interpolate(presentationProgress, [0, 1], [150 * directionMultiplier, 0], {
+        extrapolateRight: 'clamp',
+      })
+    : interpolate(presentationProgress, [0, 1], [0, -150 * directionMultiplier], {
+        extrapolateLeft: 'clamp',
+      });
+
+  // Z translation for depth
+  const translateZ = isEntering
+    ? interpolate(presentationProgress, [0, 0.4, 1], [-200, -80, 0], {
+        extrapolateRight: 'clamp',
+      })
+    : interpolate(presentationProgress, [0, 0.6, 1], [0, -80, -200], {
+        extrapolateLeft: 'clamp',
+      });
+
+  // Scale
+  const scale = isEntering
+    ? interpolate(presentationProgress, [0, 1], [0.85, 1], {
+        extrapolateRight: 'clamp',
+      })
+    : interpolate(presentationProgress, [0, 1], [1, 0.85], {
+        extrapolateLeft: 'clamp',
+      });
+
+  // Blur based on depth
+  const blur = Math.abs(translateZ) * 0.02;
+
+  // Opacity
+  const opacity = isEntering
+    ? interpolate(presentationProgress, [0, 0.25, 1], [0, 1, 1], {
+        extrapolateRight: 'clamp',
+      })
+    : interpolate(presentationProgress, [0, 0.75, 1], [1, 1, 0], {
+        extrapolateLeft: 'clamp',
+      });
+
+  return (
+    <AbsoluteFill
+      style={{
+        perspective: `${perspective}px`,
+        perspectiveOrigin: '50% 50%',
+        backgroundColor: '#1a1a1a',
+      }}
+    >
+      <AbsoluteFill
+        style={{
+          transform: `
+            translateX(${translateX}px)
+            translateZ(${translateZ}px)
+            rotateX(${rotateX}deg)
+            rotateY(${rotateY}deg)
+            rotateZ(${rotateZ}deg)
+            scale(${scale})
+          `,
+          filter: blur > 0.5 ? `blur(${blur}px)` : 'none',
+          opacity,
+          transformStyle: 'preserve-3d',
+          backfaceVisibility: 'hidden',
+        }}
+      >
+        {children}
+      </AbsoluteFill>
+    </AbsoluteFill>
+  );
+};
+
+export function spatialCameraOrbit(props: SpatialCameraOrbitProps = {}): TransitionPresentation<SpatialCameraOrbitProps> {
+  return { component: SpatialCameraOrbitPresentation, props };
+}
+
+// ============================================================================
+// DEPTH MATCH CUT TRANSITION
+// Portal effect where scenes pass through the same depth plane
+// ============================================================================
+
+type DepthMatchCutProps = {
+  /** Depth plane where scenes meet (0 = center) */
+  matchPlane?: number;
+  /** Push/pull intensity */
+  pushPullIntensity?: number;
+  /** Enable focus pull effect */
+  focusPull?: boolean;
+  /** Perspective distance */
+  perspective?: number;
+};
+
+const DepthMatchCutPresentation: React.FC<
+  TransitionPresentationComponentProps<DepthMatchCutProps>
+> = ({
+  children,
+  presentationDirection,
+  presentationProgress,
+  passedProps,
+}) => {
+  const {
+    matchPlane = 0,
+    pushPullIntensity = 1.2,
+    focusPull = true,
+    perspective = 1200,
+  } = passedProps;
+
+  const isEntering = presentationDirection === 'entering';
+
+  // Z position - outgoing pushes back, incoming enters from opposite
+  const maxPush = 400 * pushPullIntensity;
+  const zPosition = isEntering
+    ? interpolate(presentationProgress, [0, 1], [maxPush, matchPlane], {
+        extrapolateRight: 'clamp',
+      })
+    : interpolate(presentationProgress, [0, 1], [matchPlane, -maxPush], {
+        extrapolateLeft: 'clamp',
+      });
+
+  // Focus pull blur
+  const blurAmount = focusPull
+    ? Math.abs(zPosition - matchPlane) * 0.04
+    : 0;
+
+  // Scale for depth
+  const scale = isEntering
+    ? interpolate(presentationProgress, [0, 1], [1.3, 1], {
+        extrapolateRight: 'clamp',
+      })
+    : interpolate(presentationProgress, [0, 1], [1, 0.7], {
+        extrapolateLeft: 'clamp',
+      });
+
+  // Opacity
+  const opacity = isEntering
+    ? interpolate(presentationProgress, [0, 0.3, 1], [0, 1, 1], {
+        extrapolateRight: 'clamp',
+      })
+    : interpolate(presentationProgress, [0, 0.7, 1], [1, 1, 0], {
+        extrapolateLeft: 'clamp',
+      });
+
+  return (
+    <AbsoluteFill
+      style={{
+        perspective: `${perspective}px`,
+        perspectiveOrigin: '50% 50%',
+        backgroundColor: '#1a1a1a',
+      }}
+    >
+      <AbsoluteFill
+        style={{
+          transform: `translateZ(${zPosition}px) scale(${scale})`,
+          filter: blurAmount > 0.5 ? `blur(${blurAmount}px)` : 'none',
+          opacity,
+          transformStyle: 'preserve-3d',
+        }}
+      >
+        {children}
+      </AbsoluteFill>
+    </AbsoluteFill>
+  );
+};
+
+export function depthMatchCut(props: DepthMatchCutProps = {}): TransitionPresentation<DepthMatchCutProps> {
+  return { component: DepthMatchCutPresentation, props };
 }

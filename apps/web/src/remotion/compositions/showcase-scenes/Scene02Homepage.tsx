@@ -31,7 +31,7 @@ import {
   useVideoConfig,
 } from 'remotion';
 
-import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
+import { EdgeVignette } from '../../components/scene-primitives';
 import { VideoAvatar, VideoFeatureCaptions, VideoGlassCard, VideoLogo } from '../../components/ui-replicas';
 import { useCinematicCamera, useFocusPull } from '../../hooks';
 import { BACKGROUNDS, FONTS, SPACING, TEXT } from '../../lib/design-tokens';
@@ -217,26 +217,13 @@ export function Scene02Homepage() {
           style={{
             position: 'absolute',
             inset: 0,
-            transform: `
-              translate(${breathingOffset.x * 0.2}px, ${breathingOffset.y * 0.2}px)
-              translateZ(${DEPTH_LAYERS.background}px)
-            `,
-            filter: getDepthBlur(DEPTH_LAYERS.background, cameraZ),
-            transformStyle: 'preserve-3d',
+            display: 'none', // Background effects removed for cleaner look
           }}
         >
-          <DepthParticles frame={frame} baseOpacity={0.12} count={20} />
         </div>
 
-        {/* Rainbow glow orbs */}
-        <RainbowGlowOrbs
-          frame={frame}
-          orbs={DEFAULT_GLOW_ORBS.scattered}
-          breathingOffset={breathingOffset}
-        />
-
-        {/* Edge vignette - stays at camera plane */}
-        <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
+        {/* Edge vignette - subtle */}
+        <EdgeVignette innerRadius={70} edgeOpacity={0.3} />
 
         {/* Main content with camera transform + dolly movement */}
         <div

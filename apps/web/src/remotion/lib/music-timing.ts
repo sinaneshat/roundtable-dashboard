@@ -1,13 +1,18 @@
 /**
  * Music Timing Configuration for RoundtableShowcase
  *
- * This file defines the emotional arc and timing markers for the video.
- * The actual audio is played CONTINUOUSLY (no cuts) in RoundtableShowcase.tsx
+ * Uses beat-matched spliced audio cut at phrase boundaries (BPM: 116)
+ * Segments from original track aligned to video scenes:
  *
- * Use this file to:
- * 1. Document scene timing
- * 2. Define beat markers for animation sync
- * 3. Track energy levels per scene
+ * Audio Structure (showcase-spliced.mp3):
+ *   0-6s:    Intro (from 1.68s in original - soft)
+ *   6-14s:   Homepage+Sidebar (from 17.65s - building)
+ *   14-50s:  ChatInput (from 34.65s - features)
+ *   50-63s:  ModelModal (from 131.16s - peak setup)
+ *   63-84s:  ChatThread (from 163.15s - THE DROP!)
+ *   84-89s:  Finale (from 195.15s - fadeout)
+ *
+ * Cuts made at 8-bar phrase boundaries for seamless loops.
  */
 
 export const FPS = 30;

@@ -205,6 +205,7 @@
         "@radix-ui/react-toggle": "^1.1.10",
         "@radix-ui/react-tooltip": "^1.2.8",
         "@radix-ui/react-visually-hidden": "^1.2.4",
+        "@remotion/media-utils": "4.0.252",
         "@roundtable/shared": "workspace:*",
         "@tanstack/react-query": "^5.90.19",
         "@tanstack/react-router": "^1.154.8",

@@ -97,6 +97,7 @@
     "@remotion/bundler": "4.0.252",
     "@remotion/cli": "4.0.252",
     "@remotion/google-fonts": "4.0.252",
+    "@remotion/media-utils": "4.0.252",
     "@remotion/player": "4.0.252",
     "@remotion/tailwind": "4.0.252",
     "@remotion/three": "4.0.252",

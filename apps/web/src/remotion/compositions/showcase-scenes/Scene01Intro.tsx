@@ -18,7 +18,7 @@ import {
   useVideoConfig,
 } from 'remotion';
 
-import { DepthParticles, EdgeVignette, RainbowGlowOrbs, RainbowLogoContainer } from '../../components/scene-primitives';
+import { EdgeVignette, RainbowLogoContainer } from '../../components/scene-primitives';
 import { BACKGROUNDS, BRAND, SPACING, TEXT, TYPOGRAPHY } from '../../lib/design-tokens';
 
 // ============================================================================
@@ -160,8 +160,6 @@ function TextOverlay() {
 // ============================================================================
 
 export function Scene01Intro() {
-  const frame = useCurrentFrame();
-
   return (
     <AbsoluteFill
       style={{
@@ -169,24 +167,7 @@ export function Scene01Intro() {
         overflow: 'hidden',
       }}
     >
-      {/* Background depth particles (subtle 2D) */}
-      <DepthParticles
-        frame={frame}
-        count={25}
-        baseOpacity={0.1}
-        blur={25}
-        intensity={1.0}
-      />
-
-      {/* Rainbow glow orbs for background (replaces single-color glow) */}
-      <RainbowGlowOrbs
-        frame={frame}
-        orbs={[
-          { top: 30, left: 25, size: 500, colorIndex: 0, opacity: 0.15, blur: 80 },
-          { top: 45, right: 20, size: 400, colorIndex: 6, opacity: 0.12, blur: 70 },
-          { bottom: 20, left: 35, size: 350, colorIndex: 3, opacity: 0.1, blur: 75 },
-        ]}
-      />
+      {/* Background effects removed for cleaner look */}
 
       {/* Logo overlay (HTML) */}
       <LogoOverlay />
@@ -194,8 +175,8 @@ export function Scene01Intro() {
       {/* Text overlay (tagline + subtitle) */}
       <TextOverlay />
 
-      {/* Edge vignette for cinematic feel */}
-      <EdgeVignette innerRadius={50} edgeOpacity={0.4} />
+      {/* Edge vignette - subtle */}
+      <EdgeVignette innerRadius={70} edgeOpacity={0.25} />
     </AbsoluteFill>
   );
 }

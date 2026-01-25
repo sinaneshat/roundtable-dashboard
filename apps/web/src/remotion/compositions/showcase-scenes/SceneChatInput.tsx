@@ -25,7 +25,7 @@ import {
 
 import { BrowserFrame } from '../../components/BrowserFrame';
 import { BrowserFrame3D } from '../../components/BrowserFrame3D';
-import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
+import { EdgeVignette } from '../../components/scene-primitives';
 import {
   VideoAutoModeToggle,
   VideoAvatar,
@@ -81,7 +81,7 @@ export function SceneChatInput() {
   const { fps } = useVideoConfig();
 
   // Camera breathing
-  const { breathingOffset } = useCinematicCamera({
+  useCinematicCamera({
     movement: 'static',
     breathingEnabled: true,
     breathingIntensity: 3,
@@ -208,25 +208,9 @@ export function SceneChatInput() {
         fontFamily: FONTS.sans,
       }}
     >
-      {/* Background particles */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          transform: `translate(${breathingOffset.x * 0.25}px, ${breathingOffset.y * 0.25}px)`,
-        }}
-      >
-        <DepthParticles frame={frame} baseOpacity={0.12} count={18} />
-      </div>
+      {/* Background effects removed for cleaner look */}
 
-      {/* Rainbow glow orbs */}
-      <RainbowGlowOrbs
-        frame={frame}
-        orbs={DEFAULT_GLOW_ORBS.centered}
-        breathingOffset={breathingOffset}
-      />
-
-      <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
+      <EdgeVignette innerRadius={70} edgeOpacity={0.3} />
 
       {/* Prominent Feature Caption - J-cut technique: captions lead visuals by ~15 frames */}
       <VideoFeatureCaptions
@@ -261,8 +245,8 @@ export function SceneChatInput() {
         <BrowserFrame url="roundtable.ai/chat">
           <div
             style={{
-              width: 1200,
-              height: 720,
+              width: 1600,
+              height: 900,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',

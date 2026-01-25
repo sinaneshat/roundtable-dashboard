@@ -33,7 +33,7 @@ import {
 
 import { BrowserFrame } from '../../components/BrowserFrame';
 import { BrowserFrame3D } from '../../components/BrowserFrame3D';
-import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
+import { EdgeVignette } from '../../components/scene-primitives';
 import {
   VideoFeatureCaptions,
   VideoParticipantMessage,
@@ -228,7 +228,7 @@ export function SceneChatThread() {
 
   // === CINEMATIC CAMERA ===
   // Enhanced breathing and orbit motion
-  const { breathingOffset } = useCinematicCamera({
+  useCinematicCamera({
     movement: 'static',
     breathingEnabled: true,
     breathingIntensity: 2.5,
@@ -467,27 +467,10 @@ export function SceneChatThread() {
         overflow: 'hidden', // No scrollbar
       }}
     >
-      {/* Background particles - subtle parallax */}
-      <div
-        style={{
-          position: 'absolute',
-          inset: 0,
-          transform: `translate(${breathingOffset.x * 0.15}px, ${breathingOffset.y * 0.15}px)`,
-          pointerEvents: 'none',
-        }}
-      >
-        <DepthParticles frame={frame} baseOpacity={0.12} count={20} />
-      </div>
+      {/* Background effects removed for cleaner look */}
 
-      {/* Rainbow glow orbs (scattered for chat thread) */}
-      <RainbowGlowOrbs
-        frame={frame}
-        orbs={DEFAULT_GLOW_ORBS.scattered}
-        breathingOffset={breathingOffset}
-      />
-
-      {/* Edge vignette */}
-      <EdgeVignette innerRadius={55} edgeOpacity={0.6} />
+      {/* Edge vignette - subtle */}
+      <EdgeVignette innerRadius={70} edgeOpacity={0.3} />
 
       {/* Feature Label */}
       <VideoFeatureCaptions
@@ -512,8 +495,8 @@ export function SceneChatThread() {
           {/* Fixed-size viewport - overflow hidden clips the scrolling content */}
           <div
             style={{
-              width: 1200,
-              height: 720,
+              width: 1600,
+              height: 900,
               overflow: 'hidden',
               backgroundColor: BACKGROUNDS.primary,
               position: 'relative',

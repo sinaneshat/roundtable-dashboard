@@ -23,10 +23,10 @@ import {
   useVideoConfig,
 } from 'remotion';
 
-import { DepthParticles, EdgeVignette, RainbowLogoContainer } from '../../components/scene-primitives';
+import { EdgeVignette, RainbowLogoContainer } from '../../components/scene-primitives';
 import { VideoButton } from '../../components/ui-replicas';
 import { useCinematicCamera, useFocusTransition } from '../../hooks';
-import { BACKGROUNDS, BRAND, HEX_COLORS, RAINBOW, SPACING, TEXT, TYPOGRAPHY } from '../../lib/design-tokens';
+import { BACKGROUNDS, HEX_COLORS, SPACING, TEXT, TYPOGRAPHY } from '../../lib/design-tokens';
 
 // Constants for 3D depth layers
 const DEPTH_LAYERS = {
@@ -57,7 +57,7 @@ export function Scene17Finale() {
   const orbitX = 0;
 
   // === CINEMATIC CAMERA (existing breathing) ===
-  const { breathingOffset } = useCinematicCamera({
+  useCinematicCamera({
     movement: 'zoom-out',
     startFrame: 0,
     duration: 90,
@@ -122,15 +122,6 @@ export function Scene17Finale() {
   const taglineOpacity = interpolate(taglineProgress, [0, 1], [0, 1]);
   const taglineY = interpolate(taglineProgress, [0, 1], [20, 0]);
 
-  // Glow pulse effect
-  const glowPulse = Math.sin(frame * 0.15) * 0.3 + 0.7;
-
-  // === DEPTH BLUR CALCULATION ===
-  // Background elements get more blur as camera pulls back
-  const backgroundBlur = interpolate(frame, [0, 60], [15, 8], {
-    extrapolateRight: 'clamp',
-  });
-
   // Calculate effective Z position with camera offset
   const getEffectiveZ = (layerZ: number) => layerZ - cameraZ;
 
@@ -160,97 +151,23 @@ export function Scene17Finale() {
           transform: `rotateY(${orbitY}rad) rotateX(${orbitX}rad)`,
         }}
       >
-        {/* === BACKGROUND LAYER (z=-200) === */}
-        <div
-          style={{
-            position: 'absolute',
-            inset: 0,
-            transformStyle: 'preserve-3d',
-            transform: `translateZ(${getEffectiveZ(DEPTH_LAYERS.background)}px)`,
-            filter: `blur(${backgroundBlur}px)`,
-          }}
-        >
-          {/* Background depth particles - with breathing parallax */}
-          <div
-            style={{
-              position: 'absolute',
-              inset: 0,
-              transform: `translate(${breathingOffset.x * 0.3}px, ${breathingOffset.y * 0.3}px)`,
-            }}
-          >
-            <DepthParticles frame={frame} count={25} baseOpacity={0.15} />
-          </div>
-
-          {/* Background glow orbs for depth - varied rainbow colors */}
-          <div
-            style={{
-              position: 'absolute',
-              top: '20%',
-              left: '15%',
-              width: 400,
-              height: 400,
-              borderRadius: '50%',
-              background: `radial-gradient(circle, ${RAINBOW.colors[0]}20 0%, transparent 70%)`,
-              filter: 'blur(40px)',
-              opacity: 0.5,
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              bottom: '25%',
-              right: '10%',
-              width: 300,
-              height: 300,
-              borderRadius: '50%',
-              background: `radial-gradient(circle, ${RAINBOW.colors[6]}18 0%, transparent 70%)`,
-              filter: 'blur(30px)',
-              opacity: 0.45,
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              top: '60%',
-              left: '5%',
-              width: 250,
-              height: 250,
-              borderRadius: '50%',
-              background: `radial-gradient(circle, ${RAINBOW.colors[3]}15 0%, transparent 70%)`,
-              filter: 'blur(35px)',
-              opacity: 0.35,
-            }}
-          />
-          <div
-            style={{
-              position: 'absolute',
-              top: '10%',
-              right: '20%',
-              width: 350,
-              height: 350,
-              borderRadius: '50%',
-              background: `radial-gradient(circle, ${RAINBOW.colors[9]}15 0%, transparent 70%)`,
-              filter: 'blur(45px)',
-              opacity: 0.4,
-            }}
-          />
-        </div>
+        {/* Background effects removed for cleaner look */}
 
         {/* Edge vignette - at scene level */}
         <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
 
-        {/* === GLOW LAYER (z=-100) === */}
+        {/* Subtle glow behind logo - neutral, no color cast */}
         <div
           style={{
             position: 'absolute',
-            width: 1200,
-            height: 1200,
+            width: 800,
+            height: 800,
             borderRadius: '50%',
-            background: `radial-gradient(circle, ${BRAND.colors.primary}35 0%, transparent 55%)`,
-            filter: `blur(100px)`,
-            opacity: logoOpacity * glowPulse * 0.8,
+            background: `radial-gradient(circle, rgba(255,255,255,0.08) 0%, transparent 50%)`,
+            filter: `blur(80px)`,
+            opacity: logoOpacity * 0.5,
             transformStyle: 'preserve-3d',
-            transform: `translateZ(${getEffectiveZ(DEPTH_LAYERS.glow)}px) translate(${breathingOffset.x * 0.15}px, ${breathingOffset.y * 0.15}px)`,
+            transform: `translateZ(${getEffectiveZ(DEPTH_LAYERS.glow)}px)`,
           }}
         />
 

@@ -14,17 +14,21 @@ const APP_VERSION = rootPkg.version;
 
 // Remotion + video packages - dev-only, excluded from production builds
 const devOnlyPackages = [
+  // Core remotion
   'remotion',
   '@remotion/bundler',
   '@remotion/cli',
   '@remotion/google-fonts',
+  '@remotion/media-utils',
   '@remotion/player',
   '@remotion/tailwind',
   '@remotion/three',
   '@remotion/transitions',
   '@remotion/zod-types',
+  // 3D rendering
   '@react-three/fiber',
   'three',
+  // FFmpeg for audio processing
   '@ffmpeg/ffmpeg',
   '@ffmpeg/util',
 ];
