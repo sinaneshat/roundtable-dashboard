@@ -1,11 +1,10 @@
 import type { AvatarSize } from '@roundtable/shared';
-import { AvatarSizes } from '@roundtable/shared';
+import { AvatarSizes, getRoleColors } from '@roundtable/shared';
 import type { CSSProperties } from 'react';
 import { memo, useMemo } from 'react';
 
 import type { Icon } from '@/components/icons';
 import { cn } from '@/lib/ui/cn';
-import { getRoleColors } from '@/lib/utils';
 
 type RoleColorBadgeProps = {
   roleName: string;

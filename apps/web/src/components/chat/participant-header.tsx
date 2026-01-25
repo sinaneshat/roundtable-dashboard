@@ -1,8 +1,8 @@
+import { getRoleBadgeStyle } from '@roundtable/shared';
 import { memo } from 'react';
 
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
 import { useTranslations } from '@/lib/i18n';
-import { getRoleBadgeStyle } from '@/lib/utils';
 
 export type ParticipantHeaderProps = {
   avatarSrc: string;

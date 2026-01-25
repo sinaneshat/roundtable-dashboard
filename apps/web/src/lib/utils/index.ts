@@ -18,7 +18,6 @@ export * from './moderator-utils';
 export * from './participant';
 export * from './participant-message-lookup';
 export * from './project-metadata';
-export * from './role-colors';
 export * from './round-utils';
 export * from './safe-storage';
 export * from './ssr-message-verification';

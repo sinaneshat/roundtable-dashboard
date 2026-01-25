@@ -1,5 +1,5 @@
 import type { MessagePartType, MessageStatus } from '@roundtable/shared';
-import { MessagePartTypes, MessageStatuses, ReasoningPartTypes, TextPartStates } from '@roundtable/shared';
+import { getRoleBadgeStyle, MessagePartTypes, MessageStatuses, ReasoningPartTypes, TextPartStates } from '@roundtable/shared';
 import { memo, useEffect, useLayoutEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
 import { useShallow } from 'zustand/react/shallow';
@@ -25,7 +25,7 @@ import { useTranslations } from '@/lib/i18n';
 import { isDataPart } from '@/lib/schemas/data-part-schema';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
 import { cn } from '@/lib/ui/cn';
-import { getRoleBadgeStyle, hasCitations, hasProperty, isNonEmptyString } from '@/lib/utils';
+import { hasCitations, hasProperty, isNonEmptyString } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { AvailableSource, DbMessageMetadata, Model } from '@/services/api';
 import { isAssistantMessageMetadata } from '@/services/api';
@@ -286,8 +286,9 @@ export const ModelMessageCard = memo(({
                 .trim();
               const hasText = textContent.length > 0;
 
-              if (!isComplete || !hasText || hasStreamingTextParts)
+              if (!isComplete || !hasText || hasStreamingTextParts) {
                 return null;
+              }
 
               return (
                 <Actions className="mt-4">

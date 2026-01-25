@@ -1,4 +1,4 @@
-import { getShortRoleName } from '@roundtable/shared';
+import { getRoleBadgeStyle, getShortRoleName } from '@roundtable/shared';
 import { Link } from '@tanstack/react-router';
 import type { PanInfo } from 'motion/react';
 import { Reorder, useDragControls } from 'motion/react';
@@ -11,7 +11,7 @@ import { Switch } from '@/components/ui/switch';
 import { useTranslations } from '@/lib/i18n';
 import type { OrderedModel } from '@/lib/schemas/model-schemas';
 import { cn } from '@/lib/ui/cn';
-import { getProviderIcon, getRoleBadgeStyle } from '@/lib/utils';
+import { getProviderIcon } from '@/lib/utils';
 
 const REORDER_ITEM_STYLE = { position: 'relative', borderRadius: '0.75rem' } as const;
 
@@ -271,8 +271,9 @@ export const ModelItem = memo(({
             ? undefined
             : () => {
                 // Prevent toggle if drag just ended
-                if (justDraggedRef.current)
+                if (justDraggedRef.current) {
                   return;
+                }
                 onToggle();
               }
         }
