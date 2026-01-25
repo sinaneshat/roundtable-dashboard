@@ -17,7 +17,6 @@ export * from './metadata-builder';
 export * from './participant';
 export * from './participant-message-lookup';
 export * from './queue-utils';
-export * from './role-colors';
 export * from './round-utils';
 export * from './ssr-message-verification';
 export * from './state-merge';

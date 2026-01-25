@@ -1,4 +1,5 @@
 import type { RouteHandler } from '@hono/zod-openapi';
+import { UserRoles } from '@roundtable/shared';
 import { and, like, ne, or, sql } from 'drizzle-orm';
 
 import { invalidateAllUserCaches } from '@/common/cache-utils';
@@ -26,7 +27,7 @@ export const adminSearchUserHandler: RouteHandler<typeof adminSearchUserRoute, A
     const { q, limit = 5 } = c.validated.query;
 
     // Check admin role
-    if (user.role !== 'admin') {
+    if (user.role !== UserRoles.ADMIN) {
       throw createError.unauthorized('Admin access required', {
         errorType: 'authorization',
         resource: 'admin',
@@ -78,7 +79,7 @@ export const adminClearUserCacheHandler: RouteHandler<typeof adminClearUserCache
     const { userId } = c.validated.body;
 
     // Check admin role
-    if (user.role !== 'admin') {
+    if (user.role !== UserRoles.ADMIN) {
       throw createError.unauthorized('Admin access required', {
         errorType: 'authorization',
         resource: 'admin',
