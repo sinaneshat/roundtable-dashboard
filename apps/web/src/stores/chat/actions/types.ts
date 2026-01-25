@@ -117,7 +117,7 @@ const MessagePartCacheSchema = z.object({
   type: z.string().min(1),
   text: z.string().optional(),
   state: z.string().optional(),
-}).passthrough();
+}).catchall(z.unknown());
 
 /** Message metadata schema - allows extensible metadata */
 const MessageMetadataCacheSchema = z.record(z.string(), z.union([
