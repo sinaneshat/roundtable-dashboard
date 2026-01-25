@@ -256,7 +256,7 @@ export function ModelSelectionModal({
     const modelData = orderedModels.find(om => om.model.id === selectedModelForRole);
     const currentRole = modelData?.participant?.role;
 
-    const sortRoles = <T extends { name: string }>(roles: T[]): string[] => {
+    const sortRoles = <T extends { name: string }>(roles: readonly T[]): string[] => {
       return [...roles].sort((a, b) => {
         const aIsCurrent = currentRole === a.name;
         const bIsCurrent = currentRole === b.name;

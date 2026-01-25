@@ -4,11 +4,9 @@
     "baseUrl": ".",
     "paths": {
       "@/*": ["./src/*"]
-    }
+    },
+    "noEmit": true
   },
-  "references": [
-    { "path": "../api" }
-  ],
   "include": ["src/**/*", "src/types/**/*.d.ts", "*.d.ts", "vite.config.ts"],
   "exclude": [
     "node_modules",

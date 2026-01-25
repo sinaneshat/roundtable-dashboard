@@ -26,9 +26,9 @@ import {
 import type { UIMessage } from 'ai';
 import { z } from 'zod';
 
-// Direct import avoids circular dependency through @/hooks/utils barrel
-// Cycle: store-schemas -> @/hooks/utils -> use-analyze-prompt-stream -> store-defaults -> store-schemas
-import { PendingAttachmentSchema } from '@/hooks/utils/use-chat-attachments';
+// Import from dedicated schema file to avoid circular dependency
+// attachment-schemas.ts has no store imports, breaking the cycle
+import { PendingAttachmentSchema } from '@/hooks/utils/attachment-schemas';
 import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
 import { ChatParticipantSchema, ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
 import type { ApiChangelog, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';

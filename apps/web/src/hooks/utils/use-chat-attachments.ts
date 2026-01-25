@@ -11,46 +11,22 @@
  * Location: /src/hooks/utils/use-chat-attachments.ts
  */
 
-import { UploadStatuses, UploadStatusSchema } from '@roundtable/shared';
+import { UploadStatuses } from '@roundtable/shared';
 import { useCallback, useMemo } from 'react';
 import { z } from 'zod';
 
 import { toastManager } from '@/lib/toast';
 
-import { FilePreviewSchema } from './use-file-preview';
-import { UploadItemSchema, useFileUpload } from './use-file-upload';
+// Import schema and type for local use
+// Schema is in attachment-schemas.ts to break circular dependency:
+// store-schemas -> hooks/utils -> stores cycle
+import type { PendingAttachment } from './attachment-schemas';
+import { PendingAttachmentSchema } from './attachment-schemas';
+import { useFileUpload } from './use-file-upload';
 
-// ============================================================================
-// ZOD SCHEMAS - Type-safe attachment structures
-// ============================================================================
-
-/**
- * Pending attachment schema - Zod-first pattern
- * Combines upload status, item, and preview for chat input display
- */
-export const PendingAttachmentSchema = z.object({
-  /** Unique attachment ID (client-side) */
-  id: z.string(),
-  /** Original file */
-  file: z.custom<File>(val => val instanceof File, { message: 'Must be a File object' }),
-  /** Upload status */
-  status: UploadStatusSchema,
-  /** Upload item with progress */
-  uploadItem: UploadItemSchema.optional(),
-  /** File preview (thumbnail/icon) */
-  preview: FilePreviewSchema.optional(),
-  /** Backend upload ID (after successful upload) */
-  uploadId: z.string().optional(),
-});
-
-// ============================================================================
-// INFERRED TYPES
-// ============================================================================
-
-/**
- * Pending attachment type - inferred from Zod schema
- */
-export type PendingAttachment = z.infer<typeof PendingAttachmentSchema>;
+// Re-export for consumers
+export { PendingAttachmentSchema };
+export type { PendingAttachment };
 
 /**
  * Upload state summary schema

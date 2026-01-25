@@ -37,7 +37,10 @@
 import type { ChatMode, FeedbackType, MessageStatus, ScreenMode } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 
-import type { FilePreview, PendingAttachment, UploadItem } from '@/hooks/utils';
+// Import from dedicated schema file to avoid circular dependency
+import type { PendingAttachment } from '@/hooks/utils/attachment-schemas';
+import type { FilePreview } from '@/hooks/utils/use-file-preview';
+import type { UploadItem } from '@/hooks/utils/use-file-upload';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import type {

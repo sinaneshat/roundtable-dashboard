@@ -23,7 +23,9 @@ import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { createStore } from 'zustand/vanilla';
 
-import type { FilePreview, UploadItem } from '@/hooks/utils';
+// Direct imports avoid circular dependency through @/hooks/utils barrel
+import type { FilePreview } from '@/hooks/utils/use-file-preview';
+import type { UploadItem } from '@/hooks/utils/use-file-upload';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';

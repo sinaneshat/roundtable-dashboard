@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
-  "display": "Base - Strict TypeScript configuration for Roundtable monorepo",
+  "display": "Base - Maximum strict TypeScript configuration for Roundtable monorepo",
   "compilerOptions": {
     "target": "ES2022",
     "lib": ["ES2022"],
@@ -22,12 +22,16 @@
     "noImplicitAny": true,
     "noImplicitThis": true,
     "noImplicitReturns": true,
+    "noImplicitOverride": true,
     "noUnusedLocals": true,
     "noUnusedParameters": true,
     "noUncheckedIndexedAccess": true,
     "noFallthroughCasesInSwitch": true,
-    "exactOptionalPropertyTypes": false,
+    "noPropertyAccessFromIndexSignature": true,
+    "exactOptionalPropertyTypes": true,
     "useUnknownInCatchVariables": true,
+    "allowUnreachableCode": false,
+    "allowUnusedLabels": false,
 
     "declaration": false,
     "declarationMap": false,

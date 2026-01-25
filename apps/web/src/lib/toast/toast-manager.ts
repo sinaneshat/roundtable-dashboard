@@ -4,7 +4,8 @@ import React from 'react';
 
 import type { ToastActionElement } from '@/components/ui/toast';
 import { ToastAction } from '@/components/ui/toast';
-import { toast as baseToast } from '@/hooks/utils';
+// Direct import avoids circular dependency through @/hooks/utils barrel
+import { toast as baseToast } from '@/hooks/utils/use-toast';
 
 function createToastActionElement(label: string, onClick: () => void): ToastActionElement {
   const element = React.createElement(

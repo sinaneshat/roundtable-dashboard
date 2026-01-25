@@ -3,7 +3,8 @@ import { createFileRoute, Outlet, redirect } from '@tanstack/react-router';
 import { ChatLayoutShell } from '@/components/layouts/chat-layout-shell';
 import { ChatLayoutProviders } from '@/components/providers/chat-layout-providers';
 import { PreferencesStoreProvider } from '@/components/providers/preferences-store-provider';
-import { useSessionQuerySync } from '@/hooks/utils';
+// Direct import avoids circular dependency through @/hooks/utils barrel
+import { useSessionQuerySync } from '@/hooks/utils/use-session-query-sync';
 import { useSession } from '@/lib/auth/client';
 import {
   modelsQueryOptions,

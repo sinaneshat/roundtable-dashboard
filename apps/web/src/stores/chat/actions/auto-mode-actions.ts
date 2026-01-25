@@ -14,7 +14,8 @@ import { useCallback } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore, useModelPreferencesStore } from '@/components/providers';
-import { useAnalyzePromptStream } from '@/hooks/utils';
+// Direct import avoids circular dependency through @/hooks/utils barrel
+import { useAnalyzePromptStream } from '@/hooks/utils/use-analyze-prompt-stream';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 
 type AutoModeAnalysisOptions = {
