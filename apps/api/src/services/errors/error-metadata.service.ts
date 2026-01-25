@@ -40,7 +40,7 @@ export const ExtractedErrorMetadataSchema = z.object({
   providerMessage: z.string().optional(),
   isTransientError: z.boolean(),
   isPartialResponse: z.boolean(),
-});
+}).strict();
 
 export type ExtractedErrorMetadata = z.infer<typeof ExtractedErrorMetadataSchema>;
 
@@ -50,7 +50,7 @@ export type ExtractedErrorMetadata = z.infer<typeof ExtractedErrorMetadataSchema
 export const ProviderErrorResultSchema = z.object({
   rawError: z.string().optional(),
   category: ErrorCategorySchema.optional(),
-});
+}).strict();
 
 export type ProviderErrorResult = z.infer<typeof ProviderErrorResultSchema>;
 
@@ -60,7 +60,7 @@ export type ProviderErrorResult = z.infer<typeof ProviderErrorResultSchema>;
 export const UsageStatsSchema = z.object({
   inputTokens: z.number().optional(),
   outputTokens: z.number().optional(),
-});
+}).strict();
 
 export type UsageStats = z.infer<typeof UsageStatsSchema>;
 

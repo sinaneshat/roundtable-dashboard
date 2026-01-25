@@ -16,7 +16,7 @@ export const ModelCapabilitiesSchema = z.object({
   vision: z.boolean(),
   jsonModeQuality: JsonModeQualitySchema,
   knownIssues: z.array(z.string()).optional(),
-});
+}).strict();
 
 export type ModelCapabilities = z.infer<typeof ModelCapabilitiesSchema>;
 

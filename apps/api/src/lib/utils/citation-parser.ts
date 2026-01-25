@@ -17,8 +17,8 @@
  * @module lib/utils/citation-parser
  */
 
-import type { CitationPrefix, CitationSourceType } from '@roundtable/shared/enums';
-import { CITATION_PREFIXES, CitationPrefixToSourceType, CitationSegmentTypes } from '@roundtable/shared/enums';
+import type { CitationPrefix } from '@roundtable/shared/enums';
+import { CITATION_PREFIXES, CitationPrefixToSourceType, CitationSegmentTypes, CitationSourceTypeSchema } from '@roundtable/shared/enums';
 import { z } from 'zod';
 
 import type { DbCitation } from '@/db/schemas/chat-metadata';
@@ -38,7 +38,7 @@ export const ParsedCitationSchema = z.object({
   /** The type prefix extracted from source ID */
   typePrefix: z.string(),
   /** The source type derived from prefix */
-  sourceType: z.custom<CitationSourceType>(),
+  sourceType: CitationSourceTypeSchema,
   /** Display number for UI rendering (1, 2, 3...) */
   displayNumber: z.number(),
   /** Start index in original text */
@@ -119,7 +119,7 @@ const SINGLE_ID_PATTERN = new RegExp(
  * Type guard to check if a string is a valid citation prefix
  */
 function isValidPrefix(prefix: string): prefix is CitationPrefix {
-  return (CITATION_PREFIXES as readonly string[]).includes(prefix);
+  return CITATION_PREFIXES.includes(prefix as CitationPrefix);
 }
 
 /**

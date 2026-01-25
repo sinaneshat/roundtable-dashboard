@@ -21,7 +21,7 @@
  * @module hooks/utils/use-synced-refs
  */
 
-import { useLayoutEffect, useMemo } from 'react';
+import { useLayoutEffect, useRef } from 'react';
 
 /**
  * Ref values type - constrained to valid ref value types
@@ -38,7 +38,7 @@ type RefValues = { [key: string]: NonNullable<object> | string | number | boolea
  * stable ref object identity across renders.
  *
  * React Pattern:
- * - useMemo creates stable refs object on first render (empty deps)
+ * - useRef creates stable refs object on first render (never changes identity)
  * - useLayoutEffect syncs all refs before browser paint
  * - Callbacks can read current values via refs without closure issues
  *
@@ -68,20 +68,23 @@ type RefValues = { [key: string]: NonNullable<object> | string | number | boolea
 export function useSyncedRefs<T extends RefValues>(
   values: T,
 ): { [K in keyof T]: React.RefObject<T[K]> } {
-  // Create stable refs object - only initialize once
-  const refs = useMemo(() => {
+  // Create stable refs object using useRef - guaranteed to be created once
+  // and never change identity. Lazily initialize on first access.
+  const refsRef = useRef<{ [K in keyof T]: React.RefObject<T[K]> } | null>(null);
+
+  // Initialize refs object lazily on first render
+  if (refsRef.current === null) {
     const result: { [K in keyof T]?: React.RefObject<T[K]> } = {};
     for (const key in values) {
       if (Object.prototype.hasOwnProperty.call(values, key)) {
-        // ✅ TYPE-SAFE: No force casting - typed properly via mapped type
         const typedKey = key as keyof T;
         result[typedKey] = { current: values[typedKey] };
       }
     }
-    // Type assertion is safe here - we've initialized all keys from values
-    return result as { [K in keyof T]: React.RefObject<T[K]> };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []); // Empty deps - only create once
+    refsRef.current = result as { [K in keyof T]: React.RefObject<T[K]> };
+  }
+
+  const refs = refsRef.current;
 
   // Sync all refs with current values using one useLayoutEffect
   useLayoutEffect(() => {

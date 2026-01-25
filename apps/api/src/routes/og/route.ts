@@ -32,9 +32,10 @@ export const ogChatRoute = createRoute({
       description: 'OG image generated successfully (returns fallback for missing/private threads)',
       content: {
         'image/png': {
-          schema: z.any().openapi({
-            description: 'PNG image data',
-            type: 'string',
+          // ✅ JUSTIFIED: Binary responses cannot be validated by Zod at runtime.
+          // OpenAPI spec requires schema; using string+binary format for documentation.
+          schema: z.string().openapi({
+            description: 'PNG image binary data',
             format: 'binary',
           }),
         },

@@ -263,6 +263,6 @@ export function useLayerConfig(layer: DepthLayerName) {
 /**
  * Get ordered list of layer names
  */
-export function useLayerOrder(): DepthLayerName[] {
+export function getLayerOrder(): DepthLayerName[] {
   return LAYER_ORDER;
 }

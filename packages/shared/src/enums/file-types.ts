@@ -441,7 +441,8 @@ export function getMaxFileSizeForMimeType(mimeType: string): number {
  */
 export const MULTIPART_OVERHEAD_TOLERANCE = 1024; // 1KB
 
-// Legacy constants - mapped to new limits for backward compatibility
+// Upload size thresholds - used for upload strategy decisions
+/** Maximum size for single-request uploads (same as GENERAL limit) */
 export const MAX_SINGLE_UPLOAD_SIZE = FILE_SIZE_LIMITS.GENERAL;
 export const MIN_MULTIPART_PART_SIZE = 5 * 1024 * 1024;
 export const RECOMMENDED_PART_SIZE = 10 * 1024 * 1024;

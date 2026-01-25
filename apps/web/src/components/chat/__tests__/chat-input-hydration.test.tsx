@@ -27,23 +27,27 @@ vi.mock('@/hooks/queries', () => ({
   useThreadQuery: () => ({ data: null }),
 }));
 
-vi.mock('@/hooks/utils', () => ({
-  useIsMounted: () => true,
-  useAutoResizeTextarea: () => ({ handleInput: () => {} }),
-  useCreditEstimation: () => ({ canAfford: true, estimatedCredits: 0, isLoading: false }),
-  useDragDrop: () => ({ isDragging: false, dragHandlers: {} }),
-  useFreeTrialState: () => ({ isFreeUser: false, hasUsedTrial: false }),
-  useHydrationInputCapture: () => {},
-  useSpeechRecognition: () => ({
-    isListening: false,
-    isSupported: false,
-    toggle: () => {},
-    reset: () => {},
-    audioLevels: [],
-    finalTranscript: '',
-    interimTranscript: '',
-  }),
-}));
+vi.mock('@/hooks/utils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@/hooks/utils')>();
+  return {
+    ...actual,
+    useIsMounted: () => true,
+    useAutoResizeTextarea: () => ({ handleInput: () => {} }),
+    useCreditEstimation: () => ({ canAfford: true, estimatedCredits: 0, isLoading: false }),
+    useDragDrop: () => ({ isDragging: false, dragHandlers: {} }),
+    useFreeTrialState: () => ({ isFreeUser: false, hasUsedTrial: false }),
+    useHydrationInputCapture: () => {},
+    useSpeechRecognition: () => ({
+      isListening: false,
+      isSupported: false,
+      toggle: () => {},
+      reset: () => {},
+      audioLevels: [],
+      finalTranscript: '',
+      interimTranscript: '',
+    }),
+  };
+});
 
 // eslint-disable-next-line ts/no-explicit-any
 let ChatInput: ComponentType<any>;

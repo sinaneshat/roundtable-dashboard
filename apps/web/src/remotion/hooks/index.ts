@@ -28,11 +28,11 @@ export type {
   UseRackFocusConfig,
 } from './useAdvancedDepthLayer';
 export {
+  getLayerOrder,
   useDepthLayer,
   useDepthLayers,
   useLayerConfig,
   useLayerDepth,
-  useLayerOrder,
   useParallaxPush,
   useRackFocus,
 } from './useAdvancedDepthLayer';
@@ -62,4 +62,4 @@ export {
 } from './useCinematicCamera';
 
 // Focus transition hooks
-export { useFocusTransition } from './useFocusTransition';
+export { createFocusTransition } from './useFocusTransition';

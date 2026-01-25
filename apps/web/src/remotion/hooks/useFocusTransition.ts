@@ -12,7 +12,7 @@ type FocusTransitionOptions = {
   maxBlur?: number;
 };
 
-export function useFocusTransition({
+export function createFocusTransition({
   frame,
   startFrame,
   duration = 30,

@@ -116,7 +116,7 @@ const FilePartWithUrlExtractSchema = z.object({
   mediaType: z.string().optional(),
   mimeType: z.string().optional(),
   filename: z.string().optional(),
-}).passthrough();
+});
 
 /**
  * Zod schema for extracting image part properties (lenient for extraction)
@@ -125,7 +125,7 @@ const ImagePartExtractSchema = z.object({
   type: z.literal('image'),
   image: z.string(),
   mimeType: z.string(),
-}).passthrough();
+});
 
 /**
  * UI-compatible file part type

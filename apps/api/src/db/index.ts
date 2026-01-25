@@ -332,14 +332,5 @@ export type { BatchableOperation, BatchResults, D1BatchDatabase } from './d1-typ
 // Re-export all schemas (Zod metadata schemas - single source of truth)
 export * from './schemas';
 
-// Re-export all table definitions (barrel pattern)
-export * from './tables/auth';
-export * from './tables/billing';
-export * from './tables/chat';
-export * from './tables/credits';
-export * from './tables/deleted-account-audit';
-export * from './tables/job';
-export * from './tables/project';
-export * from './tables/relations';
-export * from './tables/upload';
-export * from './tables/usage';
+// Re-export all table definitions via barrel (single source of truth)
+export * from './tables';

@@ -22,7 +22,7 @@ import { createError } from '@/common/error-handling';
  */
 const AuthRequestBodySchema = z.object({
   email: z.string().email().optional(),
-}).passthrough();
+});
 
 type AuthRequestBody = z.infer<typeof AuthRequestBodySchema>;
 

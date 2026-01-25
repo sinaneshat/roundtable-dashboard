@@ -112,8 +112,8 @@ function generateR2Key(userId: string, uploadId: string, filename: string): stri
 /**
  * Validate MIME type against allowed list
  */
-function isAllowedMimeType(mimeType: string): boolean {
-  return (ALLOWED_MIME_TYPES as readonly string[]).includes(mimeType);
+function isAllowedMimeType(mimeType: string): mimeType is typeof ALLOWED_MIME_TYPES[number] {
+  return ALLOWED_MIME_TYPES.includes(mimeType as typeof ALLOWED_MIME_TYPES[number]);
 }
 
 // ============================================================================

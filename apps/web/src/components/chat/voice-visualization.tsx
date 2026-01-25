@@ -81,7 +81,7 @@ export function VoiceVisualization({
 
               return (
                 <motion.div
-                  // eslint-disable-next-line react/no-array-index-key
+                  // eslint-disable-next-line react/no-array-index-key -- animation bars have no stable identity; index creates consistent visual pattern
                   key={`bar-${index}`}
                   className="flex-1 bg-blue-500/60 rounded-full min-w-[2px]"
                   initial={{ height: '20%' }}

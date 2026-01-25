@@ -46,11 +46,26 @@ export const ErrorMetadataFieldsSchema = z.object({
 
 export type ErrorMetadataFields = z.infer<typeof ErrorMetadataFieldsSchema>;
 
+/**
+ * Type guard for AI SDK LanguageModelUsage
+ * Validates the object has the expected structure
+ */
+function isLanguageModelUsage(value: unknown): value is LanguageModelUsage {
+  if (!value || typeof value !== 'object') {
+    return false;
+  }
+  const usage = value as Record<string, unknown>;
+  return (
+    (typeof usage.inputTokens === 'number' || usage.inputTokens === undefined)
+    && (typeof usage.outputTokens === 'number' || usage.outputTokens === undefined)
+  );
+}
+
 export const OpenRouterErrorContextSchema = z.object({
   providerMetadata: z.unknown(),
   response: z.unknown(),
   finishReason: z.string(),
-  usage: z.custom<LanguageModelUsage>().optional(),
+  usage: z.custom<LanguageModelUsage>(isLanguageModelUsage).optional(),
   text: z.string().optional(),
 });
 

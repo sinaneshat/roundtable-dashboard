@@ -100,32 +100,33 @@ export type MessagePartsAnalysis = {
  * ```
  */
 export function getMessageParts(message: UIMessage): MessagePartsAnalysis {
-  const textOnlyTypes = MESSAGE_PART_CATEGORIES.TEXT_ONLY as readonly string[];
-  const displayableTypes = MESSAGE_PART_CATEGORIES.DISPLAYABLE as readonly string[];
-  const sourceTypes = MESSAGE_PART_CATEGORIES.SOURCES as readonly string[];
+  // Use Set for O(1) lookup and to avoid type narrowing issues with .includes()
+  const textOnlyTypes = new Set<string>(MESSAGE_PART_CATEGORIES.TEXT_ONLY);
+  const displayableTypes = new Set<string>(MESSAGE_PART_CATEGORIES.DISPLAYABLE);
+  const sourceTypes = new Set<string>(MESSAGE_PART_CATEGORIES.SOURCES);
 
   // Text-only parts (text + reasoning)
   const textParts = message.parts.filter(
     p =>
-      textOnlyTypes.includes(p.type)
+      textOnlyTypes.has(p.type)
       && 'text' in p
       && typeof p.text === 'string',
   );
 
   // Displayable parts (text + reasoning + tools)
   const displayableParts = message.parts.filter(
-    p => displayableTypes.includes(p.type),
+    p => displayableTypes.has(p.type),
   );
 
   // Source parts for citations
   const sourceParts = message.parts.filter(
-    p => 'type' in p && sourceTypes.includes(p.type),
+    p => 'type' in p && sourceTypes.has(p.type),
   );
 
   // Derived state flags - V8 FIX: Include REASONING type for models like Gemini Flash
   const hasTextContent = message.parts.some(
     p =>
-      textOnlyTypes.includes(p.type)
+      textOnlyTypes.has(p.type)
       && 'text' in p
       && typeof p.text === 'string'
       && p.text.trim().length > 0,

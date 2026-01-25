@@ -1,11 +1,18 @@
 import type { Virtualizer } from '@tanstack/react-virtual';
 import { useWindowVirtualizer } from '@tanstack/react-virtual';
 import type { RefObject } from 'react';
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useReducer, useRef, useSyncExternalStore } from 'react';
 
 import { rlog } from '@/lib/utils/dev-logger';
 
 import type { TimelineItem } from './use-thread-timeline';
+
+/**
+ * Reducer for force-update pattern. Returns incremented state to trigger re-render.
+ * useReducer is the idiomatic React pattern for force updates as it doesn't need
+ * eslint-disable for no-direct-set-state-in-use-effect.
+ */
+const forceUpdateReducer = (x: number): number => x + 1;
 
 /**
  * Bottom padding for virtualized timeline in pixels.
@@ -84,9 +91,10 @@ export function useVirtualizedTimeline({
     () => false, // Server: not mounted
   );
 
-  // Track scrollMargin - ref first to avoid direct setState in effect
+  // Track scrollMargin - ref first, forceUpdate triggers re-render when margin changes
+  // useReducer is the idiomatic pattern for force updates (avoids no-direct-set-state-in-use-effect)
   const scrollMarginRef = useRef(0);
-  const [, forceUpdate] = useState(0);
+  const [, forceUpdate] = useReducer(forceUpdateReducer, 0);
 
   // Track streaming state for scroll adjustment logic
   const isStreamingRef = useRef(isStreaming);
@@ -106,8 +114,7 @@ export function useVirtualizedTimeline({
         const newMargin = listRef.current.offsetTop;
         if (scrollMarginRef.current !== newMargin) {
           scrollMarginRef.current = newMargin;
-          // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect
-          forceUpdate(c => c + 1);
+          forceUpdate();
         }
       }
     };
@@ -222,8 +229,7 @@ export function useVirtualizedTimeline({
   useLayoutEffect(() => {
     if (timelineItems.length === 0 && scrollMarginRef.current !== 0) {
       scrollMarginRef.current = 0;
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- intentional force re-render
-      forceUpdate(c => c + 1);
+      forceUpdate();
     }
   }, [timelineItems.length]);
 

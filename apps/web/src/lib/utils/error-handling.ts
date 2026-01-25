@@ -21,7 +21,7 @@ export const ClientErrorDetailsSchema = z.object({
   stack: z.string().optional(),
   errorType: z.string().optional(),
   context: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
-}).optional();
+}).strict().optional();
 
 export type ClientErrorDetails = z.infer<typeof ClientErrorDetailsSchema>;
 
@@ -35,7 +35,7 @@ export const RequestMetaSchema = z.object({
   requestId: z.string().optional(),
   timestamp: z.string().optional(),
   correlationId: z.string().optional(),
-});
+}).strict();
 
 export type RequestMeta = z.infer<typeof RequestMetaSchema>;
 
@@ -50,7 +50,7 @@ export const ApiErrorDetailsSchema = z.object({
   validationErrors: z.array(ValidationErrorSchema).optional(),
   details: ClientErrorDetailsSchema,
   meta: RequestMetaSchema.optional(),
-});
+}).strict();
 
 export type ApiErrorDetails = z.infer<typeof ApiErrorDetailsSchema>;
 

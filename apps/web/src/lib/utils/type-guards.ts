@@ -1,22 +1,41 @@
 /**
  * Type Guards and Runtime Type Checking Utilities
  *
- * SINGLE SOURCE OF TRUTH: Runtime type checking that provides TypeScript type narrowing
- * without unsafe type assertions.
+ * SINGLE SOURCE OF TRUTH: Runtime type checking using Zod schemas
+ * for TypeScript type narrowing without unsafe type assertions.
+ *
+ * Pattern: Each type guard has a corresponding Zod schema that is exported
+ * alongside the guard function. Use z.safeParse() for validation.
  */
 
 import { MessagePartTypes } from '@roundtable/shared';
+import { z } from 'zod';
 
 // ============================================================================
-// BASIC TYPE GUARDS
+// BASIC SCHEMAS & TYPE GUARDS
 // ============================================================================
+
+/**
+ * Schema for any plain object (not array, not null)
+ * Note: z.record() doesn't distinguish null from objects, so we use a
+ * custom refinement to ensure proper object type checking.
+ */
+export const ObjectSchema = z.custom<Record<string, unknown>>(
+  (val): val is Record<string, unknown> =>
+    typeof val === 'object' && val !== null && !Array.isArray(val),
+);
 
 export function isObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === 'object' && value !== null && !Array.isArray(value);
+  return ObjectSchema.safeParse(value).success;
 }
 
+/**
+ * Schema for non-empty string
+ */
+export const NonEmptyStringSchema = z.string().min(1);
+
 export function isNonEmptyString(value: unknown): value is string {
-  return typeof value === 'string' && value.length > 0;
+  return NonEmptyStringSchema.safeParse(value).success;
 }
 
 /**
@@ -43,16 +62,21 @@ export function hasProperty<K extends string, T>(
 }
 
 // ============================================================================
-// DOMAIN-SPECIFIC TYPE GUARDS
+// DOMAIN-SPECIFIC SCHEMAS & TYPE GUARDS
 // ============================================================================
+
+/**
+ * Schema for text part of a message
+ */
+export const TextPartSchema = z.object({
+  type: z.literal(MessagePartTypes.TEXT),
+  text: NonEmptyStringSchema,
+}).strict();
+
+export type TextPart = z.infer<typeof TextPartSchema>;
 
 export function isTextPart(
   value: unknown,
 ): value is { type: typeof MessagePartTypes.TEXT; text: string } {
-  if (!isObject(value)) {
-    return false;
-  }
-
-  // After isObject check, value is Record<string, unknown> so we can access properties safely
-  return value.type === MessagePartTypes.TEXT && isNonEmptyString(value.text);
+  return TextPartSchema.safeParse(value).success;
 }

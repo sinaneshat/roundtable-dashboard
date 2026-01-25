@@ -300,11 +300,11 @@ const _PageOperationConfigSchema = z.object({
   waitUntil: PageWaitStrategySchema,
   timeout: z.number().positive(),
   userAgent: z.string().optional(),
-  viewport: z.object({ width: z.number(), height: z.number() }).optional(),
+  viewport: z.object({ width: z.number(), height: z.number() }).strict().optional(),
   blockResourceTypes: z.array(z.string()).optional(),
   waitForSelector: z.string().optional(),
   selectorTimeout: z.number().optional(),
-});
+}).strict();
 
 type PageOperationConfig = z.infer<typeof _PageOperationConfigSchema>;
 
@@ -320,9 +320,9 @@ const _ExtractedContentSchema = z.object({
     faviconUrl: z.string().optional(),
     wordCount: z.number(),
     readingTime: z.number(),
-  }),
-  images: z.array(z.object({ url: z.string(), alt: z.string().optional() })),
-});
+  }).strict(),
+  images: z.array(z.object({ url: z.string(), alt: z.string().optional() }).strict()),
+}).strict();
 
 type ExtractedContent = z.infer<typeof _ExtractedContentSchema>;
 
@@ -330,7 +330,7 @@ const _ExtractedSearchResultSchema = z.object({
   title: z.string(),
   url: z.string().url(),
   snippet: z.string(),
-});
+}).strict();
 
 type ExtractedSearchResult = z.infer<typeof _ExtractedSearchResultSchema>;
 

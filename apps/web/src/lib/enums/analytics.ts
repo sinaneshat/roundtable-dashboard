@@ -2,8 +2,9 @@
  * Analytics Enums
  *
  * Enums specific to project analytics and event tracking.
- * Optimized: Zod schemas lazy-loaded to reduce initial bundle size.
  */
+
+import { z } from 'zod';
 
 // ============================================================================
 // PROJECT ANALYTICS EVENT TYPE
@@ -18,13 +19,16 @@ export const PROJECT_ANALYTICS_EVENT_TYPES = [
   'project_action',
 ] as const;
 
-// 2. TYPESCRIPT TYPE (no Zod dependency)
-export type ProjectAnalyticsEventType = (typeof PROJECT_ANALYTICS_EVENT_TYPES)[number];
+// 2. ZOD SCHEMA
+export const ProjectAnalyticsEventTypeSchema = z.enum(PROJECT_ANALYTICS_EVENT_TYPES);
 
-// 3. DEFAULT VALUE
+// 3. TYPESCRIPT TYPE (inferred from Zod)
+export type ProjectAnalyticsEventType = z.infer<typeof ProjectAnalyticsEventTypeSchema>;
+
+// 4. DEFAULT VALUE
 export const DEFAULT_PROJECT_ANALYTICS_EVENT_TYPE: ProjectAnalyticsEventType = 'project_action';
 
-// 4. CONSTANT OBJECT
+// 5. CONSTANT OBJECT
 export const ProjectAnalyticsEventTypes = {
   MILESTONE_COMPLETED: 'milestone_completed' as const,
   MEMBER_ADDED: 'member_added' as const,
@@ -33,13 +37,13 @@ export const ProjectAnalyticsEventTypes = {
   PROJECT_ACTION: 'project_action' as const,
 } as const;
 
-// 5. TYPE GUARD (no Zod - simple runtime check)
+// 6. TYPE GUARD (uses Zod safeParse - no type cast)
 export function isProjectAnalyticsEventType(value: unknown): value is ProjectAnalyticsEventType {
-  return typeof value === 'string' && PROJECT_ANALYTICS_EVENT_TYPES.includes(value as ProjectAnalyticsEventType);
+  return ProjectAnalyticsEventTypeSchema.safeParse(value).success;
 }
 
-// 6. ZOD SCHEMA (lazy-loaded only when validation is needed)
-export async function getProjectAnalyticsEventTypeSchema() {
-  const { z } = await import('zod');
-  return z.enum(PROJECT_ANALYTICS_EVENT_TYPES);
+// 7. PARSE FUNCTION (returns typed value or undefined)
+export function parseProjectAnalyticsEventType(value: unknown): ProjectAnalyticsEventType | undefined {
+  const result = ProjectAnalyticsEventTypeSchema.safeParse(value);
+  return result.success ? result.data : undefined;
 }

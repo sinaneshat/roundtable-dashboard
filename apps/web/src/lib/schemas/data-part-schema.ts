@@ -13,9 +13,12 @@ import { z } from 'zod';
 /**
  * Zod schema for custom data parts in AI messages
  * Used for type-safe validation of custom data-* message parts
+ *
+ * NOTE: data field intentionally uses z.unknown() - custom data parts
+ * can contain any JSON-serializable structure defined by the application
  */
 export const DataPartSchema = z.object({
-  type: z.string().refine(t => t.startsWith('data-'), {
+  type: z.string().regex(/^data-/, {
     message: 'Custom data part type must start with "data-"',
   }),
   data: z.unknown(),

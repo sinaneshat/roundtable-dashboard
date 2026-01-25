@@ -148,7 +148,8 @@ export const PartialAssistantMetadataSchema = z.object({
   errorCategory: z.string().optional(),
   createdAt: z.string().datetime().optional(),
   providerMessage: z.string().optional(),
-  openRouterError: z.record(z.string(), z.unknown()).optional(),
+  // OpenRouter error responses contain variable structure from provider
+  openRouterError: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
   retryAttempts: z.number().int().nonnegative().optional(),
   isEmptyResponse: z.boolean().optional(),
   statusCode: z.number().int().optional(),

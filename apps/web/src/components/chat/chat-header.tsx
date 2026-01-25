@@ -50,15 +50,15 @@ const RouteThreadSchema = z.object({
   title: z.string().nullish().transform(v => v ?? undefined),
   isPublic: z.boolean().optional(),
   isFavorite: z.boolean().optional(),
-}).passthrough();
+});
 type RouteThread = z.output<typeof RouteThreadSchema>;
 
 const ThreadLoaderDataSchema = z.object({
   threadTitle: z.string().nullish(),
   threadData: z.object({
     thread: RouteThreadSchema,
-  }).passthrough().nullish(),
-}).passthrough();
+  }).nullish(),
+});
 
 const RouteParamsSchema = z.object({
   slug: z.string(),
@@ -67,8 +67,8 @@ const RouteParamsSchema = z.object({
 // Project route schemas
 const ProjectLoaderDataSchema = z.object({
   projectName: z.string().nullish(),
-  project: z.object({ name: z.string() }).passthrough().nullish(),
-}).passthrough();
+  project: z.object({ name: z.string() }).nullish(),
+});
 
 function extractProjectName(loaderData: unknown): string | null {
   const result = ProjectLoaderDataSchema.safeParse(loaderData);

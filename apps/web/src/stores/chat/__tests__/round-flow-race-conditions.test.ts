@@ -10,6 +10,7 @@
  */
 
 import { ScreenModes } from '@roundtable/shared';
+import { MessageStatuses } from '@roundtable/shared/enums';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createTestAssistantMessage, createTestUserMessage } from '@/lib/testing';
@@ -170,7 +171,7 @@ describe('round Flow Race Conditions', () => {
       });
 
       // Pre-search completes first
-      store.getState().updatePreSearchStatus(1, 'complete');
+      store.getState().updatePreSearchStatus(1, MessageStatuses.COMPLETE);
 
       // Should still be blocked by changelog
       const blockedByChangelog = store.getState().configChangeRoundNumber !== null || store.getState().isWaitingForChangelog;
@@ -178,7 +179,7 @@ describe('round Flow Race Conditions', () => {
 
       // Pre-search is complete
       const preSearch = store.getState().preSearches.find(ps => ps.roundNumber === 1);
-      expect(preSearch?.status).toBe('complete');
+      expect(preSearch?.status).toBe(MessageStatuses.COMPLETE);
     });
 
     it('should handle changelog completion before pre-search completion', () => {

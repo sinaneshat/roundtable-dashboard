@@ -49,7 +49,7 @@ export const SaveMessageParamsSchema = z.object({
   availableSources: z.array(AvailableSourceSchema).optional(),
   reasoningDuration: z.number().nonnegative().optional(),
   emptyResponseError: z.string().nullable().optional(),
-});
+}).strict();
 
 export type SaveMessageParams = z.infer<typeof SaveMessageParamsSchema>;
 

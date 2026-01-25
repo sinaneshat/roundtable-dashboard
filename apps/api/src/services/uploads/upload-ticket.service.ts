@@ -57,7 +57,7 @@ export const UploadTicketSchema = z.object({
   expiresAt: z.number(),
   used: z.boolean(),
   createdAt: z.number(),
-});
+}).strict();
 
 export type UploadTicket = z.infer<typeof UploadTicketSchema>;
 
@@ -67,7 +67,7 @@ export const CreateTicketOptionsSchema = z.object({
   mimeType: z.string(),
   maxFileSize: z.number(),
   expirationMs: z.number().optional(),
-});
+}).strict();
 
 export type CreateTicketOptions = z.infer<typeof CreateTicketOptionsSchema>;
 
@@ -94,7 +94,7 @@ const JwtPayloadSchema = z.object({
   exp: z.number().optional(),
   iss: z.string().optional(),
   aud: z.union([z.string(), z.array(z.string())]).optional(),
-});
+}).strict();
 
 type JwtPayload = z.infer<typeof JwtPayloadSchema>;
 

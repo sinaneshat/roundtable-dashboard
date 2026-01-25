@@ -33,7 +33,7 @@ export const UsageSchema = z.object({
   promptTokens: z.number().int().nonnegative(),
   completionTokens: z.number().int().nonnegative(),
   totalTokens: z.number().int().nonnegative(),
-});
+}).strict();
 
 export type Usage = z.infer<typeof UsageSchema>;
 
@@ -59,7 +59,7 @@ export const DbCitationSchema = z.object({
   filename: z.string().optional(),
   mimeType: z.string().optional(),
   fileSize: z.number().int().nonnegative().optional(),
-});
+}).strict();
 
 export type DbCitation = z.infer<typeof DbCitationSchema>;
 
@@ -83,9 +83,17 @@ export const AvailableSourceSchema = z.object({
   threadTitle: z.string().optional(),
   description: z.string().optional(),
   excerpt: z.string().optional(),
-});
+}).strict();
 
 export type AvailableSource = z.infer<typeof AvailableSourceSchema>;
+
+/**
+ * Type guard: Check if value is a valid AvailableSource
+ * ✅ ZOD VALIDATION: Uses schema safeParse for runtime type safety
+ */
+export function isAvailableSource(value: unknown): value is AvailableSource {
+  return AvailableSourceSchema.safeParse(value).success;
+}
 
 // ============================================================================
 // MESSAGE METADATA SCHEMAS
@@ -98,7 +106,7 @@ export const DbMessageMetadataBaseSchema = z.object({
   role: z.enum(['user', 'assistant']),
   roundNumber: z.number().int().nonnegative(),
   createdAt: z.string().datetime().optional(),
-});
+}).strict();
 
 /**
  * User Message Metadata Schema
@@ -108,7 +116,7 @@ export const DbUserMessageMetadataSchema = z.object({
   roundNumber: z.number().int().nonnegative(),
   createdAt: z.string().datetime().optional(),
   isParticipantTrigger: z.boolean().optional(),
-});
+}).strict();
 
 export type DbUserMessageMetadata = z.infer<typeof DbUserMessageMetadataSchema>;
 
@@ -148,7 +156,7 @@ export const DbAssistantMessageMetadataSchema = z.object({
   reasoningDuration: z.number().int().nonnegative().optional(),
   availableSources: z.array(AvailableSourceSchema).optional(),
   createdAt: z.string().datetime().optional(),
-});
+}).strict();
 
 export type DbAssistantMessageMetadata = z.infer<typeof DbAssistantMessageMetadataSchema>;
 
@@ -178,13 +186,13 @@ export const WebSearchResultItemSchema = z.object({
     description: z.string().optional(),
     imageUrl: z.string().optional(),
     faviconUrl: z.string().optional(),
-  }).optional(),
+  }).strict().optional(),
   images: z.array(z.object({
     url: z.string(),
     description: z.string().optional(),
     alt: z.string().optional(),
-  })).optional(),
-});
+  }).strict()).optional(),
+}).strict();
 
 export type WebSearchResultItem = z.infer<typeof WebSearchResultItemSchema>;
 
@@ -202,7 +210,7 @@ export const GeneratedSearchQuerySchema = z.object({
   complexity: z.string().optional(),
   sourceCount: z.number().optional(),
   total: z.number().optional(),
-});
+}).strict();
 
 export type GeneratedSearchQuery = z.infer<typeof GeneratedSearchQuerySchema>;
 
@@ -216,7 +224,7 @@ export const PreSearchQuerySchema = z.object({
   searchDepth: WebSearchDepthSchema,
   index: z.number(),
   total: z.number(),
-});
+}).strict();
 
 export type PreSearchQuery = z.infer<typeof PreSearchQuerySchema>;
 
@@ -231,7 +239,7 @@ export const PartialPreSearchQuerySchema = z.object({
   total: z.number().optional(),
   complexity: z.string().optional(),
   sourceCount: z.number().optional(),
-});
+}).strict();
 
 export type PartialPreSearchQuery = z.infer<typeof PartialPreSearchQuerySchema>;
 
@@ -246,7 +254,7 @@ export const PreSearchResultSchema = z.object({
   results: z.array(WebSearchResultItemSchema),
   responseTime: z.number(),
   index: z.number().optional(),
-});
+}).strict();
 
 export type PreSearchResult = z.infer<typeof PreSearchResultSchema>;
 
@@ -262,7 +270,7 @@ export const PreSearchDataPayloadSchema = z.object({
   failureCount: z.number().int().nonnegative(),
   totalResults: z.number().int().nonnegative(),
   totalTime: z.number(),
-});
+}).strict();
 
 export type PreSearchDataPayload = z.infer<typeof PreSearchDataPayloadSchema>;
 
@@ -278,7 +286,7 @@ export const PartialPreSearchDataSchema = z.object({
   totalResults: z.number().optional(),
   totalTime: z.number().optional(),
   index: z.number().optional(),
-});
+}).strict();
 
 export type PartialPreSearchData = z.infer<typeof PartialPreSearchDataSchema>;
 
@@ -297,14 +305,14 @@ const DbPreSearchResultItemSchema = z.object({
   contentType: WebSearchContentTypeSchema.optional(),
   keyPoints: z.array(z.string()).optional(),
   wordCount: z.number().optional(),
-});
+}).strict();
 
 const DbPreSearchResultSchema = z.object({
   query: z.string(),
   answer: z.string().nullable(),
   results: z.array(DbPreSearchResultItemSchema),
   responseTime: z.number(),
-});
+}).strict();
 
 export const DbPreSearchDataSchema = z.object({
   queries: z.array(z.object({
@@ -312,14 +320,14 @@ export const DbPreSearchDataSchema = z.object({
     rationale: z.string(),
     searchDepth: WebSearchDepthSchema,
     index: z.number().int().nonnegative(),
-  })),
+  }).strict()),
   summary: z.string(),
   successCount: z.number().int().nonnegative(),
   failureCount: z.number().int().nonnegative(),
   totalResults: z.number().int().nonnegative(),
   totalTime: z.number(),
   results: z.array(DbPreSearchResultSchema),
-});
+}).strict();
 
 export type DbPreSearchData = z.infer<typeof DbPreSearchDataSchema>;
 
@@ -339,7 +347,7 @@ export const DbPreSearchMessageMetadataSchema = z.object({
   isPreSearch: z.literal(true),
   preSearch: DbPreSearchDataSchema,
   createdAt: z.string().datetime().optional(),
-});
+}).strict();
 
 export type DbPreSearchMessageMetadata = z.infer<typeof DbPreSearchMessageMetadataSchema>;
 
@@ -352,9 +360,9 @@ export type DbPreSearchMessageMetadata = z.infer<typeof DbPreSearchMessageMetada
  */
 export const ModeratorPayloadSchema = z.object({
   summary: z.string(),
-  insights: z.array(z.string()),
+  insights: z.array(z.string()).min(1),
   recommendations: z.array(z.string()).optional(),
-});
+}).strict();
 
 export type ModeratorPayload = z.infer<typeof ModeratorPayloadSchema>;
 
@@ -373,13 +381,15 @@ export const DbModeratorMessageMetadataSchema = z.object({
   roundNumber: z.number().int().nonnegative(),
   isModerator: z.literal(true),
   model: z.string().min(1),
+  // participantIndex is used for ordering (MODERATOR_PARTICIPANT_INDEX = -99)
+  participantIndex: z.number().int().optional(),
   finishReason: FinishReasonSchema.optional(),
   usage: UsageSchema.optional(),
   hasError: z.boolean().default(false),
   errorType: ErrorTypeSchema.optional(),
   errorMessage: z.string().optional(),
   createdAt: z.string().datetime().optional(),
-});
+}).strict();
 
 export type DbModeratorMessageMetadata = z.infer<typeof DbModeratorMessageMetadataSchema>;
 
@@ -408,6 +418,14 @@ export type DbMessageMetadata = z.infer<typeof DbMessageMetadataSchema>;
 /**
  * Changelog data schema
  */
+/**
+ * Participant changelog entry for tracking participant changes
+ */
+const DbChangelogParticipantSchema = z.object({
+  modelId: z.string(),
+  role: z.string().nullable(),
+}).strict();
+
 export const DbChangelogDataSchema = z.object({
   type: z.string(),
   modelId: z.string().optional(),
@@ -417,8 +435,8 @@ export const DbChangelogDataSchema = z.object({
   oldMode: z.string().optional(),
   newMode: z.string().optional(),
   enabled: z.boolean().optional(),
-  participants: z.array(z.unknown()).optional(),
-}).passthrough();
+  participants: z.array(DbChangelogParticipantSchema).optional(),
+}).strict();
 
 export type DbChangelogData = z.infer<typeof DbChangelogDataSchema>;
 
@@ -432,7 +450,7 @@ export type DbChangelogData = z.infer<typeof DbChangelogDataSchema>;
 export const RecommendedParticipantSchema = z.object({
   modelId: z.string(),
   role: z.string().nullable(),
-});
+}).strict();
 
 export type RecommendedParticipant = z.infer<typeof RecommendedParticipantSchema>;
 
@@ -440,9 +458,9 @@ export type RecommendedParticipant = z.infer<typeof RecommendedParticipantSchema
  * Auto mode analysis response payload
  */
 export const AnalyzePromptPayloadSchema = z.object({
-  participants: z.array(RecommendedParticipantSchema),
+  participants: z.array(RecommendedParticipantSchema).min(1),
   mode: ChatModeSchema,
   enableWebSearch: z.boolean(),
-});
+}).strict();
 
 export type AnalyzePromptPayload = z.infer<typeof AnalyzePromptPayloadSchema>;

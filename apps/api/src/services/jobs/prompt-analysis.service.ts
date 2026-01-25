@@ -38,10 +38,10 @@ const AIAnalysisOutputSchema = z.object({
   participants: z.array(z.object({
     modelId: z.string(),
     role: z.string().nullable(),
-  })).min(MIN_PARTICIPANTS_REQUIRED).max(5),
+  }).strict()).min(MIN_PARTICIPANTS_REQUIRED).max(5),
   mode: z.string(),
   enableWebSearch: z.boolean(),
-});
+}).strict();
 
 // Default/fallback config
 const DEFAULT_JOB_CONFIG = {

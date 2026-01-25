@@ -6,158 +6,27 @@
  *
  * ✅ PATTERN: Immutable snapshot prevents stale closure issues
  * ✅ SEPARATION: Context building separate from transition logic
+ * ✅ ZOD-INFERRED: Types imported from store-schemas.ts (single source of truth)
  */
 
-import type { RoundPhase } from '@roundtable/shared';
+import type {
+  AiSdkSnapshot,
+  ParticipantInfo,
+  PreSearchInfo,
+  RoundContext,
+  StoreSnapshot,
+} from '../store-schemas';
 
-// ============================================================================
-// CONTEXT TYPES
-// ============================================================================
-
-/**
- * Participant info for FSM decisions
- */
-export type ParticipantInfo = {
-  id: string;
-  index: number;
-  enabled: boolean;
-  hasMessage: boolean;
-};
-
-/**
- * Pre-search state for FSM decisions
- */
-export type PreSearchInfo = {
-  exists: boolean;
-  status: 'pending' | 'streaming' | 'complete' | 'failed' | null;
-  streamId: string | null;
-};
-
-/**
- * Moderator state for FSM decisions
- */
-export type ModeratorInfo = {
-  hasMessage: boolean;
-  streamId: string | null;
-};
-
-/**
- * Resumption state from server prefill
- */
-export type ResumptionInfo = {
-  phase: RoundPhase | null;
-  participantIndex: number | null;
-  roundNumber: number | null;
-  preSearchStreamId: string | null;
-  moderatorStreamId: string | null;
-  isPrefilled: boolean;
-};
-
-/**
- * Immutable context for FSM transition decisions
- */
-export type RoundContext = {
-  // Thread identity
-  threadId: string | null;
-  createdThreadId: string | null;
-
-  // Round tracking
-  roundNumber: number | null;
-  streamingRoundNumber: number | null;
-
-  // Web search
-  webSearchEnabled: boolean;
-  preSearch: PreSearchInfo;
-
-  // Participants
-  participants: ParticipantInfo[];
-  participantCount: number;
-  enabledParticipantCount: number;
-  currentParticipantIndex: number;
-
-  // Completion tracking
-  allParticipantsComplete: boolean;
-  completedParticipantCount: number;
-
-  // Moderator
-  moderator: ModeratorInfo;
-
-  // Resumption (from server prefill)
-  resumption: ResumptionInfo;
-
-  // Error state
-  lastError: Error | null;
-
-  // AI SDK state
-  isAiSdkStreaming: boolean;
-  isAiSdkReady: boolean;
-};
-
-// ============================================================================
-// CONTEXT BUILDER
-// ============================================================================
-
-/**
- * Store slice interfaces for context building
- * These match the Zustand store structure
- */
-export type StoreSnapshot = {
-  // Thread state
-  thread: { id: string } | null;
-  createdThreadId: string | null;
-
-  // Round state
-  currentRoundNumber: number | null;
-  streamingRoundNumber: number | null;
-
-  // Form state
-  enableWebSearch: boolean;
-
-  // Participants
-  participants: Array<{
-    id: string;
-    participantIndex: number;
-    enabled?: boolean;
-  }>;
-  currentParticipantIndex: number;
-
-  // Messages (for completion detection)
-  messages: Array<{
-    id: string;
-    role: string;
-    metadata?: {
-      roundNumber?: number;
-      participantIndex?: number;
-      isModerator?: boolean;
-    };
-  }>;
-
-  // Pre-search state
-  preSearches: Array<{
-    roundNumber: number;
-    status: string;
-    id?: string;
-  }>;
-
-  // Stream resumption state
-  streamResumptionPrefilled: boolean;
-  currentResumptionPhase: RoundPhase | null;
-  resumptionRoundNumber: number | null;
-  nextParticipantToTrigger: [number, number] | null;
-  preSearchResumption: { streamId: string } | null;
-  moderatorResumption: { streamId: string } | null;
-
-  // Error
-  error: Error | null;
-};
-
-/**
- * AI SDK state snapshot
- */
-export type AiSdkSnapshot = {
-  isStreaming: boolean;
-  isReady: boolean;
-};
+// Re-export types from store-schemas for consumers
+export type {
+  AiSdkSnapshot,
+  ModeratorInfo,
+  ParticipantInfo,
+  PreSearchInfo,
+  ResumptionInfo,
+  RoundContext,
+  StoreSnapshot,
+} from '../store-schemas';
 
 /**
  * Build immutable context from store and AI SDK state

@@ -209,18 +209,17 @@ export function createTestClient(options?: ClientOptions): TestClientType {
 }
 
 // ============================================================================
-// Combined Client Factory (Legacy Support)
+// Combined Client Factory
 //
-// Returns an object with all route clients merged. Services can access
+// Returns an object with all route clients merged. Services access
 // routes through this unified interface.
 // ============================================================================
 
 /**
  * Create a combined API client with all route groups
  *
- * This provides backward compatibility for existing services that expect
- * a single client with all routes. Internally creates separate typed clients
- * and merges them.
+ * Provides type-safe access to all routes through a single client.
+ * Internally creates separate typed clients and merges them.
  *
  * @param options - Client options
  * @returns Combined client with access to all routes

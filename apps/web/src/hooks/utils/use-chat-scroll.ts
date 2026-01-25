@@ -82,13 +82,11 @@ export function useChatScroll({
   }, []);
 
   // Reset when messages become empty (navigation)
-  // resetScrollState is stable (empty deps useCallback) so excluding from deps is safe
   useEffect(() => {
     if (messages.length === 0) {
       resetScrollState();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- resetScrollState is stable
-  }, [messages.length]);
+  }, [messages.length, resetScrollState]);
 
   /**
    * Scroll to bottom using native window.scrollTo

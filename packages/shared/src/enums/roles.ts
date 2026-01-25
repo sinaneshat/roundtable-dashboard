@@ -74,7 +74,7 @@ export const RoleIconNames = {
 export const RoleCategoryMetadataSchema = z.object({
   bgColor: z.string(),
   iconColor: z.string(),
-});
+}).strict();
 
 export type RoleCategoryMetadata = z.infer<typeof RoleCategoryMetadataSchema>;
 

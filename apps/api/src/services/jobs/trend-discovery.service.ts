@@ -16,7 +16,15 @@ import type { ApiEnv } from '@/types';
 
 import { initializeOpenRouter, openRouterService } from '../models';
 
-type Platform = 'reddit' | 'twitter' | 'instagram';
+// 5-part enum pattern for Platform
+const PLATFORMS = ['reddit', 'twitter', 'instagram'] as const;
+const PlatformSchema = z.enum(PLATFORMS);
+type Platform = z.infer<typeof PlatformSchema>;
+const Platforms = {
+  REDDIT: 'reddit',
+  TWITTER: 'twitter',
+  INSTAGRAM: 'instagram',
+} as const;
 
 type TrendDiscoveryResult = {
   suggestions: TrendSuggestion[];
@@ -28,15 +36,15 @@ type TrendDiscoveryResult = {
 };
 
 const PLATFORM_SEARCH_CONFIGS: Record<Platform, { query: (keyword: string) => string; domain: string }> = {
-  reddit: {
+  [Platforms.REDDIT]: {
     query: (keyword: string) => `site:reddit.com ${keyword} discussion`,
     domain: 'reddit.com',
   },
-  twitter: {
+  [Platforms.TWITTER]: {
     query: (keyword: string) => `(site:twitter.com OR site:x.com) ${keyword} trending`,
     domain: 'twitter.com',
   },
-  instagram: {
+  [Platforms.INSTAGRAM]: {
     query: (keyword: string) => `site:instagram.com ${keyword} viral`,
     domain: 'instagram.com',
   },
@@ -46,12 +54,12 @@ const TrendExtractionSchema = z.object({
   suggestions: z.array(z.object({
     topic: z.string().describe('Brief topic name (3-8 words)'),
     prompt: z.string().describe('Engaging discussion prompt (50-200 characters)'),
-    platform: z.enum(['reddit', 'twitter', 'instagram']).describe('Source platform'),
+    platform: PlatformSchema.describe('Source platform'),
     relevanceScore: z.number().min(0).max(100).describe('Relevance/trending score'),
     suggestedRounds: z.number().min(1).max(5).describe('Suggested discussion rounds'),
     reasoning: z.string().describe('Why trending and rounds rationale'),
-  })),
-});
+  }).strict()),
+}).strict();
 
 function buildExtractionPrompt(keyword: string, formattedResults: string): string {
   return `Analyze these social media search results about "${keyword}".

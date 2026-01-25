@@ -42,11 +42,11 @@ export const ErrorMetadataSchema = z.object({
 
   // OpenRouter-specific fields
   openRouterError: z
-    .union([z.string(), z.record(z.string(), z.unknown())])
+    .union([z.string(), z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))])
     .optional(),
   openRouterCode: z.union([z.string(), z.number()]).optional(),
   openRouterType: z.string().optional(),
-  openRouterMetadata: z.record(z.string(), z.unknown()).optional(),
+  openRouterMetadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
 
   // Response details (for debugging)
   responseBody: z.string().optional(),
@@ -65,8 +65,8 @@ export const ErrorMetadataSchema = z.object({
   roundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
 
   // ✅ Explicit catch-all for external API fields (replaces passthrough)
-  additionalProviderFields: z.record(z.string(), z.unknown()).optional(),
-});
+  additionalProviderFields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.unknown())])).optional(),
+}).strict();
 
 export type ErrorMetadata = z.infer<typeof ErrorMetadataSchema>;
 

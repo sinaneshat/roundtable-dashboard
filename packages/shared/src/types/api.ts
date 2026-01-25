@@ -14,14 +14,24 @@ import { z } from '@hono/zod-openapi';
 // API ERROR RESPONSE
 // ============================================================================
 
+/**
+ * Error details schema - structured error context
+ */
+const ApiErrorDetailsSchema = z.record(z.string(), z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]));
+
 export const ApiErrorSchema = z.object({
   success: z.literal(false),
   error: z.object({
     message: z.string(),
     code: z.string().optional(),
-    details: z.unknown().optional(),
-  }),
-}).openapi({
+    details: ApiErrorDetailsSchema.optional(),
+  }).strict(),
+}).strict().openapi({
   description: 'API error response',
   example: {
     success: false,
@@ -42,7 +52,7 @@ export function createApiSuccessSchema<T extends z.ZodTypeAny>(dataSchema: T) {
   return z.object({
     success: z.literal(true),
     data: dataSchema,
-  }).openapi({
+  }).strict().openapi({
     description: 'Successful API response',
   });
 }
@@ -76,7 +86,7 @@ export function createPaginatedResponseSchema<T extends z.ZodTypeAny>(itemSchema
     page: z.number().int().positive(),
     limit: z.number().int().positive(),
     hasMore: z.boolean(),
-  }).openapi({
+  }).strict().openapi({
     description: 'Paginated response with offset-based pagination',
   });
 }
@@ -98,7 +108,7 @@ export function createCursorPaginatedResponseSchema<T extends z.ZodTypeAny>(item
     items: z.array(itemSchema),
     nextCursor: z.string().nullable(),
     hasMore: z.boolean(),
-  }).openapi({
+  }).strict().openapi({
     description: 'Paginated response with cursor-based pagination',
   });
 }

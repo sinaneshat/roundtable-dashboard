@@ -39,7 +39,7 @@ const OpenRouterServiceConfigSchema = z.object({
   apiKey: z.string().min(1),
   appName: z.string().optional(),
   appUrl: z.string().url().optional(),
-});
+}).strict();
 
 export type OpenRouterServiceConfig = z.infer<typeof OpenRouterServiceConfigSchema>;
 
@@ -52,7 +52,7 @@ export const GenerateTextParamsSchema = z.object({
   temperature: z.number().min(0).max(2).optional(),
   maxTokens: z.number().int().positive().optional(),
   topP: z.number().min(0).max(1).optional(),
-});
+}).strict();
 
 export type GenerateTextParams = z.infer<typeof GenerateTextParamsSchema>;
 

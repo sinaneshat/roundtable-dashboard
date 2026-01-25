@@ -174,9 +174,17 @@ export const SecurityValidators = {
   safeString: (maxLength = 1000) =>
     z.string()
       .max(maxLength)
-      .refine(str => !/<script/i.test(str), 'Script tags not allowed')
-      .refine(str => !/javascript:/i.test(str), 'JavaScript URLs not allowed')
-      .refine(str => !/on\w+\s*=/i.test(str), 'Event handlers not allowed')
+      .superRefine((str, ctx) => {
+        if (/<script/i.test(str)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Script tags not allowed' });
+        }
+        if (/javascript:/i.test(str)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'JavaScript URLs not allowed' });
+        }
+        if (/on\w+\s*=/i.test(str)) {
+          ctx.addIssue({ code: z.ZodIssueCode.custom, message: 'Event handlers not allowed' });
+        }
+      })
       .transform(str => str
         .replace(/<[^>]*>/g, '')
         .replace(/[<>&"']/g, '')

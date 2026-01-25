@@ -1,7 +1,5 @@
 import { MessageRoles, MessageStatuses, ScreenModes } from '@roundtable/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { StoreApi } from 'zustand';
-import { createStore } from 'zustand/vanilla';
 
 import { act } from '@/lib/testing';
 import {
@@ -15,95 +13,10 @@ import {
   createMockChatHook,
   createMockChatStore,
   createMockResumptionParticipants as createMockParticipants,
+  createMockResumptionParticipants,
   createMockResumptionPreSearch,
   createMockUserMessage,
 } from '@/lib/testing/resumption-test-helpers';
-import type { StoredPreSearch } from '@/services/api';
-
-// Legacy mock store for backward compatibility with existing tests
-type MockChatStoreState = {
-  waitingToStartStreaming: boolean;
-  isStreaming: boolean;
-  nextParticipantToTrigger: number | null;
-  participants: Array<{
-    id: string;
-    threadId: string;
-    modelId: string;
-    role: string;
-    priority: number;
-  }>;
-  messages: Array<{
-    id: string;
-    role: typeof MessageRoles.USER | typeof MessageRoles.ASSISTANT;
-    metadata?: { roundNumber?: number };
-  }>;
-  preSearches: StoredPreSearch[];
-  thread: {
-    id: string;
-    enableWebSearch: boolean;
-  } | null;
-  screenMode: string | null;
-  setWaitingToStartStreaming: (value: boolean) => void;
-  setNextParticipantToTrigger: (value: number | null) => void;
-  setIsStreaming: (value: boolean) => void;
-};
-
-function createMockStore(initialState?: Partial<MockChatStoreState>): StoreApi<MockChatStoreState> {
-  return createStore<MockChatStoreState>(set => ({
-    waitingToStartStreaming: false,
-    isStreaming: false,
-    nextParticipantToTrigger: null,
-    participants: [],
-    messages: [],
-    preSearches: [],
-    thread: null,
-    screenMode: ScreenModes.OVERVIEW,
-    setWaitingToStartStreaming: (value: boolean) =>
-      set({ waitingToStartStreaming: value }),
-    setNextParticipantToTrigger: (value: number | null) =>
-      set({ nextParticipantToTrigger: value }),
-    setIsStreaming: (value: boolean) =>
-      set({ isStreaming: value }),
-    ...initialState,
-  }));
-}
-
-function createMockParticipant(index: number) {
-  return {
-    id: `participant-${index}`,
-    threadId: 'thread-123',
-    modelId: `model-${index}`,
-    role: `Role ${index}`,
-    priority: index,
-  };
-}
-
-function createMockPreSearch(
-  roundNumber: number,
-  status: typeof MessageStatuses[keyof typeof MessageStatuses],
-): StoredPreSearch {
-  return {
-    id: `presearch-${roundNumber}`,
-    threadId: 'thread-123',
-    roundNumber,
-    status,
-    userQuery: 'Test query',
-    searchData: status === MessageStatuses.COMPLETE
-      ? {
-          queries: [],
-          results: [],
-          moderator: 'Moderator synthesis',
-          successCount: 1,
-          failureCount: 0,
-          totalResults: 3,
-          totalTime: 1000,
-        }
-      : undefined,
-    errorMessage: null,
-    createdAt: new Date(),
-    completedAt: status === MessageStatuses.COMPLETE ? new Date() : null,
-  } as StoredPreSearch;
-}
 
 describe('useRoundResumption', () => {
   let consoleLogSpy: ReturnType<typeof vi.spyOn>;
@@ -122,10 +35,10 @@ describe('useRoundResumption', () => {
   describe('resumption conditions', () => {
     it('should NOT trigger resumption when nextParticipantToTrigger is null', () => {
       const continueFromParticipant = vi.fn();
-      const store = createMockStore({
+      const store = createMockChatStore({
         nextParticipantToTrigger: null,
         waitingToStartStreaming: true,
-        participants: [createMockParticipant(0), createMockParticipant(1)],
+        participants: createMockResumptionParticipants(2),
         messages: [createMockUserMessage(0)],
       });
 
@@ -142,11 +55,11 @@ describe('useRoundResumption', () => {
 
     it('should trigger resumption when all conditions are met', () => {
       const continueFromParticipant = vi.fn();
-      const store = createMockStore({
+      const store = createMockChatStore({
         nextParticipantToTrigger: 1,
         waitingToStartStreaming: true,
         isStreaming: false,
-        participants: [createMockParticipant(0), createMockParticipant(1)],
+        participants: createMockResumptionParticipants(2),
         messages: [createMockUserMessage(0)],
         thread: { id: 'thread-123', enableWebSearch: false },
       });
@@ -179,11 +92,11 @@ describe('useRoundResumption', () => {
 
     it('should NOT resume when chat is not ready (AI SDK hydration pending)', () => {
       const continueFromParticipant = vi.fn();
-      const store = createMockStore({
+      const store = createMockChatStore({
         nextParticipantToTrigger: 1,
         waitingToStartStreaming: true,
         isStreaming: false,
-        participants: [createMockParticipant(0), createMockParticipant(1)],
+        participants: createMockResumptionParticipants(2),
         messages: [createMockUserMessage(0)],
         thread: { id: 'thread-123', enableWebSearch: false },
       });
@@ -206,11 +119,11 @@ describe('useRoundResumption', () => {
 
     it('should NOT resume when already streaming', () => {
       const continueFromParticipant = vi.fn();
-      const store = createMockStore({
+      const store = createMockChatStore({
         nextParticipantToTrigger: 1,
         waitingToStartStreaming: true,
         isStreaming: true,
-        participants: [createMockParticipant(0), createMockParticipant(1)],
+        participants: createMockResumptionParticipants(2),
         messages: [createMockUserMessage(0)],
       });
 
@@ -230,14 +143,14 @@ describe('useRoundResumption', () => {
   describe('pre-search blocking', () => {
     it('should wait for pre-search completion before resuming participants', () => {
       const continueFromParticipant = vi.fn();
-      const store = createMockStore({
+      const store = createMockChatStore({
         nextParticipantToTrigger: 0,
         waitingToStartStreaming: true,
         isStreaming: false,
-        participants: [createMockParticipant(0), createMockParticipant(1)],
+        participants: createMockResumptionParticipants(2),
         messages: [createMockUserMessage(0)],
         thread: { id: 'thread-123', enableWebSearch: true },
-        preSearches: [createMockPreSearch(0, MessageStatuses.STREAMING)],
+        preSearches: [createMockResumptionPreSearch(0, MessageStatuses.STREAMING)],
       });
 
       createMockChatHook({
@@ -257,14 +170,14 @@ describe('useRoundResumption', () => {
 
     it('should resume after pre-search completes', () => {
       const continueFromParticipant = vi.fn();
-      const store = createMockStore({
+      const store = createMockChatStore({
         nextParticipantToTrigger: 0,
         waitingToStartStreaming: true,
         isStreaming: false,
-        participants: [createMockParticipant(0), createMockParticipant(1)],
+        participants: createMockResumptionParticipants(2),
         messages: [createMockUserMessage(0)],
         thread: { id: 'thread-123', enableWebSearch: true },
-        preSearches: [createMockPreSearch(0, MessageStatuses.COMPLETE)],
+        preSearches: [createMockResumptionPreSearch(0, MessageStatuses.COMPLETE)],
       });
 
       const chat = createMockChatHook({
@@ -299,7 +212,7 @@ describe('useRoundResumption', () => {
 
   describe('dangling state cleanup', () => {
     it('should clear nextParticipantToTrigger after timeout when not streaming', async () => {
-      const store = createMockStore({
+      const store = createMockChatStore({
         nextParticipantToTrigger: 1,
         waitingToStartStreaming: false,
         isStreaming: false,
@@ -315,7 +228,7 @@ describe('useRoundResumption', () => {
     });
 
     it('should NOT clear nextParticipantToTrigger while streaming', async () => {
-      const store = createMockStore({
+      const store = createMockChatStore({
         nextParticipantToTrigger: 1,
         waitingToStartStreaming: true,
         isStreaming: true,
@@ -334,11 +247,11 @@ describe('useRoundResumption', () => {
   describe('race condition handling', () => {
     it('should handle AI SDK isReady transition from false to true', async () => {
       const continueFromParticipant = vi.fn();
-      createMockStore({
+      createMockChatStore({
         nextParticipantToTrigger: 0,
         waitingToStartStreaming: true,
         isStreaming: false,
-        participants: [createMockParticipant(0)],
+        participants: createMockResumptionParticipants(1),
         messages: [createMockUserMessage(0)],
         thread: { id: 'thread-123', enableWebSearch: false },
       });
@@ -364,11 +277,11 @@ describe('useRoundResumption', () => {
 
     it('should prevent duplicate resumption triggers', () => {
       const continueFromParticipant = vi.fn();
-      const store = createMockStore({
+      const store = createMockChatStore({
         nextParticipantToTrigger: 0,
         waitingToStartStreaming: true,
         isStreaming: false,
-        participants: [createMockParticipant(0)],
+        participants: createMockResumptionParticipants(1),
         messages: [createMockUserMessage(0)],
         thread: { id: 'thread-123', enableWebSearch: false },
       });
@@ -401,11 +314,11 @@ describe('useRoundResumption', () => {
 
   describe('empty messages handling', () => {
     it('should NOT clear waitingToStartStreaming when messages are empty (new thread)', () => {
-      const store = createMockStore({
+      const store = createMockChatStore({
         nextParticipantToTrigger: 0,
         waitingToStartStreaming: true,
         isStreaming: false,
-        participants: [createMockParticipant(0)],
+        participants: createMockResumptionParticipants(1),
         messages: [],
         thread: null,
       });
@@ -419,12 +332,12 @@ describe('useRoundResumption', () => {
 
   describe('safety timeout', () => {
     it('should clear stuck state after 5 second timeout on thread screen', async () => {
-      createMockStore({
+      createMockChatStore({
         nextParticipantToTrigger: 0,
         waitingToStartStreaming: true,
         isStreaming: false,
         screenMode: ScreenModes.THREAD,
-        participants: [createMockParticipant(0)],
+        participants: createMockResumptionParticipants(1),
         messages: [createMockUserMessage(0)],
       });
 
@@ -434,7 +347,7 @@ describe('useRoundResumption', () => {
     });
 
     it('should NOT timeout while streaming is active', async () => {
-      const store = createMockStore({
+      const store = createMockChatStore({
         nextParticipantToTrigger: 0,
         waitingToStartStreaming: true,
         isStreaming: true,
@@ -462,7 +375,7 @@ describe('edge cases from debug output', () => {
   });
 
   it('should handle state where nextParticipantToTrigger is null but streaming just ended', () => {
-    const store = createMockStore({
+    const store = createMockChatStore({
       nextParticipantToTrigger: null,
       waitingToStartStreaming: false,
       isStreaming: false,
@@ -489,7 +402,7 @@ describe('edge cases from debug output', () => {
   });
 
   it('should detect incomplete round needing resumption', () => {
-    const store = createMockStore({
+    const store = createMockChatStore({
       nextParticipantToTrigger: 1,
       waitingToStartStreaming: true,
       isStreaming: false,

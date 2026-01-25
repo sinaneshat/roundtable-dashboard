@@ -164,7 +164,7 @@ const _CreditBalanceInfoSchema = z.object({
   planType: PlanTypeSchema,
   monthlyCredits: z.number(),
   nextRefillAt: z.date().nullable(),
-});
+}).strict();
 
 export type CreditBalanceInfo = z.infer<typeof _CreditBalanceInfoSchema>;
 
@@ -175,13 +175,13 @@ const _TokenUsageSchema = z.object({
   threadId: z.string().optional(),
   messageId: z.string().optional(),
   modelId: z.string(),
-});
+}).strict();
 
 export type TokenUsage = z.infer<typeof _TokenUsageSchema>;
 
 const _EnforceCreditsOptionsSchema = z.object({
   skipRoundCheck: z.boolean().optional(),
-});
+}).strict();
 
 export type EnforceCreditsOptions = z.infer<typeof _EnforceCreditsOptionsSchema>;
 
@@ -958,7 +958,7 @@ const _RecordTransactionSchema = z.object({
   modelPricingInputPerMillion: z.number().optional(),
   modelPricingOutputPerMillion: z.number().optional(),
   description: z.string().optional(),
-});
+}).strict();
 
 export type RecordTransactionParams = z.infer<typeof _RecordTransactionSchema>;
 

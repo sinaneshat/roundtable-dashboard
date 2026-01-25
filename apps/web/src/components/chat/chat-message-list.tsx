@@ -1,5 +1,5 @@
 import type { MessageStatus } from '@roundtable/shared';
-import { FinishReasons, isCompletionFinishReason, MessagePartTypes, MessageRoles, MessageStatuses, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@roundtable/shared';
+import { FinishReasons, isAvailableSource, isCompletionFinishReason, MessagePartTypes, MessageRoles, MessageStatuses, MODERATOR_NAME, MODERATOR_PARTICIPANT_INDEX } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { memo, useMemo, useRef } from 'react';
 import Markdown from 'react-markdown';
@@ -196,8 +196,9 @@ function AssistantGroupCard({
       const availableSourcesFromMsg = getAvailableSources(message.metadata);
       if (availableSourcesFromMsg) {
         for (const source of availableSourcesFromMsg) {
-          if (source.id && !allSources.has(source.id)) {
-            allSources.set(source.id, source as AvailableSource);
+          // ✅ ZOD VALIDATION: Use type guard instead of cast
+          if (source.id && !allSources.has(source.id) && isAvailableSource(source)) {
+            allSources.set(source.id, source);
           }
         }
       }
@@ -241,6 +242,15 @@ function AssistantGroupCard({
               hasAnyContent,
             });
 
+            /**
+             * ✅ AI SDK INTEROP CAST - Required for UIMessage part filtering
+             *
+             * WHY CAST IS NECESSARY:
+             * - AI SDK's UIMessagePart includes dynamic-tool, step-start, and other types
+             * - Our MessagePart schema covers only the subset we render
+             * - Filter reduces to matching types, but TypeScript can't narrow array element types
+             * - Components downstream expect MessagePart[], not UIMessagePart[]
+             */
             const filteredParts = safeParts
               .filter(p =>
                 !!p && (p.type === MessagePartTypes.TEXT
@@ -1130,8 +1140,9 @@ export const ChatMessageList = memo(
                       if (availableSourcesFromMsg) {
                         for (const source of availableSourcesFromMsg) {
                           const sourceId = source.id;
-                          if (sourceId && !allSources.has(sourceId)) {
-                            allSources.set(sourceId, source as AvailableSource);
+                          // ✅ ZOD VALIDATION: Use type guard instead of cast
+                          if (sourceId && !allSources.has(sourceId) && isAvailableSource(source)) {
+                            allSources.set(sourceId, source);
                           }
                         }
                       }
@@ -1241,6 +1252,7 @@ export const ChatMessageList = memo(
                           // ✅ ANIMATION FIX: Still streaming if content exists but not finished
                           // This keeps the pulsating animation showing during active streaming
                           status = hasActuallyFinished ? MessageStatuses.COMPLETE : MessageStatuses.STREAMING;
+                          // ✅ AI SDK INTEROP CAST - see filteredParts comment above
                           parts = (participantMessage.parts || [])
                             .filter(p =>
                               p && (p.type === MessagePartTypes.TEXT
@@ -1338,8 +1350,9 @@ export const ChatMessageList = memo(
                       if (availableSourcesFromMsg) {
                         for (const source of availableSourcesFromMsg) {
                           const sourceId = source.id;
-                          if (sourceId && !allSources.has(sourceId)) {
-                            allSources.set(sourceId, source as AvailableSource);
+                          // ✅ ZOD VALIDATION: Use type guard instead of cast
+                          if (sourceId && !allSources.has(sourceId) && isAvailableSource(source)) {
+                            allSources.set(sourceId, source);
                           }
                         }
                       }
@@ -1361,6 +1374,7 @@ export const ChatMessageList = memo(
 
                   const enabledParticipants = getEnabledParticipants(participants);
 
+                  // ✅ AI SDK INTEROP CAST - see filteredParts comment in AssistantGroupCard
                   const moderatorParts = moderatorHasContent && moderatorMessage
                     ? (moderatorMessage.parts || [])
                         .filter(p =>
@@ -1469,8 +1483,9 @@ export const ChatMessageList = memo(
               if (assistantMeta?.availableSources) {
                 for (const source of assistantMeta.availableSources) {
                   const sourceId = source.id;
-                  if (sourceId && !roundSourcesMap.has(sourceId)) {
-                    roundSourcesMap.set(sourceId, source as AvailableSource);
+                  // ✅ ZOD VALIDATION: Use type guard instead of cast
+                  if (sourceId && !roundSourcesMap.has(sourceId) && isAvailableSource(source)) {
+                    roundSourcesMap.set(sourceId, source);
                   }
                 }
               }

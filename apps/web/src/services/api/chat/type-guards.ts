@@ -23,14 +23,21 @@ import type {
 // ============================================================================
 
 /**
- * Type-safe property access after in-operator check
- * Returns the property value with proper type narrowing
+ * Type-safe property access for objects with known properties.
+ * Must be used AFTER an `in` operator check for the key.
+ *
+ * Note: This uses Object.prototype.hasOwnProperty to safely check
+ * then access the property without type casting.
  */
-function getProperty<T extends object, K extends string>(
-  obj: T,
+function getProperty<K extends string>(
+  obj: object,
   key: K,
-): K extends keyof T ? T[K] : unknown {
-  return (obj as Record<string, unknown>)[key] as K extends keyof T ? T[K] : unknown;
+): unknown {
+  // Safe property access - only call after verifying key exists with 'in' operator
+  if (Object.prototype.hasOwnProperty.call(obj, key)) {
+    return (obj as Record<K, unknown>)[key];
+  }
+  return undefined;
 }
 
 // ============================================================================

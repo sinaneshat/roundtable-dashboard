@@ -283,6 +283,7 @@ export const MessagePartSchema = z
         example: 'Let me analyze this step by step...',
       }),
     }),
+    // ✅ JUSTIFIED z.unknown(): Tool args can be any JSON structure defined by tool schemas
     z.object({
       type: z.literal('tool-call'),
       toolCallId: z.string().openapi({
@@ -294,10 +295,11 @@ export const MessagePartSchema = z
         example: 'search_web',
       }),
       args: z.unknown().openapi({
-        description: 'Arguments passed to the tool',
+        description: 'Arguments passed to the tool (structure defined by tool schema)',
         example: { query: 'AI SDK documentation' },
       }),
     }),
+    // ✅ JUSTIFIED z.unknown(): Tool results can be any JSON structure returned by tool execution
     z.object({
       type: z.literal('tool-result'),
       toolCallId: z.string().openapi({
@@ -309,7 +311,7 @@ export const MessagePartSchema = z
         example: 'search_web',
       }),
       result: z.unknown().openapi({
-        description: 'Result returned from tool execution',
+        description: 'Result returned from tool execution (structure defined by tool)',
         example: { results: [] },
       }),
       isError: z.boolean().optional().openapi({
@@ -371,7 +373,7 @@ export function isMessagePart(value: unknown): value is MessagePart {
 export function isMessageStatus(value: unknown): value is MessageStatus {
   if (typeof value !== 'string')
     return false;
-  return (MESSAGE_STATUSES as readonly string[]).includes(value);
+  return MESSAGE_STATUSES.includes(value as MessageStatus);
 }
 
 /**
@@ -947,6 +949,7 @@ export type ReasoningPart = z.infer<typeof ReasoningPartSchema>;
  * args is optional because DynamicToolCall may not have it.
  * @see https://sdk.vercel.ai/docs/reference/ai-sdk-core/tool-call-part
  */
+// ✅ JUSTIFIED z.unknown(): args structure is tool-defined and varies per tool
 export const StreamingToolCallSchema = z.object({
   type: z.literal('tool-call').optional(),
   toolCallId: z.string(),
@@ -968,12 +971,15 @@ export type StreamingToolCall = z.infer<typeof StreamingToolCallSchema>;
  * @see streaming.handler.ts onFinish callback
  * @see message-persistence.service.ts extractReasoning
  */
+// ✅ JUSTIFIED z.unknown(): AI SDK response objects vary by provider and version.
+// We use type guards at runtime to safely access known properties.
 export const StreamingFinishResultSchema = z.object({
   text: z.string(),
   usage: StreamingUsageSchema.optional(),
   finishReason: z.string(),
-  // Provider-specific data - use type guards for access
+  // Provider-specific metadata - structure varies by AI provider
   providerMetadata: z.unknown().optional(),
+  // AI SDK response object - contains provider-specific fields
   response: z.unknown().optional(),
   // Reasoning can be string or array of parts
   reasoning: z.union([
@@ -984,6 +990,7 @@ export const StreamingFinishResultSchema = z.object({
   reasoningText: z.string().optional(),
   // Tool calls from AI SDK
   toolCalls: z.array(StreamingToolCallSchema).optional(),
+  // Tool results - structure varies by tool
   toolResults: z.unknown().optional(),
 });
 

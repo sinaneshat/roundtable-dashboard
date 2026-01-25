@@ -41,12 +41,14 @@ export const ErrorMetadataSchema = z.object({
   providerMessage: z.string().optional(),
 
   // OpenRouter-specific fields
+  // Note: OpenRouter error responses have variable structure, using union for flexibility
   openRouterError: z
-    .union([z.string(), z.record(z.string(), z.unknown())])
+    .union([z.string(), z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))])
     .optional(),
   openRouterCode: z.union([z.string(), z.number()]).optional(),
   openRouterType: z.string().optional(),
-  openRouterMetadata: z.record(z.string(), z.unknown()).optional(),
+  // OpenRouter metadata contains provider-specific fields that vary per error
+  openRouterMetadata: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()])).optional(),
 
   // Response details (for debugging)
   responseBody: z.string().optional(),
@@ -65,7 +67,8 @@ export const ErrorMetadataSchema = z.object({
   roundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
 
   // ✅ Explicit catch-all for external API fields (replaces passthrough)
-  additionalProviderFields: z.record(z.string(), z.unknown()).optional(),
+  // Provider fields contain JSON-serializable values from external APIs
+  additionalProviderFields: z.record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null(), z.array(z.unknown()), z.record(z.string(), z.unknown())])).optional(),
 });
 
 export type ErrorMetadata = z.infer<typeof ErrorMetadataSchema>;

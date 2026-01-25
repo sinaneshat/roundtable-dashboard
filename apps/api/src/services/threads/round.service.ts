@@ -23,20 +23,20 @@ type DbClient = Awaited<ReturnType<typeof getDbAsync>>;
 const _RoundCalculationPartSchema = z.object({
   type: z.string(),
   text: z.string().optional(),
-});
+}).strict();
 
 // Message metadata schema for round calculation
 const _RoundCalculationMetadataSchema = z.object({
   isParticipantTrigger: z.boolean().optional(),
   roundNumber: z.number().optional(),
-});
+}).strict();
 
 // Message schema for round calculation - subset of full message
 const _RoundCalculationMessageSchema = z.object({
   role: z.string().optional(),
   metadata: _RoundCalculationMetadataSchema.optional(),
   parts: z.array(_RoundCalculationPartSchema).optional(),
-});
+}).strict();
 
 type RoundCalculationMessage = z.infer<typeof _RoundCalculationMessageSchema>;
 
@@ -54,7 +54,7 @@ const _RoundNumberResultSchema = z.object({
   roundNumber: z.number(),
   isRegeneration: z.boolean(),
   isTriggerMessage: z.boolean(),
-});
+}).strict();
 
 type RoundNumberResult = z.infer<typeof _RoundNumberResultSchema>;
 

@@ -36,10 +36,10 @@ const _TierConfigurationSchema = z.object({
     analysisPerMonth: z.number(),
     projectsPerUser: z.number(),
     threadsPerProject: z.number(),
-  }),
+  }).strict(),
   upgradeMessage: z.string(),
   monthlyCredits: z.number(),
-});
+}).strict();
 
 type TierConfiguration = z.infer<typeof _TierConfigurationSchema>;
 
@@ -89,7 +89,17 @@ function deriveTierRecord<T>(
     }
     result[tier] = extractor(config);
   }
-  // Safe cast: all tiers are assigned above since SUBSCRIPTION_TIERS is exhaustive
+  /**
+   * ✅ EXHAUSTIVE ITERATION CAST - TypeScript limitation
+   *
+   * WHY THIS CAST IS NECESSARY:
+   * - TypeScript cannot infer that iterating over SUBSCRIPTION_TIERS fills all keys
+   * - SUBSCRIPTION_TIERS is a const array of all SubscriptionTier values
+   * - The for-loop assigns every tier, making result complete (not partial)
+   * - Runtime throws Error if any tier is missing config (defensive guard)
+   *
+   * ALTERNATIVE: Use Object.fromEntries with SUBSCRIPTION_TIERS.map but still requires cast
+   */
   return result as Record<SubscriptionTier, T>;
 }
 
@@ -152,8 +162,9 @@ export function getPlanConfig(): { signupCredits: number; monthlyCredits: number
 export function getModelPricingTier(model: ModelForPricing): ModelPricingTier {
   const inputPricePerMillion = costPerMillion(model.pricing.prompt);
 
+  // ✅ TYPE-SAFE: MODEL_PRICING_TIERS elements are already typed as ModelPricingTier
   for (const tier of MODEL_PRICING_TIERS) {
-    const thresholds = MODEL_TIER_THRESHOLDS[tier as ModelPricingTier];
+    const thresholds = MODEL_TIER_THRESHOLDS[tier];
     if (thresholds && inputPricePerMillion >= thresholds.min && inputPricePerMillion < thresholds.max) {
       return tier;
     }
@@ -363,7 +374,7 @@ export function canAccessModelByPricing(userTier: SubscriptionTier, model: Model
 const _TierAccessInfoSchema = z.object({
   is_accessible_to_user: z.boolean(),
   required_tier_name: z.string().nullable(),
-});
+}).strict();
 
 export type TierAccessInfo = z.infer<typeof _TierAccessInfoSchema>;
 
@@ -375,7 +386,7 @@ const _FullTierAccessInfoSchema = z.object({
   required_tier: SubscriptionTierSchema,
   required_tier_name: z.string(),
   is_accessible_to_user: z.boolean(),
-});
+}).strict();
 
 export type FullTierAccessInfo = z.infer<typeof _FullTierAccessInfoSchema>;
 

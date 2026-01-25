@@ -43,6 +43,7 @@
 
 import type { RoundFlowEvent, RoundFlowState } from '@roundtable/shared';
 import { RoundFlowStates } from '@roundtable/shared';
+import * as z from 'zod';
 
 import type { TransitionResult } from './actions';
 import { actions, noTransition } from './actions';
@@ -50,27 +51,62 @@ import type { RoundContext } from './context';
 import * as guards from './guards';
 
 // ============================================================================
-// EVENT PAYLOAD TYPES
+// EVENT PAYLOAD SCHEMAS AND TYPE GUARDS
 // ============================================================================
 
-export type StartRoundPayload = {
-  roundNumber: number;
-};
+/**
+ * ✅ ZOD SCHEMAS: Type-safe payload validation
+ * Replaces runtime type casts with proper validation
+ */
+const StartRoundPayloadSchema = z.object({
+  roundNumber: z.number().int().nonnegative(),
+});
 
-export type ResumeRoundPayload = Record<string, never>;
+// Note: Schema used only for type inference (RESUME_ROUND uses ctx.resumption, not payload)
+const _ResumeRoundPayloadSchema = z.object({}).strict();
 
-export type ParticipantCompletePayload = {
-  messageId: string;
-  participantIndex: number;
-};
+const ParticipantCompletePayloadSchema = z.object({
+  messageId: z.string(),
+  participantIndex: z.number().int().nonnegative(),
+});
 
-export type ParticipantStartPayload = {
-  participantIndex: number;
-};
+const ParticipantStartPayloadSchema = z.object({
+  participantIndex: z.number().int().nonnegative(),
+});
 
-export type ErrorPayload = {
-  error: Error;
-};
+const ErrorPayloadSchema = z.object({
+  error: z.instanceof(Error),
+});
+
+// ============================================================================
+// TYPE GUARDS
+// ============================================================================
+
+function isStartRoundPayload(payload: unknown): payload is StartRoundPayload {
+  return StartRoundPayloadSchema.safeParse(payload).success;
+}
+
+function isParticipantCompletePayload(payload: unknown): payload is ParticipantCompletePayload {
+  return ParticipantCompletePayloadSchema.safeParse(payload).success;
+}
+
+function isParticipantStartPayload(payload: unknown): payload is ParticipantStartPayload {
+  return ParticipantStartPayloadSchema.safeParse(payload).success;
+}
+
+function isErrorPayload(payload: unknown): payload is ErrorPayload {
+  return ErrorPayloadSchema.safeParse(payload).success;
+}
+
+// ============================================================================
+// EVENT PAYLOAD TYPES (inferred from schemas)
+// ============================================================================
+
+export type StartRoundPayload = z.infer<typeof StartRoundPayloadSchema>;
+export type ResumeRoundPayload = z.infer<typeof _ResumeRoundPayloadSchema>;
+export type ParticipantCompletePayload = z.infer<typeof ParticipantCompletePayloadSchema>;
+export type ParticipantStartPayload = z.infer<typeof ParticipantStartPayloadSchema>;
+export type ErrorPayload = z.infer<typeof ErrorPayloadSchema>;
 
 export type EventPayload
   = | StartRoundPayload
@@ -94,8 +130,8 @@ function handleIdleTransitions(event: RoundFlowEvent, ctx: RoundContext, payload
         return noTransition(RoundFlowStates.IDLE);
       }
 
-      const roundPayload = payload as StartRoundPayload | undefined;
-      const roundNumber = roundPayload?.roundNumber ?? ctx.roundNumber ?? 0;
+      // ✅ ZOD VALIDATION: Use type guard instead of cast
+      const roundNumber = isStartRoundPayload(payload) ? payload.roundNumber : (ctx.roundNumber ?? 0);
 
       // Decide whether to run pre-search
       if (guards.shouldRunPreSearch(ctx)) {
@@ -224,10 +260,11 @@ function handlePreSearchStreamingTransitions(event: RoundFlowEvent, _ctx: RoundC
       };
 
     case 'PRE_SEARCH_ERROR': {
-      const errorPayload = payload as ErrorPayload | undefined;
+      // ✅ ZOD VALIDATION: Use type guard instead of cast
+      const error = isErrorPayload(payload) ? payload.error : new Error('Pre-search failed');
       return {
         nextState: RoundFlowStates.ERROR,
-        actions: [actions.setError(errorPayload?.error ?? new Error('Pre-search failed'), 'pre_search')],
+        actions: [actions.setError(error, 'pre_search')],
       };
     }
 
@@ -249,8 +286,8 @@ function handlePreSearchStreamingTransitions(event: RoundFlowEvent, _ctx: RoundC
 function handleParticipantStreamingTransitions(event: RoundFlowEvent, ctx: RoundContext, payload?: EventPayload): TransitionResult {
   switch (event) {
     case 'PARTICIPANT_COMPLETE': {
-      const completePayload = payload as ParticipantCompletePayload | undefined;
-      const currentIndex = completePayload?.participantIndex ?? ctx.currentParticipantIndex;
+      // ✅ ZOD VALIDATION: Use type guard instead of cast
+      const currentIndex = isParticipantCompletePayload(payload) ? payload.participantIndex : ctx.currentParticipantIndex;
       const roundNumber = ctx.roundNumber ?? 0;
 
       // Check if there are more participants
@@ -269,10 +306,11 @@ function handleParticipantStreamingTransitions(event: RoundFlowEvent, ctx: Round
     }
 
     case 'PARTICIPANT_ERROR': {
-      const errorPayload = payload as ErrorPayload | undefined;
+      // ✅ ZOD VALIDATION: Use type guard instead of cast
+      const error = isErrorPayload(payload) ? payload.error : new Error('Participant streaming failed');
       return {
         nextState: RoundFlowStates.ERROR,
-        actions: [actions.setError(errorPayload?.error ?? new Error('Participant streaming failed'), 'participant')],
+        actions: [actions.setError(error, 'participant')],
       };
     }
 
@@ -294,8 +332,8 @@ function handleParticipantStreamingTransitions(event: RoundFlowEvent, ctx: Round
 function handleParticipantTransitionTransitions(event: RoundFlowEvent, ctx: RoundContext, payload?: EventPayload): TransitionResult {
   switch (event) {
     case 'PARTICIPANT_START': {
-      const startPayload = payload as ParticipantStartPayload | undefined;
-      const nextIndex = startPayload?.participantIndex ?? ctx.currentParticipantIndex + 1;
+      // ✅ ZOD VALIDATION: Use type guard instead of cast
+      const nextIndex = isParticipantStartPayload(payload) ? payload.participantIndex : (ctx.currentParticipantIndex + 1);
 
       if (!guards.isValidParticipantIndex(ctx, nextIndex)) {
         // Invalid index, go to moderator
@@ -366,10 +404,11 @@ function handleModeratorStreamingTransitions(event: RoundFlowEvent, ctx: RoundCo
     }
 
     case 'MODERATOR_ERROR': {
-      const errorPayload = payload as ErrorPayload | undefined;
+      // ✅ ZOD VALIDATION: Use type guard instead of cast
+      const error = isErrorPayload(payload) ? payload.error : new Error('Moderator streaming failed');
       return {
         nextState: RoundFlowStates.ERROR,
-        actions: [actions.setError(errorPayload?.error ?? new Error('Moderator streaming failed'), 'moderator')],
+        actions: [actions.setError(error, 'moderator')],
       };
     }
 

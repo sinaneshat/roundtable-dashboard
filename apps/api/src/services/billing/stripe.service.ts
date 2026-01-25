@@ -37,7 +37,7 @@ const StripeServiceConfigSchema = z.object({
   webhookSecret: z.string().min(1),
   portalConfigId: z.string().optional(),
   apiVersion: z.custom<Stripe.LatestApiVersion>().optional(),
-});
+}).strict();
 
 export type StripeServiceConfig = z.infer<typeof StripeServiceConfigSchema>;
 

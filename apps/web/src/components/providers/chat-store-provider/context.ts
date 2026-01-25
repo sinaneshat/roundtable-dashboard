@@ -62,12 +62,20 @@ export function useChatStore<T>(selector: (store: ChatStore) => T): T {
  * Satisfies Zustand's StoreApi interface but returns empty state.
  * This prevents "getState is not a function" errors when useStore is called.
  *
- * Type assertion rationale:
- * - ChatStoreApi = ReturnType<typeof createChatStore> includes devtools middleware
- * - NOOP_STORE provides minimal StoreApi structure for React's Rules of Hooks
- * - Only used in conditional logic where undefined is the actual returned value
- * - Runtime safety: Empty object cast satisfies useStore's type constraints without runtime operations
- * - Must use unknown cast: devtools middleware adds dynamic properties not representable in static type
+ * ✅ FRAMEWORK COMPATIBILITY CAST - Cannot be removed
+ *
+ * WHY THIS CAST IS NECESSARY:
+ * 1. React's Rules of Hooks requires consistent hook calls across renders
+ * 2. useChatStoreOptional must call useStore unconditionally
+ * 3. When no context exists, we need a noop store that satisfies Zustand's StoreApi
+ * 4. ChatStoreApi includes devtools middleware properties that cannot be represented statically
+ * 5. The empty object cast is safe because this store is only used when context is undefined,
+ *    and the function returns undefined in that case (the store value is never actually used)
+ *
+ * ALTERNATIVES CONSIDERED AND REJECTED:
+ * - Conditional hook call: Violates Rules of Hooks
+ * - Separate hook without store: Still needs compatible type for useStore overload
+ * - Type-only solution: Zustand's middleware composition creates dynamic types
  */
 const NOOP_STORE = {
   getState: () => ({}) as ChatStore,

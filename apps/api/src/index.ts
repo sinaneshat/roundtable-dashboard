@@ -10,7 +10,6 @@
  * Route groups are used to split the type inference chain to avoid TS7056 error.
  */
 
-import { WebAppEnvs } from '@roundtable/shared';
 import { Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { contextStorage } from 'hono/context-storage';
@@ -34,14 +33,6 @@ import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStrip
 import { apiRoutes } from './routes';
 // PostHog proxy (analytics ad-blocker bypass)
 import { ingestProxyHandler } from './routes/ingest';
-
-// ============================================================================
-// Environment Detection (sync, build-time check)
-// WEBAPP_ENV values: 'local' | 'preview' | 'prod' (from wrangler.jsonc)
-// ============================================================================
-const WEBAPP_ENV = process.env.WEBAPP_ENV || WebAppEnvs.LOCAL;
-// Note: Test routes are always mounted but guarded at the handler level
-void WEBAPP_ENV;
 
 // ============================================================================
 // Step 1: Create the main OpenAPIHono app with defaultHook (following docs)

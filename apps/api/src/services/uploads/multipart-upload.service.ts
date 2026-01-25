@@ -30,7 +30,7 @@ export const MultipartUploadMetadataSchema = z.object({
   mimeType: z.string(),
   fileSize: z.number(),
   createdAt: z.number(),
-});
+}).strict();
 
 export type MultipartUploadMetadata = z.infer<typeof MultipartUploadMetadataSchema>;
 

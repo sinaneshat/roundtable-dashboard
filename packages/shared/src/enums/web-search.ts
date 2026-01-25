@@ -335,7 +335,7 @@ export const QueryAnalysisResultSchema = z.object({
     description: 'Explanation of why this complexity level was chosen',
     example: 'Long detailed query - multiple search angles recommended',
   }),
-}).openapi({
+}).strict().openapi({
   description: 'Result of user query complexity analysis',
 });
 

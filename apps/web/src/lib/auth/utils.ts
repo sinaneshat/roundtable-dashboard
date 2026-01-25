@@ -22,7 +22,7 @@ import { invalidationPatterns } from '@/lib/data/query-keys';
  */
 const AuthRequestBodySchema = z.object({
   email: z.string().email().optional(),
-}).passthrough();
+});
 
 type AuthRequestBody = z.infer<typeof AuthRequestBodySchema>;
 

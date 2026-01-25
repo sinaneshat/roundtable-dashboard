@@ -40,7 +40,7 @@ export function ShareDialog({
   const prevIsLoadingRef = useRef(isLoading);
 
   const incrementOgRevision = useCallback(() => {
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- OG image revision needs synchronous update on dialog state change
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- OG image revision needs update when dialog state changes
     setOgRevision(prev => prev + 1);
   }, []);
 
@@ -73,9 +73,9 @@ export function ShareDialog({
   const [imageError, setImageError] = useState(false);
 
   const resetImageState = useCallback(() => {
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Image state reset on URL change requires synchronous setState
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- reset image loading state when URL changes
     setImageLoaded(false);
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- Image state reset on URL change requires synchronous setState
+    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- reset image loading state when URL changes
     setImageError(false);
   }, []);
 

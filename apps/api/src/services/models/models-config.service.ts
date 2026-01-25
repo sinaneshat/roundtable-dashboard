@@ -25,13 +25,14 @@ export const HardcodedModelSchema = z.object({
   pricing: z.object({
     prompt: z.string(),
     completion: z.string(),
-  }),
+  }).strict(),
   top_provider: z
     .object({
       context_length: z.number().nullable().optional(),
       max_completion_tokens: z.number().nullable().optional(),
       is_moderated: z.boolean().nullable().optional(),
     })
+    .strict()
     .nullable()
     .optional(),
   per_request_limits: z
@@ -39,6 +40,7 @@ export const HardcodedModelSchema = z.object({
       prompt_tokens: z.number().nullable().optional(),
       completion_tokens: z.number().nullable().optional(),
     })
+    .strict()
     .nullable()
     .optional(),
   architecture: z
@@ -47,6 +49,7 @@ export const HardcodedModelSchema = z.object({
       tokenizer: z.string().nullable().optional(),
       instruct_type: z.string().nullable().optional(),
     })
+    .strict()
     .nullable()
     .optional(),
   provider: ModelProviderSchema,
@@ -57,11 +60,11 @@ export const HardcodedModelSchema = z.object({
     reasoning: z.boolean(),
     streaming: z.boolean(),
     tools: z.boolean(),
-  }),
+  }).strict(),
   pricing_display: z.object({
     input: z.string(),
     output: z.string(),
-  }),
+  }).strict(),
   is_free: z.boolean(),
   supports_vision: z.boolean(),
   supports_file: z.boolean(), // ✅ Whether model supports file content types (PDFs) - derived from modality containing '+file'
@@ -71,7 +74,7 @@ export const HardcodedModelSchema = z.object({
   streaming_behavior: StreamingBehaviorSchema.optional(),
   tags: z.array(ModelCapabilityTagSchema), // User-facing capability filter tags
   maxFileSizeMB: z.number(), // ✅ Max total file size this model can handle (MB) - derived from context_length
-});
+}).strict();
 
 export type HardcodedModel = z.infer<typeof HardcodedModelSchema>;
 

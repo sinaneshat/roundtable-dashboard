@@ -27,7 +27,7 @@ export const ValidationErrorSchema = z.object({
   field: z.string(),
   message: z.string(),
   code: z.string().optional(),
-});
+}).strict();
 
 export type ValidationError = z.infer<typeof ValidationErrorSchema>;
 
@@ -37,7 +37,7 @@ export type ValidationError = z.infer<typeof ValidationErrorSchema>;
  */
 export const ValidationErrorDetailsSchema = z.object({
   validationErrors: z.array(ValidationErrorSchema).optional(),
-});
+}).strict();
 
 export type ValidationErrorDetails = z.infer<typeof ValidationErrorDetailsSchema>;
 
@@ -48,19 +48,19 @@ export type ValidationErrorDetails = z.infer<typeof ValidationErrorDetailsSchema
 export const PaginationSchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   limit: z.coerce.number().int().positive().max(100).default(20),
-});
+}).strict();
 
 export const CursorPaginationSchema = z.object({
   cursor: z.string().optional(),
   limit: z.coerce.number().int().positive().max(100).default(20),
-});
+}).strict();
 
 export const SortOrderSchema = z.enum(['asc', 'desc']).default('desc');
 
 export const DateRangeSchema = z.object({
   start: z.coerce.date().optional(),
   end: z.coerce.date().optional(),
-});
+}).strict();
 
 // ============================================================================
 // API RESPONSE SCHEMAS (for client-side parsing)
@@ -76,26 +76,36 @@ export function ApiSuccessResponseSchema<T extends z.ZodTypeAny>(dataSchema: T) 
     meta: z.object({
       requestId: z.string().optional(),
       timestamp: z.string().optional(),
-    }).optional(),
-  });
+    }).strict().optional(),
+  }).strict();
 }
 
 /**
  * Standard API error response wrapper
  */
+/**
+ * Error details schema - structured error context
+ */
+const ErrorDetailsSchema = z.record(z.string(), z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+]));
+
 export const ApiErrorResponseSchema = z.object({
   success: z.literal(false),
   error: z.object({
     code: z.string(),
     message: z.string(),
     validation: z.array(ValidationErrorSchema).optional(),
-    details: z.unknown().optional(),
-  }),
+    details: ErrorDetailsSchema.optional(),
+  }).strict(),
   meta: z.object({
     requestId: z.string().optional(),
     timestamp: z.string().optional(),
-  }).optional(),
-});
+  }).strict().optional(),
+}).strict();
 
 export type ApiErrorResponse = z.infer<typeof ApiErrorResponseSchema>;
 
@@ -113,7 +123,7 @@ export const ProductVariantSchema = z.object({
   price: z.number(),
   interval: BillingIntervalSchema,
   currency: z.string().default('usd'),
-});
+}).strict();
 
 export type ProductVariant = z.infer<typeof ProductVariantSchema>;
 

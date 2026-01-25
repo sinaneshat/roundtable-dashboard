@@ -79,14 +79,28 @@ export {
 export type {
   ChatStore,
   DispatchFlowEvent,
+  ModeratorInfo,
   NextParticipantToTrigger,
+  ParticipantInfo,
+  PreSearchInfo,
   ResetFlowState,
+  ResumptionInfo,
   RoundFlowActions,
   RoundFlowSlice,
   RoundFlowState,
   SetFlowState,
   StoredModeratorData,
   StoredModeratorSummary,
+} from './store-schemas';
+// FSM Context Schemas
+export {
+  AiSdkSnapshotSchema,
+  ModeratorInfoSchema,
+  ParticipantInfoSchema,
+  PreSearchInfoSchema,
+  ResumptionInfoSchema,
+  RoundContextSchema,
+  StoreSnapshotSchema,
 } from './store-schemas';
 export type { ParticipantCompletionStatus, ParticipantDebugInfo, RoundActualCompletionStatus } from './utils/participant-completion-gate';
 export {

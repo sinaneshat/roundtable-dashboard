@@ -34,7 +34,7 @@ export const ChangelogEntrySchema = z.object({
   changeType: ChangelogTypeSchema,
   changeSummary: z.string(),
   changeData: DbChangelogDataSchema,
-});
+}).strict();
 
 export type ChangelogEntry = z.infer<typeof ChangelogEntrySchema>;
 

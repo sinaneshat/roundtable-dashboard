@@ -2,8 +2,9 @@
  * Billing UI Enums
  *
  * Enums specific to billing UI components and credit management.
- * Optimized: Zod schemas lazy-loaded to reduce initial bundle size.
  */
+
+import { z } from 'zod';
 
 // ============================================================================
 // CREDIT ESTIMATION STATUS
@@ -12,33 +13,36 @@
 // 1. ARRAY CONSTANT
 export const CREDIT_ESTIMATION_STATUSES = ['sufficient', 'low', 'insufficient'] as const;
 
-// 2. TYPESCRIPT TYPE (no Zod dependency)
-export type CreditEstimationStatus = (typeof CREDIT_ESTIMATION_STATUSES)[number];
+// 2. ZOD SCHEMA
+export const CreditEstimationStatusSchema = z.enum(CREDIT_ESTIMATION_STATUSES);
 
-// 3. DEFAULT VALUE
+// 3. TYPESCRIPT TYPE (inferred from Zod)
+export type CreditEstimationStatus = z.infer<typeof CreditEstimationStatusSchema>;
+
+// 4. DEFAULT VALUE
 export const DEFAULT_CREDIT_ESTIMATION_STATUS: CreditEstimationStatus = 'sufficient';
 
-// 4. CONSTANT OBJECT
+// 5. CONSTANT OBJECT
 export const CreditEstimationStatuses = {
   SUFFICIENT: 'sufficient' as const,
   LOW: 'low' as const,
   INSUFFICIENT: 'insufficient' as const,
 } as const;
 
-// 5. TYPE GUARD (no Zod - simple runtime check)
+// 6. TYPE GUARD (uses Zod safeParse - no type cast)
 export function isCreditEstimationStatus(value: unknown): value is CreditEstimationStatus {
-  return typeof value === 'string' && CREDIT_ESTIMATION_STATUSES.includes(value as CreditEstimationStatus);
+  return CreditEstimationStatusSchema.safeParse(value).success;
 }
 
-// 6. DISPLAY LABELS
+// 7. PARSE FUNCTION (returns typed value or undefined)
+export function parseCreditEstimationStatus(value: unknown): CreditEstimationStatus | undefined {
+  const result = CreditEstimationStatusSchema.safeParse(value);
+  return result.success ? result.data : undefined;
+}
+
+// 8. DISPLAY LABELS
 export const CREDIT_ESTIMATION_STATUS_LABELS: Record<CreditEstimationStatus, string> = {
   [CreditEstimationStatuses.SUFFICIENT]: 'Sufficient Credits',
   [CreditEstimationStatuses.LOW]: 'Low Credits',
   [CreditEstimationStatuses.INSUFFICIENT]: 'Insufficient Credits',
 } as const;
-
-// 7. ZOD SCHEMA (lazy-loaded only when validation is needed)
-export async function getCreditEstimationStatusSchema() {
-  const { z } = await import('zod');
-  return z.enum(CREDIT_ESTIMATION_STATUSES);
-}

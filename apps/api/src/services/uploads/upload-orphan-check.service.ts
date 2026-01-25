@@ -32,7 +32,7 @@ export const OrphanCheckResultSchema = z.object({
   messageCount: z.number().int().nonnegative(),
   threadCount: z.number().int().nonnegative(),
   projectCount: z.number().int().nonnegative(),
-});
+}).strict();
 
 export type OrphanCheckResult = z.infer<typeof OrphanCheckResultSchema>;
 

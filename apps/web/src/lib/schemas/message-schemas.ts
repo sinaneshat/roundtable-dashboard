@@ -293,8 +293,10 @@ export const MessagePartSchema = z
         description: 'Name of the tool being called',
         example: 'search_web',
       }),
+      // NOTE: Tool args intentionally use z.unknown() - AI SDK tool schemas are defined
+      // per-tool at runtime and can be any valid JSON structure
       args: z.unknown().openapi({
-        description: 'Arguments passed to the tool',
+        description: 'Arguments passed to the tool (structure defined by tool schema)',
         example: { query: 'AI SDK documentation' },
       }),
     }),
@@ -308,8 +310,10 @@ export const MessagePartSchema = z
         description: 'Name of the tool that was executed',
         example: 'search_web',
       }),
+      // NOTE: Tool results intentionally use z.unknown() - result structure is defined
+      // by each tool's execute function and varies per tool
       result: z.unknown().openapi({
-        description: 'Result returned from tool execution',
+        description: 'Result returned from tool execution (structure varies by tool)',
         example: { results: [] },
       }),
       isError: z.boolean().optional().openapi({
@@ -972,7 +976,8 @@ export const StreamingFinishResultSchema = z.object({
   text: z.string(),
   usage: StreamingUsageSchema.optional(),
   finishReason: z.string(),
-  // Provider-specific data - use type guards for access
+  // NOTE: providerMetadata/response intentionally use z.unknown() - structure varies
+  // by AI provider (OpenAI, Anthropic, etc.) and cannot be statically typed
   providerMetadata: z.unknown().optional(),
   response: z.unknown().optional(),
   // Reasoning can be string or array of parts
@@ -984,6 +989,7 @@ export const StreamingFinishResultSchema = z.object({
   reasoningText: z.string().optional(),
   // Tool calls from AI SDK
   toolCalls: z.array(StreamingToolCallSchema).optional(),
+  // NOTE: toolResults intentionally uses z.unknown() - result structure varies per tool
   toolResults: z.unknown().optional(),
 });
 

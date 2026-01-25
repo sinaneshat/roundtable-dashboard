@@ -660,6 +660,167 @@ export const StreamResumptionActionsSchema = z.object({
 export const StreamResumptionSliceSchema = z.intersection(StreamResumptionSliceStateSchema, StreamResumptionActionsSchema);
 
 // ============================================================================
+// FSM CONTEXT SCHEMAS (for transition decisions)
+// ============================================================================
+
+/**
+ * Participant info for FSM decisions - Zod schema
+ * ✅ PATTERN: Schema-first → Infer types
+ */
+export const ParticipantInfoSchema = z.object({
+  id: z.string(),
+  index: z.number().int().nonnegative(),
+  enabled: z.boolean(),
+  hasMessage: z.boolean(),
+});
+
+export type ParticipantInfo = z.infer<typeof ParticipantInfoSchema>;
+
+/**
+ * Pre-search state for FSM decisions - Zod schema
+ */
+export const PreSearchInfoSchema = z.object({
+  exists: z.boolean(),
+  status: z.enum(['pending', 'streaming', 'complete', 'failed']).nullable(),
+  streamId: z.string().nullable(),
+});
+
+export type PreSearchInfo = z.infer<typeof PreSearchInfoSchema>;
+
+/**
+ * Moderator state for FSM decisions - Zod schema
+ */
+export const ModeratorInfoSchema = z.object({
+  hasMessage: z.boolean(),
+  streamId: z.string().nullable(),
+});
+
+export type ModeratorInfo = z.infer<typeof ModeratorInfoSchema>;
+
+/**
+ * Resumption state from server prefill - Zod schema
+ */
+export const ResumptionInfoSchema = z.object({
+  phase: RoundPhaseSchema.nullable(),
+  participantIndex: z.number().int().nonnegative().nullable(),
+  roundNumber: z.number().int().nonnegative().nullable(),
+  preSearchStreamId: z.string().nullable(),
+  moderatorStreamId: z.string().nullable(),
+  isPrefilled: z.boolean(),
+});
+
+export type ResumptionInfo = z.infer<typeof ResumptionInfoSchema>;
+
+/**
+ * Immutable context for FSM transition decisions - Zod schema
+ * Context is built from store state at dispatch time.
+ */
+export const RoundContextSchema = z.object({
+  // Thread identity
+  threadId: z.string().nullable(),
+  createdThreadId: z.string().nullable(),
+
+  // Round tracking
+  roundNumber: z.number().int().nonnegative().nullable(),
+  streamingRoundNumber: z.number().int().nonnegative().nullable(),
+
+  // Web search
+  webSearchEnabled: z.boolean(),
+  preSearch: PreSearchInfoSchema,
+
+  // Participants
+  participants: z.array(ParticipantInfoSchema),
+  participantCount: z.number().int().nonnegative(),
+  enabledParticipantCount: z.number().int().nonnegative(),
+  currentParticipantIndex: z.number().int().nonnegative(),
+
+  // Completion tracking
+  allParticipantsComplete: z.boolean(),
+  completedParticipantCount: z.number().int().nonnegative(),
+
+  // Moderator
+  moderator: ModeratorInfoSchema,
+
+  // Resumption (from server prefill)
+  resumption: ResumptionInfoSchema,
+
+  // Error state
+  lastError: z.custom<Error | null>(),
+
+  // AI SDK state
+  isAiSdkStreaming: z.boolean(),
+  isAiSdkReady: z.boolean(),
+});
+
+export type RoundContext = z.infer<typeof RoundContextSchema>;
+
+/**
+ * Store slice interfaces for context building - Zod schema
+ * These match the Zustand store structure
+ */
+export const StoreSnapshotSchema = z.object({
+  // Thread state
+  thread: z.object({ id: z.string() }).nullable(),
+  createdThreadId: z.string().nullable(),
+
+  // Round state
+  currentRoundNumber: z.number().nullable(),
+  streamingRoundNumber: z.number().nullable(),
+
+  // Form state
+  enableWebSearch: z.boolean(),
+
+  // Participants
+  participants: z.array(z.object({
+    id: z.string(),
+    participantIndex: z.number(),
+    enabled: z.boolean().optional(),
+  })),
+  currentParticipantIndex: z.number(),
+
+  // Messages (for completion detection)
+  messages: z.array(z.object({
+    id: z.string(),
+    role: z.string(),
+    metadata: z.object({
+      roundNumber: z.number().optional(),
+      participantIndex: z.number().optional(),
+      isModerator: z.boolean().optional(),
+    }).optional(),
+  })),
+
+  // Pre-search state
+  preSearches: z.array(z.object({
+    roundNumber: z.number(),
+    status: z.string(),
+    id: z.string().optional(),
+  })),
+
+  // Stream resumption state
+  streamResumptionPrefilled: z.boolean(),
+  currentResumptionPhase: RoundPhaseSchema.nullable(),
+  resumptionRoundNumber: z.number().nullable(),
+  nextParticipantToTrigger: z.tuple([z.number(), z.number()]).nullable(),
+  preSearchResumption: z.object({ streamId: z.string() }).nullable(),
+  moderatorResumption: z.object({ streamId: z.string() }).nullable(),
+
+  // Error
+  error: z.custom<Error | null>(),
+});
+
+export type StoreSnapshot = z.infer<typeof StoreSnapshotSchema>;
+
+/**
+ * AI SDK state snapshot - Zod schema
+ */
+export const AiSdkSnapshotSchema = z.object({
+  isStreaming: z.boolean(),
+  isReady: z.boolean(),
+});
+
+export type AiSdkSnapshot = z.infer<typeof AiSdkSnapshotSchema>;
+
+// ============================================================================
 // ROUND FLOW SLICE SCHEMAS (FSM-based orchestration)
 // ============================================================================
 

@@ -44,7 +44,7 @@ export function MemoryCreatedIndicator({
   className,
 }: MemoryCreatedIndicatorProps) {
   const [open, setOpen] = useState(defaultOpen);
-  const [deletingIds, setDeletingIds] = useState<Set<string>>(new Set());
+  const [deletingIds, setDeletingIds] = useState<Set<string>>(() => new Set());
 
   if (memories.length === 0) {
     return null;

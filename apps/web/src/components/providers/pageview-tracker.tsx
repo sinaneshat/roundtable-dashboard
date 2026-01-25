@@ -30,7 +30,7 @@ import { useSession } from '@/lib/auth/client';
 const TrackableSearchParamsSchema = z.object({
   model: z.string().optional(),
   view: z.string().optional(),
-}).passthrough();
+});
 
 type TrackableSearchParams = z.infer<typeof TrackableSearchParamsSchema>;
 

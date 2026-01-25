@@ -25,7 +25,7 @@ import {
 
 import { EdgeVignette, RainbowLogoContainer } from '../../components/scene-primitives';
 import { VideoButton } from '../../components/ui-replicas';
-import { useCinematicCamera, useFocusTransition } from '../../hooks';
+import { createFocusTransition, useCinematicCamera } from '../../hooks';
 import { BACKGROUNDS, HEX_COLORS, SPACING, TEXT, TYPOGRAPHY } from '../../lib/design-tokens';
 
 // Constants for 3D depth layers
@@ -68,7 +68,7 @@ export function Scene17Finale() {
   });
 
   // Focus pull for dramatic reveal
-  const { filter: focusFilter } = useFocusTransition({
+  const { filter: focusFilter } = createFocusTransition({
     frame,
     startFrame: 0,
     duration: 35,

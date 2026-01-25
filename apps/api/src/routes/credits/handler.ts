@@ -24,6 +24,7 @@ import { CreditEstimateRequestSchema, CreditTransactionsQuerySchema } from './sc
 // Credit Action Calculator Registry
 // ============================================================================
 
+/** Internal params for credit estimation calculations */
 type CreditEstimateParams = {
   participantCount: number;
   inputTokens: number;

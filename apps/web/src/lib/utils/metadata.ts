@@ -187,12 +187,13 @@ export function extractMessageMetadata(
  */
 export function getCreatedAt(message: unknown): string | null {
   // Minimal schema for createdAt field extraction
+  // NOTE: Using passthrough() intentionally - this extracts specific fields from various message shapes
   const MessageCreatedAtSchema = z.object({
     createdAt: z.union([z.string().datetime(), z.date()]).optional(),
     metadata: z.object({
       createdAt: z.string().datetime().optional(),
-    }).optional(),
-  });
+    }).passthrough().optional(),
+  }).passthrough();
 
   const result = MessageCreatedAtSchema.safeParse(message);
   if (!result.success) {
@@ -233,9 +234,10 @@ export function getRoundNumber(metadata: unknown): number | null {
 
   // ✅ FALLBACK: Minimal schema for roundNumber extraction only
   // Handles cases where metadata has roundNumber but fails full validation
+  // NOTE: Using passthrough() intentionally - extracts field from metadata with extra properties
   const PartialRoundNumberSchema = z.object({
     roundNumber: z.number().int().nonnegative(),
-  });
+  }).passthrough();
 
   const partialResult = PartialRoundNumberSchema.safeParse(metadata);
   return partialResult.success ? partialResult.data.roundNumber : null;
@@ -261,9 +263,10 @@ export function getParticipantId(metadata: unknown): string | null {
 
   // ✅ FALLBACK: Minimal schema for participantId extraction only
   // Handles streaming race conditions where full schema validation fails
+  // NOTE: Using passthrough() intentionally - extracts field from metadata with extra properties
   const PartialParticipantIdSchema = z.object({
     participantId: z.string().min(1),
-  });
+  }).passthrough();
 
   const partialResult = PartialParticipantIdSchema.safeParse(metadata);
   return partialResult.success && partialResult.data.participantId
@@ -291,9 +294,10 @@ export function getParticipantIndex(metadata: unknown): number | null {
 
   // ✅ FALLBACK: Minimal schema for participantIndex extraction only
   // Handles streaming race conditions where full schema validation fails
+  // NOTE: Using passthrough() intentionally - extracts field from metadata with extra properties
   const PartialParticipantIndexSchema = z.object({
     participantIndex: z.number().int().nonnegative(),
-  });
+  }).passthrough();
 
   const partialResult = PartialParticipantIndexSchema.safeParse(metadata);
   return partialResult.success && typeof partialResult.data.participantIndex === 'number'
@@ -422,9 +426,10 @@ export function getExtractedText(metadata: unknown): string | null {
   }
 
   // Use minimal Zod schema for extractedText field extraction
+  // NOTE: Used with .partial() below - passthrough not needed since partial handles flexibility
   const ExtractedTextSchema = z.object({
     extractedText: z.string().min(1),
-  });
+  }).strict();
 
   const result = ExtractedTextSchema.partial().safeParse(metadata);
   if (result.success && result.data.extractedText) {
@@ -739,7 +744,7 @@ const ParticipantEnrichmentSchema = z.object({
   participantIndex: z.number().int().nonnegative(),
   participantRole: z.string().nullable().optional(),
   model: z.string().min(1),
-});
+}).strict();
 
 /**
  * Enrich metadata with participant information

@@ -5,6 +5,8 @@
  * All events trigger sync from Stripe API and revenue tracking.
  */
 
+import { z } from 'zod';
+
 // ============================================================================
 // STRIPE WEBHOOK EVENT TYPES
 // ============================================================================
@@ -31,13 +33,16 @@ export const STRIPE_WEBHOOK_EVENT_TYPES = [
   'payment_intent.canceled',
 ] as const;
 
-// 2. TYPESCRIPT TYPE
-export type StripeWebhookEventType = (typeof STRIPE_WEBHOOK_EVENT_TYPES)[number];
+// 2. ZOD SCHEMA
+export const StripeWebhookEventTypeSchema = z.enum(STRIPE_WEBHOOK_EVENT_TYPES);
 
-// 3. DEFAULT VALUE
+// 3. TYPESCRIPT TYPE (inferred from Zod)
+export type StripeWebhookEventType = z.infer<typeof StripeWebhookEventTypeSchema>;
+
+// 4. DEFAULT VALUE
 export const DEFAULT_STRIPE_WEBHOOK_EVENT_TYPE: StripeWebhookEventType = 'invoice.paid';
 
-// 4. CONSTANT OBJECT
+// 5. CONSTANT OBJECT
 export const StripeWebhookEventTypes = {
   CHECKOUT_SESSION_COMPLETED: 'checkout.session.completed' as const,
   CUSTOMER_SUBSCRIPTION_CREATED: 'customer.subscription.created' as const,
@@ -59,7 +64,13 @@ export const StripeWebhookEventTypes = {
   PAYMENT_INTENT_CANCELED: 'payment_intent.canceled' as const,
 } as const;
 
-// 5. TYPE GUARD
+// 6. TYPE GUARD (uses Zod safeParse - no type cast)
 export function isStripeWebhookEventType(value: unknown): value is StripeWebhookEventType {
-  return typeof value === 'string' && STRIPE_WEBHOOK_EVENT_TYPES.includes(value as StripeWebhookEventType);
+  return StripeWebhookEventTypeSchema.safeParse(value).success;
+}
+
+// 7. PARSE FUNCTION (returns typed value or undefined)
+export function parseStripeWebhookEventType(value: unknown): StripeWebhookEventType | undefined {
+  const result = StripeWebhookEventTypeSchema.safeParse(value);
+  return result.success ? result.data : undefined;
 }

@@ -94,7 +94,7 @@ export const RoundExecutionStateSchema = z.object({
   recoveryAttempts: z.number().int().nonnegative().default(0),
   /** Maximum recovery attempts allowed (default: 3) */
   maxRecoveryAttempts: z.number().int().positive().default(DEFAULT_MAX_RECOVERY_ATTEMPTS),
-});
+}).strict();
 
 export type RoundExecutionState = z.infer<typeof RoundExecutionStateSchema>;
 
