@@ -12,6 +12,23 @@ import tsconfigPaths from 'vite-tsconfig-paths';
 const rootPkg = JSON.parse(readFileSync(path.resolve(__dirname, '../../package.json'), 'utf-8'));
 const APP_VERSION = rootPkg.version;
 
+// Remotion + video packages - dev-only, excluded from production builds
+const devOnlyPackages = [
+  'remotion',
+  '@remotion/bundler',
+  '@remotion/cli',
+  '@remotion/google-fonts',
+  '@remotion/player',
+  '@remotion/tailwind',
+  '@remotion/three',
+  '@remotion/transitions',
+  '@remotion/zod-types',
+  '@react-three/fiber',
+  'three',
+  '@ffmpeg/ffmpeg',
+  '@ffmpeg/util',
+];
+
 export default defineConfig({
   plugins: [
     // Official order per Cloudflare + TanStack docs
@@ -46,6 +63,22 @@ export default defineConfig({
   },
   define: {
     __APP_VERSION__: JSON.stringify(APP_VERSION),
+  },
+  build: {
+    rollupOptions: {
+      // Exclude remotion directory and packages from production bundle
+      external: (id) => {
+        // Exclude all remotion packages
+        if (devOnlyPackages.some(pkg => id === pkg || id.startsWith(`${pkg}/`))) {
+          return true;
+        }
+        // Exclude remotion source directory
+        if (id.includes('/remotion/') || id.includes('src/remotion')) {
+          return true;
+        }
+        return false;
+      },
+    },
   },
   // Fix SSR issues with packages that don't work with dep optimizer
   ssr: {

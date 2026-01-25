@@ -34,10 +34,10 @@ import {
 } from 'remotion';
 
 import { BrowserFrame } from '../../components/BrowserFrame';
-import { DepthParticles, EdgeVignette } from '../../components/scene-primitives';
+import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
 import { VideoFeatureCaptions } from '../../components/ui-replicas';
 import { useCinematicCamera, useFocusPull } from '../../hooks';
-import { BACKGROUNDS, RAINBOW, SPACING } from '../../lib/design-tokens';
+import { BACKGROUNDS, FONTS, RAINBOW, SPACING } from '../../lib/design-tokens';
 
 // Dark theme colors from globals.css - matching actual app
 const SIDEBAR_COLORS = {
@@ -153,7 +153,7 @@ export function Scene03Sidebar() {
     display: 'flex',
     flexDirection: 'column',
     boxShadow: '10px 0 40px rgba(0, 0, 0, 0.3)',
-    fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+    fontFamily: FONTS.sans,
   };
 
   // SidebarHeader
@@ -287,6 +287,13 @@ export function Scene03Sidebar() {
       >
         <DepthParticles frame={frame} baseOpacity={0.12} count={18} />
       </div>
+
+      {/* Rainbow glow orbs (sidebar-focused) */}
+      <RainbowGlowOrbs
+        frame={frame}
+        orbs={DEFAULT_GLOW_ORBS.sidebar}
+        breathingOffset={breathingOffset}
+      />
 
       {/* Edge Vignette */}
       <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
@@ -526,7 +533,7 @@ export function Scene03Sidebar() {
                           fontSize: 13,
                           fontWeight: 600,
                           color: '#ffffff',
-                          fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+                          fontFamily: FONTS.sans,
                         }}
                       >
                         AD

@@ -1265,10 +1265,11 @@ export function VideoAutoModeToggle({ value }: VideoAutoModeToggleProps) {
         fontSize: 12,
         fontWeight: 500,
         color: isAuto ? '#dedede' : 'rgba(163, 163, 163, 0.7)',
+        // Tailwind violet-500 = #8b5cf6, purple-500 = #a855f7, fuchsia-500 = #d946ef
         ...(isAuto
           ? {
-              background: 'linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.12), rgba(255,255,255,0.08))',
-              border: '1px solid rgba(255, 255, 255, 0.2)',
+              background: 'linear-gradient(135deg, rgba(139, 92, 246, 0.2), rgba(168, 85, 247, 0.2), rgba(217, 70, 239, 0.2))',
+              border: '1px solid rgba(168, 85, 247, 0.3)',
             }
           : {}),
       }}
@@ -1941,7 +1942,7 @@ export function VideoFeatureLabel({ text, subtitle, position = 'top-left' }: Vid
         fontSize: 22,
         fontWeight: 700,
         color: '#ffffff',
-        fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+        fontFamily: FONTS.sans,
         letterSpacing: '-0.01em',
         textShadow: '0 2px 12px rgba(0,0,0,0.8), 0 0 40px rgba(0,0,0,0.4)',
       }}
@@ -1953,7 +1954,7 @@ export function VideoFeatureLabel({ text, subtitle, position = 'top-left' }: Vid
           fontSize: 14,
           fontWeight: 400,
           color: 'rgba(255, 255, 255, 0.7)',
-          fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+          fontFamily: FONTS.sans,
           textShadow: '0 1px 8px rgba(0,0,0,0.6)',
           maxWidth: 280,
           lineHeight: 1.4,
@@ -2031,7 +2032,7 @@ export function VideoFeatureCaptions({ captions, position = 'bottom-left' }: Vid
         fontSize: 28,
         fontWeight: 700,
         color: '#ffffff',
-        fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+        fontFamily: FONTS.sans,
         letterSpacing: '-0.02em',
         textShadow: '0 2px 12px rgba(0,0,0,0.8), 0 0 30px rgba(0,0,0,0.3)',
       }}
@@ -2043,7 +2044,7 @@ export function VideoFeatureCaptions({ captions, position = 'bottom-left' }: Vid
           fontSize: 14,
           fontWeight: 400,
           color: 'rgba(255, 255, 255, 0.65)',
-          fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+          fontFamily: FONTS.sans,
           textShadow: '0 1px 6px rgba(0,0,0,0.5)',
           maxWidth: 360,
           lineHeight: 1.4,

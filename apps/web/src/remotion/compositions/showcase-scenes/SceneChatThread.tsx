@@ -31,7 +31,7 @@ import {
 } from 'remotion';
 
 import { BrowserFrame } from '../../components/BrowserFrame';
-import { DepthParticles, EdgeVignette } from '../../components/scene-primitives';
+import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
 import {
   VideoFeatureCaptions,
   VideoParticipantMessage,
@@ -471,6 +471,13 @@ export function SceneChatThread() {
       >
         <DepthParticles frame={frame} baseOpacity={0.12} count={20} />
       </div>
+
+      {/* Rainbow glow orbs (scattered for chat thread) */}
+      <RainbowGlowOrbs
+        frame={frame}
+        orbs={DEFAULT_GLOW_ORBS.scattered}
+        breathingOffset={breathingOffset}
+      />
 
       {/* Edge vignette */}
       <EdgeVignette innerRadius={55} edgeOpacity={0.6} />

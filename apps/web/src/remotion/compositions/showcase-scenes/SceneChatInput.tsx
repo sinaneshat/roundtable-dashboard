@@ -24,7 +24,7 @@ import {
 } from 'remotion';
 
 import { BrowserFrame } from '../../components/BrowserFrame';
-import { DepthParticles, EdgeVignette } from '../../components/scene-primitives';
+import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
 import {
   VideoAutoModeToggle,
   VideoAvatar,
@@ -33,7 +33,7 @@ import {
   VideoVoiceVisualization,
 } from '../../components/ui-replicas';
 import { useCinematicCamera } from '../../hooks';
-import { BACKGROUNDS, HEX_COLORS, SPACING, TEXT } from '../../lib/design-tokens';
+import { BACKGROUNDS, FONTS, HEX_COLORS, SPACING, TEXT } from '../../lib/design-tokens';
 
 // Spring config
 const SPRING_CONFIG = { damping: 30, stiffness: 150, mass: 1 };
@@ -211,7 +211,7 @@ export function SceneChatInput() {
         justifyContent: 'center',
         overflow: 'hidden',
         padding: SPACING.lg,
-        fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+        fontFamily: FONTS.sans,
       }}
     >
       {/* Background particles */}
@@ -224,6 +224,13 @@ export function SceneChatInput() {
       >
         <DepthParticles frame={frame} baseOpacity={0.12} count={18} />
       </div>
+
+      {/* Rainbow glow orbs */}
+      <RainbowGlowOrbs
+        frame={frame}
+        orbs={DEFAULT_GLOW_ORBS.centered}
+        breathingOffset={breathingOffset}
+      />
 
       <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
 

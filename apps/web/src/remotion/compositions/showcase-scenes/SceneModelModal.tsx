@@ -22,7 +22,7 @@ import {
 } from 'remotion';
 
 import { BrowserFrame } from '../../components/BrowserFrame';
-import { DepthParticles, EdgeVignette } from '../../components/scene-primitives';
+import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
 import {
   VideoAvatar,
   VideoDragHandle,
@@ -30,7 +30,7 @@ import {
   VideoTabs,
 } from '../../components/ui-replicas';
 import { useCinematicCamera } from '../../hooks';
-import { BACKGROUNDS, SPACING, TEXT } from '../../lib/design-tokens';
+import { BACKGROUNDS, FONTS, SPACING, TEXT } from '../../lib/design-tokens';
 
 // Role colors matching actual app
 type RoleName = 'Researcher' | 'Writer' | 'Analyst' | 'Critic' | 'Creator';
@@ -180,7 +180,7 @@ function RoleBadge({ role, showClear }: { role: RoleName; showClear?: boolean })
         backgroundColor: colors.bg,
         color: colors.text,
         border: `1px solid ${colors.border}`,
-        fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+        fontFamily: FONTS.sans,
       }}
     >
       {role}
@@ -240,7 +240,7 @@ function VideoPresetCard({
             fontWeight: 600,
             color: TEXT.primary,
             margin: 0,
-            fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+            fontFamily: FONTS.sans,
           }}
         >
           {preset.name}
@@ -261,7 +261,7 @@ function VideoPresetCard({
                   color: roleColors.text,
                   maxWidth: 80,
                   textAlign: 'center',
-                  fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+                  fontFamily: FONTS.sans,
                 }}
               >
                 {model.role}
@@ -277,7 +277,7 @@ function VideoPresetCard({
           color: TEXT.muted,
           margin: 0,
           lineHeight: 1.5,
-          fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+          fontFamily: FONTS.sans,
         }}
       >
         {preset.description}
@@ -410,7 +410,7 @@ export function SceneModelModal() {
         justifyContent: 'center',
         overflow: 'hidden',
         padding: SPACING.lg,
-        fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+        fontFamily: FONTS.sans,
       }}
     >
       {/* Background particles */}
@@ -421,6 +421,13 @@ export function SceneModelModal() {
       >
         <DepthParticles frame={frame} baseOpacity={0.1} count={15} />
       </div>
+
+      {/* Rainbow glow orbs */}
+      <RainbowGlowOrbs
+        frame={frame}
+        orbs={DEFAULT_GLOW_ORBS.centered}
+        breathingOffset={breathingOffset}
+      />
 
       <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
 

@@ -8,8 +8,10 @@
 import type { CSSProperties, ReactNode } from 'react';
 import {
   AbsoluteFill,
+  Img,
   interpolate,
   spring,
+  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
@@ -24,7 +26,7 @@ import {
   getDepthLayerStyles,
   getParticlePosition,
 } from '../lib/camera-3d';
-import { BACKGROUNDS } from '../lib/design-tokens';
+import { BACKGROUNDS, BRAND, FONTS, RAINBOW, TEXT } from '../lib/design-tokens';
 
 // ============================================================================
 // Unified Depth Particles Background
@@ -397,7 +399,7 @@ export function Headline({
           fontSize: 48,
           fontWeight: 700,
           color: '#ffffff',
-          fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+          fontFamily: FONTS.sans,
           textAlign: align,
           ...headlineStyle,
         }}
@@ -412,7 +414,7 @@ export function Headline({
             fontSize: 24,
             fontWeight: 500,
             color: '#a3a3a3',
-            fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+            fontFamily: FONTS.sans,
             textAlign: align,
             ...subtitleStyle,
           }}
@@ -469,7 +471,7 @@ export function FeatureLabel({
           padding: '10px 20px',
           borderRadius: 12,
           border: '1px solid rgba(255, 255, 255, 0.1)',
-          fontFamily: '\'Noto Sans\', system-ui, sans-serif',
+          fontFamily: FONTS.sans,
           ...style,
         }}
       >
@@ -726,3 +728,190 @@ export function GlassPanel({
     </div>
   );
 }
+
+// ============================================================================
+// Rainbow Logo Container (Shared between Intro and Finale)
+// ============================================================================
+
+type RainbowLogoContainerProps = {
+  /** Logo size in pixels (default 100) */
+  logoSize?: number;
+  /** Current frame for animations */
+  frame: number;
+};
+
+/**
+ * Rainbow gradient border logo container.
+ * Used in Scene01Intro and Scene17Finale for consistent branding.
+ */
+export function RainbowLogoContainer({
+  logoSize = 100,
+  frame,
+}: RainbowLogoContainerProps) {
+  // Rainbow border rotation (continuous)
+  const glowRotation = interpolate(frame, [0, 90], [0, 270]);
+
+  // Scale padding based on logo size
+  const padding = Math.round(logoSize * 0.28);
+  const gap = Math.round(logoSize * 0.24);
+  const fontSize = Math.round(logoSize * 0.72);
+
+  return (
+    <div
+      style={{
+        position: 'relative',
+        padding: 5,
+        borderRadius: 36,
+        background: `linear-gradient(${glowRotation}deg, ${RAINBOW.colors.join(', ')})`,
+        boxShadow: `0 0 60px ${BRAND.colors.primary}40`,
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap,
+          padding: `${padding}px ${padding * 1.7}px`,
+          borderRadius: 32,
+          backgroundColor: BACKGROUNDS.primary,
+        }}
+      >
+        <Img
+          src={staticFile('static/logo.webp')}
+          width={logoSize}
+          height={logoSize}
+          style={{ objectFit: 'contain' }}
+        />
+        <span
+          style={{
+            fontSize,
+            fontWeight: 700,
+            color: TEXT.primary,
+            letterSpacing: '-0.02em',
+            fontFamily: FONTS.sans,
+          }}
+        >
+          Roundtable
+        </span>
+      </div>
+    </div>
+  );
+}
+
+// ============================================================================
+// Rainbow Glow Orbs (Background decoration for all scenes)
+// ============================================================================
+
+type GlowOrbConfig = {
+  /** Position as percentage (0-100) */
+  top?: number;
+  bottom?: number;
+  left?: number;
+  right?: number;
+  /** Size in pixels */
+  size: number;
+  /** Rainbow color index (0-11) */
+  colorIndex: number;
+  /** Opacity (0-1) */
+  opacity: number;
+  /** Blur in pixels */
+  blur: number;
+};
+
+type RainbowGlowOrbsProps = {
+  /** Current frame for animation */
+  frame: number;
+  /** Orb configurations */
+  orbs: readonly GlowOrbConfig[];
+  /** Optional breathing offset for parallax */
+  breathingOffset?: { x: number; y: number };
+};
+
+/**
+ * Rainbow-colored glow orbs for background decoration.
+ * Uses different RAINBOW.colors for visual variety.
+ * Animates size, opacity, and position slowly over time.
+ */
+export function RainbowGlowOrbs({
+  frame,
+  orbs,
+  breathingOffset = { x: 0, y: 0 },
+}: RainbowGlowOrbsProps) {
+  return (
+    <>
+      {orbs.map((orb, i) => {
+        // Each orb has unique phase offset for varied animation
+        const phaseOffset = i * 2.1;
+
+        // Slow position drift (very slow sine waves with different frequencies)
+        const posX = Math.sin(frame * 0.003 + phaseOffset) * 15;
+        const posY = Math.cos(frame * 0.0025 + phaseOffset * 0.7) * 12;
+
+        // Slow size pulsing (±15% of base size)
+        const sizeFactor = 1 + Math.sin(frame * 0.004 + phaseOffset * 1.3) * 0.15;
+        const animatedSize = orb.size * sizeFactor;
+
+        // Slow opacity breathing (±30% of base opacity)
+        const opacityFactor = 1 + Math.sin(frame * 0.005 + phaseOffset * 0.9) * 0.3;
+        const animatedOpacity = Math.min(1, orb.opacity * opacityFactor);
+
+        const position: CSSProperties = {};
+        if (orb.top !== undefined)
+          position.top = `${orb.top}%`;
+        if (orb.bottom !== undefined)
+          position.bottom = `${orb.bottom}%`;
+        if (orb.left !== undefined)
+          position.left = `${orb.left}%`;
+        if (orb.right !== undefined)
+          position.right = `${orb.right}%`;
+
+        // Get color from rainbow palette, wrap around if needed
+        const colorIdx = orb.colorIndex % RAINBOW.colors.length;
+        const color = RAINBOW.colors[colorIdx];
+
+        // Convert animated opacity to hex for gradient
+        const opacityHex = Math.round(animatedOpacity * 255).toString(16).padStart(2, '0');
+
+        return (
+          <div
+            key={`glow-orb-${i}`}
+            style={{
+              position: 'absolute',
+              ...position,
+              width: animatedSize,
+              height: animatedSize,
+              borderRadius: '50%',
+              background: `radial-gradient(circle, ${color}${opacityHex} 0%, transparent 70%)`,
+              filter: `blur(${orb.blur}px)`,
+              pointerEvents: 'none',
+              transform: `translate(${breathingOffset.x * 0.2 + posX}px, ${breathingOffset.y * 0.2 + posY}px)`,
+            }}
+          />
+        );
+      })}
+    </>
+  );
+}
+
+// Default orb configurations for different scene types
+export const DEFAULT_GLOW_ORBS = {
+  // Center-focused (for intro/finale)
+  centered: [
+    { top: 20, left: 15, size: 400, colorIndex: 0, opacity: 0.12, blur: 60 },
+    { bottom: 25, right: 10, size: 300, colorIndex: 6, opacity: 0.1, blur: 50 },
+    { top: 60, left: 5, size: 250, colorIndex: 3, opacity: 0.08, blur: 55 },
+  ],
+  // Scattered (for content scenes)
+  scattered: [
+    { top: 15, left: 10, size: 350, colorIndex: 0, opacity: 0.1, blur: 55 },
+    { top: 30, right: 15, size: 280, colorIndex: 4, opacity: 0.08, blur: 50 },
+    { bottom: 20, left: 20, size: 320, colorIndex: 8, opacity: 0.09, blur: 60 },
+    { bottom: 35, right: 5, size: 260, colorIndex: 2, opacity: 0.07, blur: 45 },
+  ],
+  // Sidebar-focused
+  sidebar: [
+    { top: 10, left: 5, size: 300, colorIndex: 0, opacity: 0.1, blur: 50 },
+    { top: 50, left: 8, size: 250, colorIndex: 6, opacity: 0.08, blur: 45 },
+    { bottom: 15, left: 12, size: 280, colorIndex: 3, opacity: 0.09, blur: 55 },
+  ],
+} as const;

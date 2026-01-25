@@ -17,18 +17,16 @@
 
 import {
   AbsoluteFill,
-  Img,
   interpolate,
   spring,
-  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
 
-import { DepthParticles, EdgeVignette } from '../../components/scene-primitives';
+import { DepthParticles, EdgeVignette, RainbowLogoContainer } from '../../components/scene-primitives';
 import { VideoButton } from '../../components/ui-replicas';
 import { useCinematicCamera, useFocusTransition } from '../../hooks';
-import { BACKGROUNDS, BRAND, FONTS, HEX_COLORS, RAINBOW, SPACING, TEXT, TYPOGRAPHY } from '../../lib/design-tokens';
+import { BACKGROUNDS, BRAND, HEX_COLORS, RAINBOW, SPACING, TEXT, TYPOGRAPHY } from '../../lib/design-tokens';
 
 // Constants for 3D depth layers
 const DEPTH_LAYERS = {
@@ -263,7 +261,7 @@ export function Scene17Finale() {
           }}
         />
 
-        {/* === LOGO LAYER (z=100) - Main content === */}
+        {/* === LOGO LAYER (z=100) - Main content with rainbow border === */}
         <div
           style={{
             transformStyle: 'preserve-3d',
@@ -272,35 +270,7 @@ export function Scene17Finale() {
             filter: focusFilter,
           }}
         >
-          <div
-            style={{
-              display: 'flex',
-              alignItems: 'center',
-              gap: 28,
-              padding: '32px 56px',
-              borderRadius: 24,
-              backgroundColor: BACKGROUNDS.primary,
-              boxShadow: '0 8px 32px rgba(0,0,0,0.4)',
-            }}
-          >
-            <Img
-              src={staticFile('static/logo.webp')}
-              width={120}
-              height={120}
-              style={{ objectFit: 'contain' }}
-            />
-            <span
-              style={{
-                fontSize: 80,
-                fontWeight: 700,
-                color: TEXT.primary,
-                letterSpacing: '-0.02em',
-                fontFamily: FONTS.sans,
-              }}
-            >
-              Roundtable
-            </span>
-          </div>
+          <RainbowLogoContainer logoSize={120} frame={frame} />
         </div>
 
         {/* === CTA LAYER (z=50) - 3D Flip Entrance === */}
@@ -359,13 +329,13 @@ export function Scene17Finale() {
       </div>
 
       {/* Fade to black at the very end - outside 3D container */}
-      {frame > 75 && (
+      {frame > 135 && (
         <div
           style={{
             position: 'absolute',
             inset: 0,
             backgroundColor: HEX_COLORS.black,
-            opacity: interpolate(frame, [75, 90], [0, 1], {
+            opacity: interpolate(frame, [135, 150], [0, 1], {
               extrapolateRight: 'clamp',
             }),
             zIndex: 100,

@@ -12,16 +12,14 @@
 
 import {
   AbsoluteFill,
-  Img,
   interpolate,
   spring,
-  staticFile,
   useCurrentFrame,
   useVideoConfig,
 } from 'remotion';
 
-import { DepthParticles, EdgeVignette } from '../../components/scene-primitives';
-import { BACKGROUNDS, BRAND, FONTS, RAINBOW, SPACING, TEXT, TYPOGRAPHY } from '../../lib/design-tokens';
+import { DepthParticles, EdgeVignette, RainbowGlowOrbs, RainbowLogoContainer } from '../../components/scene-primitives';
+import { BACKGROUNDS, BRAND, SPACING, TEXT, TYPOGRAPHY } from '../../lib/design-tokens';
 
 // ============================================================================
 // 2D Logo Overlay (renders HTML logo on top of 3D canvas for best quality)
@@ -47,9 +45,6 @@ function LogoOverlay() {
     extrapolateRight: 'clamp',
   });
 
-  // Rainbow border rotation
-  const glowRotation = interpolate(frame, [0, 90], [0, 270]);
-
   // Exit fade in last 10 frames
   const exitOpacity = frame > 80
     ? interpolate(frame, [80, 90], [1, 0], { extrapolateRight: 'clamp' })
@@ -66,47 +61,7 @@ function LogoOverlay() {
         pointerEvents: 'none',
       }}
     >
-      {/* Rainbow border container */}
-      <div
-        style={{
-          position: 'relative',
-          padding: 5,
-          borderRadius: 36,
-          background: `linear-gradient(${glowRotation}deg, ${RAINBOW.colors.join(', ')})`,
-          boxShadow: `0 0 60px ${BRAND.colors.primary}40`,
-        }}
-      >
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 24,
-            padding: '28px 48px',
-            borderRadius: 32,
-            backgroundColor: BACKGROUNDS.primary,
-          }}
-        >
-          {/* Actual logo */}
-          <Img
-            src={staticFile('static/logo.webp')}
-            width={100}
-            height={100}
-            style={{ objectFit: 'contain' }}
-          />
-          {/* Brand name */}
-          <span
-            style={{
-              fontSize: 72,
-              fontWeight: 700,
-              color: TEXT.primary,
-              letterSpacing: '-0.02em',
-              fontFamily: FONTS.sans,
-            }}
-          >
-            Roundtable
-          </span>
-        </div>
-      </div>
+      <RainbowLogoContainer logoSize={100} frame={frame} />
     </div>
   );
 }
@@ -223,20 +178,14 @@ export function Scene01Intro() {
         intensity={1.0}
       />
 
-      {/* Background radial gradient glow */}
-      <div
-        style={{
-          position: 'absolute',
-          top: '50%',
-          left: '50%',
-          transform: 'translate(-50%, -50%)',
-          width: 900,
-          height: 900,
-          borderRadius: '50%',
-          background: `radial-gradient(circle, ${BRAND.colors.primary}30 0%, transparent 70%)`,
-          filter: 'blur(80px)',
-          pointerEvents: 'none',
-        }}
+      {/* Rainbow glow orbs for background (replaces single-color glow) */}
+      <RainbowGlowOrbs
+        frame={frame}
+        orbs={[
+          { top: 30, left: 25, size: 500, colorIndex: 0, opacity: 0.15, blur: 80 },
+          { top: 45, right: 20, size: 400, colorIndex: 6, opacity: 0.12, blur: 70 },
+          { bottom: 20, left: 35, size: 350, colorIndex: 3, opacity: 0.1, blur: 75 },
+        ]}
       />
 
       {/* Logo overlay (HTML) */}

@@ -31,7 +31,7 @@ import {
   useVideoConfig,
 } from 'remotion';
 
-import { DepthParticles, EdgeVignette } from '../../components/scene-primitives';
+import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
 import { VideoAvatar, VideoFeatureCaptions, VideoGlassCard, VideoLogo } from '../../components/ui-replicas';
 import { useCinematicCamera, useFocusPull } from '../../hooks';
 import { BACKGROUNDS, FONTS, SPACING, TEXT } from '../../lib/design-tokens';
@@ -227,6 +227,13 @@ export function Scene02Homepage() {
         >
           <DepthParticles frame={frame} baseOpacity={0.12} count={20} />
         </div>
+
+        {/* Rainbow glow orbs */}
+        <RainbowGlowOrbs
+          frame={frame}
+          orbs={DEFAULT_GLOW_ORBS.scattered}
+          breathingOffset={breathingOffset}
+        />
 
         {/* Edge vignette - stays at camera plane */}
         <EdgeVignette innerRadius={50} edgeOpacity={0.5} />

@@ -8,6 +8,8 @@
 import type { CSSProperties, ReactNode } from 'react';
 import { useCurrentFrame } from 'remotion';
 
+import { FONTS } from '../lib/design-tokens';
+
 // ============================================================================
 // Types
 // ============================================================================
@@ -117,7 +119,7 @@ export function BrowserFrame({
     fontSize: 12,
     fontWeight: 500,
     color: 'rgba(255, 255, 255, 0.6)',
-    fontFamily: '\'Noto Sans\', system-ui, -apple-system, sans-serif',
+    fontFamily: FONTS.sans,
     userSelect: 'none',
   };
 
