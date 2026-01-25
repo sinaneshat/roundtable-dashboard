@@ -149,22 +149,26 @@ export function extractMessageMetadata(
 
   // Try each schema in order of likelihood
   const userResult = getUserMetadata(message.metadata);
-  if (userResult)
+  if (userResult) {
     return userResult;
+  }
 
   // ✅ TEXT STREAMING: Check moderator before regular assistant
   // (moderator is a specialized assistant type)
   const moderatorResult = getModeratorMetadata(message.metadata);
-  if (moderatorResult)
+  if (moderatorResult) {
     return moderatorResult;
+  }
 
   const assistantResult = getAssistantMetadata(message.metadata);
-  if (assistantResult)
+  if (assistantResult) {
     return assistantResult;
+  }
 
   const preSearchResult = getPreSearchMetadata(message.metadata);
-  if (preSearchResult)
+  if (preSearchResult) {
     return preSearchResult;
+  }
 
   return null;
 }
@@ -192,8 +196,13 @@ export function getCreatedAt(message: unknown): string | null {
     createdAt: z.union([z.string().datetime(), z.date()]).optional(),
     metadata: z.object({
       createdAt: z.string().datetime().optional(),
-    }).passthrough().optional(),
-  }).passthrough();
+    })
+      // JUSTIFIED: passthrough required for field extraction from polymorphic message types during streaming race conditions
+      .passthrough()
+      .optional(),
+  })
+    // JUSTIFIED: passthrough required for field extraction from polymorphic message types during streaming race conditions
+    .passthrough();
 
   const result = MessageCreatedAtSchema.safeParse(message);
   if (!result.success) {
@@ -237,7 +246,9 @@ export function getRoundNumber(metadata: unknown): number | null {
   // NOTE: Using passthrough() intentionally - extracts field from metadata with extra properties
   const PartialRoundNumberSchema = z.object({
     roundNumber: z.number().int().nonnegative(),
-  }).passthrough();
+  })
+    // JUSTIFIED: passthrough required for field extraction from polymorphic message types during streaming race conditions
+    .passthrough();
 
   const partialResult = PartialRoundNumberSchema.safeParse(metadata);
   return partialResult.success ? partialResult.data.roundNumber : null;
@@ -266,7 +277,9 @@ export function getParticipantId(metadata: unknown): string | null {
   // NOTE: Using passthrough() intentionally - extracts field from metadata with extra properties
   const PartialParticipantIdSchema = z.object({
     participantId: z.string().min(1),
-  }).passthrough();
+  })
+    // JUSTIFIED: passthrough required for field extraction from polymorphic message types during streaming race conditions
+    .passthrough();
 
   const partialResult = PartialParticipantIdSchema.safeParse(metadata);
   return partialResult.success && partialResult.data.participantId
@@ -297,7 +310,9 @@ export function getParticipantIndex(metadata: unknown): number | null {
   // NOTE: Using passthrough() intentionally - extracts field from metadata with extra properties
   const PartialParticipantIndexSchema = z.object({
     participantIndex: z.number().int().nonnegative(),
-  }).passthrough();
+  })
+    // JUSTIFIED: passthrough required for field extraction from polymorphic message types during streaming race conditions
+    .passthrough();
 
   const partialResult = PartialParticipantIndexSchema.safeParse(metadata);
   return partialResult.success && typeof partialResult.data.participantIndex === 'number'
