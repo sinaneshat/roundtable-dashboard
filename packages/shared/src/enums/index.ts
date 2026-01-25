@@ -71,7 +71,12 @@ export {
   DEFAULT_AUTH_ERROR_TYPE,
   DEFAULT_AUTH_MODE,
   DEFAULT_AUTH_STEP,
+  DEFAULT_USER_ROLE,
   isValidAuthErrorType,
+  USER_ROLES,
+  type UserRole,
+  UserRoles,
+  UserRoleSchema,
 } from './auth';
 
 // Billing and subscription enums

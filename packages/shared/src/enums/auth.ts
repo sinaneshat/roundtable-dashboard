@@ -123,3 +123,25 @@ export const BETTER_AUTH_SESSION_COOKIE_NAME = 'better-auth.session_token' as co
 export function isValidAuthErrorType(value: unknown): value is AuthErrorType {
   return AuthErrorTypeSchema.safeParse(value).success;
 }
+
+// ============================================================================
+// USER ROLE (Authorization Level)
+// ============================================================================
+
+// 1. Array of valid values
+export const USER_ROLES = ['admin', 'user'] as const;
+
+// 2. Default value
+export const DEFAULT_USER_ROLE: UserRole = 'user';
+
+// 3. Zod schema
+export const UserRoleSchema = z.enum(USER_ROLES);
+
+// 4. TypeScript type (inferred from schema)
+export type UserRole = z.infer<typeof UserRoleSchema>;
+
+// 5. Constant object for accessing values
+export const UserRoles = {
+  ADMIN: 'admin',
+  USER: 'user',
+} as const;
