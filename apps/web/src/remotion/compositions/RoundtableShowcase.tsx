@@ -1,5 +1,5 @@
 /**
- * RoundtableShowcase - Product Video (~90 seconds)
+ * RoundtableShowcase - Product Video (~95 seconds)
  *
  * Streamlined production video with unified scenes:
  * - 7 scenes using TransitionSeries
@@ -7,9 +7,10 @@
  * - Simple fade transitions between scenes
  * - Enhanced chromatic aberration at transition peaks
  * - Background music support
+ * - J-cut technique: captions lead visual changes by ~15 frames
  *
  * Scene Structure:
- * 01 Intro (3s)        - Logo reveal
+ * 01 Intro (5s)        - Logo reveal (extended for impact)
  * 02 Homepage (5s)     - Meet the AI Council
  * 03 Sidebar (4s)      - Choose Your Workspace
  * 04 ChatInput (36s)   - Unified: auto mode, models, files, voice, typing (5-6s per feature)
@@ -39,17 +40,17 @@ const NORMAL_TRANSITION = linearTiming({ durationInFrames: 24 });
 const SLOW_TRANSITION = linearTiming({ durationInFrames: 36 });
 
 // Transition frame positions for chromatic aberration
-// Updated: chatInput extended to 1080 frames (36s) for proper feature viewing
-const TRANSITION_FRAMES = [90, 216, 321, 1386, 1752, 2358];
+// Updated: intro extended to 150 frames (5s), chatInput to 1080 frames (36s)
+const TRANSITION_FRAMES = [150, 276, 381, 1446, 1812, 2418];
 
 /**
  * Scene durations in frames at 30fps
  *
- * Total: ~2530 frames (~84 seconds)
+ * Total: ~2590 frames (~86 seconds)
  */
 const SCENE_DURATIONS = {
-  // === INTRO & NAVIGATION (12s) ===
-  intro: 90, // 3s - Logo reveal with depth effects
+  // === INTRO & NAVIGATION (14s) ===
+  intro: 150, // 5s - Logo reveal with depth effects (extended for impact)
   homepage: 150, // 5s - Meet the AI Council - more time to see model cards
   sidebar: 120, // 4s - Choose Your Workspace - more time to see options
 
@@ -67,51 +68,165 @@ const SCENE_DURATIONS = {
 } as const;
 
 /**
- * Audio component for ODESZA "A Moment Apart"
- * Trims the song to start at the melodic build (~1:00) and syncs
- * key musical moments with scene transitions
+ * Audio - Single continuous track with volume automation
+ *
+ * IMPORTANT: This plays ONE continuous audio stream (no cuts/gaps)
+ * Volume is automated to match scene energy levels
+ *
+ * To adjust timing:
+ * - Change AUDIO_START_OFFSET to start from a different point in the track
+ * - Adjust the volume keyframes below to match your music's energy
+ *
+ * Scene Timeline (frames @ 30fps):
+ * - 0-150: Intro (5s)
+ * - 150-276: Homepage (4.2s)
+ * - 276-381: Sidebar (3.5s)
+ * - 381-1446: ChatInput (35.5s) - longest section
+ * - 1446-1812: ModelModal (12.2s)
+ * - 1812-2418: ChatThread (20.2s) - PEAK ENERGY
+ * - 2418-2532: Finale (3.8s)
  */
 function ShowcaseAudio() {
   const { fps } = useVideoConfig();
   const total = getShowcaseDuration();
 
-  // Start at 1:00 (60 seconds) into the song - skip ambient intro
-  // This aligns the melodic piano build with our intro
-  const AUDIO_START_OFFSET = 60 * fps; // 1800 frames
+  // ============================================================================
+  // MUSIC START POINT - Change this to start from a different part of the track
+  // ============================================================================
+  const AUDIO_START_SECONDS = 60; // Start at 1:00 into the track
+  const AUDIO_START_OFFSET = AUDIO_START_SECONDS * fps;
 
   return (
     <Audio
       src={staticFile('static/music/showcase-bg.mp3')}
       startFrom={AUDIO_START_OFFSET}
-      volume={(f) => {
-        // Volume envelope optimized for "A Moment Apart" structure
-        // The song builds from piano to full synth around 30s into our clip
+      volume={(f: number) => {
+        // ====================================================================
+        // VOLUME KEYFRAMES - Adjust these to match your music's energy!
+        // Format: [frame] → [volume]
+        // ====================================================================
         const baseVolume = interpolate(
           f,
           [
+            // INTRO - Soft fade in
             0, // Start
-            30, // Quick fade in
-            321, // End of navigation scenes (intro + homepage + sidebar)
-            1386, // ChatInput done, about to hit ModelModal
-            1752, // ChatThread starts - main drop should hit here
-            1850, // Deep into ChatThread
-            total - 120, // Start fade out
-            total, // End
+            45, // Fade in complete
+            140, // Before transition
+
+            // HOMEPAGE - Building
+            150, // Scene start
+            270, // Before transition
+
+            // SIDEBAR - Steady
+            276, // Scene start
+            375, // Before transition
+
+            // CHAT INPUT - Long section, gradual build
+            381, // Scene start - features begin
+            600, // Model selection
+            800, // File features
+            1000, // Voice recording
+            1200, // Typing
+            1400, // Pre-send buildup
+            1440, // Before transition
+
+            // MODEL MODAL - High energy
+            1446, // Scene start
+            1600, // Tabs shown
+            1800, // Before transition
+
+            // CHAT THREAD - PEAK (THE DROP!)
+            1812, // THE DROP - scene start
+            1900, // First responses
+            2100, // All models active - PEAK
+            2300, // Moderator synthesis
+            2410, // Before transition
+
+            // FINALE - Resolution
+            2418, // Scene start
+            2480, // CTA moment
+            total - 45, // Start fade out
+            total, // End - silence
           ],
-          [0, 0.35, 0.4, 0.45, 0.55, 0.55, 0.45, 0],
+          [
+            // INTRO
+            0, // Silence
+            0.32, // Soft intro
+            0.35, // Established
+
+            // HOMEPAGE
+            0.38, // Building energy
+            0.40, // Ready for next
+
+            // SIDEBAR
+            0.40, // Steady
+            0.42, // Ready for features
+
+            // CHAT INPUT - Gradual build through long section
+            0.42, // Start
+            0.44, // Model selection
+            0.46, // Files
+            0.50, // Voice - rising
+            0.52, // Typing
+            0.55, // Building anticipation
+            0.58, // Pre-transition peak
+
+            // MODEL MODAL
+            0.55, // Scene start
+            0.58, // Tabs
+            0.60, // Before drop
+
+            // CHAT THREAD - PEAK
+            0.62, // THE DROP!
+            0.65, // Responses starting
+            0.68, // PEAK ENERGY - all models
+            0.62, // Moderator - slight pullback
+            0.58, // Winding down
+
+            // FINALE
+            0.55, // Resolution begins
+            0.58, // CTA boost
+            0.45, // Fading
+            0, // Silence
+          ],
           { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' },
         );
 
-        // Boost at scene transitions for impact
-        const transitionBoost = TRANSITION_FRAMES.reduce((boost, transFrame) => {
+        // ====================================================================
+        // TRANSITION BOOSTS - Punch at scene changes
+        // ====================================================================
+        let transitionBoost = 0;
+        for (const transFrame of TRANSITION_FRAMES) {
           const dist = Math.abs(f - transFrame);
-          if (dist < 20) {
-            return Math.max(boost, interpolate(dist, [0, 20], [0.15, 0], { extrapolateRight: 'clamp' }));
+          if (dist < 12) {
+            const boost = interpolate(dist, [0, 6, 12], [0.10, 0.05, 0], {
+              extrapolateRight: 'clamp',
+            });
+            transitionBoost = Math.max(transitionBoost, boost);
           }
-          return boost;
-        }, 0);
+        }
 
-        return Math.min(baseVolume + transitionBoost, 0.65);
+        // ====================================================================
+        // KEY MOMENT ACCENTS
+        // ====================================================================
+        // Send button moment (end of ChatInput)
+        const sendBoost = f >= 1380 && f < 1420
+          ? interpolate(f - 1380, [0, 20, 40], [0, 0.06, 0], { extrapolateRight: 'clamp' })
+          : 0;
+
+        // THE DROP moment (ChatThread start)
+        const dropBoost = f >= 1812 && f < 1860
+          ? interpolate(f - 1812, [0, 24, 48], [0, 0.08, 0], { extrapolateRight: 'clamp' })
+          : 0;
+
+        // CTA reveal (Finale)
+        const ctaBoost = f >= 2450 && f < 2500
+          ? interpolate(f - 2450, [0, 25, 50], [0, 0.06, 0], { extrapolateRight: 'clamp' })
+          : 0;
+
+        // Combine and clamp
+        const finalVolume = baseVolume + transitionBoost + sendBoost + dropBoost + ctaBoost;
+        return Math.max(0, Math.min(finalVolume, 0.72));
       }}
     />
   );
@@ -132,18 +247,23 @@ export function RoundtableShowcase() {
 
       {/* Progress dots indicator */}
       <VideoProgressIndicator
-        sceneStarts={[0, 90, 216, 321, 1386, 1752, 2358]}
+        sceneStarts={[0, 150, 276, 381, 1446, 1812, 2418]}
         totalDuration={getShowcaseDuration()}
       />
 
-      {/* Background music - ODESZA "A Moment Apart"
-          Trim starts at ~1:00 to skip slow intro, get melodic build
-          Scene mapping:
-          - 0-8.5s (Intro/Homepage/Sidebar): Melodic piano build
-          - 8.5-18.5s (ChatInput): Rising progression
-          - 18.5-28.5s (ModelModal): Energy building
-          - 28.5-52.5s (ChatThread): Main drop aligned with core feature
-          - 52.5-57.5s (Finale): Emotional peak for CTA
+      {/* Background music with cinematic volume automation
+          Emotional arc:
+          - Intro (0-5s): Gentle fade in, soft and inviting (0.30-0.35)
+          - Homepage/Sidebar (5-13s): Building anticipation (0.38-0.40)
+          - ChatInput (13-48s): Steady showcase with dynamics (0.42-0.52)
+          - ModelModal (48-60s): Rising energy (0.55)
+          - ChatThread (60-80s): PEAK ENERGY - core feature (0.60-0.65)
+          - Finale (80-86s): Powerful resolution (0.55 → fade)
+
+          Techniques applied:
+          - Caption ducking (-0.08 when captions appear)
+          - Transition boosts (+0.12 at scene changes)
+          - Key moment accents (send, moderator, CTA)
       */}
       <ShowcaseAudio />
       <TransitionSeries>

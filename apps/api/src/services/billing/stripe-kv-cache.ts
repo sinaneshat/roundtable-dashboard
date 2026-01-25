@@ -36,7 +36,8 @@ export async function getCachedCustomerId(userId: string): Promise<string | null
     return null;
 
   try {
-    return await kv.get(getUserCustomerKey(userId));
+    // cacheTtl enables edge caching - 5 min for rarely-changing mapping
+    return await kv.get(getUserCustomerKey(userId), { cacheTtl: 300 });
   } catch {
     return null;
   }
@@ -72,7 +73,8 @@ export async function getCachedSubscriptionData(
     return null;
 
   try {
-    const data = await kv.get(getCustomerDataKey(customerId), 'json');
+    // cacheTtl enables edge caching - 60s (min) for subscription data
+    const data = await kv.get(getCustomerDataKey(customerId), { type: 'json', cacheTtl: 60 });
     return data as SyncedSubscriptionState | null;
   } catch {
     return null;

@@ -85,7 +85,8 @@ export async function getCachedSearch(
 ): Promise<WebSearchResult | null> {
   try {
     const key = generateSearchCacheKey(query, maxResults, searchDepth);
-    const cached = await env.KV.get(key, 'json');
+    // cacheTtl enables edge caching - 5 min for search results (24h TTL)
+    const cached = await env.KV.get(key, { type: 'json', cacheTtl: 300 });
 
     if (!cached) {
       await trackCacheMiss(env, logger);
@@ -174,7 +175,8 @@ export async function getCachedImageDescription(
 ): Promise<string | null> {
   try {
     const key = generateImageCacheKey(imageUrl);
-    const cached = await env.KV.get(key, 'text');
+    // cacheTtl enables edge caching - 5 min for image descriptions (7d TTL)
+    const cached = await env.KV.get(key, { type: 'text', cacheTtl: 300 });
 
     if (cached) {
       logger?.info('Image description cache hit', {
@@ -219,14 +221,26 @@ export async function cacheImageDescription(
 }
 
 // ============================================================================
-// Analytics
+// Analytics (Sharded to avoid KV 1 write/second per key limit)
 // ============================================================================
+
+/**
+ * Get hourly bucket for timestamp sharding.
+ * Distributes writes across keys to avoid KV rate limits.
+ */
+function getHourlyBucket(): string {
+  const now = new Date();
+  return `${now.getUTCFullYear()}-${String(now.getUTCMonth() + 1).padStart(2, '0')}-${String(now.getUTCDate()).padStart(2, '0')}T${String(now.getUTCHours()).padStart(2, '0')}`;
+}
 
 async function trackCacheHit(env: ApiEnv['Bindings'], logger?: TypedLogger): Promise<void> {
   try {
-    const current = await env.KV.get(CACHE_KEY_PREFIX.STATS_HITS, 'text');
+    // Shard by hour to avoid 1 write/second limit per key
+    const bucket = getHourlyBucket();
+    const key = `${CACHE_KEY_PREFIX.STATS_HITS}:${bucket}`;
+    const current = await env.KV.get(key, 'text');
     const count = Number.parseInt(current || '0', 10) + 1;
-    await env.KV.put(CACHE_KEY_PREFIX.STATS_HITS, count.toString(), { expirationTtl: CACHE_TTL.ANALYTICS });
+    await env.KV.put(key, count.toString(), { expirationTtl: CACHE_TTL.ANALYTICS });
   } catch (error) {
     logger?.debug('Cache hit tracking failed', {
       logType: LogTypes.EDGE_CASE,
@@ -238,9 +252,12 @@ async function trackCacheHit(env: ApiEnv['Bindings'], logger?: TypedLogger): Pro
 
 async function trackCacheMiss(env: ApiEnv['Bindings'], logger?: TypedLogger): Promise<void> {
   try {
-    const current = await env.KV.get(CACHE_KEY_PREFIX.STATS_MISSES, 'text');
+    // Shard by hour to avoid 1 write/second limit per key
+    const bucket = getHourlyBucket();
+    const key = `${CACHE_KEY_PREFIX.STATS_MISSES}:${bucket}`;
+    const current = await env.KV.get(key, 'text');
     const count = Number.parseInt(current || '0', 10) + 1;
-    await env.KV.put(CACHE_KEY_PREFIX.STATS_MISSES, count.toString(), { expirationTtl: CACHE_TTL.ANALYTICS });
+    await env.KV.put(key, count.toString(), { expirationTtl: CACHE_TTL.ANALYTICS });
   } catch (error) {
     logger?.debug('Cache miss tracking failed', {
       logType: LogTypes.EDGE_CASE,

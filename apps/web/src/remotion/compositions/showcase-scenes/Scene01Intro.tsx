@@ -1,6 +1,6 @@
 /**
  * Scene 1: Clean Intro with Logo Reveal
- * Duration: 0-3s (90 frames at 30fps)
+ * Duration: 0-5s (150 frames at 30fps)
  *
  * Elements:
  * - DepthParticles background (subtle 2D particles)
@@ -45,9 +45,9 @@ function LogoOverlay() {
     extrapolateRight: 'clamp',
   });
 
-  // Exit fade in last 10 frames
-  const exitOpacity = frame > 80
-    ? interpolate(frame, [80, 90], [1, 0], { extrapolateRight: 'clamp' })
+  // Exit fade in last 10 frames - updated for 150 frame duration
+  const exitOpacity = frame > 140
+    ? interpolate(frame, [140, 150], [1, 0], { extrapolateRight: 'clamp' })
     : 1;
 
   return (
@@ -97,9 +97,9 @@ function TextOverlay() {
   // Subtitle animations
   const subtitleOpacity = interpolate(subtitleProgress, [0, 1], [0, 1]);
 
-  // Exit fade in last 10 frames
-  const exitFade = frame > 80
-    ? interpolate(frame, [80, 90], [1, 0], { extrapolateRight: 'clamp' })
+  // Exit fade in last 10 frames - updated for 150 frame duration
+  const exitFade = frame > 140
+    ? interpolate(frame, [140, 150], [1, 0], { extrapolateRight: 'clamp' })
     : 1;
 
   return (

@@ -12,6 +12,55 @@ import { Buffer } from 'node:buffer';
 import type { StorageMetadata, StorageResult } from '@/types/uploads';
 
 // ============================================================================
+// R2 RETRY LOGIC (Platform Outage Resilience)
+// ============================================================================
+
+/**
+ * Retry R2 operations with exponential backoff.
+ * R2 can experience transient failures (5xx, timeouts) - retry logic is critical.
+ *
+ * @see cloudflare-r2 skill - Issue #13 platform outages
+ */
+async function r2WithRetry<T>(
+  operation: () => Promise<T>,
+  maxRetries = 3,
+): Promise<T> {
+  let lastError: Error | null = null;
+
+  for (let attempt = 0; attempt < maxRetries; attempt++) {
+    try {
+      return await operation();
+    } catch (error) {
+      lastError = error instanceof Error ? error : new Error(String(error));
+      const message = lastError.message;
+
+      // Check if error is transient/retryable
+      const is5xxError
+        = message.includes('500')
+          || message.includes('502')
+          || message.includes('503')
+          || message.includes('504');
+
+      const isRetryable
+        = is5xxError
+          || message.includes('network')
+          || message.includes('timeout')
+          || message.includes('temporarily unavailable');
+
+      if (!isRetryable || attempt === maxRetries - 1) {
+        throw lastError;
+      }
+
+      // Exponential backoff: 100ms, 200ms, 400ms (max ~700ms total)
+      const delay = 100 * 2 ** attempt;
+      await new Promise(r => setTimeout(r, delay));
+    }
+  }
+
+  throw lastError ?? new Error('R2 operation failed after retries');
+}
+
+// ============================================================================
 // LOCAL FILE STORAGE FALLBACK (Development Only)
 // ============================================================================
 
@@ -247,10 +296,12 @@ export async function putFile(
   }
 
   try {
-    await r2Bucket.put(key, data, {
-      httpMetadata: metadata?.contentType ? { contentType: metadata.contentType } : undefined,
-      customMetadata: metadata?.customMetadata,
-    });
+    await r2WithRetry(() =>
+      r2Bucket.put(key, data, {
+        httpMetadata: metadata?.contentType ? { contentType: metadata.contentType } : undefined,
+        customMetadata: metadata?.customMetadata,
+      }),
+    );
     return { success: true, key };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'R2 upload failed';
@@ -280,10 +331,12 @@ export async function getFileStream(
   }
 
   try {
-    const object = await r2Bucket.get(key, {
-      onlyIf: options?.onlyIf,
-      range: options?.range,
-    });
+    const object = await r2WithRetry(() =>
+      r2Bucket.get(key, {
+        onlyIf: options?.onlyIf,
+        range: options?.range,
+      }),
+    );
 
     if (!object) {
       return notFound;
@@ -334,7 +387,7 @@ export async function getFile(
   }
 
   try {
-    const object = await r2Bucket.get(key);
+    const object = await r2WithRetry(() => r2Bucket.get(key));
     if (!object) {
       return { data: null };
     }
@@ -364,7 +417,7 @@ export async function deleteFile(
   }
 
   try {
-    await r2Bucket.delete(key);
+    await r2WithRetry(() => r2Bucket.delete(key));
     return { success: true, key };
   } catch (error) {
     const message = error instanceof Error ? error.message : 'R2 delete failed';
@@ -385,7 +438,7 @@ export async function fileExists(
   }
 
   try {
-    const object = await r2Bucket.head(key);
+    const object = await r2WithRetry(() => r2Bucket.head(key));
     return object !== null;
   } catch {
     return false;
@@ -421,10 +474,12 @@ export async function createMultipartUpload(
   }
 
   try {
-    const upload = await r2Bucket.createMultipartUpload(key, {
-      httpMetadata: metadata?.contentType ? { contentType: metadata.contentType } : undefined,
-      customMetadata: metadata?.customMetadata,
-    });
+    const upload = await r2WithRetry(() =>
+      r2Bucket.createMultipartUpload(key, {
+        httpMetadata: metadata?.contentType ? { contentType: metadata.contentType } : undefined,
+        customMetadata: metadata?.customMetadata,
+      }),
+    );
     return { uploadId: upload.uploadId };
   } catch {
     return null;

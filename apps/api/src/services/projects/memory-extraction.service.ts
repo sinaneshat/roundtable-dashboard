@@ -17,6 +17,7 @@ import { and, desc, eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import type { getDbAsync } from '@/db';
+import { chunkForD1Insert } from '@/db/batch-operations';
 import * as tables from '@/db/tables';
 import type { ProjectMemoryMetadata } from '@/db/validation/project';
 import { deductCreditsForAction } from '@/services/billing/credit.service';
@@ -274,9 +275,12 @@ export async function extractMemoriesFromRound(
     duplicates: result.duplicates,
   });
 
-  // 5. Insert valid memories
+  // 5. Insert valid memories (chunked to avoid D1 100-parameter limit)
+  // projectMemory has 13 columns, so max 7 rows per insert
   if (memoriesToInsert.length > 0) {
-    await db.insert(tables.projectMemory).values(memoriesToInsert);
+    for (const chunk of chunkForD1Insert(memoriesToInsert, 13)) {
+      await db.insert(tables.projectMemory).values(chunk);
+    }
     result.extracted = memoriesToInsert.length;
     console.error('[Memory Extraction] Inserted memories', {
       projectId,
@@ -532,9 +536,12 @@ export async function extractMemoriesFromConversation(
     result.memoryIds.push(memoryId);
   }
 
-  // Insert memories
+  // Insert memories (chunked to avoid D1 100-parameter limit)
+  // projectMemory has 13 columns, so max 7 rows per insert
   if (memoriesToInsert.length > 0) {
-    await db.insert(tables.projectMemory).values(memoriesToInsert);
+    for (const chunk of chunkForD1Insert(memoriesToInsert, 13)) {
+      await db.insert(tables.projectMemory).values(chunk);
+    }
     console.error('[Conversation Memory] Inserted memories', {
       projectId,
       threadId,

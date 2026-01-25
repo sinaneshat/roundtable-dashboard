@@ -162,17 +162,6 @@ export function SceneChatInput() {
     ? interpolate(modelButtonProgress, [0, 1], [0.8, 1])
     : 0;
 
-  // Model button exit animation when switching to auto
-  const modelButtonExitProgress = frame >= PHASE.autoModeSwitch.start
-    ? spring({
-        frame: frame - PHASE.autoModeSwitch.start,
-        fps,
-        config: { damping: 25, stiffness: 200 },
-        durationInFrames: 12,
-      })
-    : 0;
-  const modelButtonExitOpacity = interpolate(modelButtonExitProgress, [0, 1], [1, 0]);
-
   // FILE CHIPS STATE
   const showFiles = frame >= PHASE.fileChips.start && frame < PHASE.voiceRecording.start;
 
@@ -239,18 +228,26 @@ export function SceneChatInput() {
 
       <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
 
-      {/* Prominent Feature Caption - matched exactly to PHASE timing for 1080 frames */}
+      {/* Prominent Feature Caption - J-cut technique: captions lead visuals by ~15 frames */}
       <VideoFeatureCaptions
         position="bottom-right"
         captions={[
-          { start: 0, end: 90, text: 'Your AI workspace', subtitle: 'One input for multiple AI models' },
-          { start: 90, end: 270, text: 'Choose your models', subtitle: 'Pick from 20+ AI models to participate' },
-          { start: 270, end: 420, text: 'Smart mode selection', subtitle: 'Auto mode picks the best models for your question' },
-          { start: 420, end: 510, text: 'Drag & drop files', subtitle: 'PDFs, images, code — any file type supported' },
-          { start: 510, end: 660, text: 'Rich file support', subtitle: 'Context from your documents, shared with all models' },
-          { start: 660, end: 840, text: 'Voice input', subtitle: 'Speak naturally, transcribed in real-time' },
-          { start: 840, end: 990, text: 'Ask anything', subtitle: 'Get diverse perspectives from multiple AIs simultaneously' },
-          { start: 990, end: 1080, text: 'Send to the roundtable', subtitle: 'All selected models respond in parallel' },
+          // Phase 1: Input appears (0-90)
+          { start: 0, end: 75, text: 'Your AI workspace', subtitle: 'The unified input for all AI models' },
+          // Phase 2: Model button (90-270) - caption leads by 15 frames
+          { start: 75, end: 255, text: 'Select your models', subtitle: 'Manually choose which AI models participate' },
+          // Phase 3: Auto mode switch (270-420) - caption leads
+          { start: 255, end: 405, text: 'Or use Auto mode', subtitle: 'Let AI pick the best models for your question' },
+          // Phase 4: Drag overlay (420-510) - caption leads
+          { start: 405, end: 495, text: 'Drag & drop files', subtitle: 'PDFs, images, code — any file type supported' },
+          // Phase 5: File chips (510-660) - caption leads
+          { start: 495, end: 645, text: 'Files attached', subtitle: 'Context from your documents, shared with all models' },
+          // Phase 6: Voice recording (660-840) - caption leads
+          { start: 645, end: 825, text: 'Voice input', subtitle: 'Speak naturally, transcribed in real-time' },
+          // Phase 7: Typing (840-990) - caption leads
+          { start: 825, end: 975, text: 'Type your question', subtitle: 'Ask anything to get diverse AI perspectives' },
+          // Phase 8: Send (990-1080) - caption leads
+          { start: 975, end: 1080, text: 'Send to the roundtable', subtitle: 'All selected models respond in parallel' },
         ]}
       />
 
@@ -432,13 +429,14 @@ export function SceneChatInput() {
                   }}
                 >
                   {/* Left side - Models (manual) + Mode (manual) + Attachment + Web Search (manual) */}
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flex: 1, minWidth: 0, overflow: 'hidden' }}>
-                    {/* Models button - ONLY shown in Manual mode (frames 30-70) */}
-                    {frame >= PHASE.modelButton.start && frame < PHASE.autoModeSwitch.end && (
+                  {/* No flex: 1 so this container only takes space it needs, keeping buttons at true left */}
+                  <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 8, minWidth: 0, overflow: 'hidden' }}>
+                    {/* Models button - ONLY shown in Manual mode, removed once exit animation nearly complete */}
+                    {frame >= PHASE.modelButton.start && !isAutoMode && (
                       <div
                         style={{
-                          opacity: isAutoMode ? modelButtonExitOpacity : modelButtonOpacity,
-                          transform: `scale(${isAutoMode ? 1 : modelButtonScale})`,
+                          opacity: modelButtonOpacity,
+                          transform: `scale(${modelButtonScale})`,
                           display: 'flex',
                           alignItems: 'center',
                           gap: 6,

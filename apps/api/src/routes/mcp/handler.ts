@@ -30,6 +30,7 @@ import { verifyThreadOwnership } from '@/common/permissions';
 import { createHandler, Responses } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
+import { chunkForD1Insert } from '@/db/batch-operations';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { filterNonEmptyMessages, isObject } from '@/lib/utils';
 import { AI_RETRY_CONFIG, AI_TIMEOUT_CONFIG, canAccessModelByPricing, checkFreeUserHasCompletedRound, enforceCredits, finalizeCredits, getSafeMaxOutputTokens } from '@/services/billing';
@@ -659,8 +660,11 @@ async function toolCreateThread(
       updatedAt: now,
     }));
 
+  // Chunked insert to avoid D1 100-parameter limit (10 columns = max 10 rows)
   if (participantValues.length > 0) {
-    await db.insert(tables.chatParticipant).values(participantValues);
+    for (const chunk of chunkForD1Insert(participantValues, 10)) {
+      await db.insert(tables.chatParticipant).values(chunk);
+    }
   }
 
   const participantIds = participantValues.map(p => p.id);
