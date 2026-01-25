@@ -26,7 +26,9 @@ import {
 import type { UIMessage } from 'ai';
 import { z } from 'zod';
 
-import { PendingAttachmentSchema } from '@/hooks/utils';
+// Direct import avoids circular dependency through @/hooks/utils barrel
+// Cycle: store-schemas -> @/hooks/utils -> use-analyze-prompt-stream -> store-defaults -> store-schemas
+import { PendingAttachmentSchema } from '@/hooks/utils/use-chat-attachments';
 import { ExtendedFilePartSchema } from '@/lib/schemas/message-schemas';
 import { ChatParticipantSchema, ParticipantConfigSchema } from '@/lib/schemas/participant-schemas';
 import type { ApiChangelog, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';

@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { shouldRetryMutation } from '@/hooks/utils';
+// Direct import avoids circular dependency through @/hooks/utils barrel export
+import { shouldRetryMutation } from '@/hooks/utils/mutation-retry';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import type { ListAttachmentsResponse } from '@/services/api';
 import {

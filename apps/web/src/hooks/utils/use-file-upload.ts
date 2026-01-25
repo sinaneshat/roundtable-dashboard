@@ -29,8 +29,7 @@ import {
   useDeleteAttachmentMutation,
   useSecureUploadMutation,
   useUploadPartMutation,
-} from '@/hooks/mutations';
-
+} from '../mutations/upload-mutations';
 import type { FilePreview } from './use-file-preview';
 import { FilePreviewSchema, useFilePreview } from './use-file-preview';
 import { FileValidationResultSchema, useFileValidation } from './use-file-validation';

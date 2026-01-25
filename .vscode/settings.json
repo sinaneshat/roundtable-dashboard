@@ -2,6 +2,12 @@
   "task.allowAutomaticTasks": "on",
   "editor.tabSize": 2,
   "editor.detectIndentation": false,
+  // ESLint flat config and monorepo support
+  "eslint.useFlatConfig": true,
+  "eslint.workingDirectories": [
+    { "pattern": "apps/*" },
+    { "pattern": "packages/*" }
+  ],
   "search.exclude": {
     "package-lock.json": true,
     ".claude": true,
