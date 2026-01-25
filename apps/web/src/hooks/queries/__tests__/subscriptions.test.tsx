@@ -13,7 +13,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import type { ReactNode } from 'react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-import type { UseAuthCheckReturn } from '@/hooks/utils/use-auth-check';
+import type { UseAuthCheckReturn } from '@/hooks';
 import {
   createActiveSubscription,
   createEmptySubscriptionListResponse,

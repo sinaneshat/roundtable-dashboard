@@ -7,7 +7,7 @@ import { z } from 'zod';
 import { FormProvider, RHFTextField } from '@/components/forms';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
-import { useUpdateThreadMutation } from '@/hooks/mutations/chat-mutations';
+import { useUpdateThreadMutation } from '@/hooks';
 import { useTranslations } from '@/lib/i18n';
 
 const RenameFormSchema = z.object({

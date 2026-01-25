@@ -415,6 +415,41 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
     configKey: z.string().optional(),
     operation: z.string().optional(),
   }),
+  z.object({
+    errorType: z.literal(ErrorContextTypes.QUOTA),
+    resource: z.string().optional(),
+    resourceId: z.string().optional(),
+    userId: z.string().optional(),
+    limit: z.number().optional(),
+    current: z.number().optional(),
+  }),
+  z.object({
+    errorType: z.literal(ErrorContextTypes.SUBSCRIPTION),
+    resource: z.string().optional(),
+    userId: z.string().optional(),
+    requiredPlan: z.string().optional(),
+    currentPlan: z.string().optional(),
+  }),
+  z.object({
+    errorType: z.literal(ErrorContextTypes.MODERATOR_ERROR),
+    threadId: z.string().optional(),
+    roundNumber: z.number().optional(),
+    operation: z.string().optional(),
+    reason: z.string().optional(),
+  }),
+  z.object({
+    errorType: z.literal(ErrorContextTypes.RETRY_EXHAUSTED),
+    resource: z.string().optional(),
+    resourceId: z.string().optional(),
+    maxRetries: z.number().optional(),
+    lastError: z.string().optional(),
+  }),
+  z.object({
+    errorType: z.literal(ErrorContextTypes.QUEUE),
+    queueName: z.string().optional(),
+    operation: z.string().optional(),
+    messageId: z.string().optional(),
+  }),
 ]).optional().openapi({
   example: {
     errorType: ErrorContextTypes.VALIDATION,

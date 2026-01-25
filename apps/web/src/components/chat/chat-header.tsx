@@ -50,15 +50,15 @@ const RouteThreadSchema = z.object({
   title: z.string().nullish().transform(v => v ?? undefined),
   isPublic: z.boolean().optional(),
   isFavorite: z.boolean().optional(),
-});
+}).passthrough();
 type RouteThread = z.output<typeof RouteThreadSchema>;
 
 const ThreadLoaderDataSchema = z.object({
   threadTitle: z.string().nullish(),
   threadData: z.object({
     thread: RouteThreadSchema,
-  }).nullish(),
-});
+  }).passthrough().nullish(),
+}).passthrough();
 
 const RouteParamsSchema = z.object({
   slug: z.string(),
@@ -67,8 +67,8 @@ const RouteParamsSchema = z.object({
 // Project route schemas
 const ProjectLoaderDataSchema = z.object({
   projectName: z.string().nullish(),
-  project: z.object({ name: z.string() }).nullish(),
-});
+  project: z.object({ name: z.string() }).passthrough().nullish(),
+}).passthrough();
 
 function extractProjectName(loaderData: unknown): string | null {
   const result = ProjectLoaderDataSchema.safeParse(loaderData);
@@ -128,7 +128,15 @@ function NavigationHeaderComponent({
   );
 
   const matches = useMatches();
-  const threadMatch = matches.find(m => m.routeId === '/_protected/chat/$slug');
+
+  // Check for normal thread route
+  const normalThreadMatch = matches.find(m => m.routeId === '/_protected/chat/$slug');
+
+  // Check for project thread route
+  const projectThreadMatch = matches.find(m => m.routeId === '/_protected/chat/projects/$projectId/$slug');
+
+  // Use project thread match if available, otherwise normal thread match
+  const threadMatch = projectThreadMatch ?? normalThreadMatch;
   const routeThreadTitle = extractThreadTitle(threadMatch?.loaderData);
   const routeThread = extractThreadFromLoaderData(threadMatch?.loaderData);
   const routeSlug = extractSlugFromParams(threadMatch?.params);
@@ -153,8 +161,13 @@ function NavigationHeaderComponent({
   const { data: projectQueryData } = useProjectQuery(projectIdFromPath ?? '', !!projectIdFromPath);
   const queryProjectName = projectQueryData?.success ? projectQueryData.data?.name : null;
 
+  // Extract project name from loader data - check project thread match first (has projectName),
+  // then project index match, then fall back to query
+  const loaderProjectName = extractProjectName(projectThreadMatch?.loaderData)
+    ?? extractProjectName(projectMatch?.loaderData);
+
   // Use query data (reactive to changes) over loader data (static)
-  const routeProjectName = queryProjectName ?? extractProjectName(projectMatch?.loaderData);
+  const routeProjectName = queryProjectName ?? loaderProjectName;
   const isOnProjectPage = !!isProjectPath;
   // Detect if on project thread (has slug after projectId)
   const isOnProjectThreadPage = isOnProjectPage && !!pathname?.match(/\/chat\/projects\/[^/]+\/[^/]+/);

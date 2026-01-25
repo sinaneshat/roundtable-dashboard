@@ -7,13 +7,16 @@ import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
 import { useSession } from '@/lib/auth/client';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import {
+  projectQueryOptions,
   streamResumptionQueryOptions,
   threadBySlugQueryOptions,
   threadChangelogQueryOptions,
   threadFeedbackQueryOptions,
   threadPreSearchesQueryOptions,
 } from '@/lib/data/query-options';
+import { useTranslations } from '@/lib/i18n';
 import type {
+  GetProjectResponse,
   GetThreadBySlugResponse,
   GetThreadFeedbackResponse,
   GetThreadStreamResumptionStateResponse,
@@ -21,16 +24,34 @@ import type {
 import { useIsInCreationFlow } from '@/stores/chat';
 
 export const Route = createFileRoute('/_protected/chat/projects/$projectId/$slug')({
-  staleTime: 0,
+  // SSR FIX: Use reasonable staleTime to prevent flash from route loader refetch race
+  // Route loader data is hydrated first, useQuery with initialData prevents double-fetch
+  staleTime: 30_000,
   pendingMs: 300,
 
   loader: async ({ params, context }) => {
     const { queryClient } = context;
+    const isServer = typeof window === 'undefined';
+
+    // Load project data for breadcrumbs
+    let projectName: string | null = null;
+    if (params.projectId) {
+      const projectOptions = projectQueryOptions(params.projectId);
+      try {
+        await queryClient.ensureQueryData(projectOptions);
+        const projectData = queryClient.getQueryData<GetProjectResponse>(projectOptions.queryKey);
+        projectName = projectData?.success ? projectData.data?.name ?? null : null;
+      } catch {
+        // Project fetch failed, continue without project name
+      }
+    }
 
     if (!params.slug) {
       return {
+        projectName,
         threadTitle: null,
         threadId: null,
+        threadData: null,
         preSearches: undefined,
         changelog: undefined,
         feedback: undefined,
@@ -39,7 +60,6 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/$slug
     }
 
     const options = threadBySlugQueryOptions(params.slug);
-    const isServer = typeof window === 'undefined';
 
     // Check cache for prefetched thread data
     const cachedThreadData = !isServer ? queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey) : null;
@@ -49,6 +69,7 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/$slug
     if (hasPrefetchMeta) {
       const threadData = cachedThreadData?.success ? cachedThreadData.data : null;
       return {
+        projectName,
         threadTitle: threadData?.thread?.title ?? null,
         threadId: threadData?.thread?.id ?? null,
         threadData,
@@ -64,8 +85,10 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/$slug
     } catch (error) {
       console.error('[ProjectThread] Loader error:', error);
       return {
+        projectName,
         threadTitle: null,
         threadId: null,
+        threadData: null,
         preSearches: undefined,
         changelog: undefined,
         feedback: undefined,
@@ -130,6 +153,7 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/$slug
 
     const threadData = cachedData?.success ? cachedData.data : null;
     return {
+      projectName,
       threadTitle,
       threadId,
       threadData,
@@ -174,6 +198,7 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/$slug
 });
 
 function ProjectThreadRoute() {
+  const t = useTranslations();
   const { slug } = Route.useParams();
   const { data: session } = useSession();
   const loaderData = Route.useLoaderData();
@@ -210,9 +235,9 @@ function ProjectThreadRoute() {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-destructive">Error loading thread</h1>
+          <h1 className="text-2xl font-bold text-destructive">{t('chat.errors.loadingThread')}</h1>
           <p className="text-muted-foreground mt-2">
-            {error?.message || 'An error occurred while loading the thread.'}
+            {error?.message || t('chat.errors.loadingThreadDescription')}
           </p>
         </div>
       </div>
@@ -223,9 +248,9 @@ function ProjectThreadRoute() {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-destructive">Thread not found</h1>
+          <h1 className="text-2xl font-bold text-destructive">{t('chat.errors.threadNotFound')}</h1>
           <p className="text-muted-foreground mt-2">
-            The conversation you are looking for does not exist.
+            {t('chat.errors.threadNotFoundDescription')}
           </p>
         </div>
       </div>

@@ -248,7 +248,7 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       // ✅ STEP 3: Update sidebar list caches AFTER navigation
       // When React re-renders sidebar, URL already reflects new thread
       if (projectId) {
-        const projectThreadsKey = ['threads', 'list', { search: undefined, projectId }] as const;
+        const projectThreadsKey = queryKeys.projects.threads(projectId);
         const existingData = queryClient.getQueryData(projectThreadsKey);
         const parsedExisting = validateInfiniteQueryCache(existingData);
 
@@ -344,11 +344,18 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         );
       }
 
-      // ✅ DELAYED INVALIDATION: Auto-link runs async on backend, refresh attachments after delay
-      if (projectId && attachmentIds?.length) {
+      // ✅ DELAYED INVALIDATION: Ensure project caches are fresh after SSR
+      // Optimistic updates above are immediate, but invalidation ensures consistency
+      if (projectId) {
         setTimeout(() => {
-          queryClient.invalidateQueries({ queryKey: queryKeys.projects.attachments(projectId) });
-        }, 2000);
+          // Invalidate project threads to ensure SSR hydration gets fresh data
+          queryClient.invalidateQueries({ queryKey: queryKeys.projects.threads(projectId) });
+          queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+          // Also refresh attachments if any were uploaded (auto-link runs async)
+          if (attachmentIds?.length) {
+            queryClient.invalidateQueries({ queryKey: queryKeys.projects.attachments(projectId) });
+          }
+        }, 1000);
       }
 
       actions.setInputValue('');

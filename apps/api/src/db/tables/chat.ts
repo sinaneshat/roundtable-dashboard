@@ -39,8 +39,9 @@ export const chatThread = sqliteTable('chat_thread', {
     .references(() => user.id, { onDelete: 'cascade' }),
 
   // Project association (optional - threads can exist without projects)
+  // CASCADE: When project is deleted, all associated threads are deleted
   projectId: text('project_id')
-    .references(() => chatProject.id, { onDelete: 'set null' }),
+    .references(() => chatProject.id, { onDelete: 'cascade' }),
 
   title: text('title').notNull(),
   slug: text('slug').notNull().unique(), // SEO-friendly URL slug (e.g., "product-strategy-abc123")

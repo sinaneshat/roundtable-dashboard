@@ -1,9 +1,8 @@
 import type { Control } from 'react-hook-form';
 
-import { RHFTextarea, RHFTextField } from '@/components/forms';
+import { FormControl, FormField, FormItem, FormLabel, FormMessage, RHFTextarea, RHFTextField } from '@/components/forms';
 import type { ProjectFormValues } from '@/components/projects/project-form-constants';
 import { ProjectIconColorPicker } from '@/components/projects/project-icon-color-picker';
-import { FormControl, FormField, FormItem, FormLabel } from '@/components/ui/form';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
@@ -58,6 +57,7 @@ export function ProjectFormFields({
                     onColorChange={colorField.onChange}
                   />
                 </FormControl>
+                <FormMessage />
               </FormItem>
             )}
           />

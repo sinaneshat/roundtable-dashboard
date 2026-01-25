@@ -41,7 +41,7 @@ function ChatInputToolbarMobileSkeleton() {
     <button
       type="button"
       disabled
-      className="flex items-center justify-center size-8 rounded-full bg-white/5 opacity-50"
+      className="flex items-center justify-center size-8 rounded-xl bg-white/5 opacity-50"
     >
       <Icons.moreHorizontal className="size-4" />
     </button>

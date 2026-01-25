@@ -93,6 +93,8 @@ export const queryKeys = {
     preSearches: (id: string) => QueryKeyFactory.action('threads', 'pre-searches', id),
     feedback: (id: string) => QueryKeyFactory.action('threads', 'feedback', id),
     streamResumption: (id: string) => QueryKeyFactory.action('threads', 'stream-resumption', id),
+    memoryEvents: (threadId: string, roundNumber: number) =>
+      QueryKeyFactory.action('threads', 'memory-events', threadId, String(roundNumber)),
   },
 
   // Chat Custom Roles
@@ -150,7 +152,12 @@ export const queryKeys = {
     detail: (id: string) => QueryKeyFactory.detail('projects', id),
     attachments: (id: string) => QueryKeyFactory.action('projects', 'attachments', id),
     memories: (id: string) => QueryKeyFactory.action('projects', 'memories', id),
-    threads: (id: string) => QueryKeyFactory.action('projects', 'threads', id),
+    /**
+     * Project threads query key - matches projectThreadsQueryOptions pattern
+     * Key format: ['threads', 'list', { search: undefined, projectId }]
+     * This ensures invalidation hits the actual cached query
+     */
+    threads: (id: string) => ['threads', 'list', { search: undefined, projectId: id }] as const,
     context: (id: string) => QueryKeyFactory.action('projects', 'context', id),
     limits: () => QueryKeyFactory.action('projects', 'limits'),
   },
@@ -303,6 +310,13 @@ export const invalidationPatterns = {
   projectAttachments: (projectId: string) => [
     queryKeys.projects.attachments(projectId),
     queryKeys.projects.detail(projectId), // Update attachment counts
+  ],
+
+  // Project thread operations - invalidate threads list and project detail
+  projectThreads: (projectId: string) => [
+    queryKeys.projects.threads(projectId),
+    queryKeys.projects.detail(projectId), // Update thread counts
+    queryKeys.projects.sidebar(), // Update sidebar thread counts
   ],
 
   // Project memory operations

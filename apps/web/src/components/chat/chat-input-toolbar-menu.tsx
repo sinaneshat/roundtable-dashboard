@@ -260,56 +260,6 @@ export const ChatInputToolbarMenu = memo(({
                     <div className="px-5 pb-5 space-y-3">
                       <button
                         type="button"
-                        onClick={onOpenModelModal}
-                        className={cn(
-                          'w-full flex items-center gap-4 p-4 min-h-14 rounded-2xl transition-colors touch-feedback',
-                          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
-                          hasNoModelsSelected
-                            ? 'bg-destructive/10 border border-destructive/30 hover:bg-destructive/15'
-                            : 'bg-white/5 hover:bg-white/[0.07] active:bg-black/20',
-                        )}
-                      >
-                        <div className={cn(
-                          'flex items-center justify-center size-10 rounded-full',
-                          hasNoModelsSelected ? 'bg-destructive/20' : 'bg-cyan-500/10',
-                        )}
-                        >
-                          {hasNoModelsSelected
-                            ? <Icons.alertCircle className="size-5 text-destructive" />
-                            : <Icons.sparkles className="size-5 text-cyan-400" />}
-                        </div>
-                        <div className="flex flex-col flex-1 min-w-0 text-left">
-                          <span className={cn(
-                            'text-sm font-medium',
-                            hasNoModelsSelected ? 'text-destructive' : 'text-foreground',
-                          )}
-                          >
-                            {t('chat.models.aiModels')}
-                          </span>
-                          <span className={cn(
-                            'text-xs truncate',
-                            hasNoModelsSelected ? 'text-destructive/70' : 'text-muted-foreground',
-                          )}
-                          >
-                            {hasNoModelsSelected
-                              ? t('chat.models.minimumRequired.description', { count: MIN_PARTICIPANTS_REQUIRED })
-                              : `${selectedParticipants.length} ${t('chat.toolbar.selected')}`}
-                          </span>
-                        </div>
-                        {!hasNoModelsSelected && (
-                          <AvatarGroup
-                            participants={selectedParticipants}
-                            allModels={allModels}
-                            size={AvatarSizes.SM}
-                            maxVisible={3}
-                            showCount={false}
-                            showOverflow
-                          />
-                        )}
-                      </button>
-
-                      <button
-                        type="button"
                         onClick={onOpenModeModal}
                         className="w-full flex items-center gap-4 p-4 min-h-14 rounded-2xl bg-white/5 hover:bg-white/[0.07] active:bg-black/20 transition-colors touch-feedback focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >

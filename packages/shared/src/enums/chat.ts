@@ -180,6 +180,7 @@ export const CHANGELOG_CHANGE_TYPES = [
   'mode_change',
   'participant_reorder',
   'web_search',
+  'memory_created',
 ] as const;
 
 export const ChangelogChangeTypeSchema = z.enum(CHANGELOG_CHANGE_TYPES).openapi({
@@ -197,6 +198,7 @@ export const ChangelogChangeTypes = {
   MODE_CHANGE: 'mode_change' as const,
   PARTICIPANT_REORDER: 'participant_reorder' as const,
   WEB_SEARCH: 'web_search' as const,
+  MEMORY_CREATED: 'memory_created' as const,
 } as const;
 
 // ============================================================================

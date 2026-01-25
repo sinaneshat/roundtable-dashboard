@@ -827,6 +827,8 @@ export {
   PROJECT_ICONS,
   PROJECT_INDEX_STATUSES,
   PROJECT_MEMORY_SOURCES,
+  PROJECT_TEMPLATE_KEYS,
+  PROJECT_TEMPLATES,
   type ProjectColor,
   ProjectColors,
   ProjectColorSchema,
@@ -839,6 +841,10 @@ export {
   type ProjectMemorySource,
   ProjectMemorySources,
   ProjectMemorySourceSchema,
+  type ProjectTemplateConfig,
+  type ProjectTemplateKey,
+  ProjectTemplateKeys,
+  ProjectTemplateKeySchema,
 } from './project';
 
 // Prompt template enums

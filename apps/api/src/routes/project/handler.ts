@@ -1,7 +1,7 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { PROJECT_LIMITS, WebAppEnvs } from '@roundtable/shared';
 import { DEFAULT_PROJECT_INDEX_STATUS, SubscriptionTiers, ThreadStatuses } from '@roundtable/shared/enums';
-import { and, eq, like } from 'drizzle-orm';
+import { and, eq, inArray, like } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { invalidatePublicThreadCache } from '@/common/cache-utils';
@@ -352,7 +352,14 @@ export const updateProjectHandler: RouteHandler<typeof updateProjectRoute, ApiEn
 );
 
 /**
- * Delete a project (cascades to attachments and soft-deletes threads)
+ * Delete a project with FULL CASCADE
+ *
+ * Deletes everything related to the project:
+ * - All threads and their messages, participants, changelogs, pre-searches, feedback
+ * - All project attachments and their R2 files
+ * - All project memories (including those from deleted threads)
+ * - All junction table records (threadUpload, messageUpload)
+ * - All R2 files from thread uploads
  */
 export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEnv> = createHandler(
   {
@@ -367,17 +374,86 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
 
     await verifyProjectOwnership(id, user.id, db);
 
-    // Get all threads for cache invalidation
+    // =========================================================================
+    // STEP 1: Collect all data that needs to be deleted
+    // =========================================================================
+
+    // Get all threads with their messages for cascade deletion
     const threads = await db.query.chatThread.findMany({
       where: eq(tables.chatThread.projectId, id),
       columns: { id: true, slug: true, isPublic: true, previousSlug: true },
+      with: {
+        messages: {
+          columns: { id: true },
+        },
+      },
     });
 
-    if (threads.length > 0) {
-      await db.update(tables.chatThread)
-        .set({ status: ThreadStatuses.DELETED, updatedAt: new Date() })
-        .where(eq(tables.chatThread.projectId, id));
+    const threadIds = threads.map(t => t.id);
+    const messageIds = threads.flatMap(t => t.messages?.map(m => m.id) ?? []);
 
+    // Get all project attachments for R2 cleanup
+    const projectAttachments = await db.query.projectAttachment.findMany({
+      where: eq(tables.projectAttachment.projectId, id),
+      with: {
+        upload: {
+          columns: { r2Key: true },
+        },
+      },
+    });
+
+    // Get thread uploads for R2 cleanup (junction table has no FK to thread)
+    const threadUploads = threadIds.length > 0
+      ? await db.query.threadUpload.findMany({
+          where: inArray(tables.threadUpload.threadId, threadIds),
+          with: {
+            upload: {
+              columns: { r2Key: true },
+            },
+          },
+        })
+      : [];
+
+    // Get message uploads for R2 cleanup (junction table has no FK to message)
+    const messageUploads = messageIds.length > 0
+      ? await db.query.messageUpload.findMany({
+          where: inArray(tables.messageUpload.messageId, messageIds),
+          with: {
+            upload: {
+              columns: { r2Key: true },
+            },
+          },
+        })
+      : [];
+
+    // =========================================================================
+    // STEP 2: Delete junction table records (no FK constraints)
+    // These MUST be deleted before threads/messages due to missing FKs
+    // =========================================================================
+
+    if (threadIds.length > 0) {
+      await db.delete(tables.threadUpload)
+        .where(inArray(tables.threadUpload.threadId, threadIds));
+    }
+
+    if (messageIds.length > 0) {
+      await db.delete(tables.messageUpload)
+        .where(inArray(tables.messageUpload.messageId, messageIds));
+    }
+
+    // =========================================================================
+    // STEP 3: Delete project memories (including those from threads)
+    // Must delete before threads due to sourceThreadId reference
+    // =========================================================================
+
+    await db.delete(tables.projectMemory)
+      .where(eq(tables.projectMemory.projectId, id));
+
+    // =========================================================================
+    // STEP 4: Invalidate public thread caches before deletion
+    // =========================================================================
+
+    if (threads.length > 0) {
       const cacheInvalidationTasks = threads
         .filter((thread): thread is typeof thread & { slug: string } => thread.isPublic && !!thread.slug)
         .flatMap((thread) => {
@@ -395,12 +471,52 @@ export const deleteProjectHandler: RouteHandler<typeof deleteProjectRoute, ApiEn
       }
     }
 
+    // =========================================================================
+    // STEP 5: Delete the project (DB cascade handles threads, attachments)
+    // With onDelete: 'cascade' on chatThread.projectId, all threads are deleted
+    // Thread cascade then deletes: messages, participants, changelogs, pre-searches, feedback
+    // =========================================================================
+
     await db.delete(tables.chatProject).where(eq(tables.chatProject.id, id));
+
+    // =========================================================================
+    // STEP 6: Delete R2 files in background (non-blocking)
+    // =========================================================================
+
+    if (c.executionCtx && c.env.UPLOADS_R2_BUCKET) {
+      const r2CleanupTasks: Promise<unknown>[] = [];
+
+      // Delete project attachment files
+      for (const attachment of projectAttachments) {
+        if (attachment.upload?.r2Key) {
+          r2CleanupTasks.push(deleteFile(c.env.UPLOADS_R2_BUCKET, attachment.upload.r2Key));
+        }
+      }
+
+      // Delete thread upload files
+      for (const threadUpload of threadUploads) {
+        if (threadUpload.upload?.r2Key) {
+          r2CleanupTasks.push(deleteFile(c.env.UPLOADS_R2_BUCKET, threadUpload.upload.r2Key));
+        }
+      }
+
+      // Delete message upload files
+      for (const messageUpload of messageUploads) {
+        if (messageUpload.upload?.r2Key) {
+          r2CleanupTasks.push(deleteFile(c.env.UPLOADS_R2_BUCKET, messageUpload.upload.r2Key));
+        }
+      }
+
+      if (r2CleanupTasks.length > 0) {
+        c.executionCtx.waitUntil(Promise.all(r2CleanupTasks).catch(() => {}));
+      }
+    }
 
     return Responses.ok(c, {
       id,
       deleted: true,
       deletedThreadCount: threads.length,
+      deletedAttachmentCount: projectAttachments.length,
     });
   },
 );

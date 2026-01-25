@@ -18,6 +18,7 @@ import { StructuredData } from '@/components/seo';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { getAppBaseUrl, getWebappEnv } from '@/lib/config/base-urls';
+import { useTranslations } from '@/lib/i18n';
 import { TurnstileProvider } from '@/lib/turnstile';
 import { IdleLazyProvider } from '@/lib/utils/lazy-provider';
 import type { RouterContext } from '@/router';
@@ -147,7 +148,7 @@ function RootDocument({ children, env = DEFAULT_PUBLIC_ENV }: { children: ReactN
         <HeadContent />
       </head>
       <body className="min-h-screen bg-background font-sans antialiased">
-        {/* Skip link for keyboard/screen reader users */}
+        {/* Skip link for keyboard/screen reader users - hardcoded for robustness in critical navigation */}
         <a
           href="#main-content"
           className="sr-only focus:not-sr-only focus:fixed focus:top-4 focus:left-4 focus:z-[100] focus:rounded-md focus:bg-primary focus:px-4 focus:py-2 focus:text-primary-foreground focus:outline-none focus:ring-2 focus:ring-ring"
@@ -208,6 +209,7 @@ async function trackErrorToPostHog(error: Error, context: { url: string; userAge
 function RootErrorComponent({ error, reset }: ErrorComponentProps) {
   const isProd = getWebappEnv() === WebAppEnvs.PROD;
   const hasTracked = useRef(false);
+  const t = useTranslations();
 
   // Track error to PostHog once
   useEffect(() => {
@@ -232,10 +234,10 @@ function RootErrorComponent({ error, reset }: ErrorComponentProps) {
                 <Icons.triangleAlert className="size-10 text-destructive" />
               </div>
               <h1 className="text-2xl sm:text-3xl font-bold text-destructive mb-2">
-                Something went wrong
+                {t('states.error.default')}
               </h1>
               <p className="text-muted-foreground text-base sm:text-lg max-w-md">
-                An unexpected error occurred. Please try again or return home.
+                {t('states.error.boundaryDescription')}
               </p>
             </div>
 
@@ -244,21 +246,21 @@ function RootErrorComponent({ error, reset }: ErrorComponentProps) {
               <details className="w-full rounded-xl bg-destructive/5 border border-destructive/20 mb-8 overflow-hidden">
                 <summary className="cursor-pointer px-5 py-4 font-medium text-destructive hover:bg-destructive/10 transition-colors flex items-center gap-2">
                   <Icons.chevronRight className="size-4 transition-transform [details[open]>&]:rotate-90" />
-                  <span>Error Details</span>
+                  <span>{t('states.error.detailsTitle')}</span>
                   <Badge variant="outline" className="ml-auto font-mono text-xs">
                     {error.name || 'Error'}
                   </Badge>
                 </summary>
                 <div className="px-5 pb-5 space-y-4 border-t border-destructive/10">
                   <div className="pt-4">
-                    <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Message</p>
+                    <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">{t('errors.boundary.errorLabel')}</p>
                     <pre className="overflow-x-auto rounded-lg bg-black/20 p-4 text-sm text-destructive/90 font-mono whitespace-pre-wrap break-words">
                       {error.message || String(error)}
                     </pre>
                   </div>
                   {error.stack && (
                     <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">Stack Trace</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">{t('errors.boundary.stackLabel')}</p>
                       <pre className="overflow-auto rounded-lg bg-black/20 p-4 text-xs text-muted-foreground font-mono max-h-64 whitespace-pre">
                         {error.stack}
                       </pre>
@@ -266,7 +268,7 @@ function RootErrorComponent({ error, reset }: ErrorComponentProps) {
                   )}
                   {typeof window !== 'undefined' && (
                     <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">URL</p>
+                      <p className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wide">{t('errors.boundary.urlLabel')}</p>
                       <pre className="overflow-x-auto rounded-lg bg-black/20 p-3 text-xs text-muted-foreground font-mono">
                         {window.location.href}
                       </pre>
@@ -285,7 +287,7 @@ function RootErrorComponent({ error, reset }: ErrorComponentProps) {
                 startIcon={<Icons.refreshCw />}
                 className="min-w-[140px]"
               >
-                Try Again
+                {t('actions.tryAgain')}
               </Button>
               <Button
                 variant="outline"
@@ -294,7 +296,7 @@ function RootErrorComponent({ error, reset }: ErrorComponentProps) {
                 startIcon={<Icons.home />}
                 className="min-w-[140px]"
               >
-                <Link to="/">Go Home</Link>
+                <Link to="/">{t('actions.goHome')}</Link>
               </Button>
             </div>
           </div>

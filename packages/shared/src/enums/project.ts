@@ -222,6 +222,39 @@ export const ProjectColors = {
 } as const;
 
 // ============================================================================
+// PROJECT TEMPLATE (for quick project creation)
+// ============================================================================
+
+export const PROJECT_TEMPLATE_KEYS = ['investing', 'research', 'writing', 'travel'] as const;
+
+export const ProjectTemplateKeySchema = z.enum(PROJECT_TEMPLATE_KEYS).openapi({
+  description: 'Project template key for quick creation',
+  example: 'research',
+});
+
+export type ProjectTemplateKey = z.infer<typeof ProjectTemplateKeySchema>;
+
+export const ProjectTemplateKeys = {
+  INVESTING: 'investing' as const,
+  RESEARCH: 'research' as const,
+  WRITING: 'writing' as const,
+  TRAVEL: 'travel' as const,
+} as const;
+
+export type ProjectTemplateConfig = {
+  key: ProjectTemplateKey;
+  icon: ProjectIcon;
+  color: ProjectColor;
+};
+
+export const PROJECT_TEMPLATES: readonly ProjectTemplateConfig[] = [
+  { key: ProjectTemplateKeys.INVESTING, icon: ProjectIcons.COINS, color: ProjectColors.AMBER },
+  { key: ProjectTemplateKeys.RESEARCH, icon: ProjectIcons.GRADUATION_CAP, color: ProjectColors.BLUE },
+  { key: ProjectTemplateKeys.WRITING, icon: ProjectIcons.PENCIL, color: ProjectColors.VIOLET },
+  { key: ProjectTemplateKeys.TRAVEL, icon: ProjectIcons.GLOBE, color: ProjectColors.ORANGE },
+] as const;
+
+// ============================================================================
 // CITATION SOURCE TYPE (RAG context citation sources)
 // ============================================================================
 

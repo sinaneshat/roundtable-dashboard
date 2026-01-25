@@ -3,6 +3,7 @@ import { useRef } from 'react';
 
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAutoResizeTextarea } from '@/hooks/utils';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 type ChatInputMinimalProps = {
@@ -27,7 +28,7 @@ type ChatInputMinimalProps = {
  * when the real component hydrates.
  */
 export function ChatInputMinimal({
-  placeholder = 'Message Roundtable...',
+  placeholder,
   disabled = false,
   minHeight = 72,
   maxHeight = 200,
@@ -36,7 +37,9 @@ export function ChatInputMinimal({
   className,
   ...props
 }: ChatInputMinimalProps) {
+  const t = useTranslations();
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const resolvedPlaceholder = placeholder ?? t('chat.input.placeholder');
 
   // Still want auto-resize to work during skeleton state
   useAutoResizeTextarea(textareaRef, {
@@ -69,7 +72,7 @@ export function ChatInputMinimal({
                 dir="auto"
                 defaultValue=""
                 disabled={disabled}
-                placeholder={placeholder}
+                placeholder={resolvedPlaceholder}
                 className={cn(
                   'w-full bg-transparent border-0 text-sm sm:text-base leading-relaxed',
                   'focus:outline-none focus:ring-0',
@@ -78,7 +81,7 @@ export function ChatInputMinimal({
                   'resize-none scrollbar-thin',
                 )}
                 aria-disabled={disabled}
-                aria-label="Chat input"
+                aria-label={t('accessibility.chatInput')}
               />
             </div>
 
@@ -109,13 +112,13 @@ export function ChatInputMinimal({
                     <Skeleton className="size-11 rounded-xl" />
                     {!autoMode && (
                       /* Inline model selector skeleton */
-                      <Skeleton className="h-9 w-14 rounded-full" />
+                      <Skeleton className="h-9 w-14 rounded-xl" />
                     )}
                   </div>
 
                   <div className="flex items-center gap-2 sm:gap-3 shrink-0">
                     {/* Send button skeleton */}
-                    <Skeleton className="size-11 rounded-full" />
+                    <Skeleton className="size-11 rounded-xl" />
                   </div>
                 </div>
               </div>

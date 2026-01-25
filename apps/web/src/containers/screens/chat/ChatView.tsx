@@ -66,6 +66,14 @@ const ChatInputToolbarMenu = dynamic<ChatInputToolbarMenuProps>(
   { ssr: false },
 );
 
+export type MemoryEvent = {
+  id: string;
+  summary: string;
+  content: string;
+};
+
+export type MemoryEventsByRound = Map<number, MemoryEvent[]>;
+
 export type ChatViewProps = {
   user: {
     name: string;
@@ -95,6 +103,18 @@ export type ChatViewProps = {
    * Ensures changelog accordion shows on SSR without waiting for client-side query
    */
   initialChangelog?: ApiChangelog[];
+  /**
+   * Memory events by round for inline display under user messages
+   */
+  memoryEventsByRound?: MemoryEventsByRound;
+  /**
+   * Callback to delete a memory
+   */
+  onDeleteMemory?: (memoryId: string, roundNumber: number) => Promise<void>;
+  /**
+   * Skip entrance animations for SSR-hydrated content to prevent flash
+   */
+  skipEntranceAnimations?: boolean;
 };
 
 export function ChatView({
@@ -108,6 +128,9 @@ export function ChatView({
   initialParticipants,
   initialPreSearches,
   initialChangelog,
+  memoryEventsByRound,
+  onDeleteMemory,
+  skipEntranceAnimations = false,
 }: ChatViewProps) {
   const t = useTranslations();
 
@@ -853,6 +876,9 @@ export function ChatView({
               isModeratorStreaming={isModeratorStreaming}
               getIsStreamingFromStore={getIsStreamingFromStore}
               initialScrollToBottom={false}
+              memoryEventsByRound={memoryEventsByRound}
+              onDeleteMemory={onDeleteMemory}
+              skipEntranceAnimations={skipEntranceAnimations}
             />
           </div>
 

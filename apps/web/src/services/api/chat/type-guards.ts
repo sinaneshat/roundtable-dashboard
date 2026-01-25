@@ -7,7 +7,7 @@
  * ✅ TYPE-SAFE: Full TypeScript inference via in-operator narrowing
  */
 
-import { MessageRoles, UIMessageRoles } from '@roundtable/shared';
+import { ChangelogChangeTypes, MessageRoles, UIMessageRoles } from '@roundtable/shared';
 
 import type {
   DbAssistantMessageMetadata,
@@ -95,34 +95,42 @@ export function isParticipantMessageMetadata(metadata: DbMessageMetadata): metad
 /**
  * Check if changelog data is a participant change
  */
-export function isParticipantChange(data: DbChangelogData): data is Extract<DbChangelogData, { type: 'participant' }> {
-  return data.type === 'participant';
+export function isParticipantChange(data: DbChangelogData): data is Extract<DbChangelogData, { type: typeof ChangelogChangeTypes.PARTICIPANT }> {
+  return data.type === ChangelogChangeTypes.PARTICIPANT;
 }
 
 /**
  * Check if changelog data is a participant role change
  */
-export function isParticipantRoleChange(data: DbChangelogData): data is Extract<DbChangelogData, { type: 'participant_role' }> {
-  return data.type === 'participant_role';
+export function isParticipantRoleChange(data: DbChangelogData): data is Extract<DbChangelogData, { type: typeof ChangelogChangeTypes.PARTICIPANT_ROLE }> {
+  return data.type === ChangelogChangeTypes.PARTICIPANT_ROLE;
 }
 
 /**
  * Check if changelog data is a mode change
  */
-export function isModeChange(data: DbChangelogData): data is Extract<DbChangelogData, { type: 'mode_change' }> {
-  return data.type === 'mode_change';
+export function isModeChange(data: DbChangelogData): data is Extract<DbChangelogData, { type: typeof ChangelogChangeTypes.MODE_CHANGE }> {
+  return data.type === ChangelogChangeTypes.MODE_CHANGE;
 }
 
 /**
  * Check if changelog data is a participant reorder
  */
-export function isParticipantReorder(data: DbChangelogData): data is Extract<DbChangelogData, { type: 'participant_reorder' }> {
-  return data.type === 'participant_reorder';
+export function isParticipantReorder(data: DbChangelogData): data is Extract<DbChangelogData, { type: typeof ChangelogChangeTypes.PARTICIPANT_REORDER }> {
+  return data.type === ChangelogChangeTypes.PARTICIPANT_REORDER;
 }
 
 /**
  * Check if changelog data is a web search change
  */
-export function isWebSearchChange(data: DbChangelogData): data is Extract<DbChangelogData, { type: 'web_search' }> {
-  return data.type === 'web_search';
+export function isWebSearchChange(data: DbChangelogData): data is Extract<DbChangelogData, { type: typeof ChangelogChangeTypes.WEB_SEARCH }> {
+  return data.type === ChangelogChangeTypes.WEB_SEARCH;
+}
+
+/**
+ * Check if changelog data is a memory created event
+ * Note: Uses type intersection since memory_created may not be in RPC-inferred types
+ */
+export function isMemoryCreatedChange(data: DbChangelogData): data is DbChangelogData & { type: typeof ChangelogChangeTypes.MEMORY_CREATED } {
+  return data.type === ChangelogChangeTypes.MEMORY_CREATED;
 }

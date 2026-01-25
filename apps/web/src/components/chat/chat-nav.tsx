@@ -1,5 +1,4 @@
-import type { ProjectColor, ProjectIcon } from '@roundtable/shared';
-import { PROJECT_LIMITS, SidebarCollapsibles, SidebarVariants } from '@roundtable/shared';
+import { SidebarCollapsibles, SidebarVariants } from '@roundtable/shared';
 import { Link, useLocation, useNavigate } from '@tanstack/react-router';
 import React, { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react';
 
@@ -14,12 +13,12 @@ import type { ShareDialogProps } from '@/components/chat/share-dialog';
 import { Icons } from '@/components/icons';
 import type { ProjectListItemData } from '@/components/projects';
 import {
+  LimitReachedDialog,
   ProjectCreateDialog,
   ProjectDeleteDialog,
   ProjectList,
   ProjectListSkeleton,
 } from '@/components/projects';
-import { Button } from '@/components/ui/button';
 import Image from '@/components/ui/image';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import {
@@ -35,7 +34,7 @@ import {
   SidebarTrigger,
   useSidebar,
 } from '@/components/ui/sidebar';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { TooltipProvider } from '@/components/ui/tooltip';
 import { BRAND } from '@/constants';
 import { useTogglePublicMutation } from '@/hooks/mutations';
 import { useProjectLimitsQuery, useSidebarProjectsQuery, useSidebarThreadsQuery, useThreadQuery } from '@/hooks/queries';
@@ -70,12 +69,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const [isProjectsCollapsed, setIsProjectsCollapsed] = useState(false);
   const [isFavoritesCollapsed, setIsFavoritesCollapsed] = useState(false);
   const [isChatsCollapsed, setIsChatsCollapsed] = useState(false);
-  // Initialize with expanded project if on a project route (for SSR)
-  const [expandedProjects, setExpandedProjects] = useState<Record<string, boolean>>(() => {
-    const projectMatch = pathname.match(/^\/chat\/projects\/([^/]+)/);
-    const projectId = projectMatch?.[1];
-    return projectId ? { [projectId]: true } : {};
-  });
   const sidebarContentRef = useRef<HTMLDivElement>(null);
   const { isMobile, setOpenMobile } = useSidebar();
   const handleNavigationReset = useNavigationReset();
@@ -99,27 +92,18 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
   const canCreateProject = projectLimits?.success
     ? projectLimits.data.canCreateProject
     : false;
-  const maxThreadsPerProject = projectLimits?.success
-    ? projectLimits.data.maxThreadsPerProject
-    : PROJECT_LIMITS.MAX_THREADS_PER_PROJECT;
-  const tier = projectLimits?.success ? projectLimits.data.tier : 'free';
-  const maxProjects = projectLimits?.success ? projectLimits.data.maxProjects : 0;
 
   const [isProjectDialogOpen, setIsProjectDialogOpen] = useState(false);
-  const [projectToEdit, setProjectToEdit] = useState<{
-    id: string;
-    name: string;
-    description?: string | null;
-    color?: ProjectColor | null;
-    icon?: ProjectIcon | null;
-    customInstructions?: string | null;
-  } | undefined>(undefined);
+  const [isLimitDialogOpen, setIsLimitDialogOpen] = useState(false);
   const [projectToDelete, setProjectToDelete] = useState<{ id: string; name: string } | null>(null);
 
   const { data: threadDetailData } = useThreadQuery(chatToShare?.id ?? '', !!chatToShare);
-  const threadIsPublic = threadDetailData?.success && threadDetailData.data && typeof threadDetailData.data === 'object' && 'thread' in threadDetailData.data && threadDetailData.data.thread && typeof threadDetailData.data.thread === 'object' && 'isPublic' in threadDetailData.data.thread
-    ? (threadDetailData.data.thread as { isPublic?: boolean }).isPublic
-    : chatToShare?.isPublic ?? false;
+  const threadIsPublic = useMemo((): boolean => {
+    if (threadDetailData?.success && threadDetailData.data) {
+      return threadDetailData.data.thread.isPublic ?? chatToShare?.isPublic ?? false;
+    }
+    return chatToShare?.isPublic ?? false;
+  }, [threadDetailData, chatToShare?.isPublic]);
 
   const displayIsPublic = togglePublicMutation.isPending && togglePublicMutation.variables
     ? togglePublicMutation.variables.isPublic
@@ -160,46 +144,17 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     });
   }, [projectsData]);
 
-  const handleEditProject = useCallback((project: ProjectListItemData) => {
-    const fullProject = projectsData?.pages
-      .flatMap(page => page.success && page.data?.items ? page.data.items : [])
-      .find(p => p.id === project.id);
-
-    if (fullProject) {
-      setProjectToEdit({
-        id: fullProject.id,
-        name: fullProject.name,
-        description: fullProject.description,
-        color: fullProject.color,
-        icon: fullProject.icon,
-        customInstructions: fullProject.customInstructions,
-      });
-      setIsProjectDialogOpen(true);
-    }
-  }, [projectsData]);
-
   const handleDeleteProject = useCallback((project: ProjectListItemData) => {
     setProjectToDelete({ id: project.id, name: project.name });
   }, []);
 
   const handleCreateProject = useCallback(() => {
-    setProjectToEdit(undefined);
-    setIsProjectDialogOpen(true);
-  }, []);
-
-  const handleToggleProjectExpand = useCallback((projectId: string) => {
-    setExpandedProjects(prev => ({
-      ...prev,
-      [projectId]: !prev[projectId],
-    }));
-  }, []);
-
-  const handleNewThreadInProject = useCallback((projectId: string) => {
-    navigate({ to: '/chat/projects/$projectId/new', params: { projectId } });
-    if (isMobile) {
-      setOpenMobile(false);
+    if (!canCreateProject) {
+      setIsLimitDialogOpen(true);
+      return;
     }
-  }, [navigate, isMobile, setOpenMobile]);
+    setIsProjectDialogOpen(true);
+  }, [canCreateProject]);
 
   const onKeyDown = useEffectEvent((e: KeyboardEvent) => {
     if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
@@ -261,20 +216,6 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
     }
     prevPathnameRef.current = pathname;
   }, [pathname, isMobile, setOpenMobile]);
-
-  // Auto-expand project in sidebar when viewing a project route
-  useEffect(() => {
-    const projectMatch = pathname.match(/^\/chat\/projects\/([^/]+)/);
-    const projectId = projectMatch?.[1];
-    if (projectId) {
-      setExpandedProjects((prev) => {
-        if (prev[projectId]) {
-          return prev;
-        }
-        return { ...prev, [projectId]: true };
-      });
-    }
-  }, [pathname]);
 
   const handleShareClick = useCallback((chat: ChatSidebarItem) => {
     setChatToShare(chat);
@@ -410,7 +351,7 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
               <div className="flex flex-col w-full px-0.5 pr-4">
                 {/* Projects Section */}
                 <SidebarGroup className="group/projects pt-4 group-data-[collapsible=icon]:hidden">
-                  <SidebarGroupLabel className="flex items-center justify-between gap-0.5 px-4">
+                  <SidebarGroupLabel className="flex items-center gap-0.5 px-4">
                     <button
                       type="button"
                       className={cn(
@@ -432,49 +373,17 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
                         />
                       )}
                     </button>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="size-5 hover:bg-sidebar-accent"
-                          onClick={handleCreateProject}
-                          disabled={!canCreateProject}
-                        >
-                          <Icons.plus className="size-3.5" />
-                          <span className="sr-only">{t('projects.create')}</span>
-                        </Button>
-                      </TooltipTrigger>
-                      {!canCreateProject && (
-                        <TooltipContent>
-                          {tier === 'free'
-                            ? t('projects.proOnly')
-                            : t('projects.limitReached', { max: maxProjects })}
-                        </TooltipContent>
-                      )}
-                    </Tooltip>
                   </SidebarGroupLabel>
 
                   {isProjectsLoading && <ProjectListSkeleton count={3} />}
 
-                  {!isProjectsLoading && projects.length === 0 && (
-                    <div className="px-4 py-2">
-                      <p className="text-xs text-muted-foreground">
-                        {t('projects.empty')}
-                      </p>
-                    </div>
-                  )}
-
-                  {!isProjectsLoading && projects.length > 0 && !isProjectsCollapsed && (
+                  {!isProjectsLoading && !isProjectsCollapsed && (
                     <>
                       <ProjectList
                         projects={projects}
-                        expandedProjects={expandedProjects}
-                        onToggleExpand={handleToggleProjectExpand}
-                        onEditProject={handleEditProject}
                         onDeleteProject={handleDeleteProject}
-                        maxThreadsPerProject={maxThreadsPerProject}
-                        onNewThreadInProject={handleNewThreadInProject}
+                        onCreateProject={handleCreateProject}
+                        isCreateDisabled={!canCreateProject}
                       />
                       {isFetchingNextProjectsPage && (
                         <ProjectListSkeleton count={3} />
@@ -593,13 +502,19 @@ function AppSidebarComponent({ initialSession, ...props }: AppSidebarProps) {
       <ProjectCreateDialog
         open={isProjectDialogOpen}
         onOpenChange={setIsProjectDialogOpen}
-        editProject={projectToEdit}
       />
 
       <ProjectDeleteDialog
         open={!!projectToDelete}
         onOpenChange={open => !open && setProjectToDelete(null)}
         project={projectToDelete}
+      />
+
+      <LimitReachedDialog
+        open={isLimitDialogOpen}
+        onOpenChange={setIsLimitDialogOpen}
+        type="project"
+        max={projectLimits?.success ? projectLimits.data.maxProjects : 5}
       />
     </>
   );

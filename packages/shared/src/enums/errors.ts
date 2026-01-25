@@ -387,6 +387,11 @@ export const ERROR_CONTEXT_TYPES = [
   'resource',
   'resource_unavailable',
   'configuration',
+  'quota',
+  'subscription',
+  'moderator_error',
+  'retry_exhausted',
+  'queue',
 ] as const;
 
 export const DEFAULT_ERROR_CONTEXT_TYPE: ErrorContextType = 'validation';
@@ -407,4 +412,9 @@ export const ErrorContextTypes = {
   RESOURCE: 'resource' as const,
   RESOURCE_UNAVAILABLE: 'resource_unavailable' as const,
   CONFIGURATION: 'configuration' as const,
+  QUOTA: 'quota' as const,
+  SUBSCRIPTION: 'subscription' as const,
+  MODERATOR_ERROR: 'moderator_error' as const,
+  RETRY_EXHAUSTED: 'retry_exhausted' as const,
+  QUEUE: 'queue' as const,
 } as const;

@@ -4,6 +4,7 @@ import type { UIMessage } from 'ai';
 import { memo, useMemo, useRef } from 'react';
 import Markdown from 'react-markdown';
 
+import { MemoryCreatedIndicator } from '@/components/ai-elements/memory-created';
 import type { MessageAttachment } from '@/components/chat/message-attachment-preview';
 import { MessageAttachmentPreview } from '@/components/chat/message-attachment-preview';
 import { ModelMessageCard } from '@/components/chat/model-message-card';
@@ -443,6 +444,14 @@ type ChatMessageListProps = {
    * Read-only mode - skips models API call. Used for public/shared threads.
    */
   isReadOnly?: boolean;
+  /**
+   * Memory events by round for inline display under user messages
+   */
+  memoryEventsByRound?: Map<number, Array<{ id: string; summary: string; content: string }>>;
+  /**
+   * Callback to delete a memory
+   */
+  onDeleteMemory?: (memoryId: string, roundNumber: number) => Promise<void>;
 };
 export const ChatMessageList = memo(
   ({
@@ -466,6 +475,8 @@ export const ChatMessageList = memo(
     roundNumber: _roundNumber,
     demoMode = false,
     isReadOnly = false,
+    memoryEventsByRound,
+    onDeleteMemory,
   }: ChatMessageListProps) => {
     const t = useTranslations();
     const { findModel } = useModelLookup({ enabled: !isReadOnly });
@@ -1002,6 +1013,29 @@ export const ChatMessageList = memo(
                     );
                   })}
                 </div>
+
+                {/* Memory events indicator - shows inline under user messages */}
+                {(() => {
+                  const memories = memoryEventsByRound?.get(roundNumber);
+                  if (!memories || memories.length === 0)
+                    return null;
+
+                  return (
+                    <div className="flex justify-end mt-2">
+                      <div className="max-w-[85%]">
+                        <MemoryCreatedIndicator
+                          memories={memories}
+                          onDelete={
+                            onDeleteMemory
+                              ? (memoryId: string) => onDeleteMemory(memoryId, roundNumber)
+                              : undefined
+                          }
+                          defaultOpen={true}
+                        />
+                      </div>
+                    </div>
+                  );
+                })()}
 
                 {/* CRITICAL FIX: Render PreSearchCard immediately after user message, before assistant messages */}
                 {/* ✅ mt-14 provides consistent spacing from user message content to PreSearchCard */}

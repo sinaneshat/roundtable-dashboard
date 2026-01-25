@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { useFormContext } from 'react-hook-form';
 
+import { FormControl, FormField, FormItem, FormMessage } from '@/components/forms';
 import { Icons } from '@/components/icons';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
@@ -141,6 +141,7 @@ export function TrendSuggestionCard({ index, disabled }: TrendSuggestionCardProp
                     disabled={disabled}
                   />
                 </FormControl>
+                <FormMessage />
               </FormItem>
             )}
           />

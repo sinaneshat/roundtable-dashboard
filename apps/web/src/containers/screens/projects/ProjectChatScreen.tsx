@@ -2,12 +2,13 @@ import {
   ChatModeSchema,
   DEFAULT_PROJECT_COLOR,
   DEFAULT_PROJECT_ICON,
+  PROJECT_LIMITS,
   ScreenModes,
   UploadStatuses,
 } from '@roundtable/shared';
 import { Link } from '@tanstack/react-router';
 import type { ChatStatus } from 'ai';
-import { useCallback, useEffect, useMemo, useRef } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { ChatInput } from '@/components/chat/chat-input';
@@ -17,7 +18,7 @@ import { ChatInputToolbarMenu } from '@/components/chat/chat-input-toolbar-menu'
 import { ConversationModeModal } from '@/components/chat/conversation-mode-modal';
 import type { ModelSelectionModalProps } from '@/components/chat/model-selection-modal';
 import { useThreadHeader } from '@/components/chat/thread-header-context';
-import { ProjectIconBadge } from '@/components/projects';
+import { LimitReachedDialog, ProjectIconBadge } from '@/components/projects';
 import { useChatStore, useChatStoreApi, useModelPreferencesStore } from '@/components/providers';
 import { Button } from '@/components/ui/button';
 import { useCustomRolesQuery, useModelsQuery } from '@/hooks/queries';
@@ -41,6 +42,7 @@ import { useTranslations } from '@/lib/i18n';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { showApiErrorToast, toastManager } from '@/lib/toast';
 import {
+  getApiErrorDetails,
   getDetailedIncompatibleModelIds,
   isDocumentFile,
   isImageFile,
@@ -70,6 +72,11 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
   const storeApi = useChatStoreApi();
   const { setThreadActions } = useThreadHeader();
   const isMobile = useIsMobile();
+  const [isThreadLimitDialogOpen, setIsThreadLimitDialogOpen] = useState(false);
+
+  // Check if thread limit is reached for this project
+  const threadCount = project?.threadCount ?? 0;
+  const isThreadLimitReached = threadCount >= PROJECT_LIMITS.MAX_THREADS_PER_PROJECT;
 
   const { defaultModelId } = useModelLookup();
   const incompatibleModelIdsRef = useRef<Set<string>>(new Set());
@@ -417,6 +424,12 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
     if (!inputValue.trim() || isOperationBlocked)
       return;
 
+    // Check thread limit before proceeding
+    if (isThreadLimitReached) {
+      setIsThreadLimitDialogOpen(true);
+      return;
+    }
+
     if (!chatAttachments.allUploaded)
       return;
 
@@ -455,9 +468,17 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
       await formActions.handleCreateThread(attachmentIds, attachmentInfos, projectId);
       chatAttachments.clearAttachments();
     } catch (error) {
-      showApiErrorToast('Error creating thread', error);
+      // Check if this is a thread limit error from the API
+      const errorDetails = getApiErrorDetails(error);
+      const isLimitError = errorDetails.message.toLowerCase().includes('thread limit')
+        || errorDetails.message.toLowerCase().includes('limit reached');
+      if (isLimitError) {
+        setIsThreadLimitDialogOpen(true);
+      } else {
+        showApiErrorToast('Error creating thread', error);
+      }
     }
-  }, [inputValue, isOperationBlocked, chatAttachments, autoMode, accessibleModelIds, analyzeAndApply, storeApi, formActions, projectId]);
+  }, [inputValue, isOperationBlocked, isThreadLimitReached, chatAttachments, autoMode, accessibleModelIds, analyzeAndApply, storeApi, formActions, projectId]);
 
   const handleToggleModel = useCallback((modelId: string) => {
     const orderedModel = orderedModels.find(om => om.model.id === modelId);
@@ -613,12 +634,12 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-destructive">Project not found</h1>
+          <h1 className="text-2xl font-bold text-destructive">{t('projects.notFound')}</h1>
           <p className="text-muted-foreground mt-2">
-            The project you are looking for does not exist.
+            {t('projects.notFoundDescription')}
           </p>
           <Button asChild className="mt-4">
-            <Link to="/chat">Back to Chat</Link>
+            <Link to="/chat">{t('projects.backToChat')}</Link>
           </Button>
         </div>
       </div>
@@ -752,6 +773,14 @@ export default function ProjectChatScreen({ projectId, project }: ProjectChatScr
           fileIncompatibleModelIds={fileIncompatibleModelIds}
         />
       )}
+
+      {/* Thread Limit Dialog */}
+      <LimitReachedDialog
+        open={isThreadLimitDialogOpen}
+        onOpenChange={setIsThreadLimitDialogOpen}
+        type="thread"
+        max={PROJECT_LIMITS.MAX_THREADS_PER_PROJECT}
+      />
     </>
   );
 }

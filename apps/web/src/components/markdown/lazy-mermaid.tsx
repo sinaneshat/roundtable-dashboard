@@ -11,6 +11,7 @@
 
 import { memo } from 'react';
 
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 type LazyMermaidProps = {
@@ -19,10 +20,11 @@ type LazyMermaidProps = {
 };
 
 function LazyMermaidComponent({ chart, className }: LazyMermaidProps) {
+  const t = useTranslations();
   return (
     <div className={cn('rounded-lg border border-border bg-muted/30 overflow-hidden', className)}>
       <div className="flex items-center gap-2 px-3 py-2 border-b border-border bg-muted/50">
-        <span className="text-xs font-medium text-muted-foreground">Mermaid Diagram</span>
+        <span className="text-xs font-medium text-muted-foreground">{t('markdown.mermaidDiagram')}</span>
       </div>
       <pre className="p-4 overflow-auto text-sm font-mono text-muted-foreground">
         <code>{chart}</code>

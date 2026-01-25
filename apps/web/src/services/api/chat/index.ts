@@ -85,6 +85,7 @@ export {
 // Type Guards (Zod-based .safeParse() validation - from threads.ts)
 export {
   isAssistantMessageMetadata,
+  isMemoryCreatedChange,
   isModeChange,
   isModeratorMessageMetadata,
   isParticipantChange,

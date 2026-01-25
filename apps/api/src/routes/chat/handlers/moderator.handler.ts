@@ -43,6 +43,7 @@ import {
 import { filterDbToParticipantMessages } from '@/services/messages';
 import { extractModeratorModelName, getModelById, initializeOpenRouter, openRouterService } from '@/services/models';
 import { extractMemoriesFromRound } from '@/services/projects';
+import { logMemoriesCreated } from '@/services/threads/thread-changelog.service';
 import {
   buildCouncilModeratorSystemPrompt,
 } from '@/services/prompts';
@@ -346,6 +347,50 @@ async function generateCouncilModerator(
                 db: await getDbAsync(),
               });
               console.error('[Memory Extraction] Completed:', extractionResult);
+
+              // ✅ Store memory event in KV for frontend to poll
+              if (extractionResult.extracted.length > 0) {
+                const memoriesForKV = extractionResult.extracted.map((m, idx) => ({
+                  id: extractionResult.memoryIds[idx] ?? '',
+                  summary: m.summary,
+                  content: m.content.slice(0, 200),
+                }));
+
+                const memoryEventKey = `memory-event:${threadId}:${roundNumber}`;
+                const memoryEventData = {
+                  memoryIds: extractionResult.memoryIds,
+                  memories: memoriesForKV,
+                  projectId,
+                  createdAt: Date.now(),
+                };
+
+                try {
+                  await env.KV.put(
+                    memoryEventKey,
+                    JSON.stringify(memoryEventData),
+                    { expirationTtl: 300 }, // 5 min TTL
+                  );
+                  console.error('[Memory Extraction] Memory event stored in KV', {
+                    key: memoryEventKey,
+                    memoryCount: extractionResult.extracted.length,
+                  });
+                } catch (kvError) {
+                  console.error('[Memory Extraction] Failed to store memory event in KV:', kvError);
+                }
+
+                // ✅ Log memory creation to changelog for project threads
+                try {
+                  await logMemoriesCreated(
+                    threadId,
+                    roundNumber,
+                    projectId,
+                    memoriesForKV.map(m => ({ id: m.id, summary: m.summary })),
+                  );
+                  console.error('[Memory Extraction] Changelog entry created');
+                } catch (changelogError) {
+                  console.error('[Memory Extraction] Failed to create changelog entry:', changelogError);
+                }
+              }
             } catch (error) {
               console.error('[Memory Extraction] Failed:', error);
             }

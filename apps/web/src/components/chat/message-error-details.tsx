@@ -1,6 +1,7 @@
-import { ErrorCategories, ErrorTypes } from '@roundtable/shared';
+import { ComponentVariants, ErrorCategories, ErrorTypes } from '@roundtable/shared';
 
 import { Icons } from '@/components/icons';
+import { Button } from '@/components/ui/button';
 import { useBoolean } from '@/hooks/utils';
 import { useTranslations } from '@/lib/i18n';
 import { getDisplayParticipantIndex } from '@/lib/schemas/participant-schemas';
@@ -71,13 +72,14 @@ export function MessageErrorDetails({
           <p className="text-xs mt-0.5 text-destructive/70">{errorMessage}</p>
         </div>
       </div>
-      <button
+      <Button
         type="button"
+        variant={ComponentVariants.LINK}
         onClick={showDetails.onToggle}
-        className="ml-6 mt-1 text-xs text-destructive/60 hover:text-destructive/80 underline-offset-2 hover:underline"
+        className="ml-6 mt-1 h-auto p-0 text-xs text-destructive/60 hover:text-destructive/80"
       >
         {showDetails.value ? t('chat.errors.hideDetails') : t('chat.errors.showDetails')}
-      </button>
+      </Button>
       {showDetails.value && (
         <div className="mt-2 ml-6 space-y-1 text-xs text-destructive/70">
           <div className="flex gap-2">

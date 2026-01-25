@@ -221,7 +221,7 @@ export function CommandSearch({ isOpen, onClose }: CommandSearchProps) {
           <button
             type="button"
             onClick={handleClose}
-            className="size-10 shrink-0 flex items-center justify-center hover:bg-white/[0.07] rounded-full transition-colors -mr-1"
+            className="size-10 shrink-0 flex items-center justify-center hover:bg-white/[0.07] rounded-xl transition-colors -mr-1"
             aria-label={t('actions.close')}
           >
             <Icons.x className="size-5 text-muted-foreground" />

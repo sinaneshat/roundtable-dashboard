@@ -13,6 +13,7 @@ import {
   threadFeedbackQueryOptions,
   threadPreSearchesQueryOptions,
 } from '@/lib/data/query-options';
+import { useTranslations } from '@/lib/i18n';
 import { rlog } from '@/lib/utils/dev-logger';
 import type {
   GetThreadBySlugResponse,
@@ -22,7 +23,9 @@ import type {
 import { useIsInCreationFlow } from '@/stores/chat';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
-  staleTime: 0,
+  // SSR FIX: Use reasonable staleTime to prevent flash from route loader refetch race
+  // Route loader data is hydrated first, useQuery with initialData prevents double-fetch
+  staleTime: 30_000,
   pendingMs: 300,
 
   loader: async ({ params, context }) => {
@@ -185,6 +188,7 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
 });
 
 function ChatThreadRoute() {
+  const t = useTranslations();
   const { slug } = Route.useParams();
   const { data: session } = useSession();
   const loaderData = Route.useLoaderData();
@@ -226,9 +230,9 @@ function ChatThreadRoute() {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-destructive">Error loading thread</h1>
+          <h1 className="text-2xl font-bold text-destructive">{t('chat.errors.loadingThread')}</h1>
           <p className="text-muted-foreground mt-2">
-            {error?.message || 'An error occurred while loading the thread.'}
+            {error?.message || t('chat.errors.loadingThreadDescription')}
           </p>
         </div>
       </div>
@@ -239,9 +243,9 @@ function ChatThreadRoute() {
     return (
       <div className="flex h-full items-center justify-center">
         <div className="text-center">
-          <h1 className="text-2xl font-bold text-destructive">Thread not found</h1>
+          <h1 className="text-2xl font-bold text-destructive">{t('chat.errors.threadNotFound')}</h1>
           <p className="text-muted-foreground mt-2">
-            The conversation you are looking for does not exist.
+            {t('chat.errors.threadNotFoundDescription')}
           </p>
         </div>
       </div>

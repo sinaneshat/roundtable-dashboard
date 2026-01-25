@@ -208,7 +208,7 @@ function JobCard({
             )}
 
             {job.status === 'completed' && job.threadSlug && job.isPublic && (
-              <Button variant="ghost" size="icon" asChild aria-label="Open public thread">
+              <Button variant="ghost" size="icon" asChild aria-label={t('accessibility.openPublicThread')}>
                 <a
                   href={`/public/chat/${job.threadSlug}`}
                   target="_blank"

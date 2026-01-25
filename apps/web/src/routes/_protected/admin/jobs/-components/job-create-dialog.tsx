@@ -2,6 +2,15 @@ import { zodResolver } from '@hookform/resolvers/zod';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import {
+  Form,
+  FormControl,
+  FormDescription,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from '@/components/forms';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import {
@@ -11,29 +20,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Form,
-  FormControl,
-  FormDescription,
-  FormField,
-  FormItem,
-  FormLabel,
-  FormMessage,
-} from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateJobMutation } from '@/hooks/mutations';
 import { useTranslations } from '@/lib/i18n';
 import { toastManager } from '@/lib/toast';
-
-const createJobFormSchema = z.object({
-  initialPrompt: z.string().min(10, 'Prompt must be at least 10 characters').max(2000),
-  totalRounds: z.number().int().min(1).max(5),
-  autoPublish: z.boolean(),
-});
-
-type CreateJobFormValues = z.infer<typeof createJobFormSchema>;
 
 type JobCreateDialogProps = {
   open: boolean;
@@ -43,6 +35,14 @@ type JobCreateDialogProps = {
 export function JobCreateDialog({ open, onOpenChange }: JobCreateDialogProps) {
   const t = useTranslations();
   const createMutation = useCreateJobMutation();
+
+  const createJobFormSchema = z.object({
+    initialPrompt: z.string().min(10, t('admin.jobs.validation.promptMinLength')).max(2000),
+    totalRounds: z.number().int().min(1).max(5),
+    autoPublish: z.boolean(),
+  });
+
+  type CreateJobFormValues = z.infer<typeof createJobFormSchema>;
 
   const form = useForm<CreateJobFormValues>({
     resolver: zodResolver(createJobFormSchema),

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { useFieldArray, useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { FormProvider } from '@/components/forms';
+import { FormControl, FormField, FormItem, FormMessage, FormProvider } from '@/components/forms';
 import { Icons } from '@/components/icons';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Button } from '@/components/ui/button';
@@ -17,7 +17,6 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { FormControl, FormField, FormItem, FormMessage } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -31,39 +30,50 @@ import { TrendSuggestionCard } from './trend-suggestion-card';
 const PLATFORMS = ['reddit', 'twitter', 'instagram'] as const;
 type Platform = (typeof PLATFORMS)[number];
 
-const SuggestionItemSchema = z.object({
-  topic: z.string(),
-  platform: z.enum(PLATFORMS),
-  relevanceScore: z.number(),
-  reasoning: z.string(),
-  prompt: z.string().min(10, 'Prompt must be at least 10 characters').max(2000),
-  rounds: z.number().min(1).max(5),
-  selected: z.boolean(),
-});
-
-const TrendDiscoveryFormSchema = z.object({
-  keyword: z.string().min(2, 'Enter at least 2 characters').max(100),
-  platforms: z.array(z.enum(PLATFORMS)).min(1, 'Select at least one platform'),
-  suggestions: z.array(SuggestionItemSchema),
-});
-
-type TrendDiscoveryFormValues = z.infer<typeof TrendDiscoveryFormSchema>;
-
-export type { TrendDiscoveryFormValues };
+// Exported type for use in child components (TrendSuggestionCard)
+export type TrendDiscoveryFormValues = {
+  keyword: string;
+  platforms: Platform[];
+  suggestions: Array<{
+    topic: string;
+    platform: Platform;
+    relevanceScore: number;
+    reasoning: string;
+    prompt: string;
+    rounds: number;
+    selected: boolean;
+  }>;
+};
 
 type TrendDiscoveryDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-const PLATFORM_CONFIG: { id: Platform; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
-  { id: 'reddit', label: 'Reddit', icon: Icons.reddit },
-  { id: 'twitter', label: 'X', icon: Icons.twitter },
-  { id: 'instagram', label: 'Instagram', icon: Icons.instagram },
-];
-
 export function TrendDiscoveryDialog({ open, onOpenChange }: TrendDiscoveryDialogProps) {
   const t = useTranslations();
+
+  const SuggestionItemSchema = z.object({
+    topic: z.string(),
+    platform: z.enum(PLATFORMS),
+    relevanceScore: z.number(),
+    reasoning: z.string(),
+    prompt: z.string().min(10, t('admin.jobs.validation.promptMinLength')).max(2000),
+    rounds: z.number().min(1).max(5),
+    selected: z.boolean(),
+  });
+
+  const TrendDiscoveryFormSchema = z.object({
+    keyword: z.string().min(2, t('admin.jobs.validation.keywordMinLength')).max(100),
+    platforms: z.array(z.enum(PLATFORMS)).min(1, t('admin.jobs.validation.platformRequired')),
+    suggestions: z.array(SuggestionItemSchema),
+  });
+
+  const PLATFORM_CONFIG: { id: Platform; label: string; icon: React.ComponentType<{ className?: string }> }[] = [
+    { id: 'reddit', label: t('admin.jobs.trends.platformLabels.reddit'), icon: Icons.reddit },
+    { id: 'twitter', label: t('admin.jobs.trends.platformLabels.twitter'), icon: Icons.twitter },
+    { id: 'instagram', label: t('admin.jobs.trends.platformLabels.instagram'), icon: Icons.instagram },
+  ];
   const [isCreatingBatch, setIsCreatingBatch] = useState(false);
   const [batchProgress, setBatchProgress] = useState({ current: 0, total: 0 });
 

@@ -529,6 +529,11 @@ export const createThreadHandler: RouteHandler<typeof createThreadRoute, ApiEnv>
     await invalidateThreadCache(db, user.id, threadId);
     await invalidateMessagesCache(db, threadId);
 
+    // ✅ CACHE: Invalidate project caches when thread is created in a project
+    if (body.projectId) {
+      await invalidateProjectCache(db, body.projectId);
+    }
+
     // ✅ Associate attachments with the first user message and add file parts
     let messageWithFileParts = firstMessage;
     if (body.attachmentIds && body.attachmentIds.length > 0 && firstMessage) {
@@ -1549,6 +1554,17 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
     });
   },
 );
+/**
+ * Delete a thread with FULL CASCADE
+ *
+ * Hard deletes the thread and all related data:
+ * - All messages and their uploads
+ * - All participants, changelogs, pre-searches, feedback
+ * - All project memories from this thread
+ * - All project attachments linked to this thread
+ * - All junction table records (threadUpload, messageUpload)
+ * - All R2 files from uploads
+ */
 export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv> = createHandler(
   {
     auth: 'session',
@@ -1561,54 +1577,127 @@ export const deleteThreadHandler: RouteHandler<typeof deleteThreadRoute, ApiEnv>
     const db = await getDbAsync();
     const thread = await verifyThreadOwnership(id, user.id, db);
 
-    // ✅ CASCADE CLEANUP: Delete thread-linked project attachments and deactivate memories
-    // Find all project attachments linked to this thread via ragMetadata.sourceThreadId
+    // =========================================================================
+    // STEP 1: Collect all data for cascade deletion
+    // =========================================================================
+
+    // Get all messages for this thread
+    const messages = await db.query.chatMessage.findMany({
+      where: eq(tables.chatMessage.threadId, id),
+      columns: { id: true },
+    });
+    const messageIds = messages.map(m => m.id);
+
+    // Get thread uploads for R2 cleanup
+    const threadUploads = await db.query.threadUpload.findMany({
+      where: eq(tables.threadUpload.threadId, id),
+      with: {
+        upload: {
+          columns: { r2Key: true },
+        },
+      },
+    });
+
+    // Get message uploads for R2 cleanup
+    const messageUploads = messageIds.length > 0
+      ? await db.query.messageUpload.findMany({
+          where: inArray(tables.messageUpload.messageId, messageIds),
+          with: {
+            upload: {
+              columns: { r2Key: true },
+            },
+          },
+        })
+      : [];
+
+    // Get project attachments linked via ragMetadata.sourceThreadId
     const linkedAttachments = await db.query.projectAttachment.findMany({
       where: sql`json_extract(${tables.projectAttachment.ragMetadata}, '$.sourceThreadId') = ${id}`,
     });
 
-    // Delete R2 files for each attachment
-    for (const attachment of linkedAttachments) {
-      const ragMetadata = attachment.ragMetadata;
-      if (ragMetadata?.projectR2Key) {
-        await deleteFile(c.env.UPLOADS_R2_BUCKET, ragMetadata.projectR2Key);
-      }
+    // =========================================================================
+    // STEP 2: Delete junction table records (no FK constraints to thread/message)
+    // Must delete before thread/messages due to missing FKs
+    // =========================================================================
+
+    await db.delete(tables.threadUpload)
+      .where(eq(tables.threadUpload.threadId, id));
+
+    if (messageIds.length > 0) {
+      await db.delete(tables.messageUpload)
+        .where(inArray(tables.messageUpload.messageId, messageIds));
     }
 
-    // Delete projectAttachment records
+    // =========================================================================
+    // STEP 3: Delete project memories from this thread (HARD DELETE)
+    // =========================================================================
+
+    await db.delete(tables.projectMemory)
+      .where(eq(tables.projectMemory.sourceThreadId, id));
+
+    // =========================================================================
+    // STEP 4: Delete project attachments linked to this thread
+    // =========================================================================
+
     if (linkedAttachments.length > 0) {
       await db.delete(tables.projectAttachment)
         .where(sql`json_extract(${tables.projectAttachment.ragMetadata}, '$.sourceThreadId') = ${id}`);
     }
 
-    // Deactivate memories from this thread
-    await db.update(tables.projectMemory)
-      .set({ isActive: false, updatedAt: new Date() })
-      .where(eq(tables.projectMemory.sourceThreadId, id));
-
-    // Soft-delete the thread
-    await db
-      .update(tables.chatThread)
-      .set({
-        status: ThreadStatusSchema.enum.deleted,
-        updatedAt: new Date(),
-      })
-      .where(eq(tables.chatThread.id, id));
+    // =========================================================================
+    // STEP 5: Invalidate caches before deletion
+    // =========================================================================
 
     await invalidateThreadCache(db, user.id, id, thread.slug);
 
-    // ✅ PROJECT CACHE: Invalidate if thread belonged to a project
     if (thread.projectId) {
       await invalidateProjectCache(db, thread.projectId);
     }
 
-    // ✅ PUBLIC THREAD CACHE: Invalidate if thread was public
-    // Also clears cached OG images from R2
-    // CRITICAL: Must invalidate BOTH current slug AND previousSlug caches
     if (thread.isPublic && thread.slug) {
       await invalidatePublicThreadCache(db, thread.slug, id, c.env.UPLOADS_R2_BUCKET);
       if (thread.previousSlug) {
         await invalidatePublicThreadCache(db, thread.previousSlug, id, c.env.UPLOADS_R2_BUCKET);
+      }
+    }
+
+    // =========================================================================
+    // STEP 6: HARD DELETE the thread (DB cascade handles messages, participants, etc.)
+    // =========================================================================
+
+    await db.delete(tables.chatThread).where(eq(tables.chatThread.id, id));
+
+    // =========================================================================
+    // STEP 7: Delete R2 files in background (non-blocking)
+    // =========================================================================
+
+    if (c.executionCtx && c.env.UPLOADS_R2_BUCKET) {
+      const r2CleanupTasks: Promise<unknown>[] = [];
+
+      // Delete thread upload files
+      for (const threadUpload of threadUploads) {
+        if (threadUpload.upload?.r2Key) {
+          r2CleanupTasks.push(deleteFile(c.env.UPLOADS_R2_BUCKET, threadUpload.upload.r2Key));
+        }
+      }
+
+      // Delete message upload files
+      for (const messageUpload of messageUploads) {
+        if (messageUpload.upload?.r2Key) {
+          r2CleanupTasks.push(deleteFile(c.env.UPLOADS_R2_BUCKET, messageUpload.upload.r2Key));
+        }
+      }
+
+      // Delete linked project attachment R2 files
+      for (const attachment of linkedAttachments) {
+        const ragMetadata = attachment.ragMetadata;
+        if (ragMetadata?.projectR2Key) {
+          r2CleanupTasks.push(deleteFile(c.env.UPLOADS_R2_BUCKET, ragMetadata.projectR2Key));
+        }
+      }
+
+      if (r2CleanupTasks.length > 0) {
+        c.executionCtx.waitUntil(Promise.all(r2CleanupTasks).catch(() => {}));
       }
     }
 

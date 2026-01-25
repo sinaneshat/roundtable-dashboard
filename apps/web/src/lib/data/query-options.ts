@@ -381,8 +381,8 @@ export function projectMemoriesQueryOptions(projectId: string) {
  */
 export function projectThreadsQueryOptions(projectId: string) {
   return infiniteQueryOptions({
-    // Use unified query key pattern: ['threads', 'list', 'project', projectId]
-    queryKey: [...queryKeys.threads.lists(), 'project', projectId] as const,
+    // Use canonical key from queryKeys.projects.threads() for consistent invalidation
+    queryKey: queryKeys.projects.threads(projectId),
     queryFn: async () => {
       const result = await getThreadsByProject({ data: projectId });
       if (!result.success) {

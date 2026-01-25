@@ -43,7 +43,8 @@ export type ExtractedMemory = {
 };
 
 type ExtractionResult = {
-  extracted: number;
+  extracted: ExtractedMemory[];
+  memoryIds: string[];
   skipped: number;
   duplicates: number;
 };
@@ -65,7 +66,8 @@ export async function extractMemoriesFromRound(
   const { projectId, threadId, roundNumber, userQuestion, moderatorSummary, userId, ai, db } = params;
 
   const result: ExtractionResult = {
-    extracted: 0,
+    extracted: [],
+    memoryIds: [],
     skipped: 0,
     duplicates: 0,
   };
@@ -245,8 +247,9 @@ export async function extractMemoriesFromRound(
     }
 
     const now = new Date();
+    const memoryId = ulid();
     memoriesToInsert.push({
-      id: ulid(),
+      id: memoryId,
       projectId,
       content: memory.content,
       summary: memory.summary,
@@ -264,6 +267,9 @@ export async function extractMemoriesFromRound(
       createdAt: now,
       updatedAt: now,
     });
+
+    result.extracted.push(memory);
+    result.memoryIds.push(memoryId);
   }
 
   // Log filtering results
@@ -281,18 +287,18 @@ export async function extractMemoriesFromRound(
     for (const chunk of chunkForD1Insert(memoriesToInsert, 13)) {
       await db.insert(tables.projectMemory).values(chunk);
     }
-    result.extracted = memoriesToInsert.length;
     console.error('[Memory Extraction] Inserted memories', {
       projectId,
       threadId,
-      count: result.extracted,
+      count: result.extracted.length,
+      memoryIds: result.memoryIds,
     });
 
     // 6. Deduct credits for memory extraction (per round, not per memory)
     try {
       await deductCreditsForAction(userId, 'memoryExtraction', {
         threadId,
-        description: `Memory extraction: ${result.extracted} memories from round ${roundNumber}`,
+        description: `Memory extraction: ${result.extracted.length} memories from round ${roundNumber}`,
       });
     } catch {
       // Non-critical - don't fail extraction if billing fails

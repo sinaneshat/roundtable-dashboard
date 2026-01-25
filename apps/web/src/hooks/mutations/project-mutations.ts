@@ -2,9 +2,10 @@ import type { InfiniteData } from '@tanstack/react-query';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { shouldRetryMutation } from '@/hooks/utils';
+import enCommon from '@/i18n/locales/en/common.json';
 import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import { toastManager } from '@/lib/toast';
-import type { GetProjectResponse, ListProjectAttachmentsResponse, ListProjectsResponse } from '@/services/api';
+import type { GetProjectResponse, ListProjectAttachmentsResponse, ListProjectsResponse, ProjectAttachmentItem, ProjectListItem } from '@/services/api';
 import {
   addUploadToProjectService,
   createProjectMemoryService,
@@ -32,11 +33,15 @@ export function useCreateProjectMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<CreateProjectResult, Error, Parameters<typeof createProjectService>[0]>({
+    mutationKey: ['projects', 'create'],
     mutationFn: createProjectService,
     onSuccess: () => {
       invalidationPatterns.projects.forEach((key) => {
         queryClient.invalidateQueries({ queryKey: key });
       });
+    },
+    onError: () => {
+      toastManager.error(enCommon.projects.createError);
     },
     retry: false,
     throwOnError: false,
@@ -47,6 +52,7 @@ export function useUpdateProjectMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<UpdateProjectResult, Error, Parameters<typeof updateProjectService>[0]>({
+    mutationKey: ['projects', 'update'],
     mutationFn: updateProjectService,
     onSuccess: (response, variables) => {
       if (response.success && response.data) {
@@ -77,7 +83,7 @@ export function useUpdateProjectMutation() {
                   data: {
                     ...page.data,
                     items: page.data.items.map(
-                      (project: typeof updatedProject) => (project.id === updatedProject.id ? updatedProject : project),
+                      (project: ProjectListItem) => (project.id === updatedProject.id ? { ...project, ...updatedProject } : project),
                     ),
                   },
                 };
@@ -114,6 +120,7 @@ export function useDeleteProjectMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<DeleteProjectResult, Error, Parameters<typeof deleteProjectService>[0], { previousProjects?: ListProjectsResponse }>({
+    mutationKey: ['projects', 'delete'],
     mutationFn: deleteProjectService,
     onMutate: async (data) => {
       const projectId = data.param?.id;
@@ -134,7 +141,7 @@ export function useDeleteProjectMutation() {
             ...oldData,
             data: {
               ...oldData.data,
-              items: oldData.data.items.filter((project: typeof oldData.data.items[number]) => project.id !== projectId),
+              items: oldData.data.items.filter((project: ProjectListItem) => project.id !== projectId),
             },
           };
         },
@@ -171,6 +178,7 @@ export function useAddAttachmentToProjectMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<AddUploadToProjectResult, Error, Parameters<typeof addUploadToProjectService>[0]>({
+    mutationKey: ['projects', 'attachments', 'add'],
     mutationFn: addUploadToProjectService,
     onSuccess: (data, variables) => {
       if (!data.success || !data.data)
@@ -237,6 +245,7 @@ export function useUpdateProjectAttachmentMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<UpdateProjectAttachmentResult, Error, Parameters<typeof updateProjectAttachmentService>[0]>({
+    mutationKey: ['projects', 'attachments', 'update'],
     mutationFn: updateProjectAttachmentService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
@@ -260,6 +269,7 @@ export function useRemoveAttachmentFromProjectMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<RemoveAttachmentFromProjectResult, Error, Parameters<typeof removeAttachmentFromProjectService>[0]>({
+    mutationKey: ['projects', 'attachments', 'remove'],
     mutationFn: removeAttachmentFromProjectService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
@@ -289,7 +299,7 @@ export function useRemoveAttachmentFromProjectMutation() {
                 ...page,
                 data: {
                   ...page.data,
-                  items: page.data.items.filter((item: typeof page.data.items[number]) => item.id !== attachmentId),
+                  items: page.data.items.filter((item: ProjectAttachmentItem) => item.id !== attachmentId),
                 },
               };
             }),
@@ -311,6 +321,7 @@ export function useCreateProjectMemoryMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<CreateProjectMemoryResult, Error, Parameters<typeof createProjectMemoryService>[0]>({
+    mutationKey: ['projects', 'memories', 'create'],
     mutationFn: createProjectMemoryService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
@@ -328,6 +339,7 @@ export function useUpdateProjectMemoryMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<UpdateProjectMemoryResult, Error, Parameters<typeof updateProjectMemoryService>[0]>({
+    mutationKey: ['projects', 'memories', 'update'],
     mutationFn: updateProjectMemoryService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;
@@ -343,6 +355,7 @@ export function useDeleteProjectMemoryMutation() {
   const queryClient = useQueryClient();
 
   return useMutation<DeleteProjectMemoryResult, Error, Parameters<typeof deleteProjectMemoryService>[0]>({
+    mutationKey: ['projects', 'memories', 'delete'],
     mutationFn: deleteProjectMemoryService,
     onSuccess: (_data, variables) => {
       const projectId = variables.param.id;

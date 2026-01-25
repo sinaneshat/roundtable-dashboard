@@ -288,3 +288,22 @@ export type ListProjectAttachmentsQuery = ListProjectAttachmentsRequest extends 
  * Derived from ListProjectMemoriesRequest
  */
 export type ListProjectMemoriesQuery = ListProjectMemoriesRequest extends { query: infer Q } ? Q : never;
+
+// ============================================================================
+// Derived Entity Types (SINGLE SOURCE OF TRUTH)
+// ============================================================================
+
+/**
+ * Project item from list endpoint - the complete project shape
+ */
+export type ProjectListItem = NonNullable<ListProjectsResponse['data']>['items'][number];
+
+/**
+ * Project detail from get/update endpoint
+ */
+export type ProjectDetail = NonNullable<GetProjectResponse['data']>;
+
+/**
+ * Project attachment item from list attachments endpoint
+ */
+export type ProjectAttachmentItem = NonNullable<ListProjectAttachmentsResponse['data']>['items'][number];

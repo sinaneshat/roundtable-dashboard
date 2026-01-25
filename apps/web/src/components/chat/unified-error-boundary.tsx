@@ -223,21 +223,28 @@ export class UnifiedErrorBoundary extends Component<
   }
 }
 
-export const InlineErrorDisplay: React.FC<{
+export function InlineErrorDisplay({
+  error,
+  participantName,
+  onRetry,
+}: {
   error: string;
   participantName?: string;
   onRetry?: () => void;
-}> = ({ error, participantName, onRetry }) => (
-  <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3">
-    <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
-    <div className="flex-1">
-      <span className="font-medium">{participantName || 'Participant'}</span>
-      <span className="text-sm text-muted-foreground ml-2">{error}</span>
+}) {
+  const t = useTranslations();
+  return (
+    <div className="flex items-center gap-2 rounded-md bg-destructive/10 p-3">
+      <div className="h-2 w-2 rounded-full bg-destructive animate-pulse" />
+      <div className="flex-1">
+        <span className="font-medium">{participantName || t('chat.errors.participant')}</span>
+        <span className="text-sm text-muted-foreground ml-2">{error}</span>
+      </div>
+      {onRetry && (
+        <Button onClick={onRetry} size="icon" variant="ghost" aria-label={t('accessibility.retry')}>
+          <Icons.refreshCw />
+        </Button>
+      )}
     </div>
-    {onRetry && (
-      <Button onClick={onRetry} size="icon" variant="ghost" aria-label="Retry">
-        <Icons.refreshCw />
-      </Button>
-    )}
-  </div>
-);
+  );
+}

@@ -9,10 +9,9 @@ import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
-import { RHFTextField } from '@/components/forms/rhf-text-field';
+import { Form, RHFTextField } from '@/components/forms';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
-import { Form } from '@/components/ui/form';
 import { useBoolean, useIsMounted } from '@/hooks/utils';
 import { authClient } from '@/lib/auth/client';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
@@ -21,12 +20,6 @@ import { showApiErrorToast, showApiInfoToast } from '@/lib/toast';
 import { getApiErrorDetails } from '@/lib/utils';
 
 import { GoogleButton } from './google-button';
-
-const magicLinkSchema = z.object({
-  email: z.string().email('Please enter a valid email address'),
-});
-
-type MagicLinkFormData = z.infer<typeof magicLinkSchema>;
 
 const routeApi = getRouteApi('/auth/sign-in');
 
@@ -41,6 +34,12 @@ function AuthFormContent() {
 
   // SSR-safe: disable animations on server to prevent invisible content
   const isServer = !isMounted;
+
+  const magicLinkSchema = z.object({
+    email: z.string().email(t('auth.validation.email')),
+  });
+
+  type MagicLinkFormData = z.infer<typeof magicLinkSchema>;
 
   // Handle toast messages from URL params
   useEffect(() => {

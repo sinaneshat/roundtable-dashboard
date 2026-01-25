@@ -5,6 +5,7 @@ import type { BundledLanguage } from 'shiki';
 import { highlightCode } from '@/components/ai-elements/code-block-highlighter';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
+import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 
 type CodeBlockProps = {
@@ -116,6 +117,7 @@ export function CodeBlockCopyButton({
   className,
   ...props
 }: CodeBlockCopyButtonProps) {
+  const t = useTranslations();
   const [isCopied, setIsCopied] = useState(false);
   const context = use(CodeBlockContext);
   if (!context) {
@@ -159,7 +161,7 @@ export function CodeBlockCopyButton({
       onClick={copyToClipboard}
       size="icon"
       variant="ghost"
-      aria-label={isCopied ? 'Copied' : 'Copy code'}
+      aria-label={isCopied ? t('accessibility.copied') : t('accessibility.copyCode')}
       {...props}
     >
       {children ?? <Icon size={14} />}

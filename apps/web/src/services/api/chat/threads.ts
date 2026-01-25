@@ -365,6 +365,7 @@ export type AvailableSource = NonNullable<DbAssistantMessageMetadata['availableS
 
 export {
   isAssistantMessageMetadata,
+  isMemoryCreatedChange,
   isModeChange,
   isModeratorMessageMetadata,
   isParticipantChange,

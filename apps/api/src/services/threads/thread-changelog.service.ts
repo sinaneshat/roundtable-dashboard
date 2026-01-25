@@ -197,3 +197,28 @@ export async function logWebSearchToggle(
     },
   });
 }
+
+export async function logMemoriesCreated(
+  threadId: string,
+  roundNumber: number,
+  projectId: string,
+  memories: Array<{ id: string; summary: string }>,
+): Promise<string> {
+  const memoryCount = memories.length;
+  const summary = memoryCount === 1
+    ? `Saved 1 memory: ${memories[0]?.summary.slice(0, 50)}...`
+    : `Saved ${memoryCount} memories`;
+
+  return createChangelogEntry({
+    threadId,
+    roundNumber,
+    changeType: ChangelogTypes.ADDED,
+    changeSummary: summary,
+    changeData: {
+      type: ChangelogChangeTypes.MEMORY_CREATED,
+      memoryCount,
+      memories: memories.map(m => ({ id: m.id, summary: m.summary })),
+      projectId,
+    },
+  });
+}

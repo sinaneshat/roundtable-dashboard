@@ -7,7 +7,7 @@
  * Location: /src/components/providers/posthog-identify-user.tsx
  */
 
-import { usePostHogIdentify } from '@/hooks/utils/use-posthog-identify';
+import { usePostHogIdentify } from '@/hooks';
 
 /**
  * Component that identifies users to PostHog when they authenticate

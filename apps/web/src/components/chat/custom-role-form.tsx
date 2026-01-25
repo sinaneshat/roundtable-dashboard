@@ -3,8 +3,8 @@ import { memo } from 'react';
 import { useForm } from 'react-hook-form';
 import { z } from 'zod';
 
+import { Form, FormControl, FormField, FormItem, FormMessage } from '@/components/forms';
 import { Button } from '@/components/ui/button';
-import { Form, FormControl, FormField, FormItem } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
 import { useTranslations } from '@/lib/i18n';
 
@@ -50,16 +50,13 @@ export const CustomRoleForm = memo(({
             <FormItem className="flex-1 min-w-0">
               <FormControl>
                 <Input
-                  ref={field.ref}
-                  name={field.name}
-                  value={field.value}
-                  onChange={field.onChange}
-                  onBlur={field.onBlur}
+                  {...field}
                   placeholder={t('chat.models.modal.customRolePlaceholder')}
                   aria-label={t('chat.models.modal.customRolePlaceholder')}
                   disabled={isPending || disabled}
                 />
               </FormControl>
+              <FormMessage />
             </FormItem>
           )}
         />

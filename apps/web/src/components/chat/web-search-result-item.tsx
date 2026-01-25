@@ -182,7 +182,7 @@ export function WebSearchResultItem({
                   target="_blank"
                   rel="noopener noreferrer"
                   className="relative flex-shrink-0 w-12 h-9 rounded-md overflow-hidden bg-muted/30 border border-border/20 hover:border-primary/40 hover:shadow-sm transition-all cursor-pointer group"
-                  title={`View on ${cleanDomain}`}
+                  title={t('viewOnDomain', { domain: cleanDomain })}
                 >
                   {!isLoaded && (
                     <Skeleton className="absolute inset-0 rounded-none" />
@@ -210,7 +210,7 @@ export function WebSearchResultItem({
                 target="_blank"
                 rel="noopener noreferrer"
                 className="flex-shrink-0 w-12 h-9 rounded-md bg-muted/20 border border-border/20 flex items-center justify-center text-xs text-muted-foreground hover:border-primary/40 hover:text-primary transition-all"
-                title={`View all images on ${cleanDomain}`}
+                title={t('viewAllImagesOnDomain', { domain: cleanDomain })}
               >
                 +
                 {allImages.length - 4}

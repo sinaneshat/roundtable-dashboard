@@ -1,8 +1,9 @@
-import { getFileTypeColorClass, UploadStatuses } from '@roundtable/shared';
+import { ComponentSizes, ComponentVariants, getFileTypeColorClass, UploadStatuses } from '@roundtable/shared';
 import { useState } from 'react';
 
 import { FileTypeIcon } from '@/components/chat/chat-input-attachments';
 import { Icons } from '@/components/icons';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useDownloadUrlQuery } from '@/hooks/queries';
 import type { PendingAttachment } from '@/hooks/utils';
@@ -103,28 +104,32 @@ export function ProjectPendingFileItem({
       <div className="flex items-center gap-1">
         {/* Download button - only show when completed and URL available */}
         {isCompleted && (
-          <button
+          <Button
             type="button"
+            variant={ComponentVariants.GHOST}
+            size={ComponentSizes.ICON}
             onClick={handleDownload}
             disabled={!downloadUrl || isLoadingUrl}
-            className="p-1.5 rounded-md hover:bg-primary/10 text-muted-foreground hover:text-primary transition-colors disabled:opacity-50"
+            className="size-8 text-muted-foreground hover:text-primary hover:bg-primary/10"
             title={t('actions.download')}
           >
             {isLoadingUrl
               ? <Icons.loader className="size-4 animate-spin" />
               : <Icons.download className="size-4" />}
-          </button>
+          </Button>
         )}
 
         {/* Cancel/Delete button */}
-        <button
+        <Button
           type="button"
+          variant={ComponentVariants.GHOST}
+          size={ComponentSizes.ICON}
           onClick={handleAction}
-          className="p-1.5 rounded-md hover:bg-destructive/10 text-muted-foreground hover:text-destructive transition-colors"
+          className="size-8 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
           title={isProcessing ? t('actions.cancel') : t('actions.remove')}
         >
           <ActionIcon className="size-4" />
-        </button>
+        </Button>
       </div>
     </div>
   );

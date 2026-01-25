@@ -74,6 +74,18 @@ export function useCreateThreadMutation() {
       const previousUsage = queryClient.getQueryData(queryKeys.usage.stats());
       return { previousUsage };
     },
+    onSuccess: (_data, variables) => {
+      // Invalidate project-related caches when thread is created in a project
+      const projectId = variables.json.projectId;
+      if (projectId) {
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.threads(projectId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.sidebar() });
+      }
+      // Always invalidate thread lists and sidebar
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
+      queryClient.invalidateQueries({ queryKey: queryKeys.threads.sidebar() });
+    },
     onError: (_error, _variables, context) => {
       if (context?.previousUsage) {
         queryClient.setQueryData(queryKeys.usage.stats(), context.previousUsage);

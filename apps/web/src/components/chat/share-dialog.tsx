@@ -176,11 +176,13 @@ export function ShareDialog({
                       className="w-full pr-11 font-mono"
                       onClick={e => e.currentTarget.select()}
                     />
-                    <button
+                    <Button
                       type="button"
+                      variant="ghost"
+                      size="icon"
                       onClick={() => handleCopy(shareUrl, 'link')}
                       className={cn(
-                        'absolute right-0 inset-y-0 flex w-11 items-center justify-center rounded-r-md text-muted-foreground transition-all hover:text-foreground',
+                        'absolute right-0 inset-y-0 w-11 rounded-l-none rounded-r-xl text-muted-foreground hover:text-foreground',
                         copySuccess === 'link' && 'text-emerald-500 hover:text-emerald-500',
                       )}
                       aria-label={copySuccess === 'link' ? t('chat.shareDialog.copied') : t('chat.shareDialog.copyLink')}
@@ -188,7 +190,7 @@ export function ShareDialog({
                       {copySuccess === 'link'
                         ? <Icons.check className="size-4" />
                         : <Icons.copy className="size-4" />}
-                    </button>
+                    </Button>
                   </div>
                   <Button
                     variant="outline"
@@ -231,7 +233,7 @@ export function ShareDialog({
                     <img
                       key={ogImageUrl}
                       src={ogImageUrl}
-                      alt="Thread preview"
+                      alt={t('chat.shareDialog.threadPreviewAlt')}
                       className={cn(
                         'absolute inset-0 w-full h-full object-cover transition-opacity duration-300',
                         imageLoaded && !imageError ? 'opacity-100' : 'opacity-0',

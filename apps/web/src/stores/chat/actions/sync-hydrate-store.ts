@@ -8,7 +8,7 @@
  * Usage: Call this hook FIRST in your screen component, before any useChatStore calls.
  */
 
-import type { ChatMode, ScreenMode } from '@roundtable/shared';
+import type { ScreenMode } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { useLayoutEffect, useRef } from 'react';
 
@@ -21,7 +21,6 @@ export type SyncHydrateOptions = {
   thread?: ChatThread | null;
   participants?: ChatParticipant[];
   initialMessages?: UIMessage[];
-  chatMode?: ChatMode | null;
   streamResumptionState?: ThreadStreamResumptionState | null;
   /** Pre-search data hydrated from server for resumption */
   initialPreSearches?: StoredPreSearch[];
@@ -95,7 +94,7 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     }
 
     // ✅ FIX: Skip if data is shell (empty participants/messages)
-    // Prevents useThreadNavigation's cache pre-population from causing empty store
+    // Prevents cache pre-population from causing empty store
     const isShellData = participants.length === 0 && initialMessages.length === 0;
     if (isShellData) {
       rlog.sync('hydrate-skip', 'shell data (empty participants/messages)');

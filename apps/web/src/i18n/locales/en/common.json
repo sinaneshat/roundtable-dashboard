@@ -1,11 +1,19 @@
 {
   "accessibility": {
+    "chatInput": "Chat input",
+    "copied": "Copied",
+    "copyCode": "Copy code",
     "mobileSidebar": {
       "description": "Main navigation menu",
       "title": "Navigation"
     },
     "moreOptions": "More options",
+    "nextSlide": "Next slide",
+    "openPublicThread": "Open public thread",
     "openSidebar": "Open sidebar",
+    "previousSlide": "Previous slide",
+    "retry": "Retry",
+    "skipToMainContent": "Skip to main content",
     "toggleSidebar": "Toggle Sidebar"
   },
   "admin": {
@@ -84,6 +92,11 @@
         "keywordLabel": "Keyword",
         "keywordPlaceholder": "Enter a topic to explore...",
         "platforms": "Platforms",
+        "platformLabels": {
+          "reddit": "Reddit",
+          "twitter": "X",
+          "instagram": "Instagram"
+        },
         "discover": "Discover",
         "discovering": "Searching...",
         "noResults": "No trends found for this keyword",
@@ -100,10 +113,16 @@
         "batchCreated": "{count} jobs created successfully",
         "batchErrors": "{count} jobs failed to create",
         "discoveryError": "Failed to discover trends"
+      },
+      "validation": {
+        "promptMinLength": "Prompt must be at least 10 characters",
+        "keywordMinLength": "Enter at least 2 characters",
+        "platformRequired": "Select at least one platform"
       }
     }
   },
   "actions": {
+    "add": "Add",
     "back": "Back",
     "cancel": "Cancel",
     "close": "Close",
@@ -115,6 +134,7 @@
     "loadMore": "Load more",
     "loading": "Loading...",
     "more": "More",
+    "reload": "Reload Page",
     "remove": "Remove",
     "save": "Save",
     "select": "Select",
@@ -204,6 +224,9 @@
     "continueWithEmail": "Continue with Email",
     "email": "Email",
     "emailPlaceholder": "Enter your email",
+    "validation": {
+      "email": "Please enter a valid email address"
+    },
     "errors": {
       "accessDenied": "Access Denied",
       "accessDeniedDesc": "You do not have permission to sign in. Please check your credentials or contact support.",
@@ -396,6 +419,7 @@
       },
       "added": "Added",
       "modified": "Modified",
+      "modelUnavailable": "Model no longer available",
       "removed": "Removed",
       "configurationChanged": "Configuration changed",
       "webSearchDisabled": "Web search disabled",
@@ -418,6 +442,10 @@
     "errors": {
       "addOwnApiKey": "Add your own API key for higher limits",
       "apiError": "API Error",
+      "loadingThread": "Error loading thread",
+      "loadingThreadDescription": "An error occurred while loading the thread.",
+      "threadNotFound": "Thread not found",
+      "threadNotFoundDescription": "The conversation you are looking for does not exist.",
       "authenticationError": "Authentication Error",
       "checkConnection": "Check your internet connection",
       "contentFilterHint": "Your message was filtered. Try rephrasing.",
@@ -459,7 +487,8 @@
       "like": "Like"
     },
     "memory": {
-      "memorySaved": "Memory saved"
+      "memorySaved": "Memory saved",
+      "deleteFailed": "Failed to remove memory"
     },
     "input": {
       "attachFiles": "Attach files",
@@ -649,6 +678,7 @@
       "noMessagesYet": "No messages yet",
       "privateChat": "Private Chat",
       "privateChatDescription": "This conversation is private and cannot be viewed.",
+      "sharedConversation": "Shared Conversation",
       "threadNotFound": "Thread Not Found",
       "threadNotFoundDescription": "This public chat thread doesn't exist or has been made private.",
       "noLongerPublic": "No Longer Public",
@@ -683,7 +713,8 @@
       "loadingPreview": "Loading preview...",
       "openInNewTab": "Open in new tab",
       "previewUnavailable": "Preview unavailable",
-      "publicStatus": "Public"
+      "publicStatus": "Public",
+      "threadPreviewAlt": "Thread preview"
     },
     "shareThread": "Share Thread",
     "shareThreadDescription": "Share this conversation with others",
@@ -707,6 +738,9 @@
         "webSearch": "Enable web search",
         "webSearchEnabled": "Web search enabled"
       }
+    },
+    "thread": {
+      "conversationTitle": "Conversation"
     },
     "tools": {
       "arguments": "Arguments",
@@ -760,7 +794,8 @@
       "refreshPage": "Refresh Page",
       "stackLabel": "Stack Trace",
       "title": "Something Went Wrong",
-      "tryAgain": "Try Again"
+      "tryAgain": "Try Again",
+      "urlLabel": "URL"
     },
     "streamFailed": "Stream failed",
     "unknownError": "An unknown error occurred"
@@ -769,6 +804,10 @@
   "failedToDeleteRole": "Failed to delete role",
   "feedback": {
     "description": "Share your thoughts, report bugs, or request features",
+    "survey": {
+      "messageQuestion": "Share your thoughts, report bugs, or request features",
+      "typeQuestion": "What type of feedback is this?"
+    },
     "error": {
       "message": "Failed to submit feedback. Please try again.",
       "title": "Error"
@@ -801,6 +840,9 @@
     "pickDate": "PickDate",
     "searchPlaceholder": "Search...",
     "selectOption": "Select an option"
+  },
+  "markdown": {
+    "mermaidDiagram": "Mermaid Diagram"
   },
   "meta": {
     "legal": {
@@ -992,77 +1034,95 @@
     "pageTitle": "Pricing"
   },
   "projects": {
+    "addFiles": "Add files",
     "andMoreThreads": "...and {count} more",
     "appearance": "Appearance",
+    "attachmentRemoveError": "Failed to remove file",
+    "attachmentRemoved": "File removed from project",
+    "cannotDeleteThreadFile": "Cannot delete file used in a conversation",
+    "collapse": "Collapse",
+    "collapseLess": "Show less",
     "color": "Color",
     "create": "Create Project",
     "createDescription": "Create a new project to group conversations with shared context",
+    "createError": "Failed to create project",
+    "createProject": "Create project",
     "customInstructions": "Custom Instructions",
     "customInstructionsHint": "These instructions will be applied to all conversations in this project",
     "customInstructionsPlaceholder": "Add instructions for AI models in this project...",
     "delete": "Delete Project",
-    "deleteConfirmDescription": "This will permanently delete \"{name}\" and all its data.",
+    "deleteConfirmDescription": "This will permanently delete \"{name}\" and all chats within it.",
     "deleteConfirmTitle": "Delete Project?",
     "deleteConfirmWithThreads": "Are you sure you want to delete \"{name}\"? This will permanently delete {count} conversation(s) and all their messages.",
-    "deleted": "Project deleted",
     "deleteError": "Failed to delete project",
     "deleteThreadsWarning": "All conversations in this project and their attachments will also be permanently deleted.",
     "deleteWarning": "Once deleted, this project cannot be recovered",
+    "deleted": "Project deleted",
     "description": "Description",
     "descriptionPlaceholder": "Add a description...",
     "edit": "Edit Project",
     "editDescription": "Update project details and settings",
     "empty": "No projects yet",
     "emptyDescription": "Create a project to group conversations with shared context and files",
+    "expand": "Expand",
+    "expandMore": "Show more",
     "files": "Files",
     "filesDescription": "Files uploaded to this project are accessible in all conversations",
     "filesEmpty": "No files uploaded",
     "filesEmptyDescription": "Upload files to make them available in all project conversations",
+    "filesEmptyHint": "Add documents, code files, images, and more. {projectName} can access their contents when you chat inside the project.",
+    "fromThread": "From chat",
+    "instructionsLabel": "Instructions",
+    "instructionsPlaceholder": "Set context and customize how AI responds in this project.",
+    "limitReached": "Project limit reached",
+    "limitReachedDescription": "You can have up to {max} projects. Delete an existing project to create a new one.",
+    "limitReachedShort": "Max {max} projects",
+    "threadLimitReached": "Thread limit reached",
+    "threadLimitReachedDescription": "This project has reached the maximum of {max} conversations. Delete an existing conversation to create a new one.",
+    "threadLimitReachedShort": "Max {max} threads per project",
     "memories": "Memories",
     "memoriesAutoGenerated": "Memories are automatically extracted from conversations",
     "memoriesDescription": "Persistent context that carries across all project conversations",
     "memoriesEmpty": "No memories yet",
     "memoriesEmptyDescription": "Memories are automatically extracted from conversations or can be added manually",
+    "memoryRemoved": "Memory removed from project",
+    "memoryRemoveError": "Failed to remove memory",
     "moveToProject": "Move to Project",
     "name": "Project Name",
-    "namePlaceholder": "Enter project name...",
+    "namePlaceholder": "e.g., Trip to Japan",
     "newChat": "New Chat",
+    "newChatIn": "New chat in {projectName}",
+    "newProject": "New project",
+    "newThread": "New thread",
     "noProjects": "No projects",
+    "notFound": "Project not found",
+    "notFoundDescription": "The project you are looking for does not exist.",
+    "backToChat": "Back to Chat",
+    "onboardingText": "Use Projects to keep related chats, files, and instructions together—perfect for ongoing work or staying organized.",
+    "projectSettings": "Project settings",
+    "proOnly": "Upgrade to Pro to create projects",
+    "removeAttachment": "Remove File",
+    "removeAttachmentConfirm": "Remove \"{name}\" from this project? The file will remain in your uploads.",
     "removeFromProject": "Remove from Project",
+    "removeMemory": "Remove Memory",
+    "removeMemoryConfirm": "Are you sure you want to remove this memory from the project?",
+    "removing": "Removing...",
+    "seeMore": "See more",
     "settings": "Settings",
     "startConversation": "Start a conversation in this project",
+    "templates": {
+      "investing": "Investing",
+      "research": "Research",
+      "travel": "Travel",
+      "writing": "Writing"
+    },
+    "threadLimitReached": "This project has reached its {max} thread limit",
     "threads": "Conversations",
     "threadsEmpty": "No conversations",
     "threadsEmptyDescription": "Start a new conversation in this project",
     "threadsToDelete": "The following {count} conversation(s) will be deleted:",
     "title": "Projects",
-    "uploadFiles": "Upload Files",
-    "removeAttachment": "Remove File",
-    "removeAttachmentConfirm": "Remove \"{name}\" from this project? The file will remain in your uploads.",
-    "attachmentRemoved": "File removed from project",
-    "attachmentRemoveError": "Failed to remove file",
-    "removing": "Removing...",
-    "fromThread": "From chat",
-    "cannotDeleteThreadFile": "Cannot delete file used in a conversation",
-    "proOnly": "Upgrade to Pro to create projects",
-    "limitReached": "You've reached the limit of {{max}} projects",
-    "threadLimitReached": "This project has reached its {{max}} thread limit",
-    "expand": "Expand",
-    "collapse": "Collapse",
-    "newThread": "New thread",
-    "removeMemory": "Remove Memory",
-    "removeMemoryConfirm": "Remove this memory from the project? This cannot be undone.",
-    "memoryRemoved": "Memory removed",
-    "memoryRemoveError": "Failed to remove memory",
-    "memorySource": {
-      "chat": "From chat",
-      "explicit": "Manual",
-      "moderator": "From moderator",
-      "search": "From search",
-      "instruction": "Instructions"
-    },
-    "expandMore": "Show more",
-    "collapseLess": "Show less"
+    "uploadFiles": "Upload Files"
   },
   "roleDeleted": "Role deleted",
   "roleDeletedMessage": "The custom role has been deleted.",
@@ -1146,7 +1206,7 @@
     },
     "error": {
       "boundary": "Something went wrong",
-      "boundaryDescription": "An unexpected error occurred while loading this content.",
+      "boundaryDescription": "An unexpected error occurred. Please try again or return home.",
       "default": "Something went wrong",
       "description": "There was an error processing your request.",
       "detailsTitle": "Error Details (dev/preview only)",
@@ -1252,6 +1312,8 @@
       "minRead": "{min} min read",
       "morePoints": "{count} more points",
       "relevance": "Relevance",
+      "viewAllImagesOnDomain": "View all images on {domain}",
+      "viewOnDomain": "View on {domain}",
       "words": "words"
     }
   }

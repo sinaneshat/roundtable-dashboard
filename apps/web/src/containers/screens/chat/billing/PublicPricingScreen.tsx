@@ -8,13 +8,13 @@ import { PricingContentSkeleton } from '@/components/pricing/pricing-content-ske
 import { Button } from '@/components/ui/button';
 import { PricingCard } from '@/components/ui/pricing-card';
 import {
+  useAuthCheck,
   useCancelSubscriptionMutation,
   useCreateCheckoutSessionMutation,
   useCreateCustomerPortalSessionMutation,
   useProductsQuery,
   useSubscriptionsQuery,
 } from '@/hooks';
-import { useAuthCheck } from '@/hooks/utils/use-auth-check';
 import { useTranslations } from '@/lib/i18n';
 import { toastManager } from '@/lib/toast';
 import { getApiErrorMessage } from '@/lib/utils';

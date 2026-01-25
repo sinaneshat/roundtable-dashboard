@@ -8,9 +8,7 @@ import { usePostHog } from 'posthog-js/react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useForm } from 'react-hook-form';
 
-import { FormProvider } from '@/components/forms/form-provider';
-import { RHFSelect } from '@/components/forms/rhf-select';
-import { RHFTextarea } from '@/components/forms/rhf-textarea';
+import { FormProvider, RHFSelect, RHFTextarea } from '@/components/forms';
 import { Icons } from '@/components/icons';
 import { Button } from '@/components/ui/button';
 import { Dialog, DialogBody, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -76,12 +74,12 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
       $survey_questions: [
         {
           id: POSTHOG_SURVEYS.FEEDBACK.QUESTIONS.MESSAGE,
-          question: 'Share your thoughts, report bugs, or request features',
+          question: t('feedback.survey.messageQuestion'),
           type: 'open_text',
         },
         {
           id: POSTHOG_SURVEYS.FEEDBACK.QUESTIONS.TYPE,
-          question: 'What type of feedback is this?',
+          question: t('feedback.survey.typeQuestion'),
           type: 'multiple_choice',
         },
       ],
@@ -95,7 +93,7 @@ export function FeedbackModal({ open, onOpenChange }: FeedbackModalProps) {
       reset();
       onOpenChange(false);
     }, 2000);
-  }, [posthog, reset, onOpenChange]);
+  }, [posthog, reset, onOpenChange, t]);
 
   const handleClose = useCallback(() => {
     if (isSubmitting)

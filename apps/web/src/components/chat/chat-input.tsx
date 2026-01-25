@@ -343,11 +343,11 @@ export const ChatInput = memo(({
                         ? t('chat.toolbar.tooltips.stopRecording')
                         : t('chat.toolbar.tooltips.microphone')}
                       className={cn(
-                        'min-h-11 min-w-11 shrink-0 rounded-full',
+                        'min-h-11 min-w-11 shrink-0 rounded-xl touch-manipulation active:scale-95 transition-transform',
                         isListening && 'bg-destructive hover:bg-destructive/90 text-destructive-foreground animate-pulse',
                       )}
                     >
-                      {isListening ? <Icons.stopCircle className="size-3.5 sm:size-4" /> : <Icons.mic className="size-3.5 sm:size-4" />}
+                      {isListening ? <Icons.stopCircle className="size-4 sm:size-5" /> : <Icons.mic className="size-4 sm:size-5" />}
                     </Button>
                   )}
 

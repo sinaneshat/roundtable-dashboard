@@ -137,7 +137,7 @@ function DialogFooter({
   glass = false,
   justify = 'end',
   bordered = true,
-  bleed = false,
+  bleed = true,
   ...props
 }: DialogFooterProps) {
   return (

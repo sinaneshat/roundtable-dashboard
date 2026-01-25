@@ -19,6 +19,14 @@ import { UnifiedErrorBoundary } from './unified-error-boundary';
 const EMPTY_PRE_SEARCHES: StoredPreSearch[] = [];
 const EMPTY_COMPLETED_ROUNDS = new Set<number>();
 
+export type MemoryEvent = {
+  id: string;
+  summary: string;
+  content: string;
+};
+
+export type MemoryEventsByRound = Map<number, MemoryEvent[]>;
+
 type ThreadTimelineProps = {
   timelineItems: TimelineItem[];
   user: {
@@ -55,6 +63,14 @@ type ThreadTimelineProps = {
    * Used for thread pages to show latest messages first on SSR hydration.
    */
   initialScrollToBottom?: boolean;
+  /**
+   * Memory events by round for inline display under user messages
+   */
+  memoryEventsByRound?: MemoryEventsByRound;
+  /**
+   * Callback to delete a memory
+   */
+  onDeleteMemory?: (memoryId: string, roundNumber: number) => Promise<void>;
 };
 
 export function ThreadTimeline({
@@ -80,6 +96,8 @@ export function ThreadTimeline({
   getIsStreamingFromStore,
   disableVirtualization = false,
   initialScrollToBottom = false,
+  memoryEventsByRound,
+  onDeleteMemory,
 }: ThreadTimelineProps) {
   const isActivelyStreaming = isStreaming || isModeratorStreaming;
   const mountTimeRef = useRef(Date.now());
@@ -211,6 +229,8 @@ export function ThreadTimeline({
                 roundNumber={item.roundNumber}
                 demoMode={demoMode}
                 isReadOnly={isReadOnly}
+                memoryEventsByRound={memoryEventsByRound}
+                onDeleteMemory={onDeleteMemory}
               />
             </UnifiedErrorBoundary>
 

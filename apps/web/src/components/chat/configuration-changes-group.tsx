@@ -8,7 +8,7 @@ import {
 } from '@/components/ai-elements/chain-of-thought';
 import { Icons } from '@/components/icons';
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar';
-import { useModelLookup } from '@/hooks/utils/use-model-lookup';
+import { useModelLookup } from '@/hooks';
 import { formatRelativeTime } from '@/lib/format';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
@@ -185,7 +185,9 @@ function ChangeItem({ change, isReadOnly }: ChangeItemProps) {
           )}
         >
           <div className="text-xs text-muted-foreground italic">
-            Model no longer available (
+            {t('chat.configuration.modelUnavailable')}
+            {' '}
+            (
             {modelId?.slice(0, 8)}
             ...)
           </div>
