@@ -1,4 +1,11 @@
 /**
+ * Type guard for checking if value is a nested translation object
+ */
+function isTranslationObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
  * Get a nested value from an object using dot notation
  */
 export function getNestedValue(obj: unknown, path: string): string | undefined {
@@ -6,10 +13,10 @@ export function getNestedValue(obj: unknown, path: string): string | undefined {
   let current: unknown = obj;
 
   for (const key of keys) {
-    if (current === null || current === undefined || typeof current !== 'object') {
+    if (!isTranslationObject(current)) {
       return undefined;
     }
-    current = (current as Record<string, unknown>)[key];
+    current = current[key];
   }
 
   return typeof current === 'string' ? current : undefined;

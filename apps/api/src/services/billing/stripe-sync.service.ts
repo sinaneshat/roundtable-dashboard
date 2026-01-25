@@ -43,6 +43,13 @@ import {
 } from './stripe-kv-cache';
 import type { SyncedSubscriptionState } from './stripe-sync-schemas';
 
+const INTERVAL_CALCULATORS: Record<BillingInterval, (date: Date, count: number) => void> = {
+  [BillingIntervals.MONTH]: (d, c) => d.setMonth(d.getMonth() + c),
+  [BillingIntervals.YEAR]: (d, c) => d.setFullYear(d.getFullYear() + c),
+  [BillingIntervals.WEEK]: (d, c) => d.setDate(d.getDate() + (7 * c)),
+  [BillingIntervals.DAY]: (d, c) => d.setDate(d.getDate() + c),
+};
+
 function calculatePeriodEnd(
   startTimestamp: number,
   interval: BillingInterval = BillingIntervals.MONTH,
@@ -51,15 +58,8 @@ function calculatePeriodEnd(
   const startDate = new Date(startTimestamp * 1000);
   const endDate = new Date(startDate);
 
-  if (interval === BillingIntervals.MONTH) {
-    endDate.setMonth(endDate.getMonth() + intervalCount);
-  } else if (interval === BillingIntervals.YEAR) {
-    endDate.setFullYear(endDate.getFullYear() + intervalCount);
-  } else if (interval === BillingIntervals.WEEK) {
-    endDate.setDate(endDate.getDate() + (7 * intervalCount));
-  } else if (interval === BillingIntervals.DAY) {
-    endDate.setDate(endDate.getDate() + intervalCount);
-  }
+  const calculator = INTERVAL_CALCULATORS[interval];
+  calculator(endDate, intervalCount);
 
   return Math.floor(endDate.getTime() / 1000);
 }

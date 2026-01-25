@@ -1780,13 +1780,11 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       ...PENDING_MESSAGE_STATE_RESET,
       ...REGENERATION_STATE_RESET,
       ...STREAM_RESUMPTION_STATE_RESET,
-      // ✅ FIX A2: Clear moderator tracking Sets after round completes
-      // Prevents stale tracking from blocking re-triggers in subsequent rounds
-      createdModeratorRounds: new Set<number>(),
-      triggeredModeratorRounds: new Set<number>(),
-      triggeredModeratorIds: new Set<string>(),
-      triggeredPreSearchRounds: new Set<number>(),
-      // ✅ FIX A3: Clear pre-search activity times
+      // ✅ IMPORTANT: Do NOT clear tracking Sets here!
+      // triggeredPreSearchRounds, createdModeratorRounds, triggeredModeratorRounds, triggeredModeratorIds
+      // must PERSIST across completeStreaming calls to prevent duplicate triggers for completed rounds.
+      // These are only cleared on thread navigation (resetForThreadNavigation).
+      // ✅ Clear pre-search activity times (these are per-streaming-session, not persistent tracking)
       preSearchActivityTimes: new Map<number, number>(),
       ...(needsNewPendingAnimations ? { pendingAnimations: new Set<number>() } : {}),
       ...(needsNewAnimationResolvers ? { animationResolvers: new Map<number, () => void>() } : {}),

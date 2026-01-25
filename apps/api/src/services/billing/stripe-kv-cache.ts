@@ -12,6 +12,7 @@
 import { getKVBinding } from '@/db';
 
 import type { SyncedSubscriptionState } from './stripe-sync-schemas';
+import { SyncedSubscriptionStateSchema } from './stripe-sync-schemas';
 
 // Cache TTLs following Theo's recommendations
 const USER_CUSTOMER_ID_TTL = 60 * 60 * 24; // 24 hours - rarely changes
@@ -75,7 +76,10 @@ export async function getCachedSubscriptionData(
   try {
     // cacheTtl enables edge caching - 60s (min) for subscription data
     const data = await kv.get(getCustomerDataKey(customerId), { type: 'json', cacheTtl: 60 });
-    return data as SyncedSubscriptionState | null;
+    if (data === null)
+      return null;
+    const parsed = SyncedSubscriptionStateSchema.safeParse(data);
+    return parsed.success ? parsed.data : null;
   } catch {
     return null;
   }

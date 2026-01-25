@@ -164,7 +164,8 @@ export const createJobHandler: RouteHandler<typeof createJobRoute, ApiEnv> = cre
     if (!job) {
       throw createError.internal('Failed to create job', {
         errorType: 'database',
-        service: 'automatedJob',
+        operation: 'insert',
+        table: 'automatedJob',
       });
     }
 
@@ -320,7 +321,8 @@ export const updateJobHandler: RouteHandler<typeof updateJobRoute, ApiEnv> = cre
           .where(eq(tables.automatedJob.id, id));
         throw createError.internal('Failed to queue job', {
           errorType: 'queue',
-          service: 'automatedJob',
+          queueName: 'ROUND_ORCHESTRATION_QUEUE',
+          operation: 'send',
         });
       }
     }
@@ -344,7 +346,8 @@ export const updateJobHandler: RouteHandler<typeof updateJobRoute, ApiEnv> = cre
     if (!updatedJob) {
       throw createError.internal('Failed to reload job', {
         errorType: 'database',
-        service: 'automatedJob',
+        operation: 'select',
+        table: 'automatedJob',
       });
     }
 

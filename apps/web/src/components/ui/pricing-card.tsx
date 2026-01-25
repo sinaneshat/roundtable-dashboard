@@ -1,6 +1,7 @@
 import type { UIBillingInterval } from '@roundtable/shared';
 import { ClientOnly } from '@tanstack/react-router';
 import { motion } from 'motion/react';
+import type React from 'react';
 
 import { Icons } from '@/components/icons';
 import { useIsMounted } from '@/hooks/utils';
@@ -36,12 +37,21 @@ type PricingCardProps = {
   disabled?: boolean;
 };
 
-const VALUE_PROPS = [
+type ValuePropIcon = 'sparkles' | 'layers' | 'infinity' | 'messagesSquare';
+
+const VALUE_PROPS: ReadonlyArray<{ icon: ValuePropIcon; key: string }> = [
   { icon: 'sparkles', key: 'allModels' },
   { icon: 'layers', key: 'presets' },
   { icon: 'infinity', key: 'unlimited' },
   { icon: 'messagesSquare', key: 'councilSummary' },
-] as const;
+];
+
+const ICON_COMPONENTS: Record<ValuePropIcon, React.ComponentType<{ className?: string }>> = {
+  sparkles: Icons.sparkles,
+  layers: Icons.layers,
+  infinity: Icons.infinity,
+  messagesSquare: Icons.messagesSquare,
+};
 
 export function PricingCard({
   name,
@@ -86,19 +96,9 @@ export function PricingCard({
 
   const isActionButtonLoading = isCurrentPlan ? isProcessingCancel : isProcessingSubscribe;
 
-  const getIcon = (iconName: string) => {
-    switch (iconName) {
-      case 'sparkles':
-        return <Icons.sparkles className="size-5" />;
-      case 'layers':
-        return <Icons.layers className="size-5" />;
-      case 'infinity':
-        return <Icons.infinity className="size-5" />;
-      case 'messagesSquare':
-        return <Icons.messagesSquare className="size-5" />;
-      default:
-        return <Icons.check className="size-5" />;
-    }
+  const getIcon = (iconName: ValuePropIcon) => {
+    const IconComponent = ICON_COMPONENTS[iconName];
+    return <IconComponent className="size-5" />;
   };
 
   return (

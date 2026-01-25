@@ -28,7 +28,7 @@ export {
   useThreadsQuery,
 } from './chat/threads';
 export { useModelsQuery } from './models';
-export { useProductsQuery } from './products';
+export { useProductQuery, useProductsQuery } from './products';
 export {
   useProjectAttachmentsQuery,
   useProjectContextQuery,

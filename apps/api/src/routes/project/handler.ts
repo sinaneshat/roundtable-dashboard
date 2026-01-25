@@ -874,7 +874,7 @@ export const removeAttachmentFromProjectHandler: RouteHandler<typeof removeAttac
       if (sourceThread) {
         throw createError.badRequest(
           'Cannot delete file linked to active thread. Delete the thread first.',
-          { errorType: 'validation', resource: 'projectAttachment' },
+          { errorType: 'validation', field: 'projectAttachment' },
         );
       }
     }

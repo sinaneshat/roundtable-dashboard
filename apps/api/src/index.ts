@@ -6,6 +6,8 @@
  *
  * IMPORTANT: All routes MUST use createOpenApiApp() pattern for RPC type safety.
  * Never use createRoute directly in route handlers - always use OpenAPIHono apps.
+ *
+ * Route groups are used to split the type inference chain to avoid TS7056 error.
  */
 
 import { WebAppEnvs } from '@roundtable/shared';
@@ -28,286 +30,18 @@ import type { ApiEnv } from '@/types';
 
 import { createOpenApiApp } from './core/app';
 import { attachSession, csrfProtection, ensureOpenRouterInitialized, ensureStripeInitialized, errorLogger, performanceTracking, RateLimiterFactory, requestLogger } from './middleware';
-// Admin routes
-import { adminClearUserCacheHandler, adminSearchUserHandler } from './routes/admin/handler';
-// Admin Jobs routes
-import {
-  createJobHandler,
-  deleteJobHandler,
-  getJobHandler,
-  listJobsHandler,
-  updateJobHandler,
-} from './routes/admin/jobs/handler';
-import {
-  createJobRoute,
-  deleteJobRoute,
-  getJobRoute,
-  listJobsRoute,
-  updateJobRoute,
-} from './routes/admin/jobs/route';
-import { discoverTrendsHandler } from './routes/admin/jobs/trends/handler';
-import { discoverTrendsRoute } from './routes/admin/jobs/trends/route';
-import { adminClearUserCacheRoute, adminSearchUserRoute } from './routes/admin/route';
-// API Keys routes
-import {
-  createApiKeyHandler,
-  deleteApiKeyHandler,
-  getApiKeyHandler,
-  listApiKeysHandler,
-  updateApiKeyHandler,
-} from './routes/api-keys/handler';
-import {
-  createApiKeyRoute,
-  deleteApiKeyRoute,
-  getApiKeyRoute,
-  listApiKeysRoute,
-  updateApiKeyRoute,
-} from './routes/api-keys/route';
-// Auth routes
-import { clearOwnCacheHandler, secureMeHandler } from './routes/auth/handler';
-import { clearOwnCacheRoute, secureMeRoute } from './routes/auth/route';
-// Billing routes
-import {
-  cancelSubscriptionHandler,
-  createCheckoutSessionHandler,
-  createCustomerPortalSessionHandler,
-  getProductHandler,
-  getSubscriptionHandler,
-  handleWebhookHandler,
-  listProductsHandler,
-  listSubscriptionsHandler,
-  switchSubscriptionHandler,
-  syncAfterCheckoutHandler,
-  syncCreditsAfterCheckoutHandler,
-} from './routes/billing/handler';
-import {
-  cancelSubscriptionRoute,
-  createCheckoutSessionRoute,
-  createCustomerPortalSessionRoute,
-  getProductRoute,
-  getSubscriptionRoute,
-  handleWebhookRoute,
-  listProductsRoute,
-  listSubscriptionsRoute,
-  switchSubscriptionRoute,
-  syncAfterCheckoutRoute,
-  syncCreditsAfterCheckoutRoute,
-} from './routes/billing/route';
-// Chat routes
-import {
-  addParticipantHandler,
-  analyzePromptHandler,
-  councilModeratorRoundHandler,
-  createCustomRoleHandler,
-  createThreadHandler,
-  createUserPresetHandler,
-  deleteCustomRoleHandler,
-  deleteParticipantHandler,
-  deleteThreadHandler,
-  deleteUserPresetHandler,
-  executePreSearchHandler,
-  getCustomRoleHandler,
-  getPublicThreadHandler,
-  getRoundStatusHandler,
-  getThreadBySlugHandler,
-  getThreadChangelogHandler,
-  getThreadFeedbackHandler,
-  getThreadHandler,
-  getThreadMemoryEventsHandler,
-  getThreadMessagesHandler,
-  getThreadPreSearchesHandler,
-  getThreadRoundChangelogHandler,
-  getThreadSlugStatusHandler,
-  getThreadStreamResumptionStateHandler,
-  getUserPresetHandler,
-  listCustomRolesHandler,
-  listPublicThreadSlugsHandler,
-  listSidebarThreadsHandler,
-  listThreadsHandler,
-  listUserPresetsHandler,
-  resumeThreadStreamHandler,
-  setRoundFeedbackHandler,
-  streamChatHandler,
-  updateCustomRoleHandler,
-  updateParticipantHandler,
-  updateThreadHandler,
-  updateUserPresetHandler,
-} from './routes/chat';
-import {
-  addParticipantRoute,
-  analyzePromptRoute,
-  councilModeratorRoundRoute,
-  createCustomRoleRoute,
-  createThreadRoute,
-  createUserPresetRoute,
-  deleteCustomRoleRoute,
-  deleteParticipantRoute,
-  deleteThreadRoute,
-  deleteUserPresetRoute,
-  executePreSearchRoute,
-  getCustomRoleRoute,
-  getPublicThreadRoute,
-  getRoundStatusRoute,
-  getThreadBySlugRoute,
-  getThreadChangelogRoute,
-  getThreadFeedbackRoute,
-  getThreadMemoryEventsRoute,
-  getThreadMessagesRoute,
-  getThreadPreSearchesRoute,
-  getThreadRoundChangelogRoute,
-  getThreadRoute,
-  getThreadSlugStatusRoute,
-  getThreadStreamResumptionStateRoute,
-  getUserPresetRoute,
-  listCustomRolesRoute,
-  listPublicThreadSlugsRoute,
-  listSidebarThreadsRoute,
-  listThreadsRoute,
-  listUserPresetsRoute,
-  resumeThreadStreamRoute,
-  setRoundFeedbackRoute,
-  streamChatRoute,
-  updateCustomRoleRoute,
-  updateParticipantRoute,
-  updateThreadRoute,
-  updateUserPresetRoute,
-} from './routes/chat/route';
-// Credits routes
-import {
-  estimateCreditCostHandler,
-  getCreditBalanceHandler,
-  getCreditTransactionsHandler,
-} from './routes/credits/handler';
-import {
-  estimateCreditCostRoute,
-  getCreditBalanceRoute,
-  getCreditTransactionsRoute,
-} from './routes/credits/route';
+// Routes - types are re-exported below
+import { apiRoutes } from './routes';
 // PostHog proxy (analytics ad-blocker bypass)
 import { ingestProxyHandler } from './routes/ingest';
-// MCP (Model Context Protocol) routes - Consolidated JSON-RPC + REST endpoints
-import {
-  callToolHandler,
-  listResourcesHandler,
-  listToolsHandler,
-  mcpJsonRpcHandler,
-  openAIFunctionsHandler,
-} from './routes/mcp/handler';
-import {
-  callToolRoute,
-  listResourcesRoute,
-  listToolsRoute,
-  mcpJsonRpcRoute,
-  openAIFunctionsRoute,
-} from './routes/mcp/route';
-// Models routes (dynamic OpenRouter models)
-import { listModelsHandler } from './routes/models/handler';
-import { listModelsRoute } from './routes/models/route';
-// OG image routes
-import { ogChatHandler, ogChatRoute } from './routes/og';
-// Project routes
-import {
-  addAttachmentToProjectHandler,
-  createProjectHandler,
-  createProjectMemoryHandler,
-  deleteProjectHandler,
-  deleteProjectMemoryHandler,
-  getProjectAttachmentHandler,
-  getProjectContextHandler,
-  getProjectHandler,
-  getProjectLimitsHandler,
-  getProjectMemoryHandler,
-  listProjectAttachmentsHandler,
-  listProjectMemoriesHandler,
-  listProjectsHandler,
-  listProjectThreadsHandler,
-  removeAttachmentFromProjectHandler,
-  updateProjectAttachmentHandler,
-  updateProjectHandler,
-  updateProjectMemoryHandler,
-} from './routes/project/handler';
-import {
-  addAttachmentToProjectRoute,
-  createProjectMemoryRoute,
-  createProjectRoute,
-  deleteProjectMemoryRoute,
-  deleteProjectRoute,
-  getProjectAttachmentRoute,
-  getProjectContextRoute,
-  getProjectLimitsRoute,
-  getProjectMemoryRoute,
-  getProjectRoute,
-  listProjectAttachmentsRoute,
-  listProjectMemoriesRoute,
-  listProjectsRoute,
-  listProjectThreadsRoute,
-  removeAttachmentFromProjectRoute,
-  updateProjectAttachmentRoute,
-  updateProjectMemoryRoute,
-  updateProjectRoute,
-} from './routes/project/route';
-// ============================================================================
-// Route and Handler Imports (organized to match registration order below)
-// ============================================================================
-// System/health routes
-import {
-  detailedHealthHandler,
-  healthHandler,
-} from './routes/system/handler';
-import {
-  detailedHealthRoute,
-  healthRoute,
-} from './routes/system/route';
-// Test routes (development/test only)
-import {
-  setUserCreditsHandler,
-} from './routes/test/handler';
-import {
-  setUserCreditsRoute,
-} from './routes/test/route';
-// Upload routes (R2 file uploads - secure ticket-based pattern)
-import {
-  abortMultipartUploadHandler,
-  completeMultipartUploadHandler,
-  createMultipartUploadHandler,
-  deleteUploadHandler,
-  downloadUploadHandler,
-  getDownloadUrlHandler,
-  getUploadHandler,
-  listUploadsHandler,
-  requestUploadTicketHandler,
-  updateUploadHandler,
-  uploadPartHandler,
-  uploadWithTicketHandler,
-} from './routes/uploads/handler';
-import {
-  abortMultipartUploadRoute,
-  completeMultipartUploadRoute,
-  createMultipartUploadRoute,
-  deleteUploadRoute,
-  downloadUploadRoute,
-  getDownloadUrlRoute,
-  getUploadRoute,
-  listUploadsRoute,
-  requestUploadTicketRoute,
-  updateUploadRoute,
-  uploadPartRoute,
-  uploadWithTicketRoute,
-} from './routes/uploads/route';
-// Usage tracking routes
-import {
-  getUserUsageStatsHandler,
-} from './routes/usage/handler';
-import {
-  getUserUsageStatsRoute,
-} from './routes/usage/route';
 
 // ============================================================================
 // Environment Detection (sync, build-time check)
 // WEBAPP_ENV values: 'local' | 'preview' | 'prod' (from wrangler.jsonc)
 // ============================================================================
 const WEBAPP_ENV = process.env.WEBAPP_ENV || WebAppEnvs.LOCAL;
-const IS_DEV_ENVIRONMENT = WEBAPP_ENV === WebAppEnvs.LOCAL || WEBAPP_ENV === WebAppEnvs.PREVIEW;
+// Note: Test routes are always mounted but guarded at the handler level
+void WEBAPP_ENV;
 
 // ============================================================================
 // Step 1: Create the main OpenAPIHono app with defaultHook (following docs)
@@ -319,7 +53,7 @@ const app = createOpenApiApp();
 // Step 2: Apply global middleware (following Hono patterns)
 // ============================================================================
 
-// 🔍 DEBUG: Log ALL requests (especially POST) to diagnose 400 errors
+// DEBUG: Log ALL requests (especially POST) to diagnose 400 errors
 if (process.env.DEBUG_REQUESTS === 'true') {
   app.use('*', async (c, next) => {
     const startTime = Date.now();
@@ -584,137 +318,40 @@ app.use('/uploads/multipart/:id/parts', RateLimiterFactory.create('upload'), csr
 app.use('/uploads/multipart/:id/complete', RateLimiterFactory.create('upload'), csrfProtection);
 
 // ============================================================================
-// Step 5: Register all routes
+// Step 5: Mount routes using .route()
+// All routes are registered in routes/index.ts with chained .openapi() calls
+// for full Hono RPC type inference.
 // ============================================================================
 
-const appRoutes = app
-  .openapi(healthRoute, healthHandler)
-  .openapi(detailedHealthRoute, detailedHealthHandler)
-  .openapi(ogChatRoute, ogChatHandler)
-  .openapi(secureMeRoute, secureMeHandler)
-  .openapi(clearOwnCacheRoute, clearOwnCacheHandler)
-  .openapi(listApiKeysRoute, listApiKeysHandler)
-  .openapi(getApiKeyRoute, getApiKeyHandler)
-  .openapi(createApiKeyRoute, createApiKeyHandler)
-  .openapi(updateApiKeyRoute, updateApiKeyHandler)
-  .openapi(deleteApiKeyRoute, deleteApiKeyHandler)
-  .openapi(listProductsRoute, listProductsHandler)
-  .openapi(getProductRoute, getProductHandler)
-  .openapi(createCheckoutSessionRoute, createCheckoutSessionHandler)
-  .openapi(createCustomerPortalSessionRoute, createCustomerPortalSessionHandler)
-  .openapi(syncAfterCheckoutRoute, syncAfterCheckoutHandler)
-  .openapi(syncCreditsAfterCheckoutRoute, syncCreditsAfterCheckoutHandler)
-  .openapi(listSubscriptionsRoute, listSubscriptionsHandler)
-  .openapi(getSubscriptionRoute, getSubscriptionHandler)
-  .openapi(switchSubscriptionRoute, switchSubscriptionHandler)
-  .openapi(cancelSubscriptionRoute, cancelSubscriptionHandler)
-  .openapi(handleWebhookRoute, handleWebhookHandler)
-  .openapi(listThreadsRoute, listThreadsHandler)
-  .openapi(listSidebarThreadsRoute, listSidebarThreadsHandler)
-  .openapi(createThreadRoute, createThreadHandler)
-  .openapi(getThreadRoute, getThreadHandler)
-  .openapi(getThreadBySlugRoute, getThreadBySlugHandler)
-  .openapi(getThreadSlugStatusRoute, getThreadSlugStatusHandler)
-  .openapi(updateThreadRoute, updateThreadHandler)
-  .openapi(deleteThreadRoute, deleteThreadHandler)
-  .openapi(getPublicThreadRoute, getPublicThreadHandler)
-  .openapi(listPublicThreadSlugsRoute, listPublicThreadSlugsHandler)
-  .openapi(getThreadMessagesRoute, getThreadMessagesHandler)
-  .openapi(getThreadChangelogRoute, getThreadChangelogHandler)
-  .openapi(getThreadRoundChangelogRoute, getThreadRoundChangelogHandler)
-  .openapi(streamChatRoute, streamChatHandler)
-  .openapi(resumeThreadStreamRoute, resumeThreadStreamHandler)
-  .openapi(getThreadStreamResumptionStateRoute, getThreadStreamResumptionStateHandler)
-  .openapi(getThreadMemoryEventsRoute, getThreadMemoryEventsHandler)
-  .openapi(addParticipantRoute, addParticipantHandler)
-  .openapi(updateParticipantRoute, updateParticipantHandler)
-  .openapi(deleteParticipantRoute, deleteParticipantHandler)
-  .openapi(analyzePromptRoute, analyzePromptHandler)
-  .openapi(listCustomRolesRoute, listCustomRolesHandler)
-  .openapi(createCustomRoleRoute, createCustomRoleHandler)
-  .openapi(getCustomRoleRoute, getCustomRoleHandler)
-  .openapi(updateCustomRoleRoute, updateCustomRoleHandler)
-  .openapi(deleteCustomRoleRoute, deleteCustomRoleHandler)
-  .openapi(listUserPresetsRoute, listUserPresetsHandler)
-  .openapi(createUserPresetRoute, createUserPresetHandler)
-  .openapi(getUserPresetRoute, getUserPresetHandler)
-  .openapi(updateUserPresetRoute, updateUserPresetHandler)
-  .openapi(deleteUserPresetRoute, deleteUserPresetHandler)
-  .openapi(getThreadPreSearchesRoute, getThreadPreSearchesHandler)
-  .openapi(executePreSearchRoute, executePreSearchHandler)
-  .openapi(councilModeratorRoundRoute, councilModeratorRoundHandler)
-  .openapi(getRoundStatusRoute, getRoundStatusHandler)
-  .openapi(setRoundFeedbackRoute, setRoundFeedbackHandler)
-  .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler)
-  .openapi(listProjectsRoute, listProjectsHandler)
-  .openapi(getProjectLimitsRoute, getProjectLimitsHandler)
-  .openapi(createProjectRoute, createProjectHandler)
-  .openapi(getProjectRoute, getProjectHandler)
-  .openapi(updateProjectRoute, updateProjectHandler)
-  .openapi(deleteProjectRoute, deleteProjectHandler)
-  .openapi(listProjectThreadsRoute, listProjectThreadsHandler)
-  .openapi(listProjectAttachmentsRoute, listProjectAttachmentsHandler)
-  .openapi(addAttachmentToProjectRoute, addAttachmentToProjectHandler)
-  .openapi(getProjectAttachmentRoute, getProjectAttachmentHandler)
-  .openapi(updateProjectAttachmentRoute, updateProjectAttachmentHandler)
-  .openapi(removeAttachmentFromProjectRoute, removeAttachmentFromProjectHandler)
-  .openapi(listProjectMemoriesRoute, listProjectMemoriesHandler)
-  .openapi(createProjectMemoryRoute, createProjectMemoryHandler)
-  .openapi(getProjectMemoryRoute, getProjectMemoryHandler)
-  .openapi(updateProjectMemoryRoute, updateProjectMemoryHandler)
-  .openapi(deleteProjectMemoryRoute, deleteProjectMemoryHandler)
-  .openapi(getProjectContextRoute, getProjectContextHandler)
-  .openapi(getUserUsageStatsRoute, getUserUsageStatsHandler)
-  .openapi(getCreditBalanceRoute, getCreditBalanceHandler)
-  .openapi(getCreditTransactionsRoute, getCreditTransactionsHandler)
-  .openapi(estimateCreditCostRoute, estimateCreditCostHandler)
-  .openapi(adminSearchUserRoute, adminSearchUserHandler)
-  .openapi(adminClearUserCacheRoute, adminClearUserCacheHandler)
-  // Admin Jobs routes
-  .openapi(listJobsRoute, listJobsHandler)
-  .openapi(createJobRoute, createJobHandler)
-  .openapi(getJobRoute, getJobHandler)
-  .openapi(updateJobRoute, updateJobHandler)
-  .openapi(deleteJobRoute, deleteJobHandler)
-  // Admin Jobs Trends routes
-  .openapi(discoverTrendsRoute, discoverTrendsHandler);
-
-let creditsChain = appRoutes;
-if (IS_DEV_ENVIRONMENT) {
-  creditsChain = creditsChain.openapi(setUserCreditsRoute, setUserCreditsHandler);
-}
-
-const finalRoutes = creditsChain
-  .openapi(listModelsRoute, listModelsHandler)
-  .openapi(mcpJsonRpcRoute, mcpJsonRpcHandler)
-  .openapi(listToolsRoute, listToolsHandler)
-  .openapi(listResourcesRoute, listResourcesHandler)
-  .openapi(callToolRoute, callToolHandler)
-  .openapi(openAIFunctionsRoute, openAIFunctionsHandler)
-  .openapi(listUploadsRoute, listUploadsHandler)
-  .openapi(getUploadRoute, getUploadHandler)
-  .openapi(getDownloadUrlRoute, getDownloadUrlHandler)
-  .openapi(downloadUploadRoute, downloadUploadHandler)
-  .openapi(updateUploadRoute, updateUploadHandler)
-  .openapi(deleteUploadRoute, deleteUploadHandler)
-  .openapi(requestUploadTicketRoute, requestUploadTicketHandler)
-  .openapi(uploadWithTicketRoute, uploadWithTicketHandler)
-  .openapi(createMultipartUploadRoute, createMultipartUploadHandler)
-  .openapi(uploadPartRoute, uploadPartHandler)
-  .openapi(completeMultipartUploadRoute, completeMultipartUploadHandler)
-  .openapi(abortMultipartUploadRoute, abortMultipartUploadHandler);
+// Mount all API routes at root path (routes define their own paths)
+app.route('/', apiRoutes);
 
 // ============================================================================
-// Step 6: Export AppType for RPC client type inference
+// Step 6: Re-export route types for RPC client type inference
+// Individual route group types are exported for modular client usage.
+// AppType is the intersection of all groups for unified client usage.
 // ============================================================================
 
-export type AppType = typeof finalRoutes;
+export type {
+  AdminRoutesType,
+  AppType,
+  BillingRoutesType,
+  ChatFeatureRoutesType,
+  ChatMessageRoutesType,
+  ChatThreadRoutesType,
+  // Individual route group types for modular clients
+  HealthAuthRoutesType,
+  ProjectRoutesType,
+  TestRoutesType,
+  UploadRoutesType,
+  UtilityRoutesType,
+} from './routes';
 
 // ============================================================================
 // Step 7: OpenAPI documentation endpoints
 // ============================================================================
 
-finalRoutes.doc('/doc', c => ({
+app.doc('/doc', c => ({
   openapi: '3.0.0',
   info: {
     version: APP_VERSION,
@@ -756,12 +393,12 @@ finalRoutes.doc('/doc', c => ({
   security: [{ ApiKeyAuth: [] }],
 }));
 
-finalRoutes.get('/openapi.json', async (c) => {
+app.get('/openapi.json', async (c) => {
   return c.redirect('/api/v1/doc');
 });
 
 // Scalar UI with CSP
-finalRoutes.use('/scalar', async (c, next) => {
+app.use('/scalar', async (c, next) => {
   await next();
 
   const response = c.res;
@@ -790,7 +427,7 @@ finalRoutes.use('/scalar', async (c, next) => {
 });
 
 // Scalar API docs - loaded from CDN, not bundled
-finalRoutes.get('/scalar', (c) => {
+app.get('/scalar', (c) => {
   const html = `<!DOCTYPE html>
 <html>
 <head>
@@ -807,9 +444,9 @@ finalRoutes.get('/scalar', (c) => {
 });
 
 // LLMs.txt - OpenAPI as markdown (no external deps, uses built-in JSON)
-finalRoutes.get('/llms.txt', async (c) => {
+app.get('/llms.txt', async (c) => {
   try {
-    const document = finalRoutes.getOpenAPI31Document({
+    const document = app.getOpenAPI31Document({
       openapi: '3.1.0',
       info: { title: 'Application API', version: APP_VERSION },
     });
@@ -954,7 +591,7 @@ rootApp.get('/api/v1/health', (c) => {
 });
 
 // Mount API routes
-rootApp.route('/api/v1', finalRoutes);
+rootApp.route('/api/v1', app);
 
 // ============================================================================
 // Step 9: Export for Cloudflare Workers

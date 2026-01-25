@@ -43,7 +43,6 @@ import {
 import { filterDbToParticipantMessages } from '@/services/messages';
 import { extractModeratorModelName, getModelById, initializeOpenRouter, openRouterService } from '@/services/models';
 import { extractMemoriesFromRound } from '@/services/projects';
-import { logMemoriesCreated } from '@/services/threads/thread-changelog.service';
 import {
   buildCouncilModeratorSystemPrompt,
 } from '@/services/prompts';
@@ -58,6 +57,7 @@ import {
   markStreamActive,
   setThreadActiveStream,
 } from '@/services/streaming';
+import { logMemoriesCreated } from '@/services/threads/thread-changelog.service';
 import type { ApiEnv } from '@/types';
 
 import type { councilModeratorRoundRoute } from '../route';

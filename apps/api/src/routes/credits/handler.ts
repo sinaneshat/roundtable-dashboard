@@ -1,6 +1,6 @@
 import type { RouteHandler } from '@hono/zod-openapi';
 import { CREDIT_CONFIG } from '@roundtable/shared';
-import type { UsageStatus } from '@roundtable/shared/enums';
+import type { CreditAction, UsageStatus } from '@roundtable/shared/enums';
 import { CreditActions, PlanTypes, UsageStatuses } from '@roundtable/shared/enums';
 
 import { createHandler, Responses } from '@/core';
@@ -19,6 +19,39 @@ import type {
   getCreditTransactionsRoute,
 } from './route';
 import { CreditEstimateRequestSchema, CreditTransactionsQuerySchema } from './schema';
+
+// ============================================================================
+// Credit Action Calculator Registry
+// ============================================================================
+
+type CreditEstimateParams = {
+  participantCount: number;
+  inputTokens: number;
+};
+
+type CreditCalculator = (params: CreditEstimateParams) => number;
+
+const CREDIT_ACTION_CALCULATORS: Record<CreditAction, CreditCalculator> = {
+  [CreditActions.AI_RESPONSE]: p => estimateStreamingCredits(p.participantCount, p.inputTokens),
+  [CreditActions.USER_MESSAGE]: p => estimateStreamingCredits(p.participantCount, p.inputTokens),
+  [CreditActions.WEB_SEARCH]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.webSearchQuery),
+  [CreditActions.THREAD_CREATION]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.threadCreation),
+  [CreditActions.FILE_READING]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.fileReading),
+  [CreditActions.ANALYSIS_GENERATION]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.analysisGeneration),
+  [CreditActions.MEMORY_EXTRACTION]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.memoryExtraction),
+  [CreditActions.RAG_QUERY]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.ragQuery),
+  [CreditActions.PROJECT_FILE_LINK]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.projectFileLink),
+  [CreditActions.PROJECT_STORAGE]: () => tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.projectStoragePer10MB),
+  // Grant actions - return 0 for estimation (not deductions)
+  [CreditActions.SIGNUP_BONUS]: () => 0,
+  [CreditActions.MONTHLY_RENEWAL]: () => 0,
+  [CreditActions.CREDIT_PURCHASE]: () => 0,
+  [CreditActions.FREE_ROUND_COMPLETE]: () => 0,
+};
+
+function calculateCreditCost(action: CreditAction, params: CreditEstimateParams): number {
+  return CREDIT_ACTION_CALCULATORS[action](params);
+}
 
 export const getCreditBalanceHandler: RouteHandler<
   typeof getCreditBalanceRoute,
@@ -123,31 +156,12 @@ export const estimateCreditCostHandler: RouteHandler<
     const { user } = c.auth();
     const body = c.validated.body;
 
-    let estimatedCredits = 0;
+    const params: CreditEstimateParams = {
+      participantCount: body.params?.participantCount ?? 1,
+      inputTokens: body.params?.estimatedInputTokens ?? CREDIT_CONFIG.DEFAULT_ESTIMATED_INPUT_TOKENS,
+    };
 
-    switch (body.action) {
-      case CreditActions.AI_RESPONSE:
-      case CreditActions.USER_MESSAGE: {
-        const participantCount = body.params?.participantCount ?? 1;
-        const inputTokens = body.params?.estimatedInputTokens;
-        estimatedCredits = estimateStreamingCredits(participantCount, inputTokens);
-        break;
-      }
-      case CreditActions.WEB_SEARCH:
-        estimatedCredits = tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.webSearchQuery);
-        break;
-      case CreditActions.THREAD_CREATION:
-        estimatedCredits = tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.threadCreation);
-        break;
-      case CreditActions.FILE_READING:
-        estimatedCredits = tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.fileReading);
-        break;
-      case CreditActions.ANALYSIS_GENERATION:
-        estimatedCredits = tokensToCredits(CREDIT_CONFIG.ACTION_COSTS.analysisGeneration);
-        break;
-      default:
-        estimatedCredits = 1;
-    }
+    const estimatedCredits = calculateCreditCost(body.action, params);
 
     const creditBalance = await getUserCreditBalance(user.id);
     const currentBalance = creditBalance.available;

@@ -85,18 +85,15 @@ describe('query Cache Invalidation', () => {
       expect(getQueryKeysToInvalidate(null)).toEqual([]);
     });
 
-    it('returns all thread-specific query keys when threadId exists', () => {
+    it('returns ephemeral thread-specific query keys when threadId exists', () => {
       const threadId = 'thread-123';
       const keys = getQueryKeysToInvalidate(threadId);
 
-      // leaveThread returns all thread-specific keys to ensure complete cache invalidation
-      expect(keys).toHaveLength(6);
-      expect(keys).toContainEqual(queryKeys.threads.messages(threadId));
-      expect(keys).toContainEqual(queryKeys.threads.preSearches(threadId));
-      expect(keys).toContainEqual(queryKeys.threads.feedback(threadId));
+      // leaveThread only invalidates ephemeral streaming state - NOT detail/messages/etc.
+      // This ensures snappy navigation when returning to cached threads
+      // (see query-keys.ts:344 comment)
+      expect(keys).toHaveLength(1);
       expect(keys).toContainEqual(queryKeys.threads.streamResumption(threadId));
-      expect(keys).toContainEqual(queryKeys.threads.changelog(threadId));
-      expect(keys).toContainEqual(queryKeys.threads.detail(threadId));
     });
 
     it('generates unique keys for different thread IDs', () => {

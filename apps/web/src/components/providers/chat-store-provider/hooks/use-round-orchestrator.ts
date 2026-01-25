@@ -215,8 +215,12 @@ export function useRoundOrchestrator({
       currentResumptionPhase: state.currentResumptionPhase,
       resumptionRoundNumber: state.resumptionRoundNumber,
       nextParticipantToTrigger: state.nextParticipantToTrigger as [number, number] | null,
-      preSearchResumption: null, // TODO: Map from store
-      moderatorResumption: null, // TODO: Map from store
+      preSearchResumption: state.preSearchResumption?.streamId
+        ? { streamId: state.preSearchResumption.streamId }
+        : null,
+      moderatorResumption: state.moderatorResumption?.streamId
+        ? { streamId: state.moderatorResumption.streamId }
+        : null,
       error: state.flowLastError,
     };
 

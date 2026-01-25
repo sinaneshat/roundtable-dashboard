@@ -12,9 +12,9 @@ import {
   ProjectSettingsModal,
 } from '@/components/projects';
 import { Button } from '@/components/ui/button';
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useProjectQuery, useProjectThreadsQuery } from '@/hooks/queries';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
@@ -112,48 +112,50 @@ export function ProjectDetailScreen({
           </div>
 
           {/* New Chat Section */}
-          {isThreadLimitReached ? (
-            <TooltipProvider>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <button
-                    type="button"
-                    onClick={() => setIsThreadLimitDialogOpen(true)}
-                    className={cn(
-                      'flex items-center justify-center gap-2 p-4 mb-8 w-full',
-                      'rounded-xl border-2 border-dashed border-border/40',
-                      'text-muted-foreground/60 cursor-not-allowed',
-                      'bg-muted/10',
-                    )}
-                  >
-                    <Icons.plus className="size-5" />
-                    <span className="text-base font-medium">
-                      {t('projects.newChatIn', { projectName: project.name })}
-                    </span>
-                  </button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  <p>{t('projects.threadLimitReachedShort', { max: PROJECT_LIMITS.MAX_THREADS_PER_PROJECT })}</p>
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
-          ) : (
-            <Link
-              to="/chat/projects/$projectId/new"
-              params={{ projectId }}
-              className={cn(
-                'flex items-center justify-center gap-2 p-4 mb-8',
-                'rounded-xl border-2 border-dashed border-border/60',
-                'text-muted-foreground hover:text-foreground',
-                'hover:bg-muted/30 hover:border-border transition-all',
+          {isThreadLimitReached
+            ? (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <button
+                        type="button"
+                        onClick={() => setIsThreadLimitDialogOpen(true)}
+                        className={cn(
+                          'flex items-center justify-center gap-2 p-4 mb-8 w-full',
+                          'rounded-xl border-2 border-dashed border-border/40',
+                          'text-muted-foreground/60 cursor-not-allowed',
+                          'bg-muted/10',
+                        )}
+                      >
+                        <Icons.plus className="size-5" />
+                        <span className="text-base font-medium">
+                          {t('projects.newChatIn', { projectName: project.name })}
+                        </span>
+                      </button>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>{t('projects.threadLimitReachedShort', { max: PROJECT_LIMITS.MAX_THREADS_PER_PROJECT })}</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )
+            : (
+                <Link
+                  to="/chat/projects/$projectId/new"
+                  params={{ projectId }}
+                  className={cn(
+                    'flex items-center justify-center gap-2 p-4 mb-8',
+                    'rounded-xl border-2 border-dashed border-border/60',
+                    'text-muted-foreground hover:text-foreground',
+                    'hover:bg-muted/30 hover:border-border transition-all',
+                  )}
+                >
+                  <Icons.plus className="size-5" />
+                  <span className="text-base font-medium">
+                    {t('projects.newChatIn', { projectName: project.name })}
+                  </span>
+                </Link>
               )}
-            >
-              <Icons.plus className="size-5" />
-              <span className="text-base font-medium">
-                {t('projects.newChatIn', { projectName: project.name })}
-              </span>
-            </Link>
-          )}
 
           {/* Thread List */}
           <ThreadList

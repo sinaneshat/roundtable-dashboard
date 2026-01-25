@@ -23,7 +23,7 @@ import {
 } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import dynamic from '@/lib/utils/dynamic';
-import type { ApiMessage, ApiParticipant, ChangelogItem, ChatThread, Model, RoundFeedbackData, StoredPreSearch, ThreadDetailData, ThreadStreamResumptionState } from '@/services/api';
+import type { ApiMessage, ApiParticipant, ChangelogItem, ChatThread, GetThreadMemoryEventsResponse, Model, RoundFeedbackData, StoredPreSearch, ThreadDetailData, ThreadStreamResumptionState } from '@/services/api';
 import { getThreadMemoryEventsService } from '@/services/api';
 import {
   areAllParticipantsCompleteForRound,
@@ -400,7 +400,8 @@ export default function ChatThreadScreen({
 
         if (response?.memories?.length) {
           // Store memory events for inline display under user messages
-          const memoryEvents: MemoryEvent[] = response.memories.map(m => ({
+          type MemoryItem = NonNullable<GetThreadMemoryEventsResponse>['memories'][number];
+          const memoryEvents: MemoryEvent[] = response.memories.map((m: MemoryItem) => ({
             id: m.id,
             summary: m.summary,
             content: m.content ?? m.summary,

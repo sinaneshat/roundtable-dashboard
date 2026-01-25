@@ -13,7 +13,7 @@ export default antfu(
     ignores: [
       'migrations/**/*',
       'apps/web/src/components/ui/*',
-      'apps/api/src/db/migrations/meta/*',
+      'apps/api/src/db/migrations/**/*',
       '**/cloudflare-env.d.ts',
       '**/*.md',
       '.claude/**/*',

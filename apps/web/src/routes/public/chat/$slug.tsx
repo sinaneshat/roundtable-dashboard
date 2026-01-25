@@ -25,8 +25,7 @@ export const Route = createFileRoute('/public/chat/$slug')({
   //
   // ✅ SSR: Use ensureQueryData to guarantee data is available before rendering
   // prefetchQuery doesn't guarantee data and can cause "not found" flash during hydration
-  // @ts-expect-error TanStack Router generated types don't match loader return type after adding errorState
-  loader: async ({ params, context }): Promise<PublicChatLoaderData> => {
+  loader: async ({ params, context }) => {
     const { queryClient } = context;
 
     try {
@@ -45,7 +44,7 @@ export const Route = createFileRoute('/public/chat/$slug')({
       // Count user messages (rounds) for cache invalidation
       const roundCount = initialData?.messages?.filter((m: ApiMessage) => m.role === MessageRoles.USER).length ?? 0;
 
-      return { initialData, roundCount, errorState: null as PublicThreadErrorState };
+      return { initialData, roundCount, errorState: null } satisfies PublicChatLoaderData;
     } catch (error) {
       // ✅ GRACEFUL ERROR HANDLING: Catch API errors and return error state
       // This prevents 500 errors and allows showing user-friendly error pages
@@ -59,15 +58,14 @@ export const Route = createFileRoute('/public/chat/$slug')({
       return {
         initialData: null,
         roundCount: 0,
-        errorState: (isNoLongerPublic ? 'no_longer_public' : 'not_found') as PublicThreadErrorState,
-      };
+        errorState: isNoLongerPublic ? 'no_longer_public' : 'not_found',
+      } satisfies PublicChatLoaderData;
     }
   },
   // ✅ ISR CACHING: Long cache with tag-based invalidation
   // Cache invalidation handles visibility changes via KV tags
-  // @ts-expect-error TanStack Router types don't include loaderData in headers context
-  headers: (ctx: { loaderData?: PublicChatLoaderData }) => {
-    const errorState = ctx.loaderData?.errorState;
+  headers: ({ loaderData }): Record<string, string> => {
+    const errorState = loaderData?.errorState;
 
     // ✅ NO CACHE FOR ERRORS: Don't cache private/not-found responses
     if (errorState) {
@@ -79,7 +77,7 @@ export const Route = createFileRoute('/public/chat/$slug')({
 
     // ISR cache - 1 day edge, 1 hour SWR
     // Cache invalidation handles visibility changes
-    const roundCount = ctx.loaderData?.roundCount ?? 0;
+    const roundCount = loaderData?.roundCount ?? 0;
     return {
       'Cache-Control': 'public, max-age=86400, s-maxage=86400, stale-while-revalidate=3600',
       'ETag': `"rounds-${roundCount}"`,

@@ -7,6 +7,13 @@ import enCommon from '@/i18n/locales/en/common.json';
 import type { Messages, TranslationFunction } from './use-translations';
 
 /**
+ * Type guard for checking if value is a nested translation object
+ */
+function isTranslationObject(value: unknown): value is Record<string, unknown> {
+  return value !== null && typeof value === 'object' && !Array.isArray(value);
+}
+
+/**
  * Get a nested value from an object using dot notation
  */
 function getNestedValue(obj: unknown, path: string): string | undefined {
@@ -14,10 +21,10 @@ function getNestedValue(obj: unknown, path: string): string | undefined {
   let current: unknown = obj;
 
   for (const key of keys) {
-    if (current === null || current === undefined || typeof current !== 'object') {
+    if (!isTranslationObject(current)) {
       return undefined;
     }
-    current = (current as Record<string, unknown>)[key];
+    current = current[key];
   }
 
   return typeof current === 'string' ? current : undefined;

@@ -1,4 +1,5 @@
 export { AttachmentDeleteDialog } from './attachment-delete-dialog';
+export { LimitReachedDialog } from './limit-reached-dialog';
 export { MemoryDeleteDialog } from './memory-delete-dialog';
 export { getProjectColorClass, PROJECT_COLOR_CLASSES } from './project-color-constants';
 export { ProjectColorPicker } from './project-color-picker';
@@ -14,7 +15,6 @@ export { ProjectFormFields } from './project-form-fields';
 export { ProjectIconBadge, ProjectIconColorPicker } from './project-icon-color-picker';
 export { getProjectIconComponent } from './project-icon-constants';
 export { ProjectIconPicker } from './project-icon-picker';
-export { LimitReachedDialog } from './limit-reached-dialog';
 export { ProjectList } from './project-list';
 export type { ProjectListItemData } from './project-list-item';
 export { ProjectListItem } from './project-list-item';

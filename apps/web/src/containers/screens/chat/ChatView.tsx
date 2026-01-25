@@ -510,11 +510,10 @@ export function ChatView({
   const lastLoadedFeedbackRef = useRef<string>('');
   useEffect(() => {
     if (feedbackSuccess && feedbackData?.success && feedbackData.data && Array.isArray(feedbackData.data)) {
-      const feedbackArray: RoundFeedbackData[] = feedbackData.data as RoundFeedbackData[];
-      const feedbackKey = feedbackArray.map((feedback) => {
-        const fb = feedback as Record<string, unknown>;
-        return `${fb.roundNumber as number}:${(fb.feedbackType as string | null) ?? 'none'}`;
-      }).join(',');
+      const feedbackArray = feedbackData.data as RoundFeedbackData[];
+      const feedbackKey = feedbackArray.map(feedback =>
+        `${feedback.roundNumber}:${feedback.feedbackType ?? 'none'}`,
+      ).join(',');
       if (feedbackKey !== lastLoadedFeedbackRef.current) {
         lastLoadedFeedbackRef.current = feedbackKey;
         feedbackActions.loadFeedback(feedbackArray);

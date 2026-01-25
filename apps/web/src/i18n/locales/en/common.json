@@ -1116,7 +1116,6 @@
       "travel": "Travel",
       "writing": "Writing"
     },
-    "threadLimitReached": "This project has reached its {max} thread limit",
     "threads": "Conversations",
     "threadsEmpty": "No conversations",
     "threadsEmptyDescription": "Start a new conversation in this project",

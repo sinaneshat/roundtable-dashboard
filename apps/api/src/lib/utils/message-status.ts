@@ -24,6 +24,28 @@ import type { UIMessage } from 'ai';
 import { getAssistantMetadata } from './metadata';
 
 // ============================================================================
+// Message Part Categories
+// ============================================================================
+
+/**
+ * Centralized message part type groupings for filtering operations.
+ * Reduces magic arrays scattered across the codebase.
+ */
+export const MESSAGE_PART_CATEGORIES = {
+  /** Text and reasoning parts only (for simple text display) */
+  TEXT_ONLY: [MessagePartTypes.TEXT, MessagePartTypes.REASONING] as const,
+  /** Text, reasoning, tool-call, and tool-result parts (for full UI) */
+  DISPLAYABLE: [
+    MessagePartTypes.TEXT,
+    MessagePartTypes.REASONING,
+    MessagePartTypes.TOOL_CALL,
+    MessagePartTypes.TOOL_RESULT,
+  ] as const,
+  /** Source URL and source document parts (for citations) */
+  SOURCES: [MessagePartTypes.SOURCE_URL, MessagePartTypes.SOURCE_DOCUMENT] as const,
+} as const;
+
+// ============================================================================
 // Message Parts Analysis
 // ============================================================================
 
@@ -78,33 +100,32 @@ export type MessagePartsAnalysis = {
  * ```
  */
 export function getMessageParts(message: UIMessage): MessagePartsAnalysis {
+  const textOnlyTypes = MESSAGE_PART_CATEGORIES.TEXT_ONLY as readonly string[];
+  const displayableTypes = MESSAGE_PART_CATEGORIES.DISPLAYABLE as readonly string[];
+  const sourceTypes = MESSAGE_PART_CATEGORIES.SOURCES as readonly string[];
+
   // Text-only parts (text + reasoning)
   const textParts = message.parts.filter(
     p =>
-      (p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING)
+      textOnlyTypes.includes(p.type)
       && 'text' in p
       && typeof p.text === 'string',
   );
 
   // Displayable parts (text + reasoning + tools)
   const displayableParts = message.parts.filter(
-    p =>
-      p.type === MessagePartTypes.TEXT
-      || p.type === MessagePartTypes.REASONING
-      || p.type === MessagePartTypes.TOOL_CALL
-      || p.type === MessagePartTypes.TOOL_RESULT,
+    p => displayableTypes.includes(p.type),
   );
 
   // Source parts for citations
   const sourceParts = message.parts.filter(
-    p =>
-      'type' in p
-      && (p.type === MessagePartTypes.SOURCE_URL || p.type === MessagePartTypes.SOURCE_DOCUMENT),
+    p => 'type' in p && sourceTypes.includes(p.type),
   );
 
-  // Derived state flags - ✅ V8 FIX: Include REASONING type for models like Gemini Flash
+  // Derived state flags - V8 FIX: Include REASONING type for models like Gemini Flash
   const hasTextContent = message.parts.some(
-    p => (p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING)
+    p =>
+      textOnlyTypes.includes(p.type)
       && 'text' in p
       && typeof p.text === 'string'
       && p.text.trim().length > 0,
