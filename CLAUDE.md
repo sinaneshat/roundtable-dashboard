@@ -1,180 +1,95 @@
 # CLAUDE.md
 
-- In all interactions and commit messages, be extremely concise and sacrifice grammar for the sake of concision.
+Be concise. Sacrifice grammar.
 
-Project guidance for Roundtable - a collaborative AI brainstorming platform.
+Roundtable: collaborative AI brainstorming platform.
 
-## Documentation Hierarchy
+## Docs
 
-**TYPE SAFETY** (ALL WORK):
-- `/docs/type-inference-patterns.md` - MANDATORY for all development
+- `/docs/type-inference-patterns.md` - TYPE SAFETY (mandatory)
+- `/docs/backend-patterns.md` - backend source of truth
+- `/docs/frontend-patterns.md` - frontend source of truth
 
-**BACKEND** (`apps/api/`):
-- `/docs/backend-patterns.md` - SINGLE SOURCE OF TRUTH
+## Type Safety Rules
 
-**FRONTEND** (`apps/web/`):
-- `/docs/frontend-patterns.md` - SINGLE SOURCE OF TRUTH
+**FORBIDDEN:**
+- `.passthrough()` in Zod
+- `any`, `unknown`, `Record<string, unknown>` overgeneralization
+- `as` type casting
+- inline type extensions (`& { extra: Type }`)
+- hardcoded types - use `z.infer<typeof Schema>`
+- manual type guards - use `.safeParse()`/`.parse()`
+- TODO comments for migrations
+- legacy/deprecated/backwards-compatible code
+- re-exports (except barrel index.ts)
 
-## Skills & Agents
+**REQUIRED:**
+- 5-part enum pattern (array → default → schema → type → constant object)
+- `z.infer<>` for all types
+- discriminated unions for metadata
+- single source of truth for exports
 
-### Available Skills
+## Skills
 
-Skills extend Claude's capabilities. Invoke with `/skill-name`.
+Invoke: `/skill-name`
 
-**Backend Skills**:
-| Skill | Use When |
-|-------|----------|
-| `/drizzle-orm-d1` | D1 schemas, migrations, Drizzle patterns |
-| `/cloudflare-d1` | D1 troubleshooting, SQL patterns |
-| `/cloudflare` | General Cloudflare platform |
-| `/cloudflare-kv` | KV storage, caching |
-| `/cloudflare-r2` | Object storage, file uploads |
-| `/cloudflare-queues` | Async job processing |
-| `/cloudflare-durable-objects` | Stateful coordination |
-| `/cloudflare-vectorize` | Semantic search |
-| `/wrangler` | Deployment, CLI |
-| `/using-drizzle-queries` | Type-safe queries |
+**Backend:** drizzle-orm-d1, cloudflare-d1, cloudflare, cloudflare-kv, cloudflare-r2, cloudflare-queues, cloudflare-durable-objects, cloudflare-vectorize, wrangler, using-drizzle-queries, durable-objects, software-architecture
 
-**Frontend Skills**:
-| Skill | Use When |
-|-------|----------|
-| `/shadcn-ui` | Component installation, usage |
-| `/tanstack-query` | Query/mutation patterns |
-| `/react-hook-form-zod` | Form validation |
-| `/zustand-state-management` | Store patterns, SSR |
-| `/react-state-management` | General state |
-| `/frontend-design` | UI/UX design |
-| `/component-refactoring` | Reduce complexity |
-| `/react-modernization` | React upgrades |
+**Frontend:** shadcn-ui, tanstack-query, react-hook-form-zod, zustand-state-management, react-state-management, frontend-design, component-refactoring, react-modernization, software-architecture
 
-**General Skills**:
-| Skill | Use When |
-|-------|----------|
-| `/software-architecture` | Architecture decisions |
-| `/pdf` | PDF manipulation |
-| `/agent-md-refactor` | Refactor instruction files |
+**General:** pdf, agent-md-refactor
 
-### Specialized Agents
+## Agents
 
-Located in `.claude/agents/`:
+`.claude/agents/`:
+- **backend-agent**: Hono + Workers + Drizzle (12 skills)
+- **frontend-agent**: TanStack Start + shadcn + Query (9 skills)
 
-- **backend-agent**: Hono + Cloudflare Workers + Drizzle ORM specialist
-- **frontend-agent**: TanStack Start + shadcn/ui + TanStack Query specialist
-
-Claude Code's built-in agents (Explore, Plan, general-purpose) can also leverage skills.
-
-## Essential Commands
+## Commands
 
 ```bash
-# Development
-bun run dev                 # Start development
-bun run build               # Build for production
-bun run lint                # Run ESLint
-bun run check-types         # TypeScript checking
-
-# Database
-bun run db:generate         # Generate migrations
-bun run db:migrate:local    # Apply migrations locally
-bun run db:studio:local     # Open Drizzle Studio
-bun run db:full-reset:local # Full reset + seed
-
-# Deployment
-bun run deploy:preview      # Deploy to preview
-bun run deploy:production   # Deploy to production
-
-# Testing
-bun run test                # Run tests
-bun run test:watch          # Watch mode
+bun run dev|build|lint|check-types           # Dev
+bun run db:generate|db:migrate:local|db:studio:local|db:full-reset:local  # DB
+bun run deploy:preview|deploy:production     # Deploy
+bun run test|test:watch                      # Test
 ```
 
-## Project Structure
+## Structure
 
 ```
 apps/
-├── web/                   # TanStack Start frontend (Cloudflare Pages)
-│   └── src/
-│       ├── routes/        # File-based routing
-│       ├── components/    # React components (ui/ for shadcn)
-│       ├── hooks/         # TanStack Query hooks
-│       ├── stores/        # Zustand stores
-│       └── lib/           # Utilities
-│
-├── api/                   # Hono API (Cloudflare Workers)
-│   └── src/
-│       ├── routes/        # API routes (route.ts, handler.ts, schema.ts)
-│       ├── services/      # Business logic
-│       ├── middleware/    # Auth, CORS, rate limiting
-│       └── db/            # Drizzle + D1
-│
-└── packages/shared/       # Shared types
+├── web/src/           # TanStack Start (Pages)
+│   ├── routes/        # file-based routing
+│   ├── components/    # ui/ for shadcn
+│   ├── hooks/         # queries/, mutations/
+│   └── stores/        # Zustand
+├── api/src/           # Hono (Workers)
+│   ├── routes/        # route.ts + handler.ts + schema.ts
+│   ├── services/      # business logic
+│   └── db/            # Drizzle + D1
+└── packages/shared/   # shared types
 ```
 
-## Core Patterns
+## Backend
 
-### Backend (apps/api/)
+- 3-file route: `route.ts` (OpenAPI) + `handler.ts` (`createHandler`) + `schema.ts`
+- `db.batch()` for atomicity (NEVER `db.transaction()`)
+- `createHandlerWithBatch()` for auto-batching
 
-**Route Pattern** - 3 files per domain:
-- `route.ts` - OpenAPI definitions
-- `handler.ts` - Business logic with `createHandler()`
-- `schema.ts` - Zod validation
+## Frontend
 
-**Database**:
-- Use `db.batch()` for atomic operations (NEVER `db.transaction()`)
-- Use `createHandlerWithBatch()` for automatic batching
+- TanStack Router: `__root.tsx`, `_protected.tsx`, `$param.tsx`
+- shadcn/ui from `/apps/web/src/components/ui/`
+- hooks in `hooks/queries/` + `hooks/mutations/`
+- Zustand v5: `createStore()` + `useShallow`
+- `useTranslations()` for all text
 
-**Type Safety**:
-- Infer types from Zod: `z.infer<typeof Schema>`
-- No type casting
+## Quality
 
-### Frontend (apps/web/)
+Pre-commit: `bun run lint && bun run check-types`
 
-**Routing**: TanStack Router file-based
-- `__root.tsx` - Root layout
-- `_protected.tsx` - Auth-protected layout
-- `$param.tsx` - Dynamic segments
-
-**Components**:
-- Use shadcn/ui from `/apps/web/src/components/ui/`
-- Don't recreate existing components
-
-**Data Fetching**:
-- Query hooks in `/apps/web/src/hooks/queries/`
-- Mutation hooks in `/apps/web/src/hooks/mutations/`
-- NEVER import services directly in components
-
-**State**: Zustand v5
-- Factory pattern with `createStore()` from vanilla
-- `useShallow` for batched selectors
-
-**i18n**: `useTranslations()` for all text (English-only)
-
-## Quality Requirements
-
-**Before Committing**:
-```bash
-bun run lint && bun run check-types
-bun run db:migrate:local  # if schema changed
-```
-
-**Ground Rules**:
-- NO RE-EXPORTS except barrel exports (index.ts)
-- Minimal comments - code should be self-documenting
-- No `any` or type casting
-- No hardcoded strings in UI
-
-## File References
-
-**Backend Context**:
-- Routes: `/apps/api/src/routes/{domain}/`
-- Tables: `/apps/api/src/db/tables/`
-- Services: `/apps/api/src/services/`
-
-**Frontend Context**:
-- Routes: `/apps/web/src/routes/`
-- Components: `/apps/web/src/components/`
-- Hooks: `/apps/web/src/hooks/`
-- Stores: `/apps/web/src/stores/`
-
-**Testing**:
-- Setup: `/docs/TESTING_SETUP.md`
-- Utilities: `/apps/web/src/lib/testing/`
+**Rules:**
+- NO re-exports except barrel index.ts
+- NO `any` or casting
+- NO hardcoded UI strings
+- NO `db.transaction()`
