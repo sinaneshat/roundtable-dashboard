@@ -132,7 +132,7 @@ async function getAiSdk() {
  * Adapter to convert getModelById to ModelForPricing type expected by billing functions
  * Strips Zod .openapi() index signatures from model types
  */
-function getModelForPricing(modelId: string): import('@/services/billing').ModelForPricing | undefined {
+function getModelForPricing(modelId: string): import('@/common/schemas/model-pricing').ModelForPricing | undefined {
   const model = getModelById(modelId);
   if (!model)
     return undefined;

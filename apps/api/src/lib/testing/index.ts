@@ -2,6 +2,7 @@
  * Testing utilities for API tests
  */
 
+import { InvoiceStatuses } from '@roundtable/shared/enums';
 import { vi } from 'vitest';
 
 import type { TypedLogger } from '@/types/logger';
@@ -10,11 +11,25 @@ import type { TypedLogger } from '@/types/logger';
 // Mock Types
 // ============================================================================
 
+/**
+ * Stripe event data values - constrained to JSON-serializable primitives
+ * Matches Stripe's actual webhook payload structure
+ */
+type StripeEventDataValue = string | number | boolean | null | undefined;
+
+/**
+ * Stripe event object data - supports nested objects and arrays
+ * Matches Stripe webhook `event.data.object` structure
+ */
+type StripeEventObjectData = {
+  [key: string]: StripeEventDataValue | StripeEventObjectData | StripeEventDataValue[] | StripeEventObjectData[];
+};
+
 export type MockStripeEvent = {
   id: string;
   type: string;
   data: {
-    object: Record<string, unknown>;
+    object: StripeEventObjectData;
   };
   customer?: string;
 };
@@ -55,7 +70,6 @@ export type MockDrizzleDb = {
     findFirst: ReturnType<typeof vi.fn>;
     findMany: ReturnType<typeof vi.fn>;
   }>;
-  transaction: ReturnType<typeof vi.fn>;
   batch: ReturnType<typeof vi.fn>;
 };
 
@@ -65,7 +79,7 @@ export type MockDrizzleDb = {
 
 export function createMockStripeEvent(
   type: string,
-  data: Record<string, unknown>,
+  data: StripeEventObjectData,
 ): MockStripeEvent {
   return {
     id: `evt_${Math.random().toString(36).substring(7)}`,
@@ -73,7 +87,7 @@ export function createMockStripeEvent(
     data: {
       object: data,
     },
-    customer: data.customer as string | undefined,
+    customer: typeof data.customer === 'string' ? data.customer : undefined,
   };
 }
 
@@ -104,8 +118,8 @@ export function createMockStripeSubscription(
 export function createMockStripeInvoice(
   overrides: Partial<MockStripeInvoice> = {},
 ): MockStripeInvoice {
-  const status = overrides.status || 'paid';
-  const isPaid = status === 'paid';
+  const status = overrides.status || InvoiceStatuses.PAID;
+  const isPaid = status === InvoiceStatuses.PAID;
 
   return {
     id: `in_${Math.random().toString(36).substring(7)}`,
@@ -143,7 +157,6 @@ export function createMockDrizzleDb(): MockDrizzleDb {
       findFirst: ReturnType<typeof vi.fn>;
       findMany: ReturnType<typeof vi.fn>;
     }>,
-    transaction: vi.fn(cb => cb(createMockDrizzleDb())),
     batch: vi.fn().mockResolvedValue([]),
   };
 }

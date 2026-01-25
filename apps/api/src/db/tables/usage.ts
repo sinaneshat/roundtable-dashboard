@@ -32,8 +32,8 @@ export const userChatUsage = sqliteTable(
     // ============================================================================
     // BILLING PERIOD TRACKING
     // ============================================================================
-    currentPeriodStart: integer('current_period_start', { mode: 'timestamp' }).notNull(),
-    currentPeriodEnd: integer('current_period_end', { mode: 'timestamp' }).notNull(),
+    currentPeriodStart: integer('current_period_start', { mode: 'timestamp_ms' }).notNull(),
+    currentPeriodEnd: integer('current_period_end', { mode: 'timestamp_ms' }).notNull(),
 
     // ============================================================================
     // USAGE COUNTERS (Cumulative - never decremented)
@@ -75,8 +75,9 @@ export const userChatUsage = sqliteTable(
     // ============================================================================
     // TIMESTAMPS
     // ============================================================================
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
   },
@@ -131,8 +132,8 @@ export const userChatUsageHistory = sqliteTable(
       .references(() => user.id, { onDelete: 'cascade' }),
 
     // Period this snapshot represents
-    periodStart: integer('period_start', { mode: 'timestamp' }).notNull(),
-    periodEnd: integer('period_end', { mode: 'timestamp' }).notNull(),
+    periodStart: integer('period_start', { mode: 'timestamp_ms' }).notNull(),
+    periodEnd: integer('period_end', { mode: 'timestamp_ms' }).notNull(),
 
     // Usage stats during this period (COUNTERS ONLY)
     threadsCreated: integer('threads_created').notNull().default(0),
@@ -148,7 +149,7 @@ export const userChatUsageHistory = sqliteTable(
     isAnnual: integer('is_annual', { mode: 'boolean' }).notNull().default(false),
 
     // Timestamp
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   table => [
     // Indexes for query performance

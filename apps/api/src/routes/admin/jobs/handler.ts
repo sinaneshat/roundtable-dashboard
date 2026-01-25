@@ -1,5 +1,5 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import { RoundOrchestrationMessageTypes } from '@roundtable/shared/enums';
+import { AutomatedJobStatuses, RoundOrchestrationMessageTypes, ThreadStatuses } from '@roundtable/shared/enums';
 import { and, desc, eq, lt } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
@@ -154,7 +154,7 @@ export const createJobHandler: RouteHandler<typeof createJobRoute, ApiEnv> = cre
         initialPrompt: body.initialPrompt,
         totalRounds: body.totalRounds,
         autoPublish: body.autoPublish,
-        status: 'pending',
+        status: AutomatedJobStatuses.PENDING,
         currentRound: 0,
         createdAt: now,
         updatedAt: now,
@@ -276,8 +276,8 @@ export const updateJobHandler: RouteHandler<typeof updateJobRoute, ApiEnv> = cre
     }
 
     // Handle retry - queue the job for processing
-    if (body.status === 'running') {
-      if (job.status !== 'failed') {
+    if (body.status === AutomatedJobStatuses.RUNNING) {
+      if (job.status !== AutomatedJobStatuses.FAILED) {
         throw createError.badRequest('Can only retry failed jobs', {
           errorType: 'validation',
         });
@@ -290,7 +290,7 @@ export const updateJobHandler: RouteHandler<typeof updateJobRoute, ApiEnv> = cre
       await db
         .update(tables.automatedJob)
         .set({
-          status: 'pending',
+          status: AutomatedJobStatuses.PENDING,
           currentRound: 0,
           metadata: null,
           updatedAt: new Date(),
@@ -314,7 +314,7 @@ export const updateJobHandler: RouteHandler<typeof updateJobRoute, ApiEnv> = cre
         await db
           .update(tables.automatedJob)
           .set({
-            status: 'failed',
+            status: AutomatedJobStatuses.FAILED,
             metadata: { errorMessage: 'Failed to queue job for processing' },
           })
           .where(eq(tables.automatedJob.id, id));
@@ -401,7 +401,7 @@ export const deleteJobHandler: RouteHandler<typeof deleteJobRoute, ApiEnv> = cre
       await db
         .update(tables.chatThread)
         .set({
-          status: 'deleted',
+          status: ThreadStatuses.DELETED,
           updatedAt: new Date(),
         })
         .where(eq(tables.chatThread.id, job.threadId));

@@ -17,7 +17,7 @@ import { CREDIT_CONFIG } from '@roundtable/shared';
 import { CreditActions, CreditTransactionTypes, ModelPricingTiers } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
 
-import type { ModelForPricing } from '@/services/billing';
+import type { ModelForPricing } from '@/common/schemas/model-pricing';
 import {
   calculateBaseCredits,
   calculateWeightedCredits,

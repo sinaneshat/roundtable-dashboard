@@ -601,6 +601,7 @@ export function createLiveParticipantResumeStream(
           return;
         }
 
+        // JUSTIFIED: isClosed is modified in cancel() callback and safeClose()/safeEnqueue() error handlers
         // eslint-disable-next-line no-unmodified-loop-condition
         while (!isClosed) {
           if (Date.now() - startTime > maxPollDurationMs) {
@@ -1051,6 +1052,7 @@ export function createLivePreSearchResumeStream(
           return;
         }
 
+        // JUSTIFIED: isClosed is modified in cancel() callback and safeClose()/safeEnqueue() error handlers
         // eslint-disable-next-line no-unmodified-loop-condition
         while (!isClosed) {
           if (Date.now() - startTime > maxPollDurationMs) {

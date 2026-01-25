@@ -516,6 +516,3 @@ export const MIN_URL_EXPIRATION_MS = 5 * 60 * 1000;
 
 /** Cleanup delay before orphaned uploads are deleted (15 minutes) */
 export const UPLOAD_CLEANUP_DELAY_MS = 15 * 60 * 1000;
-
-/** URL expiration for AI provider access (30 minutes) - owner-bound */
-export const AI_URL_EXPIRATION_MS = 30 * 60 * 1000;

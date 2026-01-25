@@ -161,13 +161,6 @@ Respond in JSON format:
 // ============================================================================
 
 /**
- * Query complexity types are defined in @/api/core/enums.ts following the 5-part pattern:
- * - QueryAnalysisComplexity: 'simple' | 'moderate' | 'complex'
- * - QueryAnalysisResult: Full analysis result with search parameters
- * @see /src/api/core/enums.ts:574-631
- */
-
-/**
  * Patterns that indicate a simple query (1 query, basic depth)
  */
 const SIMPLE_QUERY_PATTERNS = [
@@ -1109,7 +1102,9 @@ export function buildModeratorTranscript(participantResponses: ParticipantRespon
  * @param mode - Conversation mode (analyzing, brainstorming, debating, solving)
  * @param userQuestion - The user's original question
  * @param participantResponses - Array of participant responses
- * @param projectContext - Optional project instructions and RAG context
+ * @param projectContext - Optional project context
+ * @param projectContext.instructions - Project instructions
+ * @param projectContext.ragContext - RAG context from knowledge base
  * @returns System prompt for council moderator synthesis
  */
 export function buildCouncilModeratorSystemPrompt(

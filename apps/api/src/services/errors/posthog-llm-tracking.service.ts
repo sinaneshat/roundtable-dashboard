@@ -24,40 +24,15 @@ import type { LanguageModelUsage } from 'ai';
 import { ulid } from 'ulid';
 import * as z from 'zod';
 
-import {
-  LLMGenerationResultSchema,
-  LLMInputMessageSchema,
-  LLMTrackingContextSchema,
-  LLMTrackingResultSchema,
-  LLMTrackingUsageSchema,
-  ToolCallSchema,
-  ToolResultSchema,
+import type {
+  LLMGenerationResult,
+  LLMInputMessage,
+  LLMTrackingContext,
+  LLMTrackingResult,
 } from '@/common/schemas/llm-tracking';
+import { ToolCallSchema } from '@/common/schemas/llm-tracking';
 import { getPostHogClient } from '@/lib/analytics/posthog-server';
 import { isObject, isTransientErrorFromObject } from '@/lib/utils';
-
-// ============================================================================
-// RE-EXPORTS FOR BACKWARDS COMPATIBILITY
-// ============================================================================
-
-export {
-  LLMGenerationResultSchema,
-  LLMInputMessageSchema,
-  LLMTrackingContextSchema,
-  LLMTrackingResultSchema,
-  LLMTrackingUsageSchema,
-  ToolCallSchema,
-  ToolResultSchema,
-};
-
-// Types inferred from centralized schemas
-export type LLMTrackingContext = z.infer<typeof LLMTrackingContextSchema>;
-export type LLMTrackingUsage = z.infer<typeof LLMTrackingUsageSchema>;
-export type ToolCall = z.infer<typeof ToolCallSchema>;
-export type ToolResult = z.infer<typeof ToolResultSchema>;
-export type LLMGenerationResult = z.infer<typeof LLMGenerationResultSchema>;
-export type LLMInputMessage = z.infer<typeof LLMInputMessageSchema>;
-export type LLMTrackingResult = z.infer<typeof LLMTrackingResultSchema>;
 
 // ============================================================================
 // TYPES FOR POSTHOG INTEGRATION
@@ -124,6 +99,12 @@ export type LLMTrackingOptions = {
     baseUrl?: string;
     requestUrl?: string;
   };
+  /**
+   * JUSTIFIED: Record<string, unknown> is intentional here.
+   * PostHog events accept arbitrary custom properties - this is the official escape hatch
+   * for adding app-specific tracking data that doesn't fit predefined fields.
+   * Constraining this would break PostHog's extensible analytics model.
+   */
   additionalProperties?: Record<string, unknown>;
 };
 

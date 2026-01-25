@@ -61,6 +61,41 @@ function isValidCancelRequest(data: unknown): data is CancelCleanupRequest {
 // Cleanup delay in milliseconds (15 minutes)
 const CLEANUP_DELAY_MS = 15 * 60 * 1000;
 
+// Type guard for SQL row validation
+function isValidCleanupStateRow(
+  row: Record<string, SqlStorageValue>,
+): row is {
+  upload_id: string;
+  user_id: string;
+  r2_key: string;
+  scheduled_at: number;
+  created_at: number;
+} {
+  return (
+    typeof row.upload_id === 'string'
+    && typeof row.user_id === 'string'
+    && typeof row.r2_key === 'string'
+    && typeof row.scheduled_at === 'number'
+    && typeof row.created_at === 'number'
+  );
+}
+
+function isValidDueUploadRow(
+  row: Record<string, SqlStorageValue>,
+): row is {
+  upload_id: string;
+  user_id: string;
+  r2_key: string;
+  scheduled_at: number;
+} {
+  return (
+    typeof row.upload_id === 'string'
+    && typeof row.user_id === 'string'
+    && typeof row.r2_key === 'string'
+    && typeof row.scheduled_at === 'number'
+  );
+}
+
 // Grace period buffer for race condition protection (30 seconds)
 // Ensures attachment transactions have time to commit before orphan check
 const GRACE_PERIOD_MS = 30 * 1000;
@@ -175,24 +210,16 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
     if (!row)
       return null;
 
-    // Inline validation - no Zod dependency at startup
-    const r = row as Record<string, unknown>;
-    if (
-      typeof r.upload_id !== 'string'
-      || typeof r.user_id !== 'string'
-      || typeof r.r2_key !== 'string'
-      || typeof r.scheduled_at !== 'number'
-      || typeof r.created_at !== 'number'
-    ) {
+    if (!isValidCleanupStateRow(row)) {
       throw new TypeError('Invalid cleanup_state row format');
     }
 
     return {
-      uploadId: r.upload_id,
-      userId: r.user_id,
-      r2Key: r.r2_key,
-      scheduledAt: r.scheduled_at,
-      createdAt: r.created_at,
+      uploadId: row.upload_id,
+      userId: row.user_id,
+      r2Key: row.r2_key,
+      scheduledAt: row.scheduled_at,
+      createdAt: row.created_at,
     };
   }
 
@@ -220,20 +247,13 @@ export class UploadCleanupScheduler extends DurableObject<CloudflareEnv> {
     ).toArray();
 
     for (const row of dueUploads) {
-      // Inline validation - no Zod dependency at startup
-      const r = row as Record<string, unknown>;
-      if (
-        typeof r.upload_id !== 'string'
-        || typeof r.user_id !== 'string'
-        || typeof r.r2_key !== 'string'
-        || typeof r.scheduled_at !== 'number'
-      ) {
+      if (!isValidDueUploadRow(row)) {
         console.error({ log_type: 'invalid_row', row });
         continue;
       }
-      const uploadId = r.upload_id;
-      const r2Key = r.r2_key;
-      const scheduledAt = r.scheduled_at;
+      const uploadId = row.upload_id;
+      const r2Key = row.r2_key;
+      const scheduledAt = row.scheduled_at;
 
       // Additional grace period check - if scheduled time + grace period hasn't passed,
       // reschedule for later to allow any in-flight attachment operations to complete

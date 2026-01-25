@@ -1,6 +1,6 @@
 /**
  * Scene 3: Sidebar & Navigation
- * Duration: 4-5.5s (75 frames at 30fps)
+ * Duration: 4s (120 frames at 30fps)
  *
  * Camera: Pan from sidebar to main content with subtle zoom
  * Content: Sidebar with threads, projects, user menu
@@ -34,9 +34,10 @@ import {
 } from 'remotion';
 
 import { BrowserFrame } from '../../components/BrowserFrame';
+import { BrowserFrame3D } from '../../components/BrowserFrame3D';
 import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
 import { VideoFeatureCaptions } from '../../components/ui-replicas';
-import { useCinematicCamera, useFocusPull } from '../../hooks';
+import { useCinematicCamera } from '../../hooks';
 import { BACKGROUNDS, FONTS, RAINBOW, SPACING } from '../../lib/design-tokens';
 
 // Dark theme colors from globals.css - matching actual app
@@ -84,26 +85,20 @@ export function Scene03Sidebar() {
     breathingIntensity: 2.5,
   });
 
-  // Focus pull - blur to sharp
-  const { filter: focusFilter } = useFocusPull({
-    startFrame: 0,
-    duration: 25,
-    maxBlur: 5,
-  });
-
-  // === 3D CAMERA EFFECTS ===
-  // Camera Y rotation during sidebar reveal (-0.05rad to 0rad)
-  const cameraRotateY = interpolate(frame, [0, 25], [-0.05, 0], {
-    extrapolateRight: 'clamp',
-  });
-
-  // Camera breathing - subtle X rotation oscillation
-  const cameraRotateX = Math.sin(frame * 0.05) * 0.01;
-
   // Depth blur for main content (further back) - decreases as sidebar settles
   const depthBlurAmount = interpolate(frame, [0, 25], [3, 0], {
     extrapolateRight: 'clamp',
   });
+
+  // === ANIMATED CAMERA - start slightly rotated, settle to subtle ===
+  const cameraSettleProgress = spring({
+    frame,
+    fps,
+    config: { damping: 40, stiffness: 80 },
+    durationInFrames: 45,
+  });
+  const cameraRotateY = interpolate(cameraSettleProgress, [0, 1], [0.04, 0.02]);
+  const cameraRotateX = interpolate(cameraSettleProgress, [0, 1], [0.03, 0.01]);
 
   // Sidebar slide in with cinematic spring
   const sidebarProgress = spring({
@@ -117,18 +112,6 @@ export function Scene03Sidebar() {
   const sidebarOpacity = interpolate(sidebarProgress, [0, 0.5], [0, 1], {
     extrapolateRight: 'clamp',
   });
-
-  // Unified entrance zoom - same timing across all scenes
-  const entranceZoom = interpolate(
-    spring({ frame, fps, config: { damping: 25, stiffness: 150 }, durationInFrames: 25 }),
-    [0, 1],
-    [0.96, 1],
-  );
-
-  // Exit fade in last 10 frames
-  const exitFade = frame > 65
-    ? interpolate(frame, [65, 75], [1, 0], { extrapolateRight: 'clamp' })
-    : 1;
 
   // Items stagger with cinematic spring
   const getItemProgress = (index: number) => {
@@ -298,278 +281,265 @@ export function Scene03Sidebar() {
       {/* Edge Vignette */}
       <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
 
-      {/* Feature Captions */}
+      {/* Feature Captions - updated for 120 frame duration */}
       <VideoFeatureCaptions
-        position="bottom-left"
+        position="bottom-right"
         captions={[
-          { start: 0, end: 35, text: 'Organized workspace', subtitle: 'Projects and threads at a glance' },
-          { start: 35, end: 75, text: 'Quick navigation', subtitle: 'Find any conversation instantly' },
+          { start: 0, end: 60, text: 'Organized workspace', subtitle: 'Projects and threads at a glance' },
+          { start: 60, end: 120, text: 'Quick navigation', subtitle: 'Find any conversation instantly' },
         ]}
       />
 
-      {/* Browser Frame Wrapper with zoom + scan animation + 3D camera */}
-      <div
-        style={{
-          transform: `scale(${entranceZoom})`,
-          transformOrigin: 'center center',
-          filter: focusFilter,
-          opacity: exitFade,
-          // 3D perspective container
-          perspective: 1500,
-          perspectiveOrigin: '30% center', // Focus on sidebar area
-        }}
+      {/* Browser Frame with animated 3D - starts rotated, settles to subtle */}
+      <BrowserFrame3D
+        rotateX={cameraRotateX}
+        rotateY={cameraRotateY}
+        rotateZ={0}
+        depthBlur
       >
-        {/* 3D Camera rotation wrapper */}
-        <div
-          style={{
-            transform: `rotateY(${cameraRotateY}rad) rotateX(${cameraRotateX}rad)`,
-            transformStyle: 'preserve-3d',
-          }}
-        >
-          <BrowserFrame url="roundtable.ai">
+        <BrowserFrame url="roundtable.ai">
+          <div
+            style={{
+              display: 'flex',
+              width: 1200,
+              height: 720,
+              overflow: 'hidden',
+              backgroundColor: BACKGROUNDS.primary,
+              transformStyle: 'preserve-3d',
+            }}
+          >
+            {/* Sidebar - at front depth layer (z=50) */}
             <div
               style={{
-                display: 'flex',
-                width: 1200,
-                height: 700,
-                overflow: 'hidden',
-                backgroundColor: BACKGROUNDS.primary,
-                transformStyle: 'preserve-3d',
+                ...sidebarStyles,
+                transform: `translateX(${sidebarX}px) translateZ(50px)`,
               }}
             >
-              {/* Sidebar - at front depth layer (z=50) */}
-              <div
-                style={{
-                  ...sidebarStyles,
-                  transform: `translateX(${sidebarX}px) translateZ(50px)`,
-                }}
-              >
-                {/* SidebarHeader */}
-                <div style={headerStyles}>
-                  {/* Logo - just the icon */}
-                  <div style={{ display: 'flex', alignItems: 'center', padding: '0 4px' }}>
-                    <Img
-                      src={staticFile('static/logo.webp')}
-                      width={24}
-                      height={24}
-                      style={{ objectFit: 'contain' }}
-                    />
-                  </div>
-                  {/* SidebarTrigger - panel toggle icon */}
-                  <div
-                    style={{
-                      width: 28,
-                      height: 28,
-                      borderRadius: 8,
-                      display: 'flex',
-                      alignItems: 'center',
-                      justifyContent: 'center',
-                    }}
-                  >
-                    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <rect x="3" y="3" width="18" height="18" rx="2" />
-                      <path d="M9 3v18" />
-                    </svg>
-                  </div>
+              {/* SidebarHeader */}
+              <div style={headerStyles}>
+                {/* Logo - just the icon */}
+                <div style={{ display: 'flex', alignItems: 'center', padding: '0 4px' }}>
+                  <Img
+                    src={staticFile('static/logo.webp')}
+                    width={24}
+                    height={24}
+                    style={{ objectFit: 'contain' }}
+                  />
                 </div>
-
-                {/* SidebarMenu - New Chat & Search buttons */}
-                <div style={{ padding: '8px 0', display: 'flex', flexDirection: 'column', gap: 2 }}>
-                  {/* New Chat - active state */}
-                  <div style={menuButtonActiveStyles}>
-                    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.sidebarForeground} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 5v14M5 12h14" />
-                    </svg>
-                    <span style={{ fontSize: 14, fontWeight: 500, color: SIDEBAR_COLORS.sidebarForeground }}>
-                      New Chat
-                    </span>
-                  </div>
-
-                  {/* Search Chats button */}
-                  <div style={menuButtonStyles}>
-                    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <circle cx="11" cy="11" r="8" />
-                      <path d="m21 21-4.3-4.3" />
-                    </svg>
-                    <span style={{ fontSize: 14, fontWeight: 500, color: SIDEBAR_COLORS.mutedForeground }}>
-                      Search chats
-                    </span>
-                  </div>
-                </div>
-
-                {/* SidebarContent - Scrollable area */}
-                <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
-                  {/* Projects Section */}
-                  <div style={sectionLabelStyles}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <span>Projects</span>
-                      <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ transform: 'rotate(90deg)', opacity: 0.7 }}>
-                        <path d="m9 18 6-6-6-6" />
-                      </svg>
-                    </div>
-                    {/* Add project button */}
-                    <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-                      <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2}>
-                        <path d="M12 5v14M5 12h14" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  {/* ProjectList items */}
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    {DEMO_PROJECTS.map((project, index) => {
-                      const itemProgress = getItemProgress(index);
-                      const itemOpacity = interpolate(itemProgress, [0, 0.5], [0, 1], {
-                        extrapolateRight: 'clamp',
-                      });
-                      const itemX = interpolate(itemProgress, [0, 1], [15, 0]);
-
-                      return (
-                        <div
-                          key={project.id}
-                          style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: 10,
-                            padding: '8px 16px',
-                            borderRadius: 8,
-                            opacity: itemOpacity,
-                            transform: `translateX(${itemX}px)`,
-                          }}
-                        >
-                          {/* Chevron on LEFT */}
-                          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2} style={{ opacity: 0.5 }}>
-                            <path d="m9 18 6-6-6-6" />
-                          </svg>
-                          {/* Icon badge instead of color dot */}
-                          <div
-                            style={{
-                              width: 24,
-                              height: 24,
-                              borderRadius: 6,
-                              backgroundColor: project.color,
-                              display: 'flex',
-                              alignItems: 'center',
-                              justifyContent: 'center',
-                            }}
-                          >
-                            <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2}>
-                              <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-                            </svg>
-                          </div>
-                          {/* Name only - NO count or right chevron */}
-                          <span style={{ fontSize: 14, color: SIDEBAR_COLORS.sidebarForeground, flex: 1 }}>
-                            {project.name}
-                          </span>
-                        </div>
-                      );
-                    })}
-                  </div>
-
-                  {/* Chats Section */}
-                  <div style={sectionLabelStyles}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-                      <span>Chats</span>
-                      <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ transform: 'rotate(90deg)', opacity: 0.7 }}>
-                        <path d="m9 18 6-6-6-6" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  {/* ChatList items - just titles, no icons */}
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    {DEMO_THREADS.map((thread, index) => {
-                      const itemProgress = getItemProgress(index + DEMO_PROJECTS.length);
-                      const itemOpacity = interpolate(itemProgress, [0, 0.5], [0, 1], {
-                        extrapolateRight: 'clamp',
-                      });
-                      const itemX = interpolate(itemProgress, [0, 1], [15, 0]);
-
-                      return (
-                        <div
-                          key={thread.id}
-                          style={{
-                            ...threadItemStyles(thread.isActive),
-                            opacity: itemOpacity,
-                            transform: `translateX(${itemX}px)`,
-                          }}
-                        >
-                          <span style={threadTitleStyles}>{thread.title}</span>
-                          {/* More menu icon - visible on active/hover */}
-                          {thread.isActive && (
-                            <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
-                              <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2}>
-                                <circle cx="12" cy="12" r="1" fill="currentColor" />
-                                <circle cx="19" cy="12" r="1" fill="currentColor" />
-                                <circle cx="5" cy="12" r="1" fill="currentColor" />
-                              </svg>
-                            </div>
-                          )}
-                        </div>
-                      );
-                    })}
-                  </div>
-                </div>
-
-                {/* SidebarFooter - NavUser component */}
-                <div style={footerStyles}>
-                  <div style={userMenuStyles}>
-                    {/* Avatar - matches nav-user.tsx Avatar with brand rainbow gradient */}
-                    <div
-                      style={{
-                        width: 32,
-                        height: 32,
-                        borderRadius: 9999,
-                        background: RAINBOW.diagonal,
-                        display: 'flex',
-                        alignItems: 'center',
-                        justifyContent: 'center',
-                        flexShrink: 0,
-                        boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
-                      }}
-                    >
-                      <span
-                        style={{
-                          fontSize: 13,
-                          fontWeight: 600,
-                          color: '#ffffff',
-                          fontFamily: FONTS.sans,
-                        }}
-                      >
-                        AD
-                      </span>
-                    </div>
-                    {/* User info - grid layout like nav-user.tsx */}
-                    <div style={userInfoStyles}>
-                      <span style={userNameStyles}>Alex Developer</span>
-                      <span style={userEmailStyles}>alex@roundtable.ai</span>
-                    </div>
-                    {/* ChevronsUpDown icon - matches nav-user.tsx */}
-                    <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
-                      <path d="m7 15 5 5 5-5" />
-                      <path d="m7 9 5-5 5 5" />
-                    </svg>
-                  </div>
+                {/* SidebarTrigger - panel toggle icon */}
+                <div
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: 8,
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                  }}
+                >
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M9 3v18" />
+                  </svg>
                 </div>
               </div>
 
-              {/* Main content - at back depth layer (z=0) with depth blur */}
-              <div
-                style={{
-                  flex: 1,
-                  backgroundColor: BACKGROUNDS.primary,
-                  display: 'flex',
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  opacity: sidebarOpacity * 0.5,
-                  transform: 'translateZ(0px)',
-                  filter: `blur(${depthBlurAmount}px)`,
-                }}
-              />
+              {/* SidebarMenu - New Chat & Search buttons */}
+              <div style={{ padding: '8px 0', display: 'flex', flexDirection: 'column', gap: 2 }}>
+                {/* New Chat - active state */}
+                <div style={menuButtonActiveStyles}>
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.sidebarForeground} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: SIDEBAR_COLORS.sidebarForeground }}>
+                    New Chat
+                  </span>
+                </div>
+
+                {/* Search Chats button */}
+                <div style={menuButtonStyles}>
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <circle cx="11" cy="11" r="8" />
+                    <path d="m21 21-4.3-4.3" />
+                  </svg>
+                  <span style={{ fontSize: 14, fontWeight: 500, color: SIDEBAR_COLORS.mutedForeground }}>
+                    Search chats
+                  </span>
+                </div>
+              </div>
+
+              {/* SidebarContent - Scrollable area */}
+              <div style={{ flex: 1, overflow: 'hidden', display: 'flex', flexDirection: 'column' }}>
+                {/* Projects Section */}
+                <div style={sectionLabelStyles}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <span>Projects</span>
+                    <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ transform: 'rotate(90deg)', opacity: 0.7 }}>
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
+                  </div>
+                  {/* Add project button */}
+                  <div style={{ width: 20, height: 20, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                    <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2}>
+                      <path d="M12 5v14M5 12h14" />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* ProjectList items */}
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {DEMO_PROJECTS.map((project, index) => {
+                    const itemProgress = getItemProgress(index);
+                    const itemOpacity = interpolate(itemProgress, [0, 0.5], [0, 1], {
+                      extrapolateRight: 'clamp',
+                    });
+                    const itemX = interpolate(itemProgress, [0, 1], [15, 0]);
+
+                    return (
+                      <div
+                        key={project.id}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 10,
+                          padding: '8px 16px',
+                          borderRadius: 8,
+                          opacity: itemOpacity,
+                          transform: `translateX(${itemX}px)`,
+                        }}
+                      >
+                        {/* Chevron on LEFT */}
+                        <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2} style={{ opacity: 0.5 }}>
+                          <path d="m9 18 6-6-6-6" />
+                        </svg>
+                        {/* Icon badge instead of color dot */}
+                        <div
+                          style={{
+                            width: 24,
+                            height: 24,
+                            borderRadius: 6,
+                            backgroundColor: project.color,
+                            display: 'flex',
+                            alignItems: 'center',
+                            justifyContent: 'center',
+                          }}
+                        >
+                          <svg width={14} height={14} viewBox="0 0 24 24" fill="none" stroke="#fff" strokeWidth={2}>
+                            <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.93a2 2 0 0 1-1.66-.9l-.82-1.2A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
+                          </svg>
+                        </div>
+                        {/* Name only - NO count or right chevron */}
+                        <span style={{ fontSize: 14, color: SIDEBAR_COLORS.sidebarForeground, flex: 1 }}>
+                          {project.name}
+                        </span>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                {/* Chats Section */}
+                <div style={sectionLabelStyles}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                    <span>Chats</span>
+                    <svg width={12} height={12} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ transform: 'rotate(90deg)', opacity: 0.7 }}>
+                      <path d="m9 18 6-6-6-6" />
+                    </svg>
+                  </div>
+                </div>
+
+                {/* ChatList items - just titles, no icons */}
+                <div style={{ display: 'flex', flexDirection: 'column' }}>
+                  {DEMO_THREADS.map((thread, index) => {
+                    const itemProgress = getItemProgress(index + DEMO_PROJECTS.length);
+                    const itemOpacity = interpolate(itemProgress, [0, 0.5], [0, 1], {
+                      extrapolateRight: 'clamp',
+                    });
+                    const itemX = interpolate(itemProgress, [0, 1], [15, 0]);
+
+                    return (
+                      <div
+                        key={thread.id}
+                        style={{
+                          ...threadItemStyles(thread.isActive),
+                          opacity: itemOpacity,
+                          transform: `translateX(${itemX}px)`,
+                        }}
+                      >
+                        <span style={threadTitleStyles}>{thread.title}</span>
+                        {/* More menu icon - visible on active/hover */}
+                        {thread.isActive && (
+                          <div style={{ marginLeft: 'auto', flexShrink: 0 }}>
+                            <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2}>
+                              <circle cx="12" cy="12" r="1" fill="currentColor" />
+                              <circle cx="19" cy="12" r="1" fill="currentColor" />
+                              <circle cx="5" cy="12" r="1" fill="currentColor" />
+                            </svg>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* SidebarFooter - NavUser component */}
+              <div style={footerStyles}>
+                <div style={userMenuStyles}>
+                  {/* Avatar - matches nav-user.tsx Avatar with brand rainbow gradient */}
+                  <div
+                    style={{
+                      width: 32,
+                      height: 32,
+                      borderRadius: 9999,
+                      background: RAINBOW.diagonal,
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      flexShrink: 0,
+                      boxShadow: '0 2px 8px rgba(0, 0, 0, 0.3)',
+                    }}
+                  >
+                    <span
+                      style={{
+                        fontSize: 13,
+                        fontWeight: 600,
+                        color: '#ffffff',
+                        fontFamily: FONTS.sans,
+                      }}
+                    >
+                      AD
+                    </span>
+                  </div>
+                  {/* User info - grid layout like nav-user.tsx */}
+                  <div style={userInfoStyles}>
+                    <span style={userNameStyles}>Alex Developer</span>
+                    <span style={userEmailStyles}>alex@roundtable.ai</span>
+                  </div>
+                  {/* ChevronsUpDown icon - matches nav-user.tsx */}
+                  <svg width={16} height={16} viewBox="0 0 24 24" fill="none" stroke={SIDEBAR_COLORS.mutedForeground} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round">
+                    <path d="m7 15 5 5 5-5" />
+                    <path d="m7 9 5-5 5 5" />
+                  </svg>
+                </div>
+              </div>
             </div>
-          </BrowserFrame>
-        </div>
-      </div>
+
+            {/* Main content - at back depth layer (z=0) with depth blur */}
+            <div
+              style={{
+                flex: 1,
+                backgroundColor: BACKGROUNDS.primary,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                opacity: sidebarOpacity * 0.5,
+                transform: 'translateZ(0px)',
+                filter: `blur(${depthBlurAmount}px)`,
+              }}
+            />
+          </div>
+        </BrowserFrame>
+      </BrowserFrame3D>
     </AbsoluteFill>
   );
 }

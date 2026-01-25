@@ -1,35 +1,11 @@
-import type { AutomatedJobStatus } from '@roundtable/shared/enums';
 import { AUTOMATED_JOB_STATUSES } from '@roundtable/shared/enums';
 import { relations, sql } from 'drizzle-orm';
 import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
 
+import type { DbAutomatedJobMetadata } from '@/db/schemas/job-metadata';
+
 import { user } from './auth';
 import { chatThread } from './chat';
-
-// Re-export for backwards compatibility
-export { AUTOMATED_JOB_STATUSES, type AutomatedJobStatus };
-
-/**
- * Per-round configuration determined by prompt analysis
- */
-export type DbRoundConfig = {
-  round: number;
-  mode: string;
-  enableWebSearch: boolean;
-};
-
-/**
- * Automated Job Metadata
- * Stores prompt reasoning, round prompts, per-round configs, and error info
- */
-export type DbAutomatedJobMetadata = {
-  promptReasoning?: string;
-  roundPrompts?: string[];
-  roundConfigs?: DbRoundConfig[];
-  errorMessage?: string;
-  startedAt?: string;
-  completedAt?: string;
-};
 
 /**
  * Automated Jobs

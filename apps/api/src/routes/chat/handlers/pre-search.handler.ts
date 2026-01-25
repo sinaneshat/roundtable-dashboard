@@ -23,12 +23,12 @@ import { invalidateMessagesCache } from '@/common/cache-utils';
 import { ErrorContextBuilders } from '@/common/error-contexts';
 import { createError } from '@/common/error-handling';
 import { verifyThreadOwnership } from '@/common/permissions';
+import type { ImageAnalysisBillingContext } from '@/common/schemas/billing-context';
 import { AIModels, createHandler, IdParamSchema, Responses, STREAMING_CONFIG, ThreadRoundParamSchema } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { formatAgeMs, getTimestampAge, hasTimestampExceededTimeout } from '@/db/utils/timestamps';
 import type { MessagePart } from '@/lib/schemas/message-schemas';
-import type { ImageAnalysisBillingContext } from '@/services/billing';
 import {
   deductCreditsForAction,
   enforceCredits,

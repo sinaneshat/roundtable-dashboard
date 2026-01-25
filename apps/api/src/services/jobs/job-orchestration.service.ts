@@ -12,17 +12,14 @@
  * - Project auto-linking
  */
 
-import { MessagePartTypes, MessageRoles, RoundOrchestrationMessageTypes } from '@roundtable/shared/enums';
+import { AutomatedJobStatuses, MessagePartTypes, MessageRoles, RoundOrchestrationMessageTypes } from '@roundtable/shared/enums';
 import { eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
-import type { getDbAsync } from '@/db';
+import type { DbAutomatedJobMetadata, getDbAsync } from '@/db';
 import * as tables from '@/db';
-import type { DbAutomatedJobMetadata } from '@/db/tables/job';
 import { buildSessionAuthHeaders, getBaseUrl } from '@/lib/utils/internal-api';
 import type { ApiEnv } from '@/types';
-import type { TypedLogger } from '@/types/logger';
-import { LogHelpers } from '@/types/logger';
 import type {
   CompleteAutomatedJobQueueMessage,
   ContinueAutomatedJobQueueMessage,
@@ -31,15 +28,17 @@ import type {
 import { analyzePromptForJob, analyzeRoundPrompt } from './prompt-analysis.service';
 import { generateNextRoundPrompt } from './prompt-generation.service';
 
-// Module-level logger for job orchestration (set by caller)
-let logger: TypedLogger | undefined;
-
 /**
- * Set the logger for job orchestration service
+ * Thread creation API response type
  */
-export function setJobOrchestrationLogger(l: TypedLogger | undefined): void {
-  logger = l;
-}
+type ThreadCreationResponse = {
+  success: boolean;
+  data?: {
+    thread?: {
+      id?: string;
+    };
+  };
+};
 
 /**
  * Start an automated job
@@ -63,29 +62,23 @@ export async function startAutomatedJob(
   env: ApiEnv['Bindings'],
   queue: Queue,
 ): Promise<void> {
-  logger?.info(`Starting job ${jobId}`, LogHelpers.operation({ operationName: 'startAutomatedJob' }));
-
-  // Load job
   const job = await db.query.automatedJob.findFirst({
     where: eq(tables.automatedJob.id, jobId),
   });
 
   if (!job) {
-    logger?.error(`Job not found: ${jobId}`, LogHelpers.operation({ operationName: 'startAutomatedJob' }));
     return;
   }
 
-  if (job.status !== 'pending') {
-    logger?.warn(`Job ${jobId} is not pending, status: ${job.status}`, LogHelpers.operation({ operationName: 'startAutomatedJob', status: job.status }));
+  if (job.status !== AutomatedJobStatuses.PENDING) {
     return;
   }
 
   try {
-    // Update job to running
     await db
       .update(tables.automatedJob)
       .set({
-        status: 'running',
+        status: AutomatedJobStatuses.RUNNING,
         metadata: {
           ...job.metadata,
           startedAt: new Date().toISOString(),
@@ -93,12 +86,8 @@ export async function startAutomatedJob(
       })
       .where(eq(tables.automatedJob.id, jobId));
 
-    // Analyze prompt to determine optimal configuration (models, mode, web search)
     const analysis = await analyzePromptForJob(job.initialPrompt, env);
 
-    logger?.info(`Prompt analysis for job ${jobId}`, LogHelpers.operation({ operationName: 'startAutomatedJob' }));
-
-    // Call thread creation API to leverage existing credit/tier enforcement
     const baseUrl = getBaseUrl(env);
     const response = await fetch(`${baseUrl}/api/v1/chat/threads`, {
       method: 'POST',
@@ -116,20 +105,14 @@ export async function startAutomatedJob(
       throw new Error(`Thread creation failed: ${response.status} - ${errorText}`);
     }
 
-    const result = await response.json() as {
-      success: boolean;
-      data?: { thread?: { id?: string } };
-    };
+    const result: ThreadCreationResponse = await response.json();
 
-    // Extract threadId from API response
-    // API returns { success: true, data: { thread: { id, ... }, participants, messages } }
     if (!result.success || !result.data?.thread?.id) {
       throw new Error('Invalid thread creation response');
     }
 
     const threadId = result.data.thread.id;
 
-    // Update job with thread info and analysis results
     const updatedMetadata: DbAutomatedJobMetadata = {
       ...job.metadata,
       promptReasoning: analysis.reasoning,
@@ -152,8 +135,6 @@ export async function startAutomatedJob(
       })
       .where(eq(tables.automatedJob.id, jobId));
 
-    // Queue first participant trigger
-    // The existing round orchestration flow will handle executing the round
     await queue.send({
       type: RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT,
       messageId: `trigger-${threadId}-r0-p0`,
@@ -164,14 +145,11 @@ export async function startAutomatedJob(
       sessionToken,
       queuedAt: new Date().toISOString(),
     });
-
-    logger?.info(`Job ${jobId} started with thread ${threadId}`, LogHelpers.operation({ operationName: 'startAutomatedJob', threadId }));
   } catch (error) {
-    logger?.error(`Failed to start job ${jobId}`, LogHelpers.operation({ operationName: 'startAutomatedJob', error: error instanceof Error ? error.message : 'Unknown error' }));
     await db
       .update(tables.automatedJob)
       .set({
-        status: 'failed',
+        status: AutomatedJobStatuses.FAILED,
         metadata: {
           ...job.metadata,
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
@@ -198,22 +176,17 @@ export async function continueAutomatedJob(
   env: ApiEnv['Bindings'],
   queue: Queue,
 ): Promise<void> {
-  logger?.info(`Continuing job ${jobId}, round ${currentRound + 1}`, LogHelpers.operation({ operationName: 'continueAutomatedJob', roundNumber: currentRound + 1 }));
-
   const job = await db.query.automatedJob.findFirst({
     where: eq(tables.automatedJob.id, jobId),
   });
 
-  if (!job || job.status !== 'running') {
-    logger?.warn(`Job ${jobId} not running, skipping continue`, LogHelpers.operation({ operationName: 'continueAutomatedJob' }));
+  if (!job || job.status !== AutomatedJobStatuses.RUNNING) {
     return;
   }
 
   const nextRound = currentRound + 1;
 
-  // Check if we've completed all rounds
   if (nextRound >= job.totalRounds) {
-    logger?.info(`Job ${jobId} completed all ${job.totalRounds} rounds`, LogHelpers.operation({ operationName: 'continueAutomatedJob' }));
     await queue.send({
       type: RoundOrchestrationMessageTypes.COMPLETE_AUTOMATED_JOB,
       messageId: `complete-${jobId}`,
@@ -226,7 +199,6 @@ export async function continueAutomatedJob(
   }
 
   try {
-    // Generate next prompt
     const nextPrompt = await generateNextRoundPrompt(
       threadId,
       currentRound,
@@ -235,12 +207,8 @@ export async function continueAutomatedJob(
       env,
     );
 
-    // Analyze the generated prompt to determine round-specific config
     const roundConfig = await analyzeRoundPrompt(nextPrompt, env);
 
-    logger?.info(`Round ${nextRound} analysis`, LogHelpers.operation({ operationName: 'continueAutomatedJob', roundNumber: nextRound }));
-
-    // Update thread settings for this round (web search and mode)
     await db
       .update(tables.chatThread)
       .set({
@@ -250,7 +218,6 @@ export async function continueAutomatedJob(
       })
       .where(eq(tables.chatThread.id, threadId));
 
-    // Create user message for next round
     const now = new Date();
     const messageId = ulid();
 
@@ -267,13 +234,11 @@ export async function continueAutomatedJob(
       createdAt: now,
     });
 
-    // Update thread last message time
     await db
       .update(tables.chatThread)
       .set({ lastMessageAt: now, updatedAt: now })
       .where(eq(tables.chatThread.id, threadId));
 
-    // Update job with new round info and round-specific config
     const roundPrompts = [...(job.metadata?.roundPrompts || []), nextPrompt];
     const roundConfigs = [...(job.metadata?.roundConfigs || []), {
       round: nextRound,
@@ -293,7 +258,6 @@ export async function continueAutomatedJob(
       })
       .where(eq(tables.automatedJob.id, jobId));
 
-    // Queue participant trigger for next round
     await queue.send({
       type: RoundOrchestrationMessageTypes.TRIGGER_PARTICIPANT,
       messageId: `trigger-${threadId}-r${nextRound}-p0`,
@@ -304,14 +268,11 @@ export async function continueAutomatedJob(
       sessionToken,
       queuedAt: new Date().toISOString(),
     });
-
-    logger?.info(`Job ${jobId} continuing to round ${nextRound}`, LogHelpers.operation({ operationName: 'continueAutomatedJob', threadId, roundNumber: nextRound }));
   } catch (error) {
-    logger?.error(`Failed to continue job ${jobId}`, LogHelpers.operation({ operationName: 'continueAutomatedJob', threadId, error: error instanceof Error ? error.message : 'Unknown error' }));
     await db
       .update(tables.automatedJob)
       .set({
-        status: 'failed',
+        status: AutomatedJobStatuses.FAILED,
         metadata: {
           ...job.metadata,
           errorMessage: error instanceof Error ? error.message : 'Unknown error',
@@ -333,23 +294,19 @@ export async function completeAutomatedJob(
   autoPublish: boolean,
   db: Awaited<ReturnType<typeof getDbAsync>>,
 ): Promise<void> {
-  logger?.info(`Completing job ${jobId}`, LogHelpers.operation({ operationName: 'completeAutomatedJob' }));
-
   const job = await db.query.automatedJob.findFirst({
     where: eq(tables.automatedJob.id, jobId),
   });
 
   if (!job) {
-    logger?.warn(`Job ${jobId} not found`, LogHelpers.operation({ operationName: 'completeAutomatedJob' }));
     return;
   }
 
   try {
-    // Mark job as completed
     await db
       .update(tables.automatedJob)
       .set({
-        status: 'completed',
+        status: AutomatedJobStatuses.COMPLETED,
         metadata: {
           ...job.metadata,
           completedAt: new Date().toISOString(),
@@ -357,18 +314,14 @@ export async function completeAutomatedJob(
       })
       .where(eq(tables.automatedJob.id, jobId));
 
-    // Optionally publish thread
     if (autoPublish) {
       await db
         .update(tables.chatThread)
         .set({ isPublic: true, updatedAt: new Date() })
         .where(eq(tables.chatThread.id, threadId));
-      logger?.info(`Thread ${threadId} published`, LogHelpers.operation({ operationName: 'completeAutomatedJob', threadId }));
     }
-
-    logger?.info(`Job ${jobId} completed successfully`, LogHelpers.operation({ operationName: 'completeAutomatedJob' }));
-  } catch (error) {
-    logger?.error(`Failed to complete job ${jobId}`, LogHelpers.operation({ operationName: 'completeAutomatedJob', error: error instanceof Error ? error.message : 'Unknown error' }));
+  } catch {
+    // Error during completion - job state already reflects failure in metadata
   }
 }
 
@@ -384,16 +337,14 @@ export async function checkJobContinuation(
   db: Awaited<ReturnType<typeof getDbAsync>>,
   queue: Queue,
 ): Promise<boolean> {
-  // Find job by threadId
   const job = await db.query.automatedJob.findFirst({
     where: eq(tables.automatedJob.threadId, threadId),
   });
 
-  if (!job || job.status !== 'running') {
-    return false; // Not a job-owned thread or job not running
+  if (!job || job.status !== AutomatedJobStatuses.RUNNING) {
+    return false;
   }
 
-  // Job found, queue continuation
   await queue.send({
     type: RoundOrchestrationMessageTypes.CONTINUE_AUTOMATED_JOB,
     messageId: `continue-${job.id}-r${roundNumber}`,

@@ -78,8 +78,7 @@ Generate the next follow-up prompt to deepen this discussion.` }],
     }
 
     return prompt;
-  } catch (error) {
-    console.error('[prompt-generation] Error generating prompt:', error);
+  } catch {
     return getDefaultFollowUp(currentRound);
   }
 }

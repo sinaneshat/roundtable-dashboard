@@ -1,6 +1,6 @@
 /**
  * Scene 2: Homepage Hero
- * Duration: 2-4s (90 frames at 30fps)
+ * Duration: 5s (150 frames at 30fps)
  *
  * Camera: Slow dolly right across homepage with subtle zoom
  * Content: Homepage hero section with gradient mesh background
@@ -115,17 +115,17 @@ export function Scene02Homepage() {
     extrapolateRight: 'clamp',
   });
 
-  // Subtle camera Y rotation for added dimension
-  const cameraRotateY = interpolate(frame, [0, 90], [-2, 2], {
+  // Subtle camera Y rotation for added dimension - extended for 150 frame duration
+  const cameraRotateY = interpolate(frame, [0, 150], [-2, 2], {
     extrapolateRight: 'clamp',
   });
 
   // === CINEMATIC CAMERA ===
-  // Dolly right with subtle zoom
+  // Dolly right with subtle zoom - extended for 150 frame duration
   const { breathingOffset } = useCinematicCamera({
     movement: 'dolly-right',
     startFrame: 0,
-    duration: 90,
+    duration: 150,
     intensity: 0.8,
     breathingEnabled: true,
     breathingIntensity: 3,
@@ -138,13 +138,13 @@ export function Scene02Homepage() {
     maxBlur: 6,
   });
 
-  // Enhanced dolly with camera position
-  const dollyX = interpolate(frame, [0, 90], [80, -80], {
+  // Enhanced dolly with camera position - extended for 150 frame duration
+  const dollyX = interpolate(frame, [0, 150], [80, -80], {
     extrapolateRight: 'clamp',
   });
 
-  // Enhanced zoom during dolly
-  const zoomScale = interpolate(frame, [0, 90], [1, 1.08], {
+  // Enhanced zoom during dolly - extended for 150 frame duration
+  const zoomScale = interpolate(frame, [0, 150], [1, 1.08], {
     extrapolateRight: 'clamp',
   });
 
@@ -171,9 +171,9 @@ export function Scene02Homepage() {
 
   const subtitleOpacity = interpolate(subtitleProgress, [0, 1], [0, 1]);
 
-  // Exit fade in last 10 frames
-  const exitFade = frame > 80
-    ? interpolate(frame, [80, 90], [1, 0], { extrapolateRight: 'clamp' })
+  // Exit fade in last 10 frames - updated for 150 frame duration
+  const exitFade = frame > 140
+    ? interpolate(frame, [140, 150], [1, 0], { extrapolateRight: 'clamp' })
     : 1;
 
   // Feature cards floating effect - enhanced with breathing
@@ -483,12 +483,12 @@ export function Scene02Homepage() {
         </div>
       </div>
 
-      {/* Feature captions overlay - outside 3D wrapper */}
+      {/* Feature captions overlay - outside 3D wrapper - updated for 150 frame duration */}
       <VideoFeatureCaptions
-        position="bottom-left"
+        position="bottom-right"
         captions={[
-          { start: 0, end: 45, text: 'Meet the AI council', subtitle: 'Multiple models collaborate on your questions' },
-          { start: 45, end: 90, text: 'Diverse perspectives', subtitle: 'Each AI brings unique reasoning and knowledge' },
+          { start: 0, end: 75, text: 'Meet the AI council', subtitle: 'Multiple models collaborate on your questions' },
+          { start: 75, end: 150, text: 'Diverse perspectives', subtitle: 'Each AI brings unique reasoning and knowledge' },
         ]}
       />
     </AbsoluteFill>

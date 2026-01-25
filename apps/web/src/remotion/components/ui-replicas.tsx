@@ -162,7 +162,7 @@ export function VideoParticipantPlaceholder({ modelName, provider, isModerator, 
           ? <VideoAvatar src={staticFile('static/logo.webp')} fallback="RT" size={32} />
           : <VideoAvatar provider={provider} fallback={modelName?.charAt(0) || 'A'} size={32} />}
         {/* Model name: text-xl font-semibold text-muted-foreground */}
-        <span style={{ fontSize: 20, fontWeight: 600, color: COLORS.mutedForeground }}>
+        <span style={{ fontSize: 20, fontWeight: 600, color: COLORS.mutedForeground, fontFamily: FONTS.sans }}>
           {modelName}
         </span>
         {/* Pending indicator: ml-1 size-1.5 */}
@@ -183,6 +183,7 @@ export function VideoParticipantPlaceholder({ modelName, provider, isModerator, 
         fontSize: 16,
         color: COLORS.mutedForeground,
         opacity: shimmerOpacity,
+        fontFamily: FONTS.sans,
       }}
       >
         {loadingText}
@@ -720,6 +721,7 @@ export function VideoAvatar({ src, fallback, fallbackColor, size = 32, provider 
     fontSize: size * 0.4,
     fontWeight: 500,
     color: COLORS.mutedForeground,
+    fontFamily: FONTS.sans,
   };
 
   // Image: "object-contain p-0.5"
@@ -789,6 +791,7 @@ export function VideoUserMessage({ text }: VideoUserMessageProps) {
             whiteSpace: 'pre-wrap',
             wordBreak: 'break-word',
             margin: 0,
+            fontFamily: FONTS.sans,
           }}
           >
             {text}
@@ -943,7 +946,7 @@ export function VideoParticipantMessage({ modelName, provider, role, isModerator
           ? <VideoAvatar src={staticFile('static/logo.webp')} fallback="RT" size={32} />
           : <VideoAvatar provider={provider} fallback={modelName?.charAt(0) || 'A'} size={32} />}
         {/* Model name */}
-        <span style={{ fontSize: 20, fontWeight: 600, color: isModerator ? 'rgba(255,255,255,0.95)' : '#a3a3a3' }}>
+        <span style={{ fontSize: 20, fontWeight: 600, color: isModerator ? 'rgba(255,255,255,0.95)' : '#a3a3a3', fontFamily: FONTS.sans }}>
           {modelName}
         </span>
         {/* Role badge if present */}
@@ -957,6 +960,7 @@ export function VideoParticipantMessage({ modelName, provider, role, isModerator
             fontWeight: 500,
             border: '1px solid rgba(255,255,255,0.2)',
             color: '#bfbfbf',
+            fontFamily: FONTS.sans,
           }}
           >
             {role}
@@ -969,7 +973,7 @@ export function VideoParticipantMessage({ modelName, provider, role, isModerator
       </div>
 
       {/* Content: py-2 text-base min-w-0 */}
-      <div style={{ paddingTop: 8, paddingBottom: 8, fontSize: 16, lineHeight: 1.6, color: '#dedede', minWidth: 0, whiteSpace: 'pre-wrap' as const }}>
+      <div style={{ paddingTop: 8, paddingBottom: 8, fontSize: 16, lineHeight: 1.6, color: '#dedede', minWidth: 0, whiteSpace: 'pre-wrap' as const, fontFamily: FONTS.sans }}>
         {children}
       </div>
     </div>
@@ -1012,6 +1016,7 @@ export function VideoChatInput({ value, placeholder }: VideoChatInputProps) {
     color: value ? COLORS.foreground : `${COLORS.mutedForeground}99`,
     paddingLeft: 16,
     paddingRight: 16,
+    fontFamily: FONTS.sans,
   };
 
   const toolbarStyles: CSSProperties = {
@@ -1213,6 +1218,7 @@ export function VideoButton({ children, variant = 'default', size = 'md', style 
         textOverflow: 'ellipsis',
         borderRadius: 12,
         fontWeight: 500,
+        fontFamily: FONTS.sans,
         ...variantStyles,
         ...sizeStyles,
         ...style,

@@ -2,12 +2,12 @@ import { SUBSCRIPTION_TIER_NAMES } from '@roundtable/shared';
 import type { SubscriptionTier } from '@roundtable/shared/enums';
 
 import { createError } from '@/common/error-handling';
+import type { ModelForPricing } from '@/common/schemas/model-pricing';
 import type { getDbAsync } from '@/db';
 import type {
   ParticipantForValidation,
   ValidateModelAccessOptions,
 } from '@/lib/schemas/participant-schemas';
-import type { ModelForPricing } from '@/services/billing';
 import {
   canAccessModelByPricing,
   getRequiredTierForModel,
@@ -16,9 +16,6 @@ import {
 import { getModelById } from '@/services/models';
 
 import { getEnabledParticipantCount } from './participant-query.service';
-
-// Re-export types for consumers that import from this file
-export type { ParticipantForValidation, ValidateModelAccessOptions };
 
 // ============================================================================
 // HELPERS

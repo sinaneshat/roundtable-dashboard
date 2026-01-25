@@ -1,5 +1,5 @@
 /**
- * RoundtableShowcase - Product Video (~51 seconds)
+ * RoundtableShowcase - Product Video (~90 seconds)
  *
  * Streamlined production video with unified scenes:
  * - 7 scenes using TransitionSeries
@@ -10,11 +10,11 @@
  *
  * Scene Structure:
  * 01 Intro (3s)        - Logo reveal
- * 02 Homepage (3s)     - Hero section
- * 03 Sidebar (2.5s)    - Navigation
- * 04 ChatInput (10s)   - Unified: auto mode, models, files, voice, typing
- * 05 ModelModal (10s)  - Tabs, presets, custom, drag reorder
- * 06 ChatThread (24s)  - Unified: user msg → web search → placeholders → streaming → moderator
+ * 02 Homepage (5s)     - Meet the AI Council
+ * 03 Sidebar (4s)      - Choose Your Workspace
+ * 04 ChatInput (36s)   - Unified: auto mode, models, files, voice, typing (5-6s per feature)
+ * 05 ModelModal (13s)  - Tabs, presets, custom, drag reorder
+ * 06 ChatThread (21s)  - Unified: user msg → web search → placeholders → streaming → moderator
  * 07 Finale (5s)       - Grand finale with CTA
  */
 
@@ -39,27 +39,28 @@ const NORMAL_TRANSITION = linearTiming({ durationInFrames: 24 });
 const SLOW_TRANSITION = linearTiming({ durationInFrames: 36 });
 
 // Transition frame positions for chromatic aberration
-const TRANSITION_FRAMES = [90, 165, 231, 531, 813, 1521];
+// Updated: chatInput extended to 1080 frames (36s) for proper feature viewing
+const TRANSITION_FRAMES = [90, 216, 321, 1386, 1752, 2358];
 
 /**
  * Scene durations in frames at 30fps
  *
- * Total: ~1645 frames (~54.8 seconds)
+ * Total: ~2530 frames (~84 seconds)
  */
 const SCENE_DURATIONS = {
-  // === INTRO & NAVIGATION (8.5s) ===
+  // === INTRO & NAVIGATION (12s) ===
   intro: 90, // 3s - Logo reveal with depth effects
-  homepage: 90, // 3s - Hero section showcase
-  sidebar: 75, // 2.5s - Navigation and thread list
+  homepage: 150, // 5s - Meet the AI Council - more time to see model cards
+  sidebar: 120, // 4s - Choose Your Workspace - more time to see options
 
-  // === UNIFIED INPUT FEATURES (10s) ===
-  chatInput: 300, // 10s - Auto mode, models, files, voice, typing - ALL IN ONE
+  // === UNIFIED INPUT FEATURES (36s) ===
+  chatInput: 1080, // 36s - Auto mode, models, files, voice, typing - 5-6s per feature
 
-  // === MODEL SELECTION (10s) ===
-  modelModal: 300, // 10s - Tabs, presets, custom, drag reorder
+  // === MODEL SELECTION (13s) ===
+  modelModal: 390, // 13s - Tabs, presets, custom, drag reorder - more time for each tab
 
-  // === THE CONVERSATION - CORE FEATURE (24s) ===
-  chatThread: 720, // 24s - Full roundtable conversation with all participants and moderator
+  // === THE CONVERSATION - CORE FEATURE (21s) ===
+  chatThread: 630, // 21s - Full roundtable conversation, ends 3s after moderator finishes streaming
 
   // === FINALE (5s) ===
   finale: 150, // 5s - Grand finale with CTA
@@ -90,10 +91,10 @@ function ShowcaseAudio() {
           [
             0, // Start
             30, // Quick fade in
-            231, // End of navigation scenes
-            531, // ChatInput done, about to hit ModelModal
-            813, // ChatThread starts - main drop should hit here
-            870, // Deep into ChatThread
+            321, // End of navigation scenes (intro + homepage + sidebar)
+            1386, // ChatInput done, about to hit ModelModal
+            1752, // ChatThread starts - main drop should hit here
+            1850, // Deep into ChatThread
             total - 120, // Start fade out
             total, // End
           ],
@@ -131,7 +132,7 @@ export function RoundtableShowcase() {
 
       {/* Progress dots indicator */}
       <VideoProgressIndicator
-        sceneStarts={[0, 90, 165, 231, 531, 813, 1521]}
+        sceneStarts={[0, 90, 216, 321, 1386, 1752, 2358]}
         totalDuration={getShowcaseDuration()}
       />
 

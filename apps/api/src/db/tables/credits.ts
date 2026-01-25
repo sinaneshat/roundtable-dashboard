@@ -52,8 +52,8 @@ export const userCreditBalance = sqliteTable(
     monthlyCredits: integer('monthly_credits').notNull().default(0),
 
     // Refill timestamps
-    lastRefillAt: integer('last_refill_at', { mode: 'timestamp' }),
-    nextRefillAt: integer('next_refill_at', { mode: 'timestamp' }),
+    lastRefillAt: integer('last_refill_at', { mode: 'timestamp_ms' }),
+    nextRefillAt: integer('next_refill_at', { mode: 'timestamp_ms' }),
 
     // ============================================================================
     // OPTIMISTIC LOCKING
@@ -63,8 +63,9 @@ export const userCreditBalance = sqliteTable(
     // ============================================================================
     // TIMESTAMPS
     // ============================================================================
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
   },
@@ -152,7 +153,7 @@ export const creditTransaction = sqliteTable(
     // ============================================================================
     // TIMESTAMP
     // ============================================================================
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
   },
   table => [
     // Indexes for efficient queries

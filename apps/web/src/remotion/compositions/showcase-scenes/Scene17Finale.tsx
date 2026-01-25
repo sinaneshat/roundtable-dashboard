@@ -45,23 +45,16 @@ export function Scene17Finale() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // === 3D CAMERA SYSTEM ===
+  // === CAMERA SYSTEM - NO 3D SKEW FOR FINALE ===
 
-  // Dramatic camera pull-back: starts zoomed in (z=200), pulls out to z=0
-  const cameraZ = interpolate(frame, [0, 90], [200, 0], {
+  // Simple camera pull-back for depth, NO rotation
+  const cameraZ = interpolate(frame, [0, 90], [100, 0], {
     extrapolateRight: 'clamp',
   });
 
-  // Orbit rotation around the scene (subtle Y-axis rotation)
-  // Rotates ~15 degrees total for cinematic effect
-  const orbitY = interpolate(frame, [0, 90], [0, Math.PI * 0.08], {
-    extrapolateRight: 'clamp',
-  });
-
-  // Subtle X tilt for depth perception
-  const orbitX = interpolate(frame, [0, 45, 90], [0.02, 0, -0.01], {
-    extrapolateRight: 'clamp',
-  });
+  // NO orbit rotation - keep finale flat and centered
+  const orbitY = 0;
+  const orbitX = 0;
 
   // === CINEMATIC CAMERA (existing breathing) ===
   const { breathingOffset } = useCinematicCamera({
@@ -115,8 +108,8 @@ export function Scene17Finale() {
   });
   const ctaScale = interpolate(ctaFlipProgress, [0, 1], [0.8, 1]);
 
-  // CTA button pulse after entrance
-  const ctaPulse = frame > 80 ? Math.sin((frame - 80) * 0.2) * 0.03 + 1 : 1;
+  // CTA button - no pulsation, static after entrance
+  const ctaPulse = 1;
 
   // === TAGLINE ENTRANCE ===
   const taglineProgress = spring({

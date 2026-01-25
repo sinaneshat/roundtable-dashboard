@@ -1,16 +1,16 @@
 /**
  * Scene: Unified Chat Input
- * Duration: 300 frames (10 seconds at 30fps)
+ * Duration: 1080 frames (36 seconds at 30fps)
  *
- * Timeline demonstrating all chat input features:
- * - Frame 0-30: Empty chat input appears (Manual mode)
- * - Frame 30-70: Show model selection button with avatars (Manual mode)
- * - Frame 70-100: Switch to Auto mode - model button disappears
- * - Frame 100-125: Drag overlay appears (user drags files over)
- * - Frame 125-170: File chips animate in (result of drop)
- * - Frame 170-210: Voice recording activates (RED mic, waveform)
- * - Frame 210-260: Text types in input
- * - Frame 260-300: Send button pulses, message sends
+ * Timeline demonstrating all chat input features (5-6 seconds each):
+ * - Frame 0-90: Empty chat input appears (Manual mode) - 3s
+ * - Frame 90-270: Show model selection button with avatars (Manual mode) - 6s
+ * - Frame 270-420: Switch to Auto mode - model button disappears - 5s
+ * - Frame 420-510: Drag overlay appears (user drags files over) - 3s
+ * - Frame 510-660: File chips animate in (result of drop) - 5s
+ * - Frame 660-840: Voice recording activates (RED mic, waveform) - 6s
+ * - Frame 840-990: Text types in input - 5s
+ * - Frame 990-1080: Send button highlight, message sends - 3s
  *
  * Camera: Static with subtle breathing motion, simple fade transitions
  */
@@ -24,6 +24,7 @@ import {
 } from 'remotion';
 
 import { BrowserFrame } from '../../components/BrowserFrame';
+import { BrowserFrame3D } from '../../components/BrowserFrame3D';
 import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
 import {
   VideoAutoModeToggle,
@@ -86,21 +87,33 @@ export function SceneChatInput() {
     breathingIntensity: 3,
   });
 
-  // Phase timing
+  // Phase timing - extended for 1080 frame duration (5-6s per feature)
   const PHASE = {
-    inputAppear: { start: 0, end: 30 },
-    modelButton: { start: 30, end: 70 },
-    autoModeSwitch: { start: 70, end: 100 },
-    dragOverlay: { start: 100, end: 125 },
-    fileChips: { start: 125, end: 170 },
-    voiceRecording: { start: 170, end: 210 },
-    typing: { start: 210, end: 260 },
-    send: { start: 260, end: 300 },
+    inputAppear: { start: 0, end: 90 }, // 3s - input appears
+    modelButton: { start: 90, end: 270 }, // 6s - model selection
+    autoModeSwitch: { start: 270, end: 420 }, // 5s - auto mode switch
+    dragOverlay: { start: 420, end: 510 }, // 3s - drag overlay
+    fileChips: { start: 510, end: 660 }, // 5s - file chips
+    voiceRecording: { start: 660, end: 840 }, // 6s - voice recording
+    typing: { start: 840, end: 990 }, // 5s - typing
+    send: { start: 990, end: 1080 }, // 3s - send
   };
 
   // ============================================================================
-  // CAMERA SYSTEM - SIMPLIFIED (NO 3D TILTS)
+  // ANIMATED CAMERA - very subtle breathing rotation - scaled for 1080 frames
   // ============================================================================
+  const cameraRotateY = interpolate(
+    frame,
+    [0, 540, 1080],
+    [0.01, 0.025, 0.015],
+    { extrapolateRight: 'clamp' },
+  );
+  const cameraRotateX = interpolate(
+    frame,
+    [0, 540, 1080],
+    [0.015, 0.02, 0.01],
+    { extrapolateRight: 'clamp' },
+  );
 
   // ============================================================================
   // ORIGINAL ANIMATIONS (preserved)
@@ -163,40 +176,32 @@ export function SceneChatInput() {
   // FILE CHIPS STATE
   const showFiles = frame >= PHASE.fileChips.start && frame < PHASE.voiceRecording.start;
 
-  // DRAG OVERLAY STATE
+  // DRAG OVERLAY STATE - extended to fill full phase duration (90 frames)
   const showDragOverlay = frame >= PHASE.dragOverlay.start && frame < PHASE.dragOverlay.end;
   const dragOverlayOpacity = showDragOverlay
-    ? interpolate(frame - PHASE.dragOverlay.start, [0, 8, 17, 25], [0, 0.8, 0.8, 0])
+    ? interpolate(
+        frame - PHASE.dragOverlay.start,
+        [0, 15, 60, 90], // Fade in over 15 frames, hold, fade out in last 30 frames
+        [0, 0.85, 0.85, 0],
+        { extrapolateRight: 'clamp' },
+      )
     : 0;
 
   // VOICE RECORDING STATE
   const isVoiceActive = frame >= PHASE.voiceRecording.start && frame < PHASE.typing.start;
 
-  // TYPING STATE
+  // TYPING STATE - slower typing to fill 150 frame duration
   const isTyping = frame >= PHASE.typing.start;
   const typingStartFrame = PHASE.typing.start;
-  const charsPerFrame = 1.2;
+  const typingDuration = PHASE.typing.end - PHASE.typing.start; // 150 frames
+  const charsPerFrame = DEMO_QUESTION.length / (typingDuration * 0.7); // Complete typing in 70% of duration
   const charsToShow = Math.max(0, Math.floor((frame - typingStartFrame) * charsPerFrame));
   const displayedText = isTyping ? DEMO_QUESTION.slice(0, Math.min(charsToShow, DEMO_QUESTION.length)) : '';
   const cursorVisible = isTyping && (charsToShow < DEMO_QUESTION.length || (frame % 20 < 10));
 
-  // SEND BUTTON STATE
+  // SEND BUTTON STATE - no pulsation, just highlight when ready
   const isSending = frame >= PHASE.send.start;
-  const sendPulse = isSending
-    ? 1 + Math.sin((frame - PHASE.send.start) * 0.4) * 0.1
-    : 1;
-
-  // Exit fade in last 10 frames
-  const exitFade = frame > 290
-    ? interpolate(frame, [290, 300], [1, 0], { extrapolateRight: 'clamp' })
-    : 1;
-
-  // Unified entrance zoom - same timing across all scenes (now includes 3D entrance)
-  const entranceZoom = interpolate(
-    spring({ frame, fps, config: { damping: 25, stiffness: 150 }, durationInFrames: 25 }),
-    [0, 1],
-    [0.96, 1],
-  );
+  const sendPulse = 1; // Static, no pulse
 
   // Chat box fixed width
   const CHAT_BOX_WIDTH = 600;
@@ -234,34 +239,33 @@ export function SceneChatInput() {
 
       <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
 
-      {/* Prominent Feature Caption */}
+      {/* Prominent Feature Caption - matched exactly to PHASE timing for 1080 frames */}
       <VideoFeatureCaptions
-        position="bottom-left"
+        position="bottom-right"
         captions={[
-          { start: 0, end: 30, text: 'Your AI workspace', subtitle: 'One input for multiple AI models' },
-          { start: 30, end: 70, text: 'Choose your models', subtitle: 'Pick from 20+ AI models to participate' },
-          { start: 70, end: 100, text: 'Smart mode selection', subtitle: 'Auto mode picks the best models for your question' },
-          { start: 100, end: 125, text: 'Drag & drop files', subtitle: 'PDFs, images, code — any file type supported' },
-          { start: 125, end: 170, text: 'Rich file support', subtitle: 'Context from your documents, shared with all models' },
-          { start: 170, end: 210, text: 'Voice input', subtitle: 'Speak naturally, transcribed in real-time' },
-          { start: 210, end: 260, text: 'Ask anything', subtitle: 'Get diverse perspectives from multiple AIs simultaneously' },
-          { start: 260, end: 300, text: 'Send to the roundtable', subtitle: 'All selected models respond in parallel' },
+          { start: 0, end: 90, text: 'Your AI workspace', subtitle: 'One input for multiple AI models' },
+          { start: 90, end: 270, text: 'Choose your models', subtitle: 'Pick from 20+ AI models to participate' },
+          { start: 270, end: 420, text: 'Smart mode selection', subtitle: 'Auto mode picks the best models for your question' },
+          { start: 420, end: 510, text: 'Drag & drop files', subtitle: 'PDFs, images, code — any file type supported' },
+          { start: 510, end: 660, text: 'Rich file support', subtitle: 'Context from your documents, shared with all models' },
+          { start: 660, end: 840, text: 'Voice input', subtitle: 'Speak naturally, transcribed in real-time' },
+          { start: 840, end: 990, text: 'Ask anything', subtitle: 'Get diverse perspectives from multiple AIs simultaneously' },
+          { start: 990, end: 1080, text: 'Send to the roundtable', subtitle: 'All selected models respond in parallel' },
         ]}
       />
 
-      {/* Browser Frame Container - NO 3D transforms */}
-      <div
-        style={{
-          transform: `scale(${entranceZoom})`,
-          transformOrigin: 'center center',
-          opacity: exitFade,
-        }}
+      {/* Browser Frame with animated 3D - gentle breathing rotation */}
+      <BrowserFrame3D
+        rotateX={cameraRotateX}
+        rotateY={cameraRotateY}
+        rotateZ={-0.005}
+        depthBlur
       >
-        <BrowserFrame url="roundtable.ai">
+        <BrowserFrame url="roundtable.ai/chat">
           <div
             style={{
               width: 1200,
-              height: 700,
+              height: 720,
               display: 'flex',
               flexDirection: 'column',
               alignItems: 'center',
@@ -581,8 +585,7 @@ export function SceneChatInput() {
             </div>
           </div>
         </BrowserFrame>
-      </div>
-
+      </BrowserFrame3D>
     </AbsoluteFill>
   );
 }

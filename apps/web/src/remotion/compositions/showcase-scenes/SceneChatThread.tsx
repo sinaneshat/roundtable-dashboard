@@ -1,22 +1,23 @@
 /**
  * Scene: Unified Chat Thread
- * Duration: ~700 frames (23+ seconds at 30fps)
+ * Duration: 630 frames (21 seconds at 30fps)
  *
  * THE CORE FEATURE - Complete chat thread flow in ONE scene:
  * - Frame 0-30: User message slides up
  * - Frame 30-80: Web search accordion opens, streams results
  * - Frame 80: Web search accordion collapses
  * - Frame 90: ALL participant placeholders + moderator placeholder appear simultaneously
- * - Frame 130-250: Claude streams first
- * - Frame 260-380: GPT-4o streams second
- * - Frame 390-510: Gemini streams third
- * - Frame 520-560: Moderator streams (faster duration: 90 frames)
- * - Frame 560+: Hold on complete thread
+ * - Frame 120-210: Claude streams first
+ * - Frame 230-320: GPT-4o streams second
+ * - Frame 340-430: Gemini streams third
+ * - Frame 450-540: Moderator streams (finishes streaming at 540)
+ * - Frame 540-630: Hold on complete thread (3 seconds after moderator finishes)
  *
  * Key behaviors:
  * - overflow: hidden with translateY for auto-scroll (no scrollbar)
  * - Web search integrated in same scene
- * - Basic scrolling animation
+ * - Scroll reaches bottom exactly when moderator finishes streaming
+ * - Scene ends 3 seconds after moderator finishes
  * - Entrance zoom (scale-based)
  * - Exit fade
  */
@@ -31,6 +32,7 @@ import {
 } from 'remotion';
 
 import { BrowserFrame } from '../../components/BrowserFrame';
+import { BrowserFrame3D } from '../../components/BrowserFrame3D';
 import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
 import {
   VideoFeatureCaptions,
@@ -240,18 +242,30 @@ export function SceneChatThread() {
     maxBlur: 5,
   });
 
-  // === SCROLL OFFSET ===
+  // === SCROLL OFFSET - constant speed throughout streaming ===
+  // Stays at top until frame 100, then scrolls at constant speed to reach bottom at frame 540
+  // Linear scroll from frame 100 to 540 (440 frames), traveling -1700px = ~3.86px per frame
   const scrollOffset = interpolate(
     frame,
-    [0, 80, 130, 220, 320, 420, 550],
-    [0, 0, -150, -450, -700, -950, -1300],
+    [0, 100, 540],
+    [0, 0, -1700],
     { extrapolateRight: 'clamp' },
   );
 
-  // Exit fade in last 10 frames
-  const exitFade = frame > 710
-    ? interpolate(frame, [710, 720], [1, 0], { extrapolateRight: 'clamp' })
-    : 1;
+  // === ANIMATED CAMERA - very subtle slow orbit during long scene ===
+  // Camera animation ends at 630 (scene duration after moderator finishes + 3s hold)
+  const cameraRotateY = interpolate(
+    frame,
+    [0, 630],
+    [0.015, 0.03],
+    { extrapolateRight: 'clamp' },
+  );
+  const cameraRotateX = interpolate(
+    frame,
+    [0, 630],
+    [0.01, 0.025],
+    { extrapolateRight: 'clamp' },
+  );
 
   // === CONTAINER ANIMATION ===
   const containerProgress = spring({
@@ -267,13 +281,6 @@ export function SceneChatThread() {
 
   // === CAMERA ZOOM EFFECT ===
   const currentStreamingIndex = getCurrentStreamingIndex(frame);
-
-  // Unified entrance zoom - same timing across all scenes
-  const entranceZoom = interpolate(
-    spring({ frame, fps, config: { damping: 25, stiffness: 150 }, durationInFrames: 25 }),
-    [0, 1],
-    [0.96, 1],
-  );
 
   // === DEPTH BLUR HELPER ===
   // Returns blur amount for messages based on streaming state
@@ -484,33 +491,29 @@ export function SceneChatThread() {
 
       {/* Feature Label */}
       <VideoFeatureCaptions
-        position="bottom-left"
+        position="bottom-right"
         captions={[
           { start: 0, end: 30, text: 'Ask your question', subtitle: 'All models receive the same prompt' },
           { start: 30, end: 90, text: 'Web-grounded answers', subtitle: 'Real-time search enriches AI responses' },
           { start: 90, end: 180, text: 'Multiple perspectives', subtitle: 'Each AI brings unique reasoning and knowledge' },
           { start: 180, end: 430, text: 'The roundtable in action', subtitle: 'Compare insights side by side' },
-          { start: 430, end: 560, text: 'Moderator synthesis', subtitle: 'AI summarizes the best ideas from all models' },
+          { start: 430, end: 630, text: 'Moderator synthesis', subtitle: 'AI summarizes the best ideas from all models' },
         ]}
       />
 
-      {/* Browser Frame with Messages Container - NO 3D TILT */}
-      <div
-        style={{
-          transform: `scale(${entranceZoom})`,
-          transformOrigin: 'center center',
-          width: '100%',
-          display: 'flex',
-          justifyContent: 'center',
-          opacity: exitFade,
-        }}
+      {/* Browser Frame with animated 3D orbit - slow rotation over scene duration */}
+      <BrowserFrame3D
+        rotateX={cameraRotateX}
+        rotateY={cameraRotateY}
+        rotateZ={-0.005}
+        depthBlur
       >
-        <BrowserFrame url="roundtable.ai">
+        <BrowserFrame url="roundtable.ai/chat">
           {/* Fixed-size viewport - overflow hidden clips the scrolling content */}
           <div
             style={{
               width: 1200,
-              height: 750,
+              height: 720,
               overflow: 'hidden',
               backgroundColor: BACKGROUNDS.primary,
               position: 'relative',
@@ -567,7 +570,7 @@ export function SceneChatThread() {
             </div>
           </div>
         </BrowserFrame>
-      </div>
+      </BrowserFrame3D>
     </AbsoluteFill>
   );
 }

@@ -7,7 +7,7 @@
  * - Response creation from cached data
  */
 
-import type { OgImageType } from '@roundtable/shared/enums';
+import { OgImageTypes } from '@roundtable/shared/enums';
 import { describe, expect, it } from 'vitest';
 
 import {
@@ -100,7 +100,7 @@ describe('generateOgVersionHash', () => {
 describe('generateOgCacheKey', () => {
   it('should generate correct key format for public-thread type', () => {
     const key = generateOgCacheKey(
-      'public-thread' as OgImageType,
+      OgImageTypes.PUBLIC_THREAD,
       'my-thread-slug',
       'abc12345',
     );
@@ -110,7 +110,7 @@ describe('generateOgCacheKey', () => {
 
   it('should generate correct key format for thread type', () => {
     const key = generateOgCacheKey(
-      'thread' as OgImageType,
+      OgImageTypes.THREAD,
       'thread-123',
       'def67890',
     );
@@ -120,7 +120,7 @@ describe('generateOgCacheKey', () => {
 
   it('should generate correct key format for page type', () => {
     const key = generateOgCacheKey(
-      'page' as OgImageType,
+      OgImageTypes.PAGE,
       'privacy',
       'hash1234',
     );
@@ -130,7 +130,7 @@ describe('generateOgCacheKey', () => {
 
   it('should handle special characters in identifier', () => {
     const key = generateOgCacheKey(
-      'public-thread' as OgImageType,
+      OgImageTypes.PUBLIC_THREAD,
       'thread-with-dashes-123',
       'version1',
     );
@@ -140,7 +140,7 @@ describe('generateOgCacheKey', () => {
 
   it('should always end with .png extension', () => {
     const key = generateOgCacheKey(
-      'page' as OgImageType,
+      OgImageTypes.PAGE,
       'test',
       'hash',
     );
@@ -149,7 +149,7 @@ describe('generateOgCacheKey', () => {
   });
 
   it('should include all three parts in the key', () => {
-    const type = 'public-thread' as OgImageType;
+    const type = OgImageTypes.PUBLIC_THREAD;
     const identifier = 'my-slug';
     const versionHash = 'v123';
 
@@ -231,22 +231,22 @@ describe('createCachedImageResponse', () => {
 
 describe('cache Key Uniqueness', () => {
   it('should generate unique keys for different threads', () => {
-    const key1 = generateOgCacheKey('public-thread' as OgImageType, 'thread-a', 'hash1');
-    const key2 = generateOgCacheKey('public-thread' as OgImageType, 'thread-b', 'hash1');
+    const key1 = generateOgCacheKey(OgImageTypes.PUBLIC_THREAD, 'thread-a', 'hash1');
+    const key2 = generateOgCacheKey(OgImageTypes.PUBLIC_THREAD, 'thread-b', 'hash1');
 
     expect(key1).not.toBe(key2);
   });
 
   it('should generate unique keys for different versions of same thread', () => {
-    const key1 = generateOgCacheKey('public-thread' as OgImageType, 'my-thread', 'v1');
-    const key2 = generateOgCacheKey('public-thread' as OgImageType, 'my-thread', 'v2');
+    const key1 = generateOgCacheKey(OgImageTypes.PUBLIC_THREAD, 'my-thread', 'v1');
+    const key2 = generateOgCacheKey(OgImageTypes.PUBLIC_THREAD, 'my-thread', 'v2');
 
     expect(key1).not.toBe(key2);
   });
 
   it('should generate unique keys for same content in different types', () => {
-    const key1 = generateOgCacheKey('public-thread' as OgImageType, 'test', 'hash');
-    const key2 = generateOgCacheKey('thread' as OgImageType, 'test', 'hash');
+    const key1 = generateOgCacheKey(OgImageTypes.PUBLIC_THREAD, 'test', 'hash');
+    const key2 = generateOgCacheKey(OgImageTypes.THREAD, 'test', 'hash');
 
     expect(key1).not.toBe(key2);
   });

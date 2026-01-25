@@ -1495,10 +1495,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
 
         // Update message parts to include file parts
         if (filePartsForDb.length > 0 && message) {
-          const combinedPartsForDb = [
-            ...filePartsForDb,
-            ...messageParts,
-          ] as typeof message.parts;
+          const combinedPartsForDb = [...filePartsForDb, ...messageParts];
           await db.update(tables.chatMessage)
             .set({ parts: combinedPartsForDb })
             .where(eq(tables.chatMessage.id, messageId));
@@ -1507,7 +1504,7 @@ export const updateThreadHandler: RouteHandler<typeof updateThreadRoute, ApiEnv>
           createdMessage = {
             ...message,
             parts: combinedPartsForDb,
-          } as typeof message;
+          };
         }
 
         // Cancel scheduled cleanup for attached uploads (non-blocking)
@@ -2025,7 +2022,7 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
       }
 
       const existingParts = msg.parts ?? [];
-      const nonFileParts = existingParts.filter((p: { type: string; [key: string]: unknown }) => p.type !== MessagePartTypes.FILE);
+      const nonFileParts = existingParts.filter(p => p.type !== MessagePartTypes.FILE);
       const fileParts: ExtendedFilePart[] = attachments.map((att: MessageAttachment): ExtendedFilePart => {
         const signedPath = signedPaths.get(att.uploadId);
         if (!signedPath)

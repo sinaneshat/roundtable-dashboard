@@ -9,7 +9,7 @@ import {
   MESSAGE_STATUSES,
   THREAD_STATUSES,
 } from '@roundtable/shared/enums';
-import { relations, sql } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 import type {
@@ -27,7 +27,6 @@ import type {
 
 import { user } from './auth';
 import { chatProject } from './project';
-import { messageUpload } from './upload';
 
 /**
  * Chat Threads
@@ -373,94 +372,4 @@ export const chatPreSearch = sqliteTable('chat_pre_search', {
   uniqueIndex('chat_pre_search_thread_round_unique').on(table.threadId, table.roundNumber),
 ]);
 
-/**
- * Drizzle Relations for improved query support
- */
-export const chatThreadRelations = relations(chatThread, ({ one, many }) => ({
-  user: one(user, {
-    fields: [chatThread.userId],
-    references: [user.id],
-  }),
-  project: one(chatProject, {
-    fields: [chatThread.projectId],
-    references: [chatProject.id],
-  }),
-  participants: many(chatParticipant),
-  messages: many(chatMessage),
-  changelog: many(chatThreadChangelog), // Configuration change history
-  preSearches: many(chatPreSearch), // Web search results for rounds
-  roundFeedback: many(chatRoundFeedback), // User feedback for rounds
-}));
-
-export const chatCustomRoleRelations = relations(chatCustomRole, ({ one, many }) => ({
-  user: one(user, {
-    fields: [chatCustomRole.userId],
-    references: [user.id],
-  }),
-  participants: many(chatParticipant), // Participants using this custom role
-}));
-
-export const chatUserPresetRelations = relations(chatUserPreset, ({ one }) => ({
-  user: one(user, {
-    fields: [chatUserPreset.userId],
-    references: [user.id],
-  }),
-}));
-
-export const chatParticipantRelations = relations(chatParticipant, ({ one, many }) => ({
-  thread: one(chatThread, {
-    fields: [chatParticipant.threadId],
-    references: [chatThread.id],
-  }),
-  customRole: one(chatCustomRole, {
-    fields: [chatParticipant.customRoleId],
-    references: [chatCustomRole.id],
-  }),
-  messages: many(chatMessage),
-}));
-
-export const chatMessageRelations = relations(chatMessage, ({ one, many }) => ({
-  thread: one(chatThread, {
-    fields: [chatMessage.threadId],
-    references: [chatThread.id],
-  }),
-  participant: one(chatParticipant, {
-    fields: [chatMessage.participantId],
-    references: [chatParticipant.id],
-  }),
-  messageUploads: many(messageUpload),
-}));
-
-/**
- * Changelog Relations
- */
-export const chatThreadChangelogRelations = relations(chatThreadChangelog, ({ one }) => ({
-  thread: one(chatThread, {
-    fields: [chatThreadChangelog.threadId],
-    references: [chatThread.id],
-  }),
-}));
-
-/**
- * Pre-Search Relations
- */
-export const chatPreSearchRelations = relations(chatPreSearch, ({ one }) => ({
-  thread: one(chatThread, {
-    fields: [chatPreSearch.threadId],
-    references: [chatThread.id],
-  }),
-}));
-
-/**
- * Round Feedback Relations
- */
-export const chatRoundFeedbackRelations = relations(chatRoundFeedback, ({ one }) => ({
-  thread: one(chatThread, {
-    fields: [chatRoundFeedback.threadId],
-    references: [chatThread.id],
-  }),
-  user: one(user, {
-    fields: [chatRoundFeedback.userId],
-    references: [user.id],
-  }),
-}));
+// Relations moved to relations.ts to break circular dependencies

@@ -34,6 +34,7 @@ import { ulid } from 'ulid';
 import * as z from 'zod';
 
 import { createError, normalizeError } from '@/common/error-handling';
+import type { BillingContext } from '@/common/schemas/billing-context';
 import type { ErrorContext } from '@/core';
 import { AIModels } from '@/core';
 import type {
@@ -42,7 +43,6 @@ import type {
   WebSearchResultItem,
 } from '@/routes/chat/schema';
 import { MultiQueryGenerationSchema } from '@/routes/chat/schema';
-import type { BillingContext } from '@/services/billing';
 import { finalizeCredits } from '@/services/billing';
 import {
   initializeOpenRouter,
@@ -429,6 +429,13 @@ function createContentExtractor(): ContentExtractorFn {
     };
 
     /**
+     * Type guard for Element nodes in browser context
+     */
+    const isElementNode = (node: Node): node is Element => {
+      return node.nodeType === Node.ELEMENT_NODE;
+    };
+
+    /**
      * Convert DOM element to markdown - runs in browser context (no external deps)
      * Handles: headers, links, bold, italic, code, lists, paragraphs, images
      */
@@ -438,11 +445,11 @@ function createContentExtractor(): ContentExtractorFn {
           return node.textContent?.replace(/\s+/g, ' ') || '';
         }
 
-        if (node.nodeType !== Node.ELEMENT_NODE) {
+        if (!isElementNode(node)) {
           return '';
         }
 
-        const el = node as Element;
+        const el = node;
         const tag = el.tagName.toLowerCase();
         const children = Array.from(el.childNodes).map(processNode).join('');
 

@@ -1,6 +1,10 @@
 import { z } from '@hono/zod-openapi';
+import {
+  AutomatedJobStatuses,
+  AutomatedJobStatusSchema,
+} from '@roundtable/shared/enums';
 
-import { AUTOMATED_JOB_STATUSES } from '@/db/tables/job';
+import { DbAutomatedJobMetadataSchema } from '@/db';
 
 // ============================================================================
 // REQUEST SCHEMAS
@@ -38,8 +42,8 @@ export const UpdateJobRequestSchema = z.object({
     example: true,
     description: 'Set thread visibility (only works for completed jobs)',
   }),
-  status: z.enum(['running']).optional().openapi({
-    example: 'running',
+  status: z.literal(AutomatedJobStatuses.RUNNING).optional().openapi({
+    example: AutomatedJobStatuses.RUNNING,
     description: 'Retry a failed job',
   }),
 }).refine(
@@ -65,8 +69,8 @@ export type DeleteJobQuery = z.infer<typeof DeleteJobQuerySchema>;
  * Job list query params
  */
 export const JobListQuerySchema = z.object({
-  status: z.enum(AUTOMATED_JOB_STATUSES).optional().openapi({
-    example: 'running',
+  status: AutomatedJobStatusSchema.optional().openapi({
+    example: AutomatedJobStatuses.RUNNING,
     description: 'Filter by job status',
   }),
   limit: z.coerce.number().min(1).max(50).default(20).optional().openapi({
@@ -86,25 +90,12 @@ export type JobListQuery = z.infer<typeof JobListQuerySchema>;
 // ============================================================================
 
 /**
- * Job metadata schema
+ * Job metadata schema - extends DbAutomatedJobMetadataSchema with OpenAPI metadata
+ * Single source of truth: /apps/api/src/db/schemas/job-metadata.ts
  */
-export const JobMetadataSchema = z.object({
-  promptReasoning: z.string().optional().openapi({
-    description: 'AI reasoning for model selection',
-  }),
-  roundPrompts: z.array(z.string()).optional().openapi({
-    description: 'List of prompts used in each round',
-  }),
-  errorMessage: z.string().optional().openapi({
-    description: 'Error message if job failed',
-  }),
-  startedAt: z.string().optional().openapi({
-    description: 'ISO timestamp when job started',
-  }),
-  completedAt: z.string().optional().openapi({
-    description: 'ISO timestamp when job completed',
-  }),
-}).openapi('JobMetadata');
+export const JobMetadataSchema = DbAutomatedJobMetadataSchema.openapi('JobMetadata');
+
+export type JobMetadata = z.infer<typeof JobMetadataSchema>;
 
 /**
  * Single job response
@@ -138,7 +129,7 @@ export const JobResponseSchema = z.object({
   autoPublish: z.boolean().openapi({
     description: 'Whether to auto-publish when complete',
   }),
-  status: z.enum(AUTOMATED_JOB_STATUSES).openapi({
+  status: AutomatedJobStatusSchema.openapi({
     description: 'Job status',
   }),
   selectedModels: z.array(z.string()).nullable().openapi({

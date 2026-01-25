@@ -19,7 +19,10 @@ import {
   CitationSourceTypes,
 } from '@roundtable/shared/enums';
 
-import type { AggregatedProjectContext, ProjectContextParams } from '@/services/context';
+import type {
+  AggregatedProjectContext,
+  ProjectContextParams,
+} from '@/common/schemas/project-context';
 import { getAggregatedProjectContext } from '@/services/context';
 import type { CitableContextResult, CitableSource, CitationSourceMap } from '@/types/citations';
 

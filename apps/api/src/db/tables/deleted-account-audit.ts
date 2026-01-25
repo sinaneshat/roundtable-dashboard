@@ -12,8 +12,8 @@ export const deletedAccountAudit = sqliteTable(
     id: text('id').primaryKey(),
     emailHash: text('email_hash').notNull().unique(), // SHA-256 hash
     deletionCount: integer('deletion_count').default(1).notNull(),
-    firstDeletedAt: integer('first_deleted_at', { mode: 'timestamp' }).notNull(),
-    lastDeletedAt: integer('last_deleted_at', { mode: 'timestamp' }).notNull(),
+    firstDeletedAt: integer('first_deleted_at', { mode: 'timestamp_ms' }).notNull(),
+    lastDeletedAt: integer('last_deleted_at', { mode: 'timestamp_ms' }).notNull(),
   },
   table => [
     index('deleted_account_audit_email_hash_idx').on(table.emailHash),

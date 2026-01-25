@@ -37,6 +37,7 @@ import {
   isParticipantMessageMetadata,
 } from '@/db/schemas/chat-metadata';
 import type { ChatMessage } from '@/db/validation';
+import { AvailableSourceSchema } from '@/types/citations';
 
 import { isObject } from './type-guards';
 
@@ -402,12 +403,11 @@ export function getAvailableSources(
   }
 
   if ('availableSources' in metadata && Array.isArray(metadata.availableSources)) {
-    // Validate the availableSources array structure minimally
-    const sources = metadata.availableSources;
-    if (sources.length > 0 && sources.every((s: unknown) =>
-      s && typeof s === 'object' && 'id' in s && 'sourceType' in s && 'title' in s,
-    )) {
-      return sources as DbAssistantMessageMetadata['availableSources'];
+    // Validate each source with Zod schema
+    const AvailableSourcesArraySchema = z.array(AvailableSourceSchema);
+    const result = AvailableSourcesArraySchema.safeParse(metadata.availableSources);
+    if (result.success && result.data.length > 0) {
+      return result.data;
     }
   }
 

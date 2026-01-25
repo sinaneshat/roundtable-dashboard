@@ -3,16 +3,34 @@
  *
  * These type definitions enforce batch-based patterns by making transaction
  * methods unavailable at the type level, preventing accidental usage.
+ *
+ * Type Safety Notes:
+ * - EmptySchema uses Record<string, never> (correct idiom for empty object)
+ * - TSchema constraint uses Record<string, unknown> because Drizzle schemas
+ *   are inherently index-accessible. Actual types are inferred at usage sites.
  */
 
 import type { DrizzleD1Database } from 'drizzle-orm/d1';
 
-export type D1BatchDatabase<TSchema extends { [key: string]: unknown } = Record<string, never>>
+/**
+ * Empty schema type for default generic parameter.
+ * Record<string, never> is the correct TypeScript idiom for an empty object type.
+ */
+type EmptySchema = Record<string, never>;
+
+/**
+ * D1 database type with transaction method removed.
+ *
+ * The TSchema constraint uses Record<string, unknown> because Drizzle ORM
+ * schemas require index-accessible types. The actual schema type is always
+ * inferred from the concrete schema object passed to drizzle().
+ */
+export type D1BatchDatabase<TSchema extends Record<string, unknown> = EmptySchema>
   = Omit<DrizzleD1Database<TSchema>, 'transaction'> & {
     transaction: never;
   };
 
-export type BatchableOperation<TSchema extends { [key: string]: unknown } = Record<string, never>>
+export type BatchableOperation<TSchema extends Record<string, unknown> = EmptySchema>
   = | ReturnType<DrizzleD1Database<TSchema>['insert']>
     | ReturnType<DrizzleD1Database<TSchema>['update']>
     | ReturnType<DrizzleD1Database<TSchema>['delete']>

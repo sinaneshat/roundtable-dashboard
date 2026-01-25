@@ -1,15 +1,15 @@
 /**
  * Scene: Model Selection Modal with Tabs
- * Duration: 300 frames (10 seconds at 30fps)
+ * Duration: 390 frames (13 seconds at 30fps)
  *
  * Timeline:
  * - Frame 0-30: Modal fades in with presets visible
- * - Frame 30-90: Show Presets tab with preset cards animating in
- * - Frame 90-120: Tab switches to Custom with animation
- * - Frame 120-200: Custom models appear with stagger, show capability tags
- * - Frame 200-240: Drag reorder animation
- * - Frame 240-270: Role chip assigned to model
- * - Frame 270-300: Modal closes
+ * - Frame 30-180: Show Presets tab with preset cards (extended for more viewing time)
+ * - Frame 180-210: Tab switches to Custom with animation
+ * - Frame 210-300: Custom models appear with stagger, show capability tags
+ * - Frame 300-340: Drag reorder animation
+ * - Frame 340-370: Role chip assigned to model
+ * - Frame 370-390: Modal closes
  */
 
 import type { CSSProperties } from 'react';
@@ -22,6 +22,7 @@ import {
 } from 'remotion';
 
 import { BrowserFrame } from '../../components/BrowserFrame';
+import { BrowserFrame3D } from '../../components/BrowserFrame3D';
 import { DEFAULT_GLOW_ORBS, DepthParticles, EdgeVignette, RainbowGlowOrbs } from '../../components/scene-primitives';
 import {
   VideoAvatar,
@@ -290,11 +291,6 @@ export function SceneModelModal() {
   const frame = useCurrentFrame();
   const { fps } = useVideoConfig();
 
-  // Exit fade in last 10 frames
-  const exitFade = frame > 290
-    ? interpolate(frame, [290, 300], [1, 0], { extrapolateRight: 'clamp' })
-    : 1;
-
   // Camera breathing
   const { breathingOffset } = useCinematicCamera({
     movement: 'static',
@@ -302,16 +298,30 @@ export function SceneModelModal() {
     breathingIntensity: 2,
   });
 
-  // Phase timing
+  // Phase timing - extended for 390 frame duration with more time on presets
   const PHASE = {
     modalEntrance: { start: 0, end: 30 },
-    presetsTab: { start: 30, end: 90 },
-    tabSwitch: { start: 90, end: 120 },
-    modelsAppear: { start: 120, end: 200 },
-    dragReorder: { start: 200, end: 240 },
-    roleAssign: { start: 240, end: 270 },
-    modalClose: { start: 270, end: 300 },
+    presetsTab: { start: 30, end: 180 }, // Extended: 150 frames on presets (5s)
+    tabSwitch: { start: 180, end: 210 },
+    modelsAppear: { start: 210, end: 300 },
+    dragReorder: { start: 300, end: 340 },
+    roleAssign: { start: 340, end: 370 },
+    modalClose: { start: 370, end: 390 },
   };
+
+  // === ANIMATED CAMERA - very subtle slow drift - extended for 390 frames ===
+  const cameraRotateY = interpolate(
+    frame,
+    [0, 390],
+    [0.015, 0.025],
+    { extrapolateRight: 'clamp' },
+  );
+  const cameraRotateX = interpolate(
+    frame,
+    [0, 390],
+    [0.01, 0.02],
+    { extrapolateRight: 'clamp' },
+  );
 
   // Modal entrance
   const modalProgress = spring({
@@ -329,8 +339,8 @@ export function SceneModelModal() {
   // Tab state - Presets first, then Custom
   const activeTab = frame < PHASE.tabSwitch.start ? 'presets' : 'custom';
 
-  // Selected preset (frame 50-90)
-  const selectedPresetIndex = frame >= 50 && frame < PHASE.tabSwitch.start ? 0 : -1;
+  // Selected preset - highlight first preset from frame 80-180
+  const selectedPresetIndex = frame >= 80 && frame < PHASE.tabSwitch.start ? 0 : -1;
 
   // Model reorder animation
   const reorderProgress = frame >= PHASE.dragReorder.start
@@ -375,13 +385,6 @@ export function SceneModelModal() {
 
   const finalModalScale = interpolate(closeProgress, [0, 1], [1, 0.9]);
   const finalModalOpacity = interpolate(closeProgress, [0, 1], [1, 0]);
-
-  // Unified entrance zoom - same timing across all scenes
-  const entranceZoom = interpolate(
-    spring({ frame, fps, config: { damping: 25, stiffness: 150 }, durationInFrames: 25 }),
-    [0, 1],
-    [0.96, 1],
-  );
 
   // Selected capability tag in custom view
   const selectedTagIndex = frame >= PHASE.modelsAppear.start + 15 ? 0 : -1;
@@ -431,30 +434,29 @@ export function SceneModelModal() {
 
       <EdgeVignette innerRadius={50} edgeOpacity={0.5} />
 
-      {/* Feature Label */}
+      {/* Feature Label - updated for 390 frame duration with extended presets viewing */}
       <VideoFeatureCaptions
-        position="bottom-left"
+        position="bottom-right"
         captions={[
           { start: 0, end: 60, text: 'Model selection', subtitle: 'Browse presets or build custom configurations' },
-          { start: 60, end: 150, text: 'Preset configurations', subtitle: 'One-click setups for common use cases' },
-          { start: 150, end: 250, text: 'Custom models', subtitle: 'Drag to reorder, toggle to enable/disable' },
-          { start: 250, end: 300, text: 'Apply & go', subtitle: 'Your selected models are ready to collaborate' },
+          { start: 60, end: 180, text: 'Preset configurations', subtitle: 'One-click setups for common use cases' },
+          { start: 180, end: 340, text: 'Custom models', subtitle: 'Drag to reorder, toggle to enable/disable' },
+          { start: 340, end: 390, text: 'Apply & go', subtitle: 'Your selected models are ready to collaborate' },
         ]}
       />
 
-      {/* Browser Frame with Modal */}
-      <div
-        style={{
-          transform: `scale(${entranceZoom})`,
-          transformOrigin: 'center center',
-          opacity: exitFade,
-        }}
+      {/* Browser Frame with animated 3D - slow drift */}
+      <BrowserFrame3D
+        rotateX={cameraRotateX}
+        rotateY={cameraRotateY}
+        rotateZ={-0.008}
+        depthBlur
       >
-        <BrowserFrame url="roundtable.ai">
+        <BrowserFrame url="roundtable.ai/chat">
           <div
             style={{
               width: 1200,
-              height: 700,
+              height: 720,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -578,8 +580,8 @@ export function SceneModelModal() {
                         }}
                       >
                         {PRESETS.map((preset, i) => {
-                          // Simple fade + slide up entrance
-                          const cardDelay = 60 + i * 8;
+                        // Simple fade + slide up entrance - cards enter starting at frame 40
+                          const cardDelay = 40 + i * 12;
                           const cardProgress = spring({
                             frame: frame - cardDelay,
                             fps,
@@ -848,7 +850,7 @@ export function SceneModelModal() {
             </div>
           </div>
         </BrowserFrame>
-      </div>
+      </BrowserFrame3D>
     </AbsoluteFill>
   );
 }

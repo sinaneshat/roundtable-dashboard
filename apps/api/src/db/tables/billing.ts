@@ -22,8 +22,9 @@ export const stripeProduct = sqliteTable(
     metadata: text('metadata', { mode: 'json' }).$type<StripeMetadataType>(),
     images: text('images', { mode: 'json' }).$type<string[]>(),
     features: text('features', { mode: 'json' }).$type<string[]>(), // Product features list
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
   },
@@ -54,8 +55,9 @@ export const stripePrice = sqliteTable(
     trialPeriodDays: integer('trial_period_days'), // Free trial duration
     // ✅ TYPE-SAFE: Stripe metadata (string-to-string map) - type inferred from validation schema
     metadata: text('metadata', { mode: 'json' }).$type<StripeMetadataType>(),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
   },
@@ -82,8 +84,9 @@ export const stripeCustomer = sqliteTable(
     defaultPaymentMethodId: text('default_payment_method_id'),
     // ✅ TYPE-SAFE: Stripe metadata (string-to-string map) - type inferred from validation schema
     metadata: text('metadata', { mode: 'json' }).$type<StripeMetadataType>(),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
   },
@@ -114,23 +117,24 @@ export const stripeSubscription = sqliteTable(
     cancelAtPeriodEnd: integer('cancel_at_period_end', { mode: 'boolean' })
       .default(false)
       .notNull(),
-    cancelAt: integer('cancel_at', { mode: 'timestamp' }),
-    canceledAt: integer('canceled_at', { mode: 'timestamp' }),
+    cancelAt: integer('cancel_at', { mode: 'timestamp_ms' }),
+    canceledAt: integer('canceled_at', { mode: 'timestamp_ms' }),
     currentPeriodStart: integer('current_period_start', {
-      mode: 'timestamp',
+      mode: 'timestamp_ms',
     }).notNull(),
     currentPeriodEnd: integer('current_period_end', {
-      mode: 'timestamp',
+      mode: 'timestamp_ms',
     }).notNull(),
-    trialStart: integer('trial_start', { mode: 'timestamp' }),
-    trialEnd: integer('trial_end', { mode: 'timestamp' }),
-    endedAt: integer('ended_at', { mode: 'timestamp' }),
+    trialStart: integer('trial_start', { mode: 'timestamp_ms' }),
+    trialEnd: integer('trial_end', { mode: 'timestamp_ms' }),
+    endedAt: integer('ended_at', { mode: 'timestamp_ms' }),
     // ✅ TYPE-SAFE: Stripe metadata (string-to-string map) - type inferred from validation schema
     metadata: text('metadata', { mode: 'json' }).$type<StripeMetadataType>(),
     // Optimistic locking - prevents lost updates from webhook races
     version: integer('version').notNull().default(1),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
   },
@@ -167,8 +171,9 @@ export const stripePaymentMethod = sqliteTable(
     isDefault: integer('is_default', { mode: 'boolean' }).default(false).notNull(),
     // ✅ TYPE-SAFE: Stripe metadata (string-to-string map) - type inferred from validation schema
     metadata: text('metadata', { mode: 'json' }).$type<StripeMetadataType>(),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
   },
@@ -199,16 +204,17 @@ export const stripeInvoice = sqliteTable(
     amountDue: integer('amount_due').notNull(), // Amount in smallest currency unit
     amountPaid: integer('amount_paid').notNull(),
     currency: text('currency').notNull().default('usd'),
-    periodStart: integer('period_start', { mode: 'timestamp' }),
-    periodEnd: integer('period_end', { mode: 'timestamp' }),
+    periodStart: integer('period_start', { mode: 'timestamp_ms' }),
+    periodEnd: integer('period_end', { mode: 'timestamp_ms' }),
     hostedInvoiceUrl: text('hosted_invoice_url'),
     invoicePdf: text('invoice_pdf'),
     paid: integer('paid', { mode: 'boolean' }).default(false).notNull(),
     attemptCount: integer('attempt_count').default(0).notNull(),
     // ✅ TYPE-SAFE: Stripe metadata (string-to-string map) - type inferred from validation schema
     metadata: text('metadata', { mode: 'json' }).$type<StripeMetadataType>(),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-    updatedAt: integer('updated_at', { mode: 'timestamp' })
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+      .defaultNow()
       .$onUpdate(() => new Date())
       .notNull(),
   },
@@ -235,8 +241,8 @@ export const stripeWebhookEvent = sqliteTable(
     processingError: text('processing_error'),
     // ✅ TYPE-SAFE: Stripe webhook event data - type inferred from validation schema
     data: text('data', { mode: 'json' }).$type<StripeWebhookEventData>(),
-    createdAt: integer('created_at', { mode: 'timestamp' }).notNull(),
-    processedAt: integer('processed_at', { mode: 'timestamp' }),
+    createdAt: integer('created_at', { mode: 'timestamp_ms' }).notNull(),
+    processedAt: integer('processed_at', { mode: 'timestamp_ms' }),
   },
   table => [
     index('stripe_webhook_event_type_idx').on(table.type),

@@ -11,11 +11,11 @@ import { eq } from 'drizzle-orm';
 import { ulid } from 'ulid';
 
 import { createError } from '@/common/error-handling';
+import type { BillingContext } from '@/common/schemas/billing-context';
 import type { ErrorContext } from '@/core';
 import { TITLE_GENERATION_MODEL_ID } from '@/core/ai-models';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
-import type { BillingContext } from '@/services/billing';
 import { finalizeCredits, TITLE_GENERATION_CONFIG } from '@/services/billing';
 import { initializeOpenRouter, openRouterService } from '@/services/models';
 import type { ApiEnv } from '@/types';
@@ -95,8 +95,8 @@ export async function generateTitleFromMessage(
     }
 
     return title;
-  } catch {
-    // Fallback to first words of user message
+  } catch (error) {
+    console.error('[TitleGenerator] AI generation failed, using fallback:', error);
     const words = firstMessage.trim().split(/\s+/).slice(0, MAX_WORDS).join(' ');
     return words.length > MAX_LENGTH ? words.substring(0, MAX_LENGTH).trim() : words || 'Chat';
   }

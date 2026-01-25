@@ -20,17 +20,16 @@
 import { CLOUDFLARE_AI_SEARCH_COST_PER_QUERY } from '@roundtable/shared/constants';
 import { CitationSourcePrefixes, CitationSourceTypes, MessagePartTypes, MessageRoles, PreSearchStatuses } from '@roundtable/shared/enums';
 import { and, desc, eq, inArray, ne } from 'drizzle-orm';
-import type * as z from 'zod';
 
-import {
-  AggregatedProjectContextSchema,
-  ProjectAttachmentContextSchema,
-  ProjectChatContextSchema,
-  ProjectContextParamsSchema,
-  ProjectMemoryContextSchema,
-  ProjectModeratorContextSchema,
-  ProjectRagContextParamsSchema,
-  ProjectSearchContextSchema,
+import type {
+  AggregatedProjectContext,
+  ProjectAttachmentContext,
+  ProjectChatContext,
+  ProjectContextParams,
+  ProjectMemoryContext,
+  ProjectModeratorContext,
+  ProjectRagContextParams,
+  ProjectSearchContext,
 } from '@/common/schemas/project-context';
 import * as tables from '@/db';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
@@ -40,34 +39,6 @@ import { deductCreditsForAction } from '@/services/billing/credit.service';
 import { generateTraceId, trackSpan } from '@/services/errors/posthog-llm-tracking.service';
 import { getFile } from '@/services/uploads';
 import type { CitableSource, CitationSourceMap } from '@/types/citations';
-
-// ============================================================================
-// RE-EXPORTS FOR BACKWARDS COMPATIBILITY
-// ============================================================================
-
-export {
-  AggregatedProjectContextSchema,
-  ProjectAttachmentContextSchema,
-  ProjectChatContextSchema,
-  ProjectContextParamsSchema,
-  ProjectMemoryContextSchema,
-  ProjectModeratorContextSchema,
-  ProjectRagContextParamsSchema,
-  ProjectSearchContextSchema,
-};
-
-// ============================================================================
-// TYPE DEFINITIONS - INFERRED FROM ZOD SCHEMAS
-// ============================================================================
-
-export type ProjectContextParams = z.infer<typeof ProjectContextParamsSchema>;
-export type ProjectMemoryContext = z.infer<typeof ProjectMemoryContextSchema>;
-export type ProjectChatContext = z.infer<typeof ProjectChatContextSchema>;
-export type ProjectSearchContext = z.infer<typeof ProjectSearchContextSchema>;
-export type ProjectModeratorContext = z.infer<typeof ProjectModeratorContextSchema>;
-export type ProjectAttachmentContext = z.infer<typeof ProjectAttachmentContextSchema>;
-export type AggregatedProjectContext = z.infer<typeof AggregatedProjectContextSchema>;
-export type ProjectRagContextParams = z.infer<typeof ProjectRagContextParamsSchema>;
 
 // ============================================================================
 // Memory Context

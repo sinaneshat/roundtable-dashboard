@@ -11,6 +11,7 @@ import {
   CreditActions,
   CreditActionSchema,
   CreditTransactionTypes,
+  CreditTransactionTypeSchema,
   DatabaseOperations,
   ErrorContextTypes,
   getGrantTransactionType,
@@ -26,10 +27,7 @@ import * as z from 'zod';
 
 import { invalidateCreditBalanceCache } from '@/common/cache-utils';
 import { createError } from '@/common/error-handling';
-import {
-  BillingContextSchema,
-  ImageAnalysisBillingContextSchema,
-} from '@/common/schemas/billing-context';
+import type { ModelForPricing } from '@/common/schemas/model-pricing';
 import type { ErrorContext } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
@@ -37,19 +35,12 @@ import { DbTextPartSchema } from '@/db/schemas/chat-metadata';
 import type { UserCreditBalance } from '@/db/validation';
 import { getModelById } from '@/services/models';
 
-import type { ModelForPricing } from './product-logic.service';
 import {
   calculateWeightedCredits,
   getActionCreditCost,
   getModelPricingTierById,
   getPlanConfig,
 } from './product-logic.service';
-
-// ============================================================================
-// RE-EXPORTS FOR BACKWARDS COMPATIBILITY
-// ============================================================================
-
-export { BillingContextSchema, ImageAnalysisBillingContextSchema };
 
 // ============================================================================
 // TYPE HELPERS
@@ -187,10 +178,6 @@ const _TokenUsageSchema = z.object({
 });
 
 export type TokenUsage = z.infer<typeof _TokenUsageSchema>;
-
-// Types inferred from centralized schemas
-export type BillingContext = z.infer<typeof BillingContextSchema>;
-export type ImageAnalysisBillingContext = z.infer<typeof ImageAnalysisBillingContextSchema>;
 
 const _EnforceCreditsOptionsSchema = z.object({
   skipRoundCheck: z.boolean().optional(),
@@ -956,7 +943,7 @@ export async function upgradeToPaidPlan(userId: string): Promise<void> {
 
 const _RecordTransactionSchema = z.object({
   userId: z.string(),
-  type: z.custom<CreditTransactionType>(),
+  type: CreditTransactionTypeSchema,
   amount: z.number(),
   balanceAfter: z.number(),
   inputTokens: z.number().optional(),
@@ -966,7 +953,7 @@ const _RecordTransactionSchema = z.object({
   threadId: z.string().optional(),
   messageId: z.string().optional(),
   streamId: z.string().optional(),
-  action: z.custom<CreditAction>().optional(),
+  action: CreditActionSchema.optional(),
   modelId: z.string().optional(),
   modelPricingInputPerMillion: z.number().optional(),
   modelPricingOutputPerMillion: z.number().optional(),

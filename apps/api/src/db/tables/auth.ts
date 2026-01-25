@@ -8,27 +8,28 @@ export const user = sqliteTable('user', {
     .default(false)
     .notNull(),
   image: text('image'),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
   role: text('role'),
   banned: integer('banned', { mode: 'boolean' }).default(false),
   banReason: text('ban_reason'),
-  banExpires: integer('ban_expires', { mode: 'timestamp' }),
+  banExpires: integer('ban_expires', { mode: 'timestamp_ms' }),
 });
 
 export const session = sqliteTable('session', {
   id: text('id').primaryKey(),
-  expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
   token: text('token').notNull().unique(),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+    .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
   ipAddress: text('ip_address'),
@@ -50,17 +51,18 @@ export const account = sqliteTable('account', {
   refreshToken: text('refresh_token'),
   idToken: text('id_token'),
   accessTokenExpiresAt: integer('access_token_expires_at', {
-    mode: 'timestamp',
+    mode: 'timestamp_ms',
   }),
   refreshTokenExpiresAt: integer('refresh_token_expires_at', {
-    mode: 'timestamp',
+    mode: 'timestamp_ms',
   }),
   scope: text('scope'),
   password: text('password'),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+    .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
 });
@@ -69,11 +71,11 @@ export const verification = sqliteTable('verification', {
   id: text('id').primaryKey(),
   identifier: text('identifier').notNull(),
   value: text('value').notNull(),
-  expiresAt: integer('expires_at', { mode: 'timestamp' }).notNull(),
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }).notNull(),
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
@@ -97,7 +99,7 @@ export const apiKey = sqliteTable('api_key', {
   // Refill configuration
   refillInterval: integer('refill_interval'), // Interval to refill in milliseconds
   refillAmount: integer('refill_amount'), // Amount to refill
-  lastRefillAt: integer('last_refill_at', { mode: 'timestamp' }), // Last refill timestamp
+  lastRefillAt: integer('last_refill_at', { mode: 'timestamp_ms' }), // Last refill timestamp
 
   // Status and limits
   enabled: integer('enabled', { mode: 'boolean' }).default(true).notNull(),
@@ -108,16 +110,16 @@ export const apiKey = sqliteTable('api_key', {
   rateLimitTimeWindow: integer('rate_limit_time_window'), // Time window in ms
   rateLimitMax: integer('rate_limit_max'), // Max requests in window
   requestCount: integer('request_count').default(0).notNull(),
-  lastRequest: integer('last_request', { mode: 'timestamp' }),
+  lastRequest: integer('last_request', { mode: 'timestamp_ms' }),
 
   // Expiration
-  expiresAt: integer('expires_at', { mode: 'timestamp' }),
+  expiresAt: integer('expires_at', { mode: 'timestamp_ms' }),
 
   // Timestamps
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),

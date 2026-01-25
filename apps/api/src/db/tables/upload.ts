@@ -18,13 +18,15 @@
  */
 
 import { CHAT_ATTACHMENT_STATUSES, DEFAULT_CHAT_ATTACHMENT_STATUS } from '@roundtable/shared/enums';
-import { relations } from 'drizzle-orm';
+// Relations imported from centralized relations.ts
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 import type { UploadMetadata } from '@/db/validation/upload';
 
 import { user } from './auth';
-import { chatMessage, chatThread } from './chat';
+
+// NOTE: chatMessage/chatThread imports removed to break circular dependency.
+// FK constraints are enforced at DB level via migration.
 
 // Types: ChatAttachmentStatus from @/api/core/enums, UploadMetadata from @/db/validation/upload
 
@@ -81,10 +83,9 @@ export const upload = sqliteTable('upload', {
 export const threadUpload = sqliteTable('thread_upload', {
   id: text('id').primaryKey(),
 
-  // Thread reference
+  // FK to chat_thread.id enforced at DB level (avoids circular import)
   threadId: text('thread_id')
-    .notNull()
-    .references(() => chatThread.id, { onDelete: 'cascade' }),
+    .notNull(),
 
   // Upload reference
   uploadId: text('upload_id')
@@ -113,10 +114,9 @@ export const threadUpload = sqliteTable('thread_upload', {
 export const messageUpload = sqliteTable('message_upload', {
   id: text('id').primaryKey(),
 
-  // Message reference
+  // FK to chat_message.id enforced at DB level (avoids circular import)
   messageId: text('message_id')
-    .notNull()
-    .references(() => chatMessage.id, { onDelete: 'cascade' }),
+    .notNull(),
 
   // Upload reference
   uploadId: text('upload_id')
@@ -138,42 +138,4 @@ export const messageUpload = sqliteTable('message_upload', {
   uniqueIndex('message_upload_unique_idx').on(table.messageId, table.uploadId),
 ]);
 
-/**
- * Upload Relations
- */
-export const uploadRelations = relations(upload, ({ one, many }) => ({
-  user: one(user, {
-    fields: [upload.userId],
-    references: [user.id],
-  }),
-  threadUploads: many(threadUpload),
-  messageUploads: many(messageUpload),
-}));
-
-/**
- * Thread Upload Relations
- */
-export const threadUploadRelations = relations(threadUpload, ({ one }) => ({
-  thread: one(chatThread, {
-    fields: [threadUpload.threadId],
-    references: [chatThread.id],
-  }),
-  upload: one(upload, {
-    fields: [threadUpload.uploadId],
-    references: [upload.id],
-  }),
-}));
-
-/**
- * Message Upload Relations
- */
-export const messageUploadRelations = relations(messageUpload, ({ one }) => ({
-  message: one(chatMessage, {
-    fields: [messageUpload.messageId],
-    references: [chatMessage.id],
-  }),
-  upload: one(upload, {
-    fields: [messageUpload.uploadId],
-    references: [upload.id],
-  }),
-}));
+// Relations moved to relations.ts to break circular dependencies

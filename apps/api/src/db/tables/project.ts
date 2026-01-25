@@ -26,7 +26,7 @@ import {
   PROJECT_INDEX_STATUSES,
   PROJECT_MEMORY_SOURCES,
 } from '@roundtable/shared/enums';
-import { relations } from 'drizzle-orm';
+// Relations imported from centralized relations.ts
 import { index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 import type {
@@ -37,8 +37,10 @@ import type {
 } from '@/db/validation/project';
 
 import { user } from './auth';
-import { chatThread } from './chat';
 import { upload } from './upload';
+
+// NOTE: chatThread import removed to break circular dependency.
+// FK constraint on sourceThreadId is enforced at DB level via migration.
 
 // Types: ProjectColor/ProjectIndexStatus/ProjectMemorySource from @/api/core/enums
 // Types: ProjectMetadata/ProjectSettings from @/db/validation/project
@@ -77,10 +79,10 @@ export const chatProject = sqliteTable('chat_project', {
   metadata: text('metadata', { mode: 'json' }).$type<ProjectMetadata>(),
 
   // Timestamps
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
@@ -176,8 +178,8 @@ export const projectMemory = sqliteTable('project_memory', {
   source: text('source', { enum: PROJECT_MEMORY_SOURCES })
     .notNull()
     .default(DEFAULT_PROJECT_MEMORY_SOURCE),
-  sourceThreadId: text('source_thread_id')
-    .references(() => chatThread.id, { onDelete: 'set null' }), // Thread this memory came from (if applicable)
+  // FK to chat_thread.id enforced at DB level (avoids circular import)
+  sourceThreadId: text('source_thread_id'), // Thread this memory came from (if applicable)
   sourceRoundNumber: integer('source_round_number'), // Round number within thread (if from chat)
 
   // Importance and relevance
@@ -195,10 +197,10 @@ export const projectMemory = sqliteTable('project_memory', {
     .references(() => user.id, { onDelete: 'cascade' }),
 
   // Timestamps
-  createdAt: integer('created_at', { mode: 'timestamp' })
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .notNull(),
-  updatedAt: integer('updated_at', { mode: 'timestamp' })
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
     .defaultNow()
     .$onUpdate(() => new Date())
     .notNull(),
@@ -214,45 +216,4 @@ export const projectMemory = sqliteTable('project_memory', {
   index('project_memory_project_active_importance_idx').on(table.projectId, table.isActive, table.importance),
 ]);
 
-/**
- * Relations
- */
-export const chatProjectRelations = relations(chatProject, ({ one, many }) => ({
-  user: one(user, {
-    fields: [chatProject.userId],
-    references: [user.id],
-  }),
-  threads: many(chatThread),
-  attachments: many(projectAttachment),
-  memories: many(projectMemory),
-}));
-
-export const projectAttachmentRelations = relations(projectAttachment, ({ one }) => ({
-  project: one(chatProject, {
-    fields: [projectAttachment.projectId],
-    references: [chatProject.id],
-  }),
-  upload: one(upload, {
-    fields: [projectAttachment.uploadId],
-    references: [upload.id],
-  }),
-  addedByUser: one(user, {
-    fields: [projectAttachment.addedBy],
-    references: [user.id],
-  }),
-}));
-
-export const projectMemoryRelations = relations(projectMemory, ({ one }) => ({
-  project: one(chatProject, {
-    fields: [projectMemory.projectId],
-    references: [chatProject.id],
-  }),
-  sourceThread: one(chatThread, {
-    fields: [projectMemory.sourceThreadId],
-    references: [chatThread.id],
-  }),
-  createdByUser: one(user, {
-    fields: [projectMemory.createdBy],
-    references: [user.id],
-  }),
-}));
+// Relations moved to relations.ts to break circular dependencies

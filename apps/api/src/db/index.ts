@@ -11,10 +11,11 @@ import * as credits from './tables/credits';
 import * as deletedAccountAudit from './tables/deleted-account-audit';
 import * as job from './tables/job';
 import * as project from './tables/project';
+import * as relations from './tables/relations';
 import * as upload from './tables/upload';
 import * as usage from './tables/usage';
 
-// Combine all schemas for Drizzle
+// Combine all schemas for Drizzle (includes relations for type inference)
 const schema = {
   ...auth,
   ...billing,
@@ -23,6 +24,7 @@ const schema = {
   ...deletedAccountAudit,
   ...job,
   ...project,
+  ...relations,
   ...upload,
   ...usage,
 };
@@ -324,11 +326,12 @@ export { schema };
 // Export KV binding getter for services that need direct KV access
 export { getKVBinding };
 
-// Export batch operations utilities
-export { executeBatch, prepareStatement } from './batch-operations';
-
 // Export batch-related types for TypeScript enforcement
 export type { BatchableOperation, BatchResults, D1BatchDatabase } from './d1-types';
+
+// Re-export all schemas (Zod metadata schemas - single source of truth)
+export * from './schemas';
+
 // Re-export all table definitions (barrel pattern)
 export * from './tables/auth';
 export * from './tables/billing';
@@ -337,5 +340,6 @@ export * from './tables/credits';
 export * from './tables/deleted-account-audit';
 export * from './tables/job';
 export * from './tables/project';
+export * from './tables/relations';
 export * from './tables/upload';
 export * from './tables/usage';

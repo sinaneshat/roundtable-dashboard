@@ -46,12 +46,12 @@ const DEFAULT_CAMERA_DISTANCE = 1200;
 
 // Entrance animation config
 const ENTRANCE_CONFIG = {
-  initialScale: 0.85,
+  initialScale: 0.92,
   finalScale: 1,
-  initialRotateX: 0.12, // radians - start tilted back
-  initialRotateY: -0.08, // radians - start rotated left
-  initialTranslateZ: -100, // pixels - start further away
-  durationFrames: 45,
+  initialRotateX: 0.06, // radians - subtle tilt back
+  initialRotateY: -0.04, // radians - subtle rotation
+  initialTranslateZ: -50, // pixels - slight depth
+  durationFrames: 30,
 } as const;
 
 // Convert radians to degrees for CSS
@@ -291,31 +291,34 @@ export function BrowserFrame3D({
     ...innerStyle,
   };
 
-  // Content wrapper with relative positioning for overlays
+  // Content wrapper - centers and contains the browser frame
   const contentWrapperStyle: CSSProperties = {
     position: 'relative',
     width: '100%',
     height: '100%',
-    borderRadius: 16, // Match BrowserFrame border radius
-    overflow: 'hidden',
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'center',
   };
 
   return (
     <div style={containerStyle}>
       <div style={transformStyle}>
         <div style={contentWrapperStyle}>
-          {children}
-          <LightingOverlay
-            rotateX={animatedRotateX}
-            rotateY={animatedRotateY}
-            entranceProgress={entranceProgress}
-          />
-          <DepthBlurOverlay
-            rotateX={animatedRotateX}
-            rotateY={animatedRotateY}
-            enabled={depthBlur}
-            entranceProgress={entranceProgress}
-          />
+          <div style={{ position: 'relative', borderRadius: 16, overflow: 'hidden' }}>
+            {children}
+            <LightingOverlay
+              rotateX={animatedRotateX}
+              rotateY={animatedRotateY}
+              entranceProgress={entranceProgress}
+            />
+            <DepthBlurOverlay
+              rotateX={animatedRotateX}
+              rotateY={animatedRotateY}
+              enabled={depthBlur}
+              entranceProgress={entranceProgress}
+            />
+          </div>
         </div>
       </div>
     </div>
@@ -330,20 +333,20 @@ export function BrowserFrame3D({
 export const CAMERA_PRESETS = {
   /** Front-facing, no rotation */
   front: { rotateX: 0, rotateY: 0, rotateZ: 0 },
-  /** Subtle tilt for depth - good for most shots */
-  subtle: { rotateX: 0.04, rotateY: -0.06, rotateZ: 0 },
-  /** Hero shot - looking down and to the right */
-  hero: { rotateX: 0.1, rotateY: -0.12, rotateZ: 0.015 },
-  /** Showcase angle - dramatic perspective */
-  showcase: { rotateX: 0.15, rotateY: -0.18, rotateZ: 0.02 },
-  /** Side view - emphasizes width */
-  side: { rotateX: 0, rotateY: -0.25, rotateZ: 0 },
-  /** Top-down angle - looking from above */
-  topDown: { rotateX: 0.25, rotateY: 0, rotateZ: 0 },
-  /** Isometric-ish view */
-  isometric: { rotateX: 0.12, rotateY: -0.12, rotateZ: 0 },
-  /** Dramatic cinematic angle */
-  cinematic: { rotateX: 0.08, rotateY: -0.2, rotateZ: 0.03 },
+  /** Very subtle tilt - barely noticeable depth */
+  subtle: { rotateX: 0.01, rotateY: 0.015, rotateZ: 0 },
+  /** Hero shot - gentle angle */
+  hero: { rotateX: 0.02, rotateY: 0.025, rotateZ: -0.004 },
+  /** Showcase angle - slightly more perspective */
+  showcase: { rotateX: 0.025, rotateY: 0.03, rotateZ: -0.005 },
+  /** Side view - subtle side emphasis */
+  side: { rotateX: 0.01, rotateY: 0.04, rotateZ: 0 },
+  /** Top-down angle - gentle downward look */
+  topDown: { rotateX: 0.04, rotateY: 0, rotateZ: 0 },
+  /** Isometric-ish view - balanced subtle angle */
+  isometric: { rotateX: 0.02, rotateY: 0.02, rotateZ: 0 },
+  /** Cinematic angle */
+  cinematic: { rotateX: 0.015, rotateY: 0.035, rotateZ: -0.008 },
 } as const;
 
 export type CameraPreset = keyof typeof CAMERA_PRESETS;

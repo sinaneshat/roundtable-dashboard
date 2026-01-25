@@ -29,10 +29,10 @@ import { streamSSE } from 'hono/streaming';
 import { ulid } from 'ulid';
 import * as z from 'zod';
 
+import type { ModelForPricing } from '@/common/schemas/model-pricing';
 import { createHandler } from '@/core';
 import { PROMPT_ANALYSIS_MODEL_ID } from '@/core/ai-models';
 import { MIN_PARTICIPANTS_REQUIRED } from '@/lib/config';
-import type { ModelForPricing } from '@/services/billing';
 import {
   AI_TIMEOUT_CONFIG,
   canAccessModelByPricing,
