@@ -1,12 +1,11 @@
 import type { RouteHandler } from '@hono/zod-openapi';
-import { UserRoles } from '@roundtable/shared';
 import { and, like, ne, or, sql } from 'drizzle-orm';
 
 import { invalidateAllUserCaches } from '@/common/cache-utils';
-import { createError } from '@/common/error-handling';
 import { createHandler, Responses } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db/tables';
+import { requireAdmin } from '@/lib/auth/utils';
 import type { ApiEnv } from '@/types';
 
 import type { adminClearUserCacheRoute, adminSearchUserRoute } from './route';
@@ -26,14 +25,8 @@ export const adminSearchUserHandler: RouteHandler<typeof adminSearchUserRoute, A
     const { user } = c.auth();
     const { q, limit = 5 } = c.validated.query;
 
-    // Check admin role
-    if (user.role !== UserRoles.ADMIN) {
-      throw createError.unauthorized('Admin access required', {
-        errorType: 'authorization',
-        resource: 'admin',
-        userId: user.id,
-      });
-    }
+    // Check admin role - user is cast to AdminUser which includes role field
+    requireAdmin(user as Parameters<typeof requireAdmin>[0]);
 
     const db = await getDbAsync();
     const searchPattern = `%${q.toLowerCase()}%`;
@@ -78,14 +71,8 @@ export const adminClearUserCacheHandler: RouteHandler<typeof adminClearUserCache
     const { user } = c.auth();
     const { userId } = c.validated.body;
 
-    // Check admin role
-    if (user.role !== UserRoles.ADMIN) {
-      throw createError.unauthorized('Admin access required', {
-        errorType: 'authorization',
-        resource: 'admin',
-        userId: user.id,
-      });
-    }
+    // Check admin role - user is cast to AdminUser which includes role field
+    requireAdmin(user as Parameters<typeof requireAdmin>[0]);
 
     const db = await getDbAsync();
     await invalidateAllUserCaches(db, userId);
