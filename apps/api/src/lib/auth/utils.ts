@@ -4,7 +4,7 @@
  * Reusable helper functions for authentication and email domain validation
  */
 
-import { BETTER_AUTH_SESSION_COOKIE_NAME, EMAIL_DOMAIN_CONFIG } from '@roundtable/shared';
+import { BETTER_AUTH_SESSION_COOKIE_NAME, EMAIL_DOMAIN_CONFIG, UserRoles } from '@roundtable/shared';
 import { WebAppEnvs, WebAppEnvSchema } from '@roundtable/shared/enums';
 import { APIError } from 'better-auth/api';
 import { env as workersEnv } from 'cloudflare:workers';
@@ -168,7 +168,7 @@ export type AdminUser = z.infer<typeof AdminUserSchema>;
  * @throws {Error} Unauthorized error if user.role !== 'admin'
  */
 export function requireAdmin(user: AdminUser): void {
-  if (user.role !== 'admin') {
+  if (user.role !== UserRoles.ADMIN) {
     throw createError.unauthorized('Admin access required', {
       errorType: 'authorization',
       resource: 'admin',
