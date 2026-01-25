@@ -101,3 +101,6 @@ apps/web/worker-configuration.d.ts
 
 # Serena MCP
 .serena/
+
+# Backups with sensitive data
+apps/api/backups/

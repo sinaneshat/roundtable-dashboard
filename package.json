@@ -239,7 +239,7 @@
     "svgo": "^4.0.0",
     "tailwindcss": "^4.1.18",
     "tsx": "^4.21.0",
-    "turbo": "^2.5.3",
+    "turbo": "^2.7.6",
     "typescript": "5.9.3",
     "vite-tsconfig-paths": "^6.0.3",
     "vitest": "^4.0.16",
