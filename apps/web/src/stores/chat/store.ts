@@ -1047,8 +1047,8 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
         isStreaming: false,
         prefilledForThreadId: threadId,
         resumptionRoundNumber: serverState.roundNumber,
-        streamResumptionPrefilled: true,
         streamingRoundNumber: null,
+        streamResumptionPrefilled: true,
         waitingToStartStreaming: false,
       }, false, 'streamResumption/prefillStreamResumptionState_complete');
       return;
@@ -1686,11 +1686,17 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
     const isRoundActuallyComplete = latestRoundNumber >= 0 && messagesToSet.some((m) => {
       const meta = m.metadata;
-      if (!meta || typeof meta !== 'object') return false;
+      if (!meta || typeof meta !== 'object') {
+        return false;
+      }
       const isModerator = 'isModerator' in meta && meta.isModerator === true;
-      if (!isModerator) return false;
+      if (!isModerator) {
+        return false;
+      }
       const msgRound = getRoundNumber(meta);
-      if (msgRound !== latestRoundNumber) return false;
+      if (msgRound !== latestRoundNumber) {
+        return false;
+      }
       // Check if moderator message has actual text content (more robust than checking state)
       // DB messages might not have state field, or it might be in different format
       const hasContent = m.parts?.some(p =>

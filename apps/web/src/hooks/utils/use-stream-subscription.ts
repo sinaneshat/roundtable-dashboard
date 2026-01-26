@@ -27,23 +27,23 @@ import { z } from 'zod';
 // ============================================================================
 
 /** Stream chunk received from SSE */
-export interface StreamChunk {
+export type StreamChunk = {
   data: string;
   timestamp: number;
   type: 'text' | 'reasoning' | 'finish' | 'error';
-}
+};
 
 /** Subscription status */
-export type SubscriptionStatus =
-  | 'idle'
-  | 'connecting'
-  | 'queued'
-  | 'streaming'
-  | 'completed'
-  | 'failed';
+export type SubscriptionStatus
+  = | 'idle'
+    | 'connecting'
+    | 'queued'
+    | 'streaming'
+    | 'completed'
+    | 'failed';
 
 /** Stream subscription state */
-export interface StreamSubscriptionState {
+export type StreamSubscriptionState = {
   chunks: StreamChunk[];
   error: Error | null;
   isActive: boolean;
@@ -52,10 +52,10 @@ export interface StreamSubscriptionState {
   roundNumber: number | null;
   status: SubscriptionStatus;
   streamId: string | null;
-}
+};
 
 /** Hook configuration options */
-export interface UseStreamSubscriptionOptions {
+export type UseStreamSubscriptionOptions = {
   /** Whether the subscription is enabled */
   enabled?: boolean;
   /** Maximum retry attempts for "queued" status */
@@ -70,7 +70,7 @@ export interface UseStreamSubscriptionOptions {
   roundNumber: number;
   /** Thread ID to subscribe to */
   threadId: string;
-}
+};
 
 // ============================================================================
 // RESPONSE SCHEMAS

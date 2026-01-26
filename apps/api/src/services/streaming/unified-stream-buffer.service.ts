@@ -156,7 +156,9 @@ export async function appendParticipantStreamChunk(
       if (!metadata) {
         if (attempt < MAX_RETRIES - 1) {
           // Wait and retry - metadata might still be initializing
-          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+          await new Promise((resolve) => {
+            setTimeout(resolve, RETRY_DELAY_MS);
+          });
           continue;
         }
         logger?.warn('Stream metadata not found after retries', LogHelpers.operation({
@@ -184,7 +186,9 @@ export async function appendParticipantStreamChunk(
       return; // Success - exit retry loop
     } catch (error) {
       if (attempt < MAX_RETRIES - 1) {
-        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        await new Promise((resolve) => {
+          setTimeout(resolve, RETRY_DELAY_MS);
+        });
         continue;
       }
       logger?.error('Failed to append participant stream chunk', LogHelpers.operation({

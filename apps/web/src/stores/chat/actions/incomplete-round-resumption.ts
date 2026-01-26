@@ -100,8 +100,12 @@ export function useIncompleteRoundResumption(
 
   // Extract participant index from nextParticipantToTrigger (can be number or object with index)
   const getParticipantIndex = (): number | null => {
-    if (!streamResumptionPrefilled || nextParticipantToTrigger === null) return null;
-    if (typeof nextParticipantToTrigger === 'number') return nextParticipantToTrigger;
+    if (!streamResumptionPrefilled || nextParticipantToTrigger === null) {
+      return null;
+    }
+    if (typeof nextParticipantToTrigger === 'number') {
+      return nextParticipantToTrigger;
+    }
     return nextParticipantToTrigger.index;
   };
 
