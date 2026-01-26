@@ -2,10 +2,9 @@
  * Overview Screen Actions Hook
  *
  * Zustand v5 Pattern: Screen-specific action hook for overview screen
- * Handles suggestion clicks and delegates flow control
+ * Handles suggestion clicks
  *
- * Navigation logic moved to flow-controller.ts (centralized)
- * Streaming trigger moved to store subscription (store.ts)
+ * Flow control is now handled by the backend (conductor architecture).
  *
  * Location: /src/stores/chat/actions/overview-actions.ts
  * Used by: ChatOverviewScreen
@@ -18,8 +17,6 @@ import { useShallow } from 'zustand/react/shallow';
 import { useChatStore } from '@/components/providers/chat-store-provider/context';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { useMemoizedReturn } from '@/lib/utils';
-
-import { useFlowController } from './flow-controller';
 
 export type UseOverviewActionsOptions = {
   /** Project ID for project-scoped threads (updates URL to /chat/projects/{projectId}/{slug}) */
@@ -36,26 +33,20 @@ export type UseOverviewActionsReturn = {
  *
  * Consolidates:
  * - Suggestion click handling
- * - Flow control delegation (via useFlowController)
  *
  * @example
  * const overviewActions = useOverviewActions()
  *
  * <ChatQuickStart onSuggestionClick={overviewActions.handleSuggestionClick} />
  */
-export function useOverviewActions(options: UseOverviewActionsOptions = {}): UseOverviewActionsReturn {
-  const { projectId } = options;
+export function useOverviewActions(_options: UseOverviewActionsOptions = {}): UseOverviewActionsReturn {
   // Batch state and action selectors with useShallow for stable reference
-  const { showInitialUI, ...actions } = useChatStore(useShallow(s => ({
+  const actions = useChatStore(useShallow(s => ({
     setAutoMode: s.setAutoMode,
     setInputValue: s.setInputValue,
     setSelectedMode: s.setSelectedMode,
     setSelectedParticipants: s.setSelectedParticipants,
-    showInitialUI: s.showInitialUI,
   })));
-
-  // Delegate flow control to centralized controller
-  useFlowController({ enabled: !showInitialUI, projectId });
 
   /**
    * Handle suggestion click from quick start

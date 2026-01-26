@@ -327,6 +327,7 @@ export type {
   AdminRoutesType,
   AppType,
   BillingRoutesType,
+  ChatEntitySubscriptionRoutesType,
   ChatFeatureRoutesType,
   ChatMessageRoutesType,
   ChatThreadRoutesType,

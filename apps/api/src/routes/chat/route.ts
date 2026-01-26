@@ -1196,3 +1196,177 @@ export const getThreadMemoryEventsRoute = createRoute({
   summary: 'Get memory events for a round',
   tags: ['chat'],
 });
+
+// ============================================================================
+// ENTITY SUBSCRIPTION ROUTES - Backend-First Streaming Architecture
+// Per FLOW_DOCUMENTATION.md: Each entity has its own subscription endpoint
+// ============================================================================
+
+/**
+ * GET /chat/threads/:threadId/rounds/:roundNumber/stream/presearch
+ * ✅ BACKEND-FIRST: Subscribe to pre-search stream
+ */
+export const subscribeToPreSearchStreamRoute = createRoute({
+  description: `Subscribe to pre-search stream for a specific round.
+
+**Backend-First Architecture**: Backend is the orchestrator/publisher, frontend is pure subscriber.
+
+**Resumption**: Pass ?lastSeq=N to resume from sequence N+1
+
+**Response Types**:
+- 200 SSE stream if active (text/event-stream)
+- 200 JSON with status=complete if finished
+- 202 with retryAfter if not started yet
+- 200 JSON with status=disabled if web search not enabled`,
+  method: 'get',
+  path: '/chat/threads/{threadId}/rounds/{roundNumber}/stream/presearch',
+  request: {
+    params: ThreadRoundParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.ACCEPTED]: {
+      content: {
+        'application/json': {
+          schema: createApiResponseSchema(z.object({
+            retryAfter: z.number(),
+            status: z.literal('waiting'),
+          })),
+        },
+      },
+      description: 'Stream not started yet - retry after specified milliseconds',
+    },
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/json': {
+          schema: createApiResponseSchema(z.object({
+            lastSeq: z.number().optional(),
+            message: z.string().optional(),
+            status: z.enum(['complete', 'error', 'disabled']),
+          })),
+        },
+        'text/event-stream': {
+          schema: z.any().openapi({
+            description: 'SSE stream with pre-search chunks',
+          }),
+        },
+      },
+      description: 'Stream status or active SSE stream',
+    },
+    ...createProtectedRouteResponses(),
+  },
+  summary: 'Subscribe to pre-search stream',
+  tags: ['chat'],
+});
+
+/**
+ * GET /chat/threads/:threadId/rounds/:roundNumber/stream/participant/:participantIndex
+ * ✅ BACKEND-FIRST: Subscribe to participant stream
+ */
+export const subscribeToParticipantStreamRoute = createRoute({
+  description: `Subscribe to participant stream for a specific round and participant.
+
+**Backend-First Architecture**: Backend is the orchestrator/publisher, frontend is pure subscriber.
+
+**Resumption**: Pass ?lastSeq=N to resume from sequence N+1
+
+**Response Types**:
+- 200 SSE stream if active (text/event-stream)
+- 200 JSON with status=complete if finished
+- 202 with retryAfter if not started yet`,
+  method: 'get',
+  path: '/chat/threads/{threadId}/rounds/{roundNumber}/stream/participant/{participantIndex}',
+  request: {
+    params: z.object({
+      participantIndex: z.string(),
+      roundNumber: z.string(),
+      threadId: z.string(),
+    }),
+  },
+  responses: {
+    [HttpStatusCodes.ACCEPTED]: {
+      content: {
+        'application/json': {
+          schema: createApiResponseSchema(z.object({
+            retryAfter: z.number(),
+            status: z.literal('waiting'),
+          })),
+        },
+      },
+      description: 'Stream not started yet - retry after specified milliseconds',
+    },
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/json': {
+          schema: createApiResponseSchema(z.object({
+            lastSeq: z.number().optional(),
+            participantIndex: z.number().optional(),
+            status: z.enum(['complete', 'error']),
+          })),
+        },
+        'text/event-stream': {
+          schema: z.any().openapi({
+            description: 'SSE stream with participant response chunks',
+          }),
+        },
+      },
+      description: 'Stream status or active SSE stream',
+    },
+    ...createProtectedRouteResponses(),
+  },
+  summary: 'Subscribe to participant stream',
+  tags: ['chat'],
+});
+
+/**
+ * GET /chat/threads/:threadId/rounds/:roundNumber/stream/moderator
+ * ✅ BACKEND-FIRST: Subscribe to moderator stream
+ */
+export const subscribeToModeratorStreamRoute = createRoute({
+  description: `Subscribe to moderator stream for a specific round.
+
+**Backend-First Architecture**: Backend is the orchestrator/publisher, frontend is pure subscriber.
+
+**Resumption**: Pass ?lastSeq=N to resume from sequence N+1
+
+**Response Types**:
+- 200 SSE stream if active (text/event-stream)
+- 200 JSON with status=complete if finished
+- 202 with retryAfter if not started yet`,
+  method: 'get',
+  path: '/chat/threads/{threadId}/rounds/{roundNumber}/stream/moderator',
+  request: {
+    params: ThreadRoundParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.ACCEPTED]: {
+      content: {
+        'application/json': {
+          schema: createApiResponseSchema(z.object({
+            retryAfter: z.number(),
+            status: z.literal('waiting'),
+          })),
+        },
+      },
+      description: 'Stream not started yet - retry after specified milliseconds',
+    },
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/json': {
+          schema: createApiResponseSchema(z.object({
+            lastSeq: z.number().optional(),
+            status: z.enum(['complete', 'error']),
+          })),
+        },
+        'text/event-stream': {
+          schema: z.any().openapi({
+            description: 'SSE stream with moderator summary chunks',
+          }),
+        },
+      },
+      description: 'Stream status or active SSE stream',
+    },
+    ...createProtectedRouteResponses(),
+  },
+  summary: 'Subscribe to moderator stream',
+  tags: ['chat'],
+});

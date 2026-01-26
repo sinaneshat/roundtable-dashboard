@@ -26,6 +26,7 @@
 
 import { FinishReasons, parseSSEEventType, StreamPhases, StreamStatuses } from '@roundtable/shared/enums';
 
+import { getThreadActiveStream } from './resumable-stream-kv.service';
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
 import { LogHelpers } from '@/types/logger';
@@ -144,12 +145,6 @@ export async function appendParticipantStreamChunk(
 
   for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
     try {
-      const chunk: StreamChunk = {
-        data,
-        event: parseSSEEventType(data),
-        timestamp: Date.now(),
-      };
-
       const metadataKey = getMetadataKey(streamId);
       const metadata = parseStreamBufferMetadata(await env.KV.get(metadataKey, 'json'));
 
@@ -171,6 +166,13 @@ export async function appendParticipantStreamChunk(
       }
 
       const chunkIndex = metadata.chunkCount;
+
+      const chunk: StreamChunk = {
+        data,
+        event: parseSSEEventType(data),
+        seq: chunkIndex,
+        timestamp: Date.now(),
+      };
 
       await env.KV.put(
         getChunkKey(streamId, chunkIndex),
@@ -672,6 +674,185 @@ export function createLiveParticipantResumeStream(
           await new Promise((resolve) => {
             setTimeout(resolve, pollIntervalMs);
           });
+        }
+      } catch {
+        safeClose(controller);
+      }
+    },
+  });
+}
+
+/**
+ * ✅ AI SDK RESUMABLE STREAMS PATTERN: Server-side waiting stream
+ *
+ * Creates an SSE stream that WAITS for a participant stream to appear before streaming.
+ * This follows the proper pub/sub pattern where:
+ * - Server keeps connection open
+ * - Server polls for stream to become available
+ * - Server pushes data as it arrives
+ * - Client does NOT retry - single connection
+ *
+ * @param threadId - Thread ID to monitor
+ * @param roundNumber - Round number to stream
+ * @param participantIndex - Participant index to wait for
+ * @param env - Cloudflare environment bindings
+ * @param options - Stream options
+ */
+export function createWaitingParticipantStream(
+  threadId: string,
+  roundNumber: number,
+  participantIndex: number,
+  env: ApiEnv['Bindings'],
+  options: ResumeStreamOptions & { waitForStreamTimeoutMs?: number } = {},
+): ReadableStream<Uint8Array> {
+  const {
+    filterReasoningOnReplay = false,
+    maxPollDurationMs = 10 * 60 * 1000, // 10 minutes
+    noNewDataTimeoutMs = 90 * 1000, // 90 seconds
+    pollIntervalMs = 100,
+    startFromChunkIndex = 0,
+    waitForStreamTimeoutMs = 30 * 1000, // 30 seconds to wait for stream to appear
+  } = options;
+
+  const encoder = new TextEncoder();
+  let isClosed = false;
+
+  const safeClose = (controller: ReadableStreamDefaultController<Uint8Array>) => {
+    if (isClosed) return;
+    try {
+      isClosed = true;
+      controller.close();
+    } catch {
+      // Controller already closed
+    }
+  };
+
+  const safeEnqueue = (controller: ReadableStreamDefaultController<Uint8Array>, data: Uint8Array) => {
+    if (isClosed) return false;
+    try {
+      controller.enqueue(data);
+      return true;
+    } catch {
+      isClosed = true;
+      return false;
+    }
+  };
+
+  const shouldSendChunk = (chunk: { data: string; event?: string | undefined }): boolean => {
+    if (!filterReasoningOnReplay) return true;
+    return chunk.event !== 'reasoning-delta';
+  };
+
+  return new ReadableStream({
+    cancel() {
+      isClosed = true;
+    },
+
+    async start(controller) {
+      const startTime = Date.now();
+      let streamId: string | null = null;
+
+      // Phase 1: Wait for stream to appear (server-side waiting, not client retry)
+      console.error(`[WAITING-STREAM] P${participantIndex} r${roundNumber} - waiting for stream to appear`);
+
+      while (!isClosed && !streamId) {
+        if (Date.now() - startTime > waitForStreamTimeoutMs) {
+          console.error(`[WAITING-STREAM] P${participantIndex} r${roundNumber} - timeout waiting for stream`);
+          const errorEvent = `data: {"type":"error","error":"Stream not available after ${waitForStreamTimeoutMs}ms"}\n\n`;
+          safeEnqueue(controller, encoder.encode(errorEvent));
+          safeClose(controller);
+          return;
+        }
+
+        // Check if stream has started
+        streamId = await getActiveParticipantStreamId(threadId, roundNumber, participantIndex, env);
+
+        if (!streamId) {
+          // Also check thread active stream
+          const activeStream = await getThreadActiveStream(threadId, env);
+          if (activeStream?.participantIndex === participantIndex && activeStream.roundNumber === roundNumber) {
+            streamId = activeStream.streamId;
+          }
+        }
+
+        if (!streamId) {
+          await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+        }
+      }
+
+      if (isClosed || !streamId) {
+        safeClose(controller);
+        return;
+      }
+
+      console.error(`[WAITING-STREAM] P${participantIndex} r${roundNumber} - stream found: ${streamId.slice(-8)}`);
+
+      // Phase 2: Stream data (same as createLiveParticipantResumeStream)
+      let lastChunkIndex = startFromChunkIndex;
+      let lastNewDataTime = Date.now();
+
+      try {
+        // Send initial chunks
+        const initialChunks = await getParticipantStreamChunks(streamId, env);
+        if (initialChunks && initialChunks.length > startFromChunkIndex) {
+          for (let i = startFromChunkIndex; i < initialChunks.length; i++) {
+            const chunk = initialChunks[i];
+            if (chunk && shouldSendChunk(chunk)) {
+              if (!safeEnqueue(controller, encoder.encode(chunk.data))) return;
+            }
+          }
+          lastChunkIndex = initialChunks.length;
+          lastNewDataTime = Date.now();
+          console.error(`[WAITING-STREAM] P${participantIndex} r${roundNumber} - sent ${initialChunks.length} initial chunks`);
+        }
+
+        // Check if already completed
+        const initialMetadata = await getParticipantStreamMetadata(streamId, env);
+        if (
+          initialMetadata?.status === StreamStatuses.COMPLETED
+          || initialMetadata?.status === StreamStatuses.FAILED
+        ) {
+          console.error(`[WAITING-STREAM] P${participantIndex} r${roundNumber} - already ${initialMetadata.status}`);
+          safeClose(controller);
+          return;
+        }
+
+        // Continue polling for new chunks
+        while (!isClosed) {
+          if (Date.now() - startTime > maxPollDurationMs) {
+            safeClose(controller);
+            return;
+          }
+
+          const chunks = await getParticipantStreamChunks(streamId, env);
+          const metadata = await getParticipantStreamMetadata(streamId, env);
+
+          if (chunks && chunks.length > lastChunkIndex) {
+            for (let i = lastChunkIndex; i < chunks.length; i++) {
+              const chunk = chunks[i];
+              if (chunk && shouldSendChunk(chunk)) {
+                if (!safeEnqueue(controller, encoder.encode(chunk.data))) return;
+              }
+            }
+            lastChunkIndex = chunks.length;
+            lastNewDataTime = Date.now();
+          }
+
+          if (metadata?.status === StreamStatuses.COMPLETED || metadata?.status === StreamStatuses.FAILED) {
+            console.error(`[WAITING-STREAM] P${participantIndex} r${roundNumber} - stream ${metadata.status}, sent ${lastChunkIndex} total chunks`);
+            safeClose(controller);
+            return;
+          }
+
+          const timeSinceLastNewData = Date.now() - lastNewDataTime;
+          if (timeSinceLastNewData > noNewDataTimeoutMs) {
+            const syntheticFinish = `data: {"type":"finish","finishReason":"${FinishReasons.UNKNOWN}","usage":{"promptTokens":0,"completionTokens":0}}\n\n`;
+            safeEnqueue(controller, encoder.encode(syntheticFinish));
+            safeClose(controller);
+            return;
+          }
+
+          await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
         }
       } catch {
         safeClose(controller);
@@ -1211,6 +1392,7 @@ export async function appendModeratorStreamChunk(
 
     const newChunk: ModeratorStreamChunk = {
       data,
+      seq: chunkIndex,
       timestamp: Date.now(),
     };
 

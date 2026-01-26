@@ -85,9 +85,14 @@ const MessageCacheTags = {
   all: (threadId: string) => [
     MessageCacheTags.byThread(threadId),
     MessageCacheTags.changelog(threadId),
+    // ✅ FIX: Include pre-search and attachment caches so they get invalidated together
+    MessageCacheTags.preSearch(threadId),
+    MessageCacheTags.attachments(threadId),
   ],
+  attachments: (threadId: string) => `attachments-${threadId}`,
   byThread: (threadId: string) => `messages-${threadId}`,
   changelog: (threadId: string) => `changelog-${threadId}`,
+  preSearch: (threadId: string) => `presearch-${threadId}`,
 } as const;
 
 const PublicThreadCacheTags = {

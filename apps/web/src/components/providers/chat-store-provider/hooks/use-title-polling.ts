@@ -13,7 +13,7 @@
 
 import type { QueryClient } from '@tanstack/react-query';
 import type { RefObject } from 'react';
-import { useEffect, useRef } from 'react';
+import { useCallback, useEffect, useReducer, useRef } from 'react';
 import { useStore } from 'zustand';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -27,39 +27,72 @@ type UseTitlePollingOptions = {
   queryClientRef: RefObject<QueryClient>;
 };
 
+type PollingState = {
+  pendingThreadId: string | null;
+  pendingProjectId: string | null;
+};
+
+type PollingAction
+  = { type: 'START_POLLING'; threadId: string; projectId: string | null }
+    | { type: 'COMPLETE_POLLING' };
+
+function pollingReducer(state: PollingState, action: PollingAction): PollingState {
+  switch (action.type) {
+    case 'START_POLLING':
+      return {
+        pendingProjectId: action.projectId,
+        pendingThreadId: action.threadId,
+      };
+    case 'COMPLETE_POLLING':
+      return {
+        pendingProjectId: null,
+        pendingThreadId: null,
+      };
+    default:
+      return state;
+  }
+}
+
 export function useTitlePolling({ queryClientRef, store }: UseTitlePollingOptions) {
   const { createdThreadId, createdThreadProjectId } = useStore(store, useShallow(s => ({
     createdThreadId: s.createdThreadId,
     createdThreadProjectId: s.createdThreadProjectId,
   })));
 
-  // CRITICAL: Track pending title thread ID in ref - persists across navigation
-  // Store's createdThreadId gets cleared on navigation, but we need to keep polling
-  const pendingTitleThreadIdRef = useRef<string | null>(null);
-
-  // Track project ID for created thread - used for cache updates
-  const pendingProjectIdRef = useRef<string | null>(null);
+  // Use reducer for state management - this satisfies the linter's preference
+  // for not calling setState directly in useEffect
+  const [pollingState, dispatch] = useReducer(pollingReducer, {
+    pendingProjectId: null,
+    pendingThreadId: null,
+  });
 
   // Track if we've already handled the AI title for this thread
   const handledTitleRef = useRef<string | null>(null);
 
-  // Track if polling already started to prevent duplicate thread captures in first effect
+  // Track if polling already started to prevent duplicate thread captures
   const pollingStartedForRef = useRef<string | null>(null);
 
-  // Capture new thread creation in persistent ref BEFORE store clears it
+  // Memoized dispatch callbacks to satisfy linter
+  const startPolling = useCallback((threadId: string, projectId: string | null) => {
+    dispatch({ projectId, threadId, type: 'START_POLLING' });
+  }, []);
+
+  const completePolling = useCallback(() => {
+    dispatch({ type: 'COMPLETE_POLLING' });
+  }, []);
+
+  // Capture new thread creation BEFORE store clears it on navigation
   // Only set if polling hasn't started yet for this thread (prevents duplicate captures)
   useEffect(() => {
     if (createdThreadId && createdThreadId !== handledTitleRef.current) {
       if (pollingStartedForRef.current !== createdThreadId) {
-        pendingTitleThreadIdRef.current = createdThreadId;
-        pendingProjectIdRef.current = createdThreadProjectId;
         pollingStartedForRef.current = createdThreadId;
+        startPolling(createdThreadId, createdThreadProjectId);
       }
     }
-  }, [createdThreadId, createdThreadProjectId]);
+  }, [createdThreadId, createdThreadProjectId, startPolling]);
 
-  // Use the persistent ref for polling - NOT the store's createdThreadId
-  const pendingThreadId = pendingTitleThreadIdRef.current;
+  const { pendingProjectId, pendingThreadId } = pollingState;
 
   // Determine if we should poll:
   // - Have a pending thread ID (captured before navigation cleared it)
@@ -83,11 +116,12 @@ export function useTitlePolling({ queryClientRef, store }: UseTitlePollingOption
       return;
     }
     handledTitleRef.current = pendingThreadId;
-    // Capture project ID before clearing refs
-    const projectId = pendingProjectIdRef.current;
-    // Clear pending refs now that we've handled it
-    pendingTitleThreadIdRef.current = null;
-    pendingProjectIdRef.current = null;
+
+    // Capture project ID before clearing state
+    const projectId = pendingProjectId;
+
+    // Clear pending state now that we've handled it
+    completePolling();
 
     const queryClient = queryClientRef.current;
     if (!queryClient) {
@@ -239,5 +273,5 @@ export function useTitlePolling({ queryClientRef, store }: UseTitlePollingOption
     return () => {
       clearTimeout(invalidationTimeout);
     };
-  }, [slugStatusQuery.data, pendingThreadId, queryClientRef, store]);
+  }, [slugStatusQuery.data, pendingThreadId, pendingProjectId, queryClientRef, store, completePolling]);
 }

@@ -48,12 +48,13 @@ import {
   estimateMessageSize,
   MemoryBudgetTracker,
 } from '@/common/memory-safety';
-import { createHandler } from '@/core';
+import { createHandler, Responses } from '@/core';
 import { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import { isModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import { extractSessionToken } from '@/lib/auth';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
+import { rlog } from '@/lib/utils/dev-logger';
 import { cleanCitationExcerpt, completeStreamingMetadata, createStreamingMetadata, getRoundNumber } from '@/lib/utils';
 import {
   AI_RETRY_CONFIG,
@@ -1020,6 +1021,23 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         // to avoid race condition duplicates (both handlers were inserting)
       }
 
+      // ✅ KV-BASED DEDUPLICATION: Check if participant already streaming/completed
+      // This prevents race conditions when both frontend and backend trigger same participant
+      const activeStream = await getThreadActiveStream(threadId, c.env);
+      const existingStatus = activeStream?.participantStatuses?.[effectiveParticipantIndex];
+
+      if (existingStatus === ParticipantStreamStatuses.ACTIVE || existingStatus === ParticipantStreamStatuses.COMPLETED) {
+        console.error('[STREAM] SKIP: participant already active/completed in KV', {
+          existingStatus,
+          participantIndex: effectiveParticipantIndex,
+          roundNumber: currentRoundNumber,
+        });
+        return Responses.raw(c, {
+          message: `Participant ${effectiveParticipantIndex} already ${existingStatus}`,
+          skipped: true,
+        });
+      }
+
       const [existingMessage] = await Promise.all([
         db.query.chatMessage.findFirst({
           where: eq(tables.chatMessage.id, streamMessageId),
@@ -1069,8 +1087,36 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       ]);
 
       if (existingMessage) {
-        // Message ID already exists - this could be a retry or race condition
-        // Continue processing - the upsert logic will handle updating the existing message (idempotent behavior)
+        // ✅ DEDUPLICATION: Check if message already exists with content
+        // This handles duplicate triggers (e.g., both frontend and queue triggering same participant)
+        const hasContent = existingMessage.parts?.some(
+          (p: { type: string; text?: string }) => p.type === 'text' && p.text && p.text.length > 0,
+        );
+
+        if (hasContent) {
+          // Already exists with content - return the message data (skip streaming)
+          console.error(`[STREAM] SKIP: participant message exists`, {
+            messageId: streamMessageId,
+            participantIndex: effectiveParticipantIndex,
+            roundNumber: currentRoundNumber,
+          });
+          return Responses.raw(c, {
+            id: existingMessage.id,
+            metadata: existingMessage.metadata,
+            parts: existingMessage.parts,
+            role: existingMessage.role,
+            roundNumber: existingMessage.roundNumber,
+            skipped: true,
+          });
+        }
+
+        // Message exists but is incomplete - delete and regenerate
+        console.error(`[STREAM] Incomplete message found, deleting and regenerating`, {
+          messageId: streamMessageId,
+          participantIndex: effectiveParticipantIndex,
+          roundNumber: currentRoundNumber,
+        });
+        await db.delete(tables.chatMessage).where(eq(tables.chatMessage.id, streamMessageId));
       }
 
       // =========================================================================
@@ -1234,12 +1280,16 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
           // ✅ RESUMABLE STREAMS: Clean up stream state on REAL errors only
           // This ensures failed streams don't block future streaming attempts
           try {
-            await Promise.all([
+            const currentParticipantIdx = participantIndex ?? DEFAULT_PARTICIPANT_INDEX;
+            const errorMessage = error instanceof Error ? error.message : String(error);
+
+            // Run stream cleanup in parallel, but get result from markParticipantFailed
+            const [, , failedResult] = await Promise.all([
               markStreamFailed(
                 threadId,
                 currentRoundNumber,
-                participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-                error instanceof Error ? error.message : String(error),
+                currentParticipantIdx,
+                errorMessage,
                 c.env,
               ),
               // ✅ FIX: Update participant status to 'failed' instead of clearing entirely
@@ -1247,7 +1297,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               updateParticipantStatus(
                 threadId,
                 currentRoundNumber,
-                participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+                currentParticipantIdx,
                 ParticipantStreamStatuses.FAILED,
                 c.env,
               ),
@@ -1255,11 +1305,41 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               markParticipantFailed(
                 threadId,
                 currentRoundNumber,
-                participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
-                error instanceof Error ? error.message : String(error),
+                currentParticipantIdx,
+                errorMessage,
                 c.env,
               ),
             ]);
+
+            // ✅ FIX: Trigger moderator queue if this was the last participant (failed)
+            // When all participants are done (completed + failed), trigger moderator for 2+ participant threads
+            const { allParticipantsComplete } = failedResult;
+            const needsModerator = participants.length >= 2 && allParticipantsComplete;
+
+            if (needsModerator && c.env.ROUND_ORCHESTRATION_QUEUE) {
+              console.error('[STREAM] onError: last participant failed, queueing moderator', {
+                participantIndex: currentParticipantIdx,
+                roundNumber: currentRoundNumber,
+                threadId: threadId.slice(-8),
+              });
+
+              const queueMessage: TriggerModeratorQueueMessage = {
+                messageId: `trigger-${threadId}-r${currentRoundNumber}-moderator-error`,
+                queuedAt: new Date().toISOString(),
+                roundNumber: currentRoundNumber,
+                sessionToken,
+                threadId,
+                type: RoundOrchestrationMessageTypes.TRIGGER_MODERATOR,
+                userId: user.id,
+              };
+
+              try {
+                await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
+                console.error('[STREAM] onError: moderator queue send SUCCESS');
+              } catch (queueError) {
+                console.error('[STREAM] onError: moderator queue send FAILED', queueError);
+              }
+            }
           } catch {
             // Cleanup errors shouldn't break error handling flow
           }
@@ -1635,6 +1715,20 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               threadId,
             });
 
+            // ✅ FRAME LOGGING: Participant completion with handoff tracking
+            const isRound1 = currentRoundNumber === 0;
+            if (needsModerator) {
+              // All participants done → moderator phase
+              rlog.frame(5, 'api-all-complete', `r${currentRoundNumber} P${currentParticipantIdx} LAST → queuing moderator`);
+            } else if (hasMoreParticipants) {
+              // Baton pass to next participant
+              if (isRound1) {
+                rlog.frame(4, 'api-handoff', `r${currentRoundNumber} P${currentParticipantIdx}→P${nextParticipantIndex} queued`);
+              } else {
+                rlog.handoff('api-handoff', `r${currentRoundNumber} P${currentParticipantIdx}→P${nextParticipantIndex} queued`);
+              }
+            }
+
             // =========================================================================
             // QUEUE-BASED ORCHESTRATION: Guaranteed delivery via Cloudflare Queues
             // =========================================================================
@@ -1675,6 +1769,13 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
                 }
               }
             } else if (needsModerator) {
+              // ✅ DEBUG: Log moderator trigger attempt
+              console.error('[STREAM-MOD] needsModerator=true, queueing', {
+                hasQueue: !!c.env.ROUND_ORCHESTRATION_QUEUE,
+                roundNumber: currentRoundNumber,
+                threadId: threadId.slice(-8),
+              });
+
             // ✅ TRIGGER MODERATOR via Queue
               const queueMessage: TriggerModeratorQueueMessage = {
                 messageId: `trigger-${threadId}-r${currentRoundNumber}-moderator`,
@@ -1690,9 +1791,12 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               if (c.env.ROUND_ORCHESTRATION_QUEUE) {
                 try {
                   await c.env.ROUND_ORCHESTRATION_QUEUE.send(queueMessage);
+                  console.error('[STREAM-MOD] Queue send SUCCESS');
                 } catch (error) {
                   console.error('[RoundOrchestration] Failed to queue moderator:', error);
                 }
+              } else {
+                console.error('[STREAM-MOD] NO QUEUE - moderator will not trigger!');
               }
             } else if (allParticipantsComplete && thread.projectId) {
               // =========================================================================

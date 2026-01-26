@@ -128,9 +128,8 @@ export default function ChatOverviewScreen() {
     })),
   );
 
-  const { participants: contextParticipants, thread: currentThread } = useChatStore(
+  const { thread: currentThread } = useChatStore(
     useShallow(s => ({
-      participants: s.participants,
       thread: s.thread,
     })),
   );
@@ -151,7 +150,6 @@ export default function ChatOverviewScreen() {
     inputValue,
     isAnalyzingPrompt,
     messages,
-    preSearches,
     removeParticipant,
     resetToOverview,
     selectedMode,
@@ -170,7 +168,6 @@ export default function ChatOverviewScreen() {
       inputValue: s.inputValue,
       isAnalyzingPrompt: s.isAnalyzingPrompt,
       messages: s.messages,
-      preSearches: s.preSearches,
       removeParticipant: s.removeParticipant,
       resetToOverview: s.resetToOverview,
       selectedMode: s.selectedMode,
@@ -625,21 +622,8 @@ export default function ChatOverviewScreen() {
     setThreadActions(threadActions);
   }, [threadActions, setThreadActions]);
 
-  const shouldInitializeThread = Boolean(createdThreadId && currentThread);
-  const hasActivePreSearch = preSearches.some(
-    ps => ps.status === MessageStatuses.PENDING || ps.status === MessageStatuses.STREAMING,
-  );
-
-  useScreenInitialization({
-    chatMode: selectedMode,
-    enableOrchestrator: !isStreaming
-      && !isModeratorStreaming
-      && !hasActivePreSearch
-      && shouldInitializeThread,
-    mode: ScreenModes.OVERVIEW,
-    participants: shouldInitializeThread ? contextParticipants : [],
-    thread: shouldInitializeThread ? currentThread : null,
-  });
+  // Screen initialization is now a no-op stub - initialization handled differently
+  useScreenInitialization();
 
   const pendingMessage = useChatStore(s => s.pendingMessage);
 

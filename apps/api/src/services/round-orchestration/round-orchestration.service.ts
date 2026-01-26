@@ -21,6 +21,7 @@ import * as z from 'zod';
 import type { getDbAsync } from '@/db';
 import * as tables from '@/db';
 import type { ChatMessage, ChatParticipant, ChatThread } from '@/db/validation';
+import { rlog } from '@/lib/utils/dev-logger';
 import type { ApiEnv } from '@/types';
 import type { TypedLogger } from '@/types/logger';
 import { LogHelpers } from '@/types/logger';
@@ -188,6 +189,14 @@ export async function initializeRoundExecution(
       { expirationTtl: ROUND_STATE_TTL },
     );
 
+    // ✅ FRAME 2/8: Round initialized - all placeholders appear
+    const isRound1 = roundNumber === 0;
+    if (isRound1) {
+      rlog.frame(2, 'round-init', `r${roundNumber} pCount=${totalParticipants} tid=${threadId.slice(-8)}`);
+    } else {
+      rlog.frame(8, 'round-init', `r${roundNumber} pCount=${totalParticipants} hasPreSearch=${!!options?.enableWebSearch}`);
+    }
+
     logger?.info('Initialized round execution state', LogHelpers.operation({
       operationName: 'initializeRoundExecution',
       roundNumber,
@@ -347,6 +356,19 @@ export async function markParticipantStarted(
     triggeredParticipants.push(participantIndex);
   }
 
+  // ✅ FRAME 3: First participant starts streaming
+  const isRound1 = roundNumber === 0;
+  if (participantIndex === 0) {
+    if (isRound1) {
+      rlog.frame(3, 'P0-start', `r${roundNumber} P0 streaming begins, others waiting`);
+    } else {
+      // Frame 11 for round 2+ (after web research)
+      rlog.frame(11, 'P0-start', `r${roundNumber} P0 streaming begins after pre-search`);
+    }
+  } else {
+    rlog.handoff('participant-start', `r${roundNumber} P${participantIndex} streaming begins`);
+  }
+
   await updateRoundExecutionState(threadId, roundNumber, {
     participantStatuses,
     triggeredParticipants,
@@ -387,6 +409,23 @@ export async function markParticipantCompleted(
     participantStatuses,
     phase: allParticipantsComplete ? RoundExecutionPhases.MODERATOR : RoundExecutionPhases.PARTICIPANTS,
   }, env, logger);
+
+  // ✅ FRAME 4/5: Participant completion and handoff
+  const isRound1 = roundNumber === 0;
+  const isLastParticipant = allParticipantsComplete;
+  const nextIndex = participantIndex + 1;
+
+  if (isLastParticipant) {
+    // Frame 5: All participants complete → moderator starts
+    rlog.frame(5, 'all-participants-complete', `r${roundNumber} P${participantIndex} was LAST → phase→MODERATOR`);
+  } else {
+    // Frame 4: Participant handoff (baton pass)
+    if (isRound1) {
+      rlog.frame(4, 'participant-handoff', `r${roundNumber} P${participantIndex}→P${nextIndex} (baton passed)`);
+    } else {
+      rlog.handoff('participant-handoff', `r${roundNumber} P${participantIndex}→P${nextIndex}`);
+    }
+  }
 
   logger?.info('Marked participant completed', LogHelpers.operation({
     allParticipantsComplete,
@@ -467,6 +506,14 @@ export async function markModeratorCompleted(
     phase: RoundExecutionPhases.COMPLETE,
     status: RoundExecutionStatuses.COMPLETED,
   }, env, logger);
+
+  // ✅ FRAME 6/12: Round complete
+  const isRound1 = roundNumber === 0;
+  if (isRound1) {
+    rlog.frame(6, 'round-complete', `r${roundNumber} Moderator done → input re-enabled, ready for Round 2`);
+  } else {
+    rlog.frame(12, 'round-complete', `r${roundNumber} Moderator done → input re-enabled, ready for next round`);
+  }
 
   logger?.info('Marked moderator completed - round execution complete', LogHelpers.operation({
     operationName: 'markModeratorCompleted',
@@ -612,7 +659,12 @@ export async function computeRoundStatus(
   }
 
   // Determine overall status and phase
-  const allParticipantsComplete = completedParticipants >= totalParticipants;
+  // ✅ FIX: Count failed participants as "done" for round completion
+  // A participant is "done" if it completed OR failed - both mean it's finished
+  const failedCount = Object.values(participantStatuses).filter(
+    s => s === ParticipantStreamStatuses.FAILED,
+  ).length;
+  const allParticipantsComplete = (completedParticipants + failedCount) >= totalParticipants;
   const needsModerator = totalParticipants >= 2 && allParticipantsComplete && !hasModeratorMessage;
   const isComplete = allParticipantsComplete && (totalParticipants < 2 || hasModeratorMessage);
 
@@ -832,6 +884,15 @@ export async function updatePreSearchStatus(
     preSearchId,
     preSearchStatus: status,
   }, env, logger);
+
+  // ✅ FRAME 10/11: Pre-search (web research) tracking
+  if (status === RoundPreSearchStatuses.RUNNING) {
+    rlog.frame(10, 'presearch-start', `r${roundNumber} Web research streaming (blocks participants)`);
+  } else if (status === RoundPreSearchStatuses.COMPLETED) {
+    rlog.frame(11, 'presearch-complete', `r${roundNumber} Web research done → participants can start`);
+  } else if (status === RoundPreSearchStatuses.FAILED) {
+    rlog.stuck('presearch-failed', `r${roundNumber} Web research failed`);
+  }
 
   logger?.info(`Pre-search status: ${status}${preSearchId ? `, id: ${preSearchId}` : ''}`, LogHelpers.operation({
     operationName: 'updatePreSearchStatus',

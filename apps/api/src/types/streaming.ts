@@ -37,6 +37,8 @@ export const STREAM_BUFFER_TTL_SECONDS = 60 * 60;
 export const StreamChunkSchema = z.object({
   data: z.string(),
   event: SSEEventTypeSchema.optional(),
+  /** Sequence number for resumption tracking (0-indexed) */
+  seq: z.number().optional(),
   timestamp: z.number(),
 });
 
@@ -186,6 +188,8 @@ export function isStreamBufferMetadata(value: unknown): value is StreamBufferMet
 
 export const ModeratorStreamChunkSchema = z.object({
   data: z.string(),
+  /** Sequence number for resumption tracking (0-indexed) */
+  seq: z.number().optional(),
   timestamp: z.number(),
 });
 

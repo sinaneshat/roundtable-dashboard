@@ -370,7 +370,7 @@ export default function ChatThreadScreen({
     const moderatorMeta = moderatorMessage ? getModeratorMetadata(moderatorMessage.metadata) : null;
     const hasFinishReason = moderatorMeta && isCompletionFinishReason(moderatorMeta.finishReason);
     const hasContent = moderatorMessage?.parts?.some(
-      p => p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
+      (p: { type: string; text?: string }) => p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
     ) ?? false;
     const moderatorComplete = Boolean(hasFinishReason || hasContent);
 

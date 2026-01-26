@@ -26,6 +26,17 @@ export type { UseDragEdgeScrollOptions, UseDragEdgeScrollReturn } from './use-dr
 export { useDragEdgeScroll } from './use-drag-edge-scroll';
 export type { UseElapsedTimeReturn } from './use-elapsed-time';
 export { useElapsedTime } from './use-elapsed-time';
+export type {
+  EntityPhase,
+  EntitySubscriptionCallbacks,
+  EntitySubscriptionState,
+} from './use-entity-subscription';
+export {
+  useEntitySubscription,
+  useModeratorSubscription,
+  useParticipantSubscription,
+  usePreSearchSubscription,
+} from './use-entity-subscription';
 export type { FilePreview, UseFilePreviewOptions, UseFilePreviewReturn } from './use-file-preview';
 export { FilePreviewSchema, getFileIconName, getFileTypeLabel, supportsInlinePreview, useFilePreview, UseFilePreviewOptionsSchema } from './use-file-preview';
 export type {
@@ -77,6 +88,13 @@ export { usePostHogIdentify } from './use-posthog-identify';
 export { useExecutePreSearchStream, useGetThreadPreSearchesForPolling } from './use-pre-search-stream';
 export type { ProjectAnalyticsHook } from './use-project-analytics';
 export { useProjectAnalytics } from './use-project-analytics';
+export type {
+  EntityType,
+  RoundSubscriptionState,
+  UseRoundSubscriptionOptions,
+  UseRoundSubscriptionReturn,
+} from './use-round-subscription';
+export { useRoundSubscription } from './use-round-subscription';
 export { useSessionQuerySync } from './use-session-query-sync';
 export type { UseSpeechRecognitionOptions } from './use-speech-recognition';
 export { useSpeechRecognition } from './use-speech-recognition';

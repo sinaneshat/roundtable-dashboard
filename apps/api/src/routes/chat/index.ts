@@ -43,6 +43,11 @@ export {
   subscribeToStreamHandler,
 } from './handlers/stream-subscribe.handler';
 export {
+  subscribeToModeratorStreamHandler,
+  subscribeToParticipantStreamHandler,
+  subscribeToPreSearchStreamHandler,
+} from './handlers/entity-subscription.handler';
+export {
   streamChatHandler,
 } from './handlers/streaming.handler';
 export {

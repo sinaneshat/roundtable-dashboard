@@ -14,14 +14,47 @@
  * @module lib/utils/moderator-utils
  */
 
+import type { MessageStatus } from '@roundtable/shared';
 import { MessageStatuses } from '@roundtable/shared';
 import type { DeepPartial } from 'ai';
 
 import type { ModeratorPayload } from '@/services/api';
-import { getStatusPriority } from '@/stores/chat';
-import type { StoredModeratorData } from '@/stores/chat/store-schemas';
 
 import { isObject } from './type-guards';
+
+// ============================================================================
+// LOCAL TYPE DEFINITIONS
+// ============================================================================
+
+/**
+ * Stored moderator data structure used for deduplication and processing.
+ * This type is defined locally to avoid circular dependencies with store schemas.
+ */
+export type StoredModeratorData = {
+  id: string;
+  status: MessageStatus;
+  createdAt: string;
+  roundNumber: number;
+};
+
+/**
+ * Get priority for message status (higher = more complete)
+ * Used for deduplication - prefer completed over streaming over pending
+ */
+function getStatusPriority(status: MessageStatus): number {
+  switch (status) {
+    case MessageStatuses.COMPLETE:
+      return 3;
+    case MessageStatuses.STREAMING:
+      return 2;
+    case MessageStatuses.PENDING:
+      return 1;
+    case MessageStatuses.FAILED:
+      return 0;
+    default:
+      return 0;
+  }
+}
 
 // ============================================================================
 // MODERATOR DATA COMPLETENESS - SINGLE SOURCE OF TRUTH

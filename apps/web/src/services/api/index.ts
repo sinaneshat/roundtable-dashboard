@@ -155,6 +155,10 @@ export {
   type DeleteThreadRequest,
   type DeleteThreadResponse,
   deleteThreadService,
+  // Entity Subscription (Backend-First Streaming)
+  type EntitySubscriptionResponse,
+  type EntitySubscriptionServiceOptions,
+  type EntitySubscriptionStatus,
   executePreSearchStreamService,
   // Pre-search data types
   type GeneratedSearchQuery,
@@ -234,6 +238,12 @@ export {
   type StreamModeratorRequest,
   type StreamModeratorResponse,
   streamModeratorService,
+  type SubscribeToModeratorStreamParams,
+  subscribeToModeratorStreamService,
+  type SubscribeToParticipantStreamParams,
+  subscribeToParticipantStreamService,
+  type SubscribeToPreSearchStreamParams,
+  subscribeToPreSearchStreamService,
   type ThreadDetailData,
   type ThreadStreamResumptionState,
   type UpdateCustomRoleRequest,

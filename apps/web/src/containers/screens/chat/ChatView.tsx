@@ -1,5 +1,5 @@
 import type { ChatMode, ScreenMode } from '@roundtable/shared';
-import { ChatModeSchema, ErrorBoundaryContexts, MessageStatuses, RoundPhases, ScreenModes, SidebarStates } from '@roundtable/shared';
+import { ChatModeSchema, ErrorBoundaryContexts, ScreenModes, SidebarStates } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { useCallback, useEffect, useMemo, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
@@ -46,10 +46,10 @@ import { rlog } from '@/lib/utils/dev-logger';
 import dynamic from '@/lib/utils/dynamic';
 import type { ApiChangelog, ApiParticipant, Model, RoundFeedbackData, StoredPreSearch } from '@/services/api';
 import {
+  ChatPhases,
   useAutoModeAnalysis,
   useChatFormActions,
   useFeedbackActions,
-  useFlowLoading,
   useThreadActions,
 } from '@/stores/chat';
 
@@ -151,7 +151,6 @@ export function ChatView({
     contextParticipants,
     createdThreadId,
     currentParticipantIndex,
-    currentResumptionPhase,
     enableWebSearch,
     hasInitiallyLoaded,
     inputValue,
@@ -161,11 +160,9 @@ export function ChatView({
     isStreaming,
     messages,
     modelOrder,
-    moderatorResumption,
     pendingMessage,
+    phase,
     preSearches,
-    preSearchResumption,
-    resumptionRoundNumber,
     selectedMode,
     selectedParticipants,
     setAutoMode,
@@ -184,7 +181,6 @@ export function ChatView({
       contextParticipants: s.participants,
       createdThreadId: s.createdThreadId,
       currentParticipantIndex: s.currentParticipantIndex,
-      currentResumptionPhase: s.currentResumptionPhase,
       enableWebSearch: s.enableWebSearch,
       hasInitiallyLoaded: s.hasInitiallyLoaded,
       inputValue: s.inputValue,
@@ -194,11 +190,9 @@ export function ChatView({
       isStreaming: s.isStreaming,
       messages: s.messages,
       modelOrder: s.modelOrder,
-      moderatorResumption: s.moderatorResumption,
       pendingMessage: s.pendingMessage,
+      phase: s.phase,
       preSearches: s.preSearches,
-      preSearchResumption: s.preSearchResumption,
-      resumptionRoundNumber: s.resumptionRoundNumber,
       selectedMode: s.selectedMode,
       selectedParticipants: s.selectedParticipants,
       setAutoMode: s.setAutoMode,
@@ -265,11 +259,10 @@ export function ChatView({
         }
       }
     });
-    // ✅ REFRESH FIX: When server prefills currentResumptionPhase=COMPLETE after SSR refresh,
-    // treat that round as complete even before fresh messages load (moderator msg may be absent)
-    // This prevents participants from entering "thinking mode" on page refresh
-    if (currentResumptionPhase === RoundPhases.COMPLETE && resumptionRoundNumber !== null) {
-      completed.add(resumptionRoundNumber);
+    // ✅ PHASE FIX: When phase is COMPLETE, treat the current round as complete
+    // This enables input immediately when moderator finishes
+    if (phase === ChatPhases.COMPLETE && streamingRoundNumber !== null) {
+      completed.add(streamingRoundNumber);
     }
 
     // ✅ STABLE REFERENCE: Only return new Set if contents actually changed
@@ -279,7 +272,7 @@ export function ChatView({
     }
     completedRoundNumbersRef.current = completed;
     return completed;
-  }, [effectiveMessages, currentResumptionPhase, resumptionRoundNumber]);
+  }, [effectiveMessages, phase, streamingRoundNumber]);
 
   // ✅ PERF: Detect when auxiliary queries should be skipped
   // Changelog/feedback data only exists AFTER a round completes, so skip when:
@@ -636,8 +629,6 @@ export function ChatView({
   // syncToPreferences=false for ChatView - overview screen handles preference persistence
   const { analyzeAndApply } = useAutoModeAnalysis(false);
 
-  const { showLoader } = useFlowLoading({ mode });
-
   // ✅ SSR FIX: Data is ready if store is hydrated OR initial data is available from props
   // This allows SSR to render content immediately using initialMessages
   const hasInitialDataFromProps = (initialMessages?.length ?? 0) > 0;
@@ -655,23 +646,17 @@ export function ChatView({
     messages,
   });
 
-  const isResumptionActive = preSearchResumption?.status === MessageStatuses.STREAMING
-    || preSearchResumption?.status === MessageStatuses.PENDING
-    || moderatorResumption?.status === MessageStatuses.STREAMING
-    || moderatorResumption?.status === MessageStatuses.PENDING;
-
-  const isRoundInProgress = streamingRoundNumber !== null;
+  // ✅ SIMPLIFIED: Phase-based input blocking
+  // Input blocked during active phases (participants streaming, moderator streaming)
+  // Input enabled when: phase === 'idle' || phase === 'complete'
+  const isPhaseBlocking = phase === ChatPhases.PARTICIPANTS || phase === ChatPhases.MODERATOR;
 
   // Core blocking state for operations in progress
-  const isOperationBlocked = isStreaming
+  const isOperationBlocked = isPhaseBlocking
     || isCreatingThread
     || waitingToStartStreaming
-    || showLoader
-    || isModeratorStreaming
     || Boolean(pendingMessage)
-    || isResumptionActive
     || formActions.isSubmitting
-    || isRoundInProgress
     || isAnalyzingPrompt;
 
   // Full input blocking includes loading states

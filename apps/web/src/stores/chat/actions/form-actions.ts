@@ -71,28 +71,19 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
   const actions = useChatStore(useShallow(s => ({
     addPreSearch: s.addPreSearch,
-    // ✅ RACE CONDITION FIX: Atomic config change state updates
-    atomicUpdateConfigChangeState: s.atomicUpdateConfigChangeState,
     clearAttachments: s.clearAttachments,
-    clearConfigChangeState: s.clearConfigChangeState,
-    clearStreamResumption: s.clearStreamResumption,
     initializeThread: s.initializeThread,
     prepareForNewMessage: s.prepareForNewMessage,
     resetForm: s.resetForm,
-    // ✅ RACE CONDITION FIX: Explicit stream completion signal
-    resetStreamFinishAcknowledgment: s.resetStreamFinishAcknowledgment,
-    setConfigChangeRoundNumber: s.setConfigChangeRoundNumber,
     setCreatedThreadId: s.setCreatedThreadId,
     setCreatedThreadProjectId: s.setCreatedThreadProjectId,
+    setCurrentRoundNumber: s.setCurrentRoundNumber,
     setEnableWebSearch: s.setEnableWebSearch,
     setExpectedParticipantIds: s.setExpectedParticipantIds,
-    setHasPendingConfigChanges: s.setHasPendingConfigChanges,
+    setHasInitiallyLoaded: s.setHasInitiallyLoaded,
     setInputValue: s.setInputValue,
     setIsCreatingThread: s.setIsCreatingThread,
-    setIsPatchInProgress: s.setIsPatchInProgress,
-    setIsWaitingForChangelog: s.setIsWaitingForChangelog,
     setMessages: s.setMessages,
-    setNextParticipantToTrigger: s.setNextParticipantToTrigger,
     setPendingAttachmentIds: s.setPendingAttachmentIds,
     setPendingFileParts: s.setPendingFileParts,
     setPendingMessage: s.setPendingMessage,
@@ -102,8 +93,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     setStreamingRoundNumber: s.setStreamingRoundNumber,
     setThread: s.setThread,
     setWaitingToStartStreaming: s.setWaitingToStartStreaming,
-    // ✅ RACE CONDITION FIX: Round epoch management
-    startNewRound: s.startNewRound,
     updateParticipants: s.updateParticipants,
   })));
 
@@ -166,6 +155,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       const uiMessages = chatMessagesToUIMessages(messagesWithDates);
 
       actions.initializeThread(threadWithDates, participantsWithDates, uiMessages);
+      // ✅ STREAMING TRIGGER FIX: Enable Store→AI SDK sync in ChatStoreProvider
+      // Without this, chat.isReady stays false and streaming never starts
+      actions.setHasInitiallyLoaded(true);
       rlog.flow('create', `2-initializeThread done parts=${participantsWithDates.length} msgs=${uiMessages.length}`);
 
       const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
@@ -374,22 +366,23 @@ export function useChatFormActions(): UseChatFormActionsReturn {
         }));
       }
 
-      actions.prepareForNewMessage(prompt, getEnabledParticipantModelIds(participants), attachmentIds);
+      // Set pending state for new message flow
+      actions.setPendingMessage(prompt);
+      actions.setExpectedParticipantIds(getEnabledParticipantModelIds(participants));
+      if (attachmentIds?.length) {
+        actions.setPendingAttachmentIds(attachmentIds);
+      }
+      actions.prepareForNewMessage();
       rlog.flow('create', `6-prepareForNewMessage done`);
 
       actions.setStreamingRoundNumber(0);
+      actions.setCurrentRoundNumber(0);
       actions.setWaitingToStartStreaming(true);
       rlog.flow('create', `7-setWaitingToStartStreaming=true`);
 
-      const firstParticipant = participantsWithDates[0];
-      if (firstParticipant) {
-        actions.setNextParticipantToTrigger({ index: 0, participantId: firstParticipant.id });
-        rlog.flow('create', `8-setNextParticipant idx=0 id=${firstParticipant.id.slice(-8)}`);
-      }
-
       // ✅ DEBUG: Log final state after all setup
       const finalState = storeApi.getState();
-      rlog.flow('create', `9-FINAL wait=${finalState.waitingToStartStreaming ? 1 : 0} pending=${finalState.pendingMessage ? 1 : 0} created=${finalState.createdThreadId?.slice(-8) ?? '-'} nextP=${finalState.nextParticipantToTrigger ? (typeof finalState.nextParticipantToTrigger === 'object' ? finalState.nextParticipantToTrigger.index : finalState.nextParticipantToTrigger) : '-'}`);
+      rlog.flow('create', `8-FINAL wait=${finalState.waitingToStartStreaming ? 1 : 0} pending=${finalState.pendingMessage ? 1 : 0} created=${finalState.createdThreadId?.slice(-8) ?? '-'}`);
     } catch (error) {
       showApiErrorToast('Error creating thread', error);
       actions.setShowInitialUI(true);
@@ -411,16 +404,10 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       return;
     }
 
-    // ✅ CRITICAL FIX: Clear stale resumption state from previous rounds
-    // Without this, currentResumptionPhase='complete' from round N persists into round N+1
-    // This causes initializeThread to wipe pendingMessage because preserveStreamingState=false
-    actions.clearStreamResumption();
-
     const freshState = storeApi.getState();
     const freshThread = freshState.thread;
     const freshParticipants = freshState.participants;
     const freshMessages = freshState.messages;
-    const freshHasPendingConfigChanges = freshState.hasPendingConfigChanges;
     const freshSelectedMode = freshState.selectedMode;
     const freshEnableWebSearch = freshState.enableWebSearch;
     const freshSelectedParticipants = freshState.selectedParticipants;
@@ -449,9 +436,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     const webSearchChanged = currentWebSearch !== freshEnableWebSearch;
 
     const hasParticipantChanges = shouldUpdateParticipantConfig(updateResult);
-    const hasAnyChanges = hasParticipantChanges || modeChanged || webSearchChanged || freshHasPendingConfigChanges;
+    const hasAnyChanges = hasParticipantChanges || modeChanged || webSearchChanged;
 
-    rlog.submit('changes-detected', `r${nextRoundNumber} hasAny=${hasAnyChanges} participants=${hasParticipantChanges} mode=${modeChanged}(${currentModeId}→${freshSelectedMode}) webSearch=${webSearchChanged}(${currentWebSearch}→${freshEnableWebSearch}) pending=${freshHasPendingConfigChanges} files=${attachmentIds?.length || 0}`);
+    rlog.submit('changes-detected', `r${nextRoundNumber} hasAny=${hasAnyChanges} participants=${hasParticipantChanges} mode=${modeChanged}(${currentModeId}→${freshSelectedMode}) webSearch=${webSearchChanged}(${currentWebSearch}→${freshEnableWebSearch}) files=${attachmentIds?.length || 0}`);
 
     // ✅ BUG FIX: Filter out attachments without uploadId to prevent broken file previews
     // uploadId is required for backend fallback when previewUrl is empty (e.g., PDFs)
@@ -491,22 +478,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       actions.updateParticipants(optimisticParticipants);
     }
 
-    // ✅ RACE CONDITION FIX: Atomically set all config change flags together
-    // This prevents effects from seeing inconsistent state (e.g., isPatchInProgress=true but configChangeRoundNumber=null)
-    if (hasAnyChanges) {
-      rlog.submit('pre-patch-flag', `r${nextRoundNumber} atomic: configChangeRoundNumber + isPatchInProgress`);
-      actions.atomicUpdateConfigChangeState({
-        configChangeRoundNumber: nextRoundNumber,
-        hasPendingConfigChanges: false, // Clear pending since we're about to apply
-        isPatchInProgress: true,
-      });
-    } else {
-      // Still need isPatchInProgress even without config changes
-      actions.atomicUpdateConfigChangeState({
-        isPatchInProgress: true,
-      });
-    }
-
     if (freshEnableWebSearch) {
       actions.addPreSearch(createPlaceholderPreSearch({
         roundNumber: nextRoundNumber,
@@ -521,19 +492,9 @@ export function useChatFormActions(): UseChatFormActionsReturn {
     actions.setPendingMessage(trimmed);
     actions.setPendingAttachmentIds(attachmentIds?.length ? attachmentIds : null);
 
-    // ✅ RACE CONDITION FIX: Reset stream finish acknowledgment for new round
-    actions.resetStreamFinishAcknowledgment();
-
-    // ✅ RACE CONDITION FIX: Use startNewRound to atomically set round number and increment epoch
-    // This allows effects to detect stale operations by comparing epochs
-    const roundEpoch = actions.startNewRound(nextRoundNumber);
-    rlog.submit('round-epoch', `r${nextRoundNumber} epoch=${roundEpoch}`);
-
+    // Set round number and trigger streaming
+    actions.setCurrentRoundNumber(nextRoundNumber);
     actions.setWaitingToStartStreaming(true);
-    const firstParticipant = freshParticipants[0];
-    if (firstParticipant) {
-      actions.setNextParticipantToTrigger({ index: 0, participantId: firstParticipant.id });
-    }
 
     actions.setInputValue('');
     actions.clearAttachments();
@@ -578,11 +539,6 @@ export function useChatFormActions(): UseChatFormActionsReturn {
 
         const syncedParticipantConfigs = chatParticipantsToConfig(participantsWithDates);
         actions.setSelectedParticipants(syncedParticipantConfigs);
-
-        const newFirstParticipant = participantsWithDates[0];
-        if (newFirstParticipant) {
-          actions.setNextParticipantToTrigger({ index: 0, participantId: newFirstParticipant.id });
-        }
       } else if (responseData?.participants?.length === 0) {
         rlog.submit('skip-empty-participants', `r${nextRoundNumber} server returned empty, preserving existing`);
       }
@@ -590,31 +546,13 @@ export function useChatFormActions(): UseChatFormActionsReturn {
       if (responseData?.thread) {
         actions.setThread(transformChatThread(responseData.thread));
       }
-
-      // ✅ RACE CONDITION FIX: Atomically update all config change flags after PATCH
-      if (hasAnyChanges) {
-        rlog.submit('post-patch-flag', `r${nextRoundNumber} atomic: isPatchInProgress=false, isWaitingForChangelog=true`);
-        actions.atomicUpdateConfigChangeState({
-          hasPendingConfigChanges: false,
-          isPatchInProgress: false,
-          isWaitingForChangelog: true,
-          // Keep configChangeRoundNumber until changelog is fetched
-        });
-      } else {
-        rlog.submit('no-changelog', `r${nextRoundNumber} atomic: clearing config change state`);
-        actions.clearConfigChangeState();
-      }
     } catch (error) {
       actions.setMessages(currentMessages => currentMessages.filter(m => m.id !== optimisticMessage.id));
 
       actions.setWaitingToStartStreaming(false);
       actions.setStreamingRoundNumber(null);
-      actions.setNextParticipantToTrigger(null);
 
-      // ✅ RACE CONDITION FIX: Atomically clear all config change flags on error
-      rlog.submit('patch-error', `r${nextRoundNumber} atomic: clearing all config change state`);
-      actions.clearConfigChangeState();
-
+      rlog.submit('patch-error', `r${nextRoundNumber} error updating thread`);
       showApiErrorToast('Error updating thread', error);
     }
   }, [
@@ -629,18 +567,12 @@ export function useChatFormActions(): UseChatFormActionsReturn {
   }, [actions]);
 
   const handleModeChange = useCallback((mode: ChatMode) => {
-    actions.setHasPendingConfigChanges(true);
     actions.setSelectedMode(mode);
   }, [actions]);
 
   const handleWebSearchToggle = useCallback((enabled: boolean) => {
-    const freshThread = storeApi.getState().thread;
-    const freshCreatedThreadId = storeApi.getState().createdThreadId;
-    if (freshThread || freshCreatedThreadId) {
-      actions.setHasPendingConfigChanges(true);
-    }
     actions.setEnableWebSearch(enabled);
-  }, [actions, storeApi]);
+  }, [actions]);
 
   const isSubmitting = createThreadMutation.isPending || updateThreadMutation.isPending;
 

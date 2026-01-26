@@ -226,6 +226,17 @@ export function chatMessagesToUIMessages(
     ? new Map(participants.map(p => [p.id, p]))
     : null;
 
+  // Create participant index lookup (participantId -> array index)
+  const participantIndexMap = participants
+    ? new Map(participants.map((p, idx) => [p.id, idx]))
+    : null;
+
+  // DEBUG: Log participant map setup
+  rlog.moderator('toUI-setup', `participants=${participants?.length ?? 0} mapSize=${participantMap?.size ?? 0} indexMapSize=${participantIndexMap?.size ?? 0}`);
+  if (participants?.length) {
+    participants.forEach((p, i) => rlog.moderator('toUI-p', `[${i}] id=${p.id?.slice(-8)} model=${p.modelId}`));
+  }
+
   let currentRound = 0;
   const messagesWithRoundNumber = uiMessages.map((message) => {
     const explicitRound = getRoundNumber(message.metadata);
@@ -249,13 +260,20 @@ export function chatMessagesToUIMessages(
             ? participantMap.get(participantId)
             : null;
 
+          // DEBUG: Log participant lookup for each assistant message
+          rlog.moderator('toUI-msg', `id=${message.id?.slice(-8)} role=${message.role} pIdInMeta=${participantId?.slice(-8) || 'null'} foundInMap=${!!participant} needsEnrich=${participant && !hasParticipantEnrichment(message.metadata)}`);
+
           if (participant && !hasParticipantEnrichment(message.metadata)) {
+            const assignedIndex = participantIndexMap?.get(participant.id) ?? 0;
+            // DEBUG: Log enrichment with assigned index
+            rlog.moderator('toUI-enrich', `pId=${participant.id?.slice(-8)} assignedIdx=${assignedIndex} mapHasKey=${participantIndexMap?.has(participant.id)}`);
+
             const metadataForEnrichment = buildAssistantMetadata(
               getAssistantMetadata(message.metadata) || {},
               {
                 model: participant.modelId,
                 participantId: participant.id,
-                participantIndex: 0,
+                participantIndex: assignedIndex,
                 participantRole: participant.role,
                 roundNumber: explicitRound,
               },
@@ -267,7 +285,7 @@ export function chatMessagesToUIMessages(
                 metadataForEnrichment,
                 {
                   id: participant.id,
-                  index: 0,
+                  index: assignedIndex,
                   modelId: participant.modelId,
                   role: participant.role ?? null,
                 },
@@ -317,12 +335,20 @@ export function chatMessagesToUIMessages(
           ? participantMap.get(participantId)
           : null;
 
+        // DEBUG: Log participant lookup for fallback path (no roundNumber)
+        rlog.moderator('toUI-msg-fallback', `id=${message.id?.slice(-8)} role=${message.role} pIdInMeta=${participantId?.slice(-8) || 'null'} foundInMap=${!!participant}`);
+
         if (participant) {
+          const assignedIndexFallback = participantIndexMap?.get(participant.id) ?? 0;
+          // DEBUG: Log enrichment with assigned index (fallback path)
+          rlog.moderator('toUI-enrich-fallback', `pId=${participant.id?.slice(-8)} assignedIdx=${assignedIndexFallback} mapHasKey=${participantIndexMap?.has(participant.id)}`);
+
           enrichedMetadata = buildAssistantMetadata(
             getAssistantMetadata(message.metadata) || {},
             {
               model: participant.modelId,
               participantId: participant.id,
+              participantIndex: assignedIndexFallback,
               participantRole: participant.role,
               roundNumber: currentRound ?? 0,
             },

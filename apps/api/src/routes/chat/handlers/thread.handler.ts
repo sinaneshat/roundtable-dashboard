@@ -1997,7 +1997,8 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
       .limit(1)
       .$withCache({
         config: { ex: STALE_TIMES.threadDetailKV }, // 5 minutes
-        tag: ThreadCacheTags.single(slug),
+        // ✅ FIX: Use bySlug for slug-based lookups, not single (which expects threadId)
+        tag: ThreadCacheTags.bySlug(slug),
       });
     const thread = threadResults[0];
 
@@ -2056,7 +2057,8 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
         .orderBy(tables.chatPreSearch.roundNumber)
         .$withCache({
           config: { ex: STALE_TIMES.threadMessagesKV }, // 5 minutes
-          tag: `presearch-${thread.id}`,
+          // ✅ FIX: Use standardized cache tag so invalidateMessagesCache clears this too
+          tag: MessageCacheTags.preSearch(thread.id),
         }),
     ]);
 
@@ -2098,7 +2100,8 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
           .orderBy(asc(tables.messageUpload.displayOrder))
           .$withCache({
             config: { ex: STALE_TIMES.threadMessagesKV }, // 5 minutes
-            tag: `attachments-${thread.id}`,
+            // ✅ FIX: Use standardized cache tag so invalidateMessagesCache clears this too
+            tag: MessageCacheTags.attachments(thread.id),
           })
       : [];
 

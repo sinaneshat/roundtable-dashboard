@@ -25,6 +25,10 @@ import {
   updateThreadService,
   updateUserPresetService,
 } from '@/services/api';
+import type {
+  PaginatedPageCache,
+  ThreadsListCachePage,
+} from '@/stores/chat';
 import {
   ChatThreadCacheSchema,
   validateInfiniteQueryCache,
@@ -158,7 +162,7 @@ export function useUpdateThreadMutation() {
 
           return {
             ...parsedQuery,
-            pages: parsedQuery.pages.map((page) => {
+            pages: parsedQuery.pages.map((page: PaginatedPageCache) => {
               if (!page.success || !page.data?.items) {
                 return page;
               }
@@ -167,7 +171,7 @@ export function useUpdateThreadMutation() {
                 ...page,
                 data: {
                   ...page.data,
-                  items: page.data.items.map((thread) => {
+                  items: page.data.items.map((thread: z.infer<typeof ChatThreadCacheSchema>) => {
                     const threadData = ChatThreadCacheSchema.safeParse(thread);
                     if (!threadData.success || threadData.data.id !== threadId) {
                       return thread;
@@ -302,7 +306,7 @@ export function useDeleteThreadMutation() {
 
           return {
             ...parsedQuery,
-            pages: parsedQuery.pages.map((page) => {
+            pages: parsedQuery.pages.map((page: PaginatedPageCache) => {
               if (!page.success || !page.data?.items) {
                 return page;
               }
@@ -311,7 +315,7 @@ export function useDeleteThreadMutation() {
                 ...page,
                 data: {
                   ...page.data,
-                  items: page.data.items.filter((thread) => {
+                  items: page.data.items.filter((thread: z.infer<typeof ChatThreadCacheSchema>) => {
                     const threadData = ChatThreadCacheSchema.safeParse(thread);
                     return threadData.success && threadData.data.id !== threadId;
                   }),
@@ -334,7 +338,7 @@ export function useDeleteThreadMutation() {
 
             return {
               ...parsedQuery,
-              pages: parsedQuery.pages.map((page) => {
+              pages: parsedQuery.pages.map((page: PaginatedPageCache) => {
                 if (!page.success || !page.data?.items) {
                   return page;
                 }
@@ -343,7 +347,7 @@ export function useDeleteThreadMutation() {
                   ...page,
                   data: {
                     ...page.data,
-                    items: page.data.items.filter((thread) => {
+                    items: page.data.items.filter((thread: z.infer<typeof ChatThreadCacheSchema>) => {
                       const threadData = ChatThreadCacheSchema.safeParse(thread);
                       return threadData.success && threadData.data.id !== threadId;
                     }),
@@ -441,7 +445,7 @@ export function useToggleFavoriteMutation() {
 
           return {
             ...old,
-            pages: pages.map((page) => {
+            pages: pages.map((page: ThreadsListCachePage) => {
               if (!page.success || !page.data?.items) {
                 return page;
               }
@@ -450,7 +454,7 @@ export function useToggleFavoriteMutation() {
                 ...page,
                 data: {
                   ...page.data,
-                  items: page.data.items.map(thread =>
+                  items: page.data.items.map((thread: z.infer<typeof ChatThreadCacheSchema>) =>
                     thread.id === variables.threadId
                       ? { ...thread, isFavorite: variables.isFavorite }
                       : thread,

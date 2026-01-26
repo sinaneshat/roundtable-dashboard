@@ -26,6 +26,7 @@
 import type { Message, MessageBatch } from '@cloudflare/workers-types';
 import { MessagePartTypes, RoundOrchestrationMessageTypes, UIMessageRoles } from '@roundtable/shared/enums';
 
+import { rlog } from '@/lib/utils/dev-logger';
 import { buildSessionAuthHeaders, drainStream, getBaseUrl } from '@/lib/utils/internal-api';
 import { calculateExponentialBackoff } from '@/lib/utils/queue-utils';
 import type {
@@ -132,7 +133,20 @@ async function triggerParticipantStream(
 
   if (!shouldTrigger) {
     // Participant already streaming or completed - skip duplicate trigger
+    rlog.race('queue-idempotency', `r${roundNumber} P${participantIndex} skipped - already triggered`);
     return;
+  }
+
+  // ✅ FRAME: Queue triggering participant
+  const isRound1 = roundNumber === 0;
+  if (participantIndex === 0) {
+    if (isRound1) {
+      rlog.frame(3, 'queue-P0', `r${roundNumber} Queue triggering P0 via API`);
+    } else {
+      rlog.frame(11, 'queue-P0', `r${roundNumber} Queue triggering P0 after pre-search`);
+    }
+  } else {
+    rlog.handoff('queue-trigger', `r${roundNumber} Queue triggering P${participantIndex}`);
   }
 
   // Build request body matching streaming handler expectations
@@ -175,6 +189,9 @@ async function triggerModeratorStream(
   const { roundNumber, sessionToken, threadId } = message;
   const baseUrl = getBaseUrl(env);
 
+  // ✅ FRAME 5: Queue triggering moderator after all participants
+  rlog.frame(5, 'queue-mod', `r${roundNumber} Queue triggering moderator via API`);
+
   const response = await fetch(
     `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/moderator`,
     {
@@ -213,6 +230,9 @@ async function triggerPreSearch(
 ): Promise<void> {
   const { attachmentIds, roundNumber, sessionToken, threadId, userQuery } = message;
   const baseUrl = getBaseUrl(env);
+
+  // ✅ FRAME 10: Queue triggering pre-search (web research)
+  rlog.frame(10, 'queue-presearch', `r${roundNumber} Queue triggering web research via API`);
 
   const response = await fetch(
     `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/pre-search`,

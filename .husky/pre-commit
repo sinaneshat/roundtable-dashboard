@@ -1,1 +1,10 @@
+#!/bin/sh
+
+# Run lint-staged (ESLint fix + Prettier on staged files)
+# Fixes are automatically staged by lint-staged
 npx lint-staged
+
+# Type-check the whole project (one file can break types elsewhere)
+# Only check types, don't block on it during commits for speed
+# Uncomment below to enforce type-check on commits:
+# bun run check-types

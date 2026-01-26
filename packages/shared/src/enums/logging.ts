@@ -113,7 +113,7 @@ export const DEV_LOG_LEVEL_VALUES: Record<DevLogLevel, number> = {
 // ============================================================================
 
 // 1. ARRAY CONSTANT
-export const RLOG_CATEGORIES = ['PHASE', 'RESUME', 'STREAM', 'MSG', 'GATE', 'TRIGGER', 'PRESRCH', 'MOD', 'CHANGELOG', 'SUBMIT', 'INIT', 'SYNC'] as const;
+export const RLOG_CATEGORIES = ['PHASE', 'RESUME', 'STREAM', 'MSG', 'GATE', 'TRIGGER', 'PRESRCH', 'MOD', 'CHANGELOG', 'SUBMIT', 'INIT', 'SYNC', 'HANDOFF', 'STUCK', 'RACE', 'FRAME'] as const;
 
 // 2. DEFAULT VALUE
 export const DEFAULT_RLOG_CATEGORY = 'PHASE' as const;
@@ -130,14 +130,18 @@ export type RlogCategory = z.infer<typeof RlogCategorySchema>;
 // 5. CONSTANT OBJECT
 export const RlogCategories = {
   CHANGELOG: 'CHANGELOG' as const,
+  FRAME: 'FRAME' as const,
   GATE: 'GATE' as const,
+  HANDOFF: 'HANDOFF' as const,
   INIT: 'INIT' as const,
   MOD: 'MOD' as const,
   MSG: 'MSG' as const,
   PHASE: 'PHASE' as const,
   PRESRCH: 'PRESRCH' as const,
+  RACE: 'RACE' as const,
   RESUME: 'RESUME' as const,
   STREAM: 'STREAM' as const,
+  STUCK: 'STUCK' as const,
   SUBMIT: 'SUBMIT' as const,
   SYNC: 'SYNC' as const,
   TRIGGER: 'TRIGGER' as const,
@@ -264,14 +268,18 @@ export const LogTypes = {
 
 export const RLOG_CATEGORY_STYLES: Record<RlogCategory, string> = {
   [RlogCategories.CHANGELOG]: 'color: #009688; font-weight: bold',
+  [RlogCategories.FRAME]: 'color: #FFFFFF; font-weight: bold; background: #1976D2; padding: 2px 6px; border-radius: 3px', // Blue badge - frame tracking
   [RlogCategories.GATE]: 'color: #F44336',
+  [RlogCategories.HANDOFF]: 'color: #8BC34A; font-weight: bold', // Light green - participant transitions
   [RlogCategories.INIT]: 'color: #607D8B; font-weight: bold',
   [RlogCategories.MOD]: 'color: #673AB7; font-weight: bold',
   [RlogCategories.MSG]: 'color: #9C27B0',
   [RlogCategories.PHASE]: 'color: #4CAF50; font-weight: bold',
   [RlogCategories.PRESRCH]: 'color: #E91E63',
+  [RlogCategories.RACE]: 'color: #FF5722; font-weight: bold', // Deep orange - race conditions
   [RlogCategories.RESUME]: 'color: #2196F3; font-weight: bold',
   [RlogCategories.STREAM]: 'color: #FF9800',
+  [RlogCategories.STUCK]: 'color: #D32F2F; font-weight: bold; background: #FFEBEE', // Red with background - stuck states
   [RlogCategories.SUBMIT]: 'color: #795548; font-weight: bold',
   [RlogCategories.SYNC]: 'color: #3F51B5',
   [RlogCategories.TRIGGER]: 'color: #00BCD4; font-weight: bold',

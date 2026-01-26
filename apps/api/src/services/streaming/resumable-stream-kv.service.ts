@@ -253,10 +253,11 @@ export async function updateParticipantStatus(
 
     const allFinished = finishedCount >= existing.totalParticipants;
 
+    // ✅ FIX: Don't delete the active stream immediately when all participants complete
+    // Frontend may still be polling for buffered chunks. Let it expire via TTL instead.
+    // The moderator phase will set its own active stream when it starts.
     if (allFinished) {
-      // All participants done - clear the active stream
-      await env.KV.delete(getThreadActiveStreamKey(threadId));
-      logger?.info('All participants finished - cleared thread active stream', {
+      logger?.info('All participants finished - keeping active stream for frontend polling', {
         logType: LogTypes.OPERATION,
         operationName: 'updateParticipantStatus_allFinished',
         participantStatuses,
@@ -264,10 +265,10 @@ export async function updateParticipantStatus(
         threadId,
         totalParticipants: existing.totalParticipants,
       });
-      return true;
+      // Continue to update the status below instead of deleting
     }
 
-    // Not all finished yet - update the statuses
+    // Update the statuses (both when all finished and when not)
     const updated: ThreadActiveStream = {
       ...existing,
       participantStatuses,
@@ -280,6 +281,7 @@ export async function updateParticipantStatus(
     );
 
     logger?.info('Updated participant status', {
+      allParticipantsComplete: allFinished,
       finishedCount,
       logType: LogTypes.OPERATION,
       operationName: 'updateParticipantStatus',
@@ -290,7 +292,8 @@ export async function updateParticipantStatus(
       totalParticipants: existing.totalParticipants,
     });
 
-    return false;
+    // Return true if all participants finished, false otherwise
+    return allFinished;
   } catch (error) {
     logger?.warn('Failed to update participant status', {
       error: error instanceof Error ? error.message : 'Unknown error',

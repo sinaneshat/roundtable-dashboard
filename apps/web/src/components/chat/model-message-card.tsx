@@ -1,8 +1,7 @@
 import type { MessagePartType, MessageStatus } from '@roundtable/shared';
 import { getRoleBadgeStyle, MessagePartTypes, MessageStatuses, ReasoningPartTypes, TextPartStates } from '@roundtable/shared';
-import { memo, useEffect, useLayoutEffect, useRef } from 'react';
+import { memo, useEffect, useRef } from 'react';
 import Markdown from 'react-markdown';
-import { useShallow } from 'zustand/react/shallow';
 
 import { Actions } from '@/components/ai-elements/actions';
 import { Message, MessageAvatar, MessageContent } from '@/components/ai-elements/message';
@@ -29,9 +28,6 @@ import { hasCitations, hasProperty, isNonEmptyString } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { AvailableSource, DbMessageMetadata, Model } from '@/services/api';
 import { isAssistantMessageMetadata } from '@/services/api';
-
-// Stable no-op function for read-only contexts without ChatStoreProvider
-function NOOP() {}
 
 function isNonRenderableReasoningPart(part: MessagePart): boolean {
   if (part.type !== MessagePartTypes.REASONING) {
@@ -100,18 +96,7 @@ export const ModelMessageCard = memo(({
   const modelIsAccessible = model ? (isAccessible ?? model.is_accessible_to_user) : true;
 
   // Use optional store hook - returns undefined on public pages without ChatStoreProvider
-  const storeData = useChatStoreOptional(
-    useShallow(s => ({
-      completeAnimation: s.completeAnimation,
-      globalIsStreaming: s.isStreaming,
-      registerAnimation: s.registerAnimation,
-    })),
-  );
-
-  // Fallback values for read-only pages (public threads) without ChatStoreProvider
-  const globalIsStreaming = storeData?.globalIsStreaming ?? false;
-  const registerAnimation = storeData?.registerAnimation ?? NOOP;
-  const completeAnimation = storeData?.completeAnimation ?? NOOP;
+  const globalIsStreaming = useChatStoreOptional(s => s.isStreaming) ?? false;
 
   const hasActualStreamingParts = globalIsStreaming && parts.some(
     p => 'state' in p && p.state === TextPartStates.STREAMING,
@@ -151,40 +136,6 @@ export const ModelMessageCard = memo(({
   );
 
   const isStreaming = hasActualStreamingParts;
-  const hasRegisteredRef = useRef(false);
-  const prevStatusRef = useRef(status);
-
-  useLayoutEffect(() => {
-    const wasStreaming = prevStatusRef.current === MessageStatuses.STREAMING;
-    const nowComplete = status !== MessageStatuses.STREAMING && status !== MessageStatuses.PENDING;
-
-    if (isStreaming && !hasRegisteredRef.current && participantIndex >= 0) {
-      registerAnimation(participantIndex);
-      hasRegisteredRef.current = true;
-    }
-
-    if (wasStreaming && nowComplete && hasRegisteredRef.current && participantIndex >= 0) {
-      const rafId = requestAnimationFrame(() => {
-        completeAnimation(participantIndex);
-        hasRegisteredRef.current = false;
-      });
-      prevStatusRef.current = status;
-      return () => cancelAnimationFrame(rafId);
-    }
-
-    prevStatusRef.current = status;
-    return undefined;
-  }, [status, isStreaming, participantIndex, registerAnimation, completeAnimation]);
-
-  useLayoutEffect(() => {
-    const index = participantIndex;
-    return () => {
-      if (hasRegisteredRef.current && index >= 0) {
-        completeAnimation(index);
-        hasRegisteredRef.current = false;
-      }
-    };
-  }, [participantIndex, completeAnimation]);
 
   const modelName = model?.name || assistantMetadata?.model || 'AI Assistant';
   const requiredTierName = model?.required_tier_name;

@@ -1,122 +1,209 @@
 /**
- * Chat Store Public API
+ * Chat Store Public API - Minimal Rewrite
  */
 
+// Store
+import type { UIMessage } from 'ai';
+import { useLayoutEffect, useRef } from 'react';
+
+import { useChatStoreApi } from '@/components/providers/chat-store-provider/context';
+import { chatParticipantsToConfig } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
+import type { ApiChangelog, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
+
+export type { ChatStoreApi } from './store';
+export { createChatStore } from './store';
+
+// Schemas & Types
+export type {
+  AttachmentsState,
+  ChangelogState,
+  ChatPhase,
+  ChatStore,
+  ChatStoreActions,
+  ChatStoreState,
+  EntityStatus,
+  EntitySubscriptionStateType,
+  FeedbackState,
+  FormState,
+  PreSearchState,
+  SubscriptionState,
+  ThreadState,
+  TitleAnimationPhase,
+  TitleAnimationState,
+  TrackingState,
+  UIState,
+} from './store-schemas';
+export {
+  ChatPhases,
+  ChatPhaseSchema,
+  ChatPhaseValues,
+  EntityStatusSchema,
+  EntityStatusValues,
+} from './store-schemas';
+
+// Defaults
+export {
+  DEFAULT_PRESET_MODE,
+  DEFAULT_PRESET_PARTICIPANTS,
+  FORM_DEFAULTS,
+  STORE_DEFAULTS,
+  SUBSCRIPTION_DEFAULTS,
+} from './store-defaults';
+
+// Actions (kept files)
 export type { UseAutoModeAnalysisReturn } from './actions/auto-mode-actions';
 export { useAutoModeAnalysis } from './actions/auto-mode-actions';
 export type { UseFeedbackActionsOptions, UseFeedbackActionsReturn } from './actions/feedback-actions';
 export { useFeedbackActions } from './actions/feedback-actions';
-export type { UseFlowControllerOptions } from './actions/flow-controller';
-export { useFlowController } from './actions/flow-controller';
-export type { UseFlowLoadingOptions, UseFlowLoadingReturn } from './actions/flow-loading';
-export { useFlowLoading } from './actions/flow-loading';
-export { useFlowStateMachine } from './actions/flow-state-machine';
 export type { AttachmentInfo, UseChatFormActionsReturn } from './actions/form-actions';
 export { useChatFormActions } from './actions/form-actions';
 export { useNavigationReset } from './actions/navigation-reset';
 export type { UseOverviewActionsOptions, UseOverviewActionsReturn } from './actions/overview-actions';
 export { useOverviewActions } from './actions/overview-actions';
-export type { UseScreenInitializationOptions } from './actions/screen-initialization';
-export { useScreenInitialization } from './actions/screen-initialization';
-export type { SyncHydrateOptions } from './actions/sync-hydrate-store';
-export { useSyncHydrateStore } from './actions/sync-hydrate-store';
-export type { UseThreadActionsOptions } from './actions/thread-actions';
+export type { UseThreadActionsOptions, UseThreadActionsReturn } from './actions/thread-actions';
 export { useThreadActions } from './actions/thread-actions';
+
+// Cache validation utilities
 export type {
-  ChangelogItemCache,
-  ChangelogListCache,
   InfiniteQueryCache,
+  PaginatedPageCache,
   ThreadDetailCacheData,
   ThreadDetailPayloadCache,
   ThreadDetailResponseCache,
   ThreadsListCachePage,
-  UsageStatsData,
 } from './actions/types';
 export {
   ChatThreadCacheSchema,
-  validateChangelogListCache,
   validateInfiniteQueryCache,
   validateThreadDetailCache,
   validateThreadDetailPayloadCache,
   validateThreadDetailResponseCache,
   validateThreadsListPages,
-  validateUsageStatsCache,
 } from './actions/types';
-// Reusable selector hooks
-export { useIsInCreationFlow } from './hooks';
-// FSM Machine exports
-export {
-  type AiSdkSnapshot,
-  buildContext,
-  createEmptyContext,
-  type EventPayload,
-  actions as fsmActions,
-  guards,
-  isModeratorPhase,
-  isParticipantPhase,
-  isPreSearchPhase,
-  isStreamingState,
-  isTerminalState,
-  noTransition,
-  type ParticipantCompletePayload,
-  type ParticipantStartPayload,
-  type RoundContext,
-  type RoundFlowAction,
-  type StartRoundPayload,
-  type StoreSnapshot,
-  transition,
-  type TransitionResult,
-} from './machine';
-// FSM Selectors
-export { selectors } from './selectors';
-export type { ChatStoreApi } from './store';
-export { createChatStore } from './store';
-export {
-  AnimationIndices,
-  getStatusPriority,
-  ModeratorTimeouts,
-} from './store-constants';
-export type {
-  ChatStore,
-  DispatchFlowEvent,
-  ModeratorInfo,
-  NextParticipantToTrigger,
-  ParticipantInfo,
-  PreSearchInfo,
-  ResetFlowState,
-  ResumptionInfo,
-  RoundFlowActions,
-  RoundFlowSlice,
-  RoundFlowState,
-  SetFlowState,
-  StoredModeratorData,
-  StoredModeratorSummary,
-} from './store-schemas';
-// FSM Context Schemas
-export {
-  AiSdkSnapshotSchema,
-  ModeratorInfoSchema,
-  ParticipantInfoSchema,
-  PreSearchInfoSchema,
-  ResumptionInfoSchema,
-  RoundContextSchema,
-  StoreSnapshotSchema,
-} from './store-schemas';
-export type { ParticipantCompletionStatus, ParticipantDebugInfo, RoundActualCompletionStatus } from './utils/participant-completion-gate';
-export {
-  areAllParticipantsCompleteForRound,
-  getModeratorMessageForRound,
-  getParticipantCompletionStatus,
-  getRoundActualCompletionStatus,
-  isMessageComplete,
-  isRoundComplete,
-  ParticipantCompletionStatusSchema,
-  ParticipantDebugInfoSchema,
-} from './utils/participant-completion-gate';
-export type { ExecutePreSearchOptions } from './utils/pre-search-execution';
-export {
-  executePreSearch,
-  getEffectiveWebSearchEnabled,
-  readPreSearchStreamData,
-  shouldWaitForPreSearch,
-} from './utils/pre-search-execution';
+
+// ============================================================================
+// UTILITY EXPORTS
+// Helper functions and hooks used by screens
+// ============================================================================
+
+/** Screen initialization hook - simplified for backend-first architecture */
+export function useScreenInitialization(_options?: unknown) {
+  return {
+    isInitialized: true,
+    isLoading: false,
+  };
+}
+
+/** Check if all participants complete for round - simplified stub */
+export function areAllParticipantsCompleteForRound(
+  _messages: unknown[],
+  _participants: unknown[],
+  _roundNumber: number,
+): boolean {
+  return true;
+}
+
+/** Get moderator message for round - simplified stub */
+export function getModeratorMessageForRound<T>(
+  messages: T[],
+  roundNumber: number,
+): T | undefined {
+  if (!Array.isArray(messages)) {
+    return undefined;
+  }
+  return messages.find((m: unknown) => {
+    const msg = m as { metadata?: { isModerator?: boolean; roundNumber?: number } };
+    return msg?.metadata?.isModerator === true && msg?.metadata?.roundNumber === roundNumber;
+  });
+}
+
+type SyncHydrateOptions = {
+  thread: ChatThread;
+  participants: ChatParticipant[];
+  initialMessages: UIMessage[];
+  initialPreSearches?: StoredPreSearch[];
+  initialChangelog?: ApiChangelog[];
+  streamResumptionState?: unknown;
+  mode?: 'thread' | 'overview';
+};
+
+/**
+ * Sync hydrate store hook - hydrates store from server data on SSR/refresh
+ * Uses useLayoutEffect to ensure data is in store BEFORE first paint
+ */
+export function useSyncHydrateStore(options: SyncHydrateOptions): void {
+  const storeApi = useChatStoreApi();
+  const hasHydratedRef = useRef(false);
+  const threadIdRef = useRef<string | null>(null);
+
+  // Use layoutEffect for synchronous hydration before paint
+  useLayoutEffect(() => {
+    const { initialChangelog, initialMessages, initialPreSearches, participants, thread } = options;
+
+    const state = storeApi.getState();
+    const enabledCount = participants.filter(p => p.isEnabled).length;
+
+    rlog.init('useSyncHydrateStore', `tid=${thread.id.slice(-8)} curTid=${state.thread?.id?.slice(-8) ?? '-'} curPhase=${state.phase} r=${state.currentRoundNumber} streaming=${state.isStreaming} msgs=${initialMessages.length} pCount=${enabledCount} hydrated=${hasHydratedRef.current} prevTid=${threadIdRef.current?.slice(-8) ?? '-'}`);
+
+    // Skip if already hydrated for this thread
+    if (hasHydratedRef.current && threadIdRef.current === thread.id) {
+      rlog.init('useSyncHydrateStore', 'SKIP: already hydrated for this thread');
+      return;
+    }
+
+    // CRITICAL FIX: Skip hydration during active or pending streaming for same thread
+    // This happens when navigating from overview to newly created thread
+    // - waitingToStartStreaming=true means streaming is about to start
+    // - isStreaming=true means streaming is in progress
+    const isStreamingPending = state.waitingToStartStreaming;
+    const isStreamingActive = state.isStreaming;
+    if ((isStreamingPending || isStreamingActive) && state.thread?.id === thread.id) {
+      rlog.phase('useSyncHydrateStore', `SKIP: pending=${isStreamingPending} active=${isStreamingActive} phase=${state.phase}`);
+      hasHydratedRef.current = true;
+      threadIdRef.current = thread.id;
+      return;
+    }
+
+    rlog.init('useSyncHydrateStore', `HYDRATING tid=${thread.id.slice(-8)}`);
+
+    // Hydrate thread, participants, and messages
+    state.initializeThread(thread, participants, initialMessages);
+
+    // Sync participant configs to form state
+    const participantConfigs = chatParticipantsToConfig(participants);
+    state.setSelectedParticipants(participantConfigs);
+    state.setSelectedMode(thread.mode);
+    state.setEnableWebSearch(thread.enableWebSearch);
+
+    // Hydrate pre-searches if provided
+    if (initialPreSearches && initialPreSearches.length > 0) {
+      rlog.presearch('hydrate', `${initialPreSearches.length} pre-searches`);
+      state.setPreSearches(initialPreSearches);
+    }
+
+    // Hydrate changelog if provided
+    if (initialChangelog && initialChangelog.length > 0) {
+      rlog.changelog('hydrate', `${initialChangelog.length} items`);
+      state.setChangelogItems(initialChangelog);
+    }
+
+    // Mark as loaded
+    state.setHasInitiallyLoaded(true);
+    state.setShowInitialUI(false);
+
+    hasHydratedRef.current = true;
+    threadIdRef.current = thread.id;
+    rlog.init('useSyncHydrateStore', `COMPLETE tid=${thread.id.slice(-8)}`);
+  }, [storeApi, options]);
+}
+
+/** Check if in creation flow - simplified hook */
+export function useIsInCreationFlow(): boolean {
+  return false;
+}
+
+/** Get status priority - simplified stub */
+export function getStatusPriority(_status: string): number {
+  return 0;
+}

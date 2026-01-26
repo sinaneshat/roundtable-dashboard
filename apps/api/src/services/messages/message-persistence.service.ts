@@ -187,6 +187,20 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
   } = params;
 
   try {
+    // ✅ FIX: Check for duplicate message FIRST before expensive operations
+    // This prevents wasted work on reasoning extraction, citation parsing, and metadata building
+    const existingMessage = await db.query.chatMessage.findFirst({
+      where: eq(tables.chatMessage.id, messageId),
+    });
+
+    if (existingMessage) {
+      // ✅ FIX: Still invalidate cache even when message already exists
+      // This handles race conditions and ensures frontend gets fresh data
+      // after page refresh or stream resumption scenarios
+      await invalidateMessagesCache(db, threadId);
+      return;
+    }
+
     const reasoningText = extractReasoning(reasoningDeltas, finishResult);
 
     const getTotalUsage = (): { inputTokens?: number; outputTokens?: number } | undefined => {
@@ -272,14 +286,6 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
 
     if (parts.length === 0) {
       parts.push({ text: '', type: MessagePartTypes.TEXT });
-    }
-
-    const existingMessage = await db.query.chatMessage.findFirst({
-      where: eq(tables.chatMessage.id, messageId),
-    });
-
-    if (existingMessage) {
-      return;
     }
 
     const usageMetadata = usageData

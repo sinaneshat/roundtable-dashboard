@@ -5,6 +5,19 @@
  * Matches backend route structure: /api/v1/chat/*
  */
 
+// Entity Subscription (Backend-First Streaming)
+export {
+  type EntitySubscriptionResponse,
+  type EntitySubscriptionServiceOptions,
+  type EntitySubscriptionStatus,
+  type SubscribeToModeratorStreamParams,
+  subscribeToModeratorStreamService,
+  type SubscribeToParticipantStreamParams,
+  subscribeToParticipantStreamService,
+  type SubscribeToPreSearchStreamParams,
+  subscribeToPreSearchStreamService,
+} from './entity-subscription';
+
 // Feedback
 export {
   type GetThreadFeedbackRequest,

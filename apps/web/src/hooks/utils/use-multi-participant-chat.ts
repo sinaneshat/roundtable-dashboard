@@ -1,957 +1,205 @@
 /**
- * Multi-Participant Chat Hook
+ * Multi-Participant Chat Hook - Backend-First Streaming Architecture
  *
- * **ARCHITECTURE NOTE - BACKEND-FIRST MIGRATION IN PROGRESS**:
+ * This hook provides AI SDK integration for P0 (first participant) message sending.
+ * Per FLOW_DOCUMENTATION.md:
  *
- * This hook contains participant orchestration logic that should eventually
- * move to the backend. The target architecture is:
+ * - Frontend SUBSCRIBES and DISPLAYS only (via useRoundSubscription)
+ * - Backend ORCHESTRATES everything (P0 → P1 → ... → Moderator)
  *
- * - Backend's round_execution table tracks: which participants responded, current phase
- * - Backend's queue worker triggers: next participant, moderator
- * - Frontend SUBSCRIBES to SSE streams, does NOT decide what happens next
+ * This hook's role:
+ * 1. Initialize AI SDK for the thread
+ * 2. Send P0 message when user submits (via startRound)
+ * 3. Sync messages between AI SDK and store
  *
- * **ORCHESTRATION TO REMOVE** (marked with // TODO: BACKEND-CONTROLLED):
- * - participantIndexQueue - Backend tracks participant order
- * - queuedParticipantsThisRoundRef - Backend tracks queued state
- * - triggeredNextForRef - Backend handles via queue idempotency
- * - respondedParticipantsRef - Backend's round_execution.participantsCompleted
- * - triggerNextParticipantWithRefs() - Backend queue auto-triggers
- * - Round completion detection - Backend state machine
- *
- * **KEEP ON FRONTEND**:
- * - AI SDK integration (useChat, transport, message handling)
- * - Stream display and RAF-based flushing
- * - Error display
- * - File upload handling
- *
- * Once backend migration is complete, this hook should be simplified to:
- * 1. Send user message → backend queues round execution
- * 2. Subscribe to SSE → display chunks as they arrive
- * 3. Handle errors → display to user
+ * P1+ participants and moderator are handled by:
+ * - Backend queue (triggers)
+ * - useRoundSubscription hooks (subscribes to streams)
  */
 import { useChat } from '@ai-sdk/react';
-import { AiSdkStatuses, FinishReasons, MessagePartTypes, MessageRoles, TextPartStates, UIMessageErrorTypeSchema, UIMessageRoles } from '@roundtable/shared';
+import { AiSdkStatuses, MessagePartTypes, MessageRoles, UIMessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
 import { DefaultChatTransport } from 'ai';
-import { useCallback, useEffectEvent, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
-import { z } from 'zod';
 
-import { errorCategoryToUIType, ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
-import { extractValidFileParts, isRenderableContent, isStreamingPart, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
+import { extractValidFileParts, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
-import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getAvailableSources, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, isObject, isPreSearch, mergeParticipantMetadata } from '@/lib/utils';
+import { deduplicateParticipants, getCurrentRoundNumber, getEnabledParticipants } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ChatParticipant, DbUserMessageMetadata } from '@/services/api';
-import { shouldWaitForPreSearch } from '@/stores/chat/utils/pre-search-execution';
+import type { ChatParticipant } from '@/services/api';
 
 import { useSyncedRefs } from './use-synced-refs';
 
-/**
- * Zod schema for UseMultiParticipantChatOptions validation
- * Validates hook options at entry point to ensure type safety
- * Note: Callbacks are not validated to preserve their type signatures
- *
- * ✅ LENIENT VALIDATION: Only validates essential fields for hook operation
- * Database fields (createdAt, updatedAt) are optional to support test fixtures
- */
-/**
- * ✅ TYPE-SAFE: Participant settings schema (inferred from ParticipantConfigSchema)
- * Matches the settings field from /src/lib/schemas/participant-schemas.ts
- */
-const ParticipantSettingsValidationSchema = z
-  .object({
-    maxTokens: z.number().int().positive().optional(),
-    systemPrompt: z.string().optional(),
-    temperature: z.number().min(0).max(2).optional(),
-  })
-  .nullable()
-  .optional();
-
-const UseMultiParticipantChatOptionsSchema = z.object({
-  messages: z.array(z.custom<UIMessage>()).optional(),
-  mode: z.string().nullable().optional(),
-  participants: z.array(z.object({
-    createdAt: z.string().optional(),
-    customRoleId: z.string().nullable().optional(),
-    id: z.string(),
-    isEnabled: z.boolean(),
-    modelId: z.string(),
-    priority: z.number().int().nonnegative(),
-    role: z.string().nullable().optional(),
-    settings: ParticipantSettingsValidationSchema,
-    // Database fields that may be present
-    threadId: z.string().optional(),
-    updatedAt: z.string().optional(),
-  })),
-  regenerateRoundNumber: z.number().int().nonnegative().optional(), // ✅ 0-BASED: Allow round 0
-  threadId: z.string(), // Allow empty string for initial state
-  // Callbacks are not validated - they pass through via TypeScript types
-});
+// ============================================================================
+// TYPES
+// ============================================================================
 
 /**
  * Options for configuring the multi-participant chat hook
  */
-type UseMultiParticipantChatOptions = {
+export type UseMultiParticipantChatOptions = {
   /** The current chat thread ID */
   threadId: string;
   /** All participants (enabled and disabled) */
   participants: ChatParticipant[];
   /** Initial messages for the chat (optional) */
   messages?: UIMessage[];
-  /** Callback when a round completes (all enabled participants have responded) */
-  onComplete?: (messages: UIMessage[]) => void;
-  /** Callback when user clicks retry (receives the round number being retried) */
-  onRetry?: (roundNumber: number) => void;
-  /** Callback when an error occurs */
-  onError?: (error: Error) => void;
   /** Chat mode (e.g., 'moderator', 'standard') */
   mode?: string;
-  /** When set, indicates this is a round regeneration */
-  regenerateRoundNumber?: number;
   /** Enable web search before participant streaming */
   enableWebSearch?: boolean;
   /** Pending attachment IDs to associate with the user message */
   pendingAttachmentIds?: string[] | null;
-  /**
-   * Pending file parts to include in AI SDK message
-   * These are passed to sendMessage so AI SDK creates user message with file parts
-   * Required for file attachments to appear in UI without full page refresh
-   * Uses ExtendedFilePart to support uploadId fallback for PDFs with empty previewUrls
-   */
+  /** Pending file parts to include in AI SDK message */
   pendingFileParts?: ExtendedFilePart[] | null;
-  /** Callback when pre-search starts */
-  onPreSearchStart?: (data: { userQuery: string; totalQueries: number }) => void;
-  /** Callback for each pre-search query */
-  onPreSearchQuery?: (data: { query: string; rationale: string; index: number; total: number }) => void;
-  /** Callback for each pre-search result */
-  onPreSearchResult?: (data: { query: string; resultCount: number; index: number }) => void;
-  /** Callback when pre-search completes */
-  onPreSearchComplete?: (data: { successfulSearches: number; totalResults: number }) => void;
-  /** Callback when pre-search encounters an error */
-  onPreSearchError?: (data: { error: string }) => void;
-  /** Animation tracking: clear all pending animations */
-  clearAnimations?: () => void;
-  /** Animation tracking: complete animation for a specific participant */
-  completeAnimation?: (participantIndex: number) => void;
-  /**
-   * ✅ RACE CONDITION FIX: Flag indicating a form submission is in progress
-   * When true, prevents resumed stream detection from setting isStreaming=true
-   * This avoids a deadlock state where isStreaming=true but pendingMessage=null
-   */
-  hasEarlyOptimisticMessage?: boolean;
-  /**
-   * ✅ RESUMABLE STREAMS: Flag indicating server prefilled resumption state
-   * When true, skips phantom resume detection to let incomplete-round-resumption handle continuation
-   */
-  streamResumptionPrefilled?: boolean;
-  /**
-   * ✅ STREAM RESUMPTION: Callback when a resumed stream completes but participants aren't loaded yet
-   * This allows the store to queue the next participant trigger for when participants load
-   */
-  onResumedStreamComplete?: (roundNumber: number, participantIndex: number) => void;
-  /**
-   * ✅ SMART STALE DETECTION: Round number from server prefill state
-   * Used to validate if an auto-resumed stream is from the expected round
-   */
-  resumptionRoundNumber?: number | null;
-  /**
-   * ✅ SMART STALE DETECTION: Next participant to trigger from server prefill state
-   * Used to validate if an auto-resumed stream is for a valid participant
-   */
-  nextParticipantToTrigger?: number | null;
-  /**
-   * ✅ SMART STALE DETECTION: Callback to reconcile store state with active stream
-   * Called when AI SDK auto-resumes a valid stream (correct round and participant)
-   */
-  onReconcileWithActiveStream?: (streamingParticipantIndex: number) => void;
-  /**
-   * ✅ HANDOFF FIX: Callback to notify store when next participant is being triggered
-   * Called BEFORE queueMicrotask to prevent stale-streaming-cleanup from firing during P0->P1 handoff
-   */
-  setNextParticipantToTrigger?: (value: { index: number; participantId: string } | number | null) => void;
-  /**
-   * ✅ NAVIGATION CLEANUP: Callback to clear pending file parts on navigation abort
-   * Prevents stale file parts from persisting across thread navigations
-   */
-  setPendingFileParts?: (value: ExtendedFilePart[] | null) => void;
-  /**
-   * ✅ NAVIGATION CLEANUP: Callback to clear pending attachment IDs on navigation abort
-   * Prevents stale attachment IDs from persisting across thread navigations
-   */
-  setPendingAttachmentIds?: (value: string[] | null) => void;
-  /**
-   * ✅ HANDOFF FIX: Callback to set store.isStreaming directly
-   * Ensures cleanup sees streaming=true immediately without waiting for async state sync
-   */
+  /** Callback when an error occurs */
+  onError?: (error: Error) => void;
+  /** Callback to set store.isStreaming */
   setIsStreaming?: (value: boolean) => void;
-  /**
-   * ✅ HANDOFF FIX: Callback to clear handoff flag when participant actually starts streaming
-   * Called after setIsStreaming(true) to indicate the transition is complete
-   */
-  setParticipantHandoffInProgress?: (value: boolean) => void;
-  /**
-   * ✅ RACE CONDITION FIX: Callback to acknowledge stream finish
-   * Called in onFinish to signal that message state is finalized.
-   * Replaces the 50ms timeout workaround for stream settling detection.
-   */
+  /** Callback to clear pending file parts on navigation */
+  setPendingFileParts?: (value: ExtendedFilePart[] | null) => void;
+  /** Callback to clear pending attachment IDs on navigation */
+  setPendingAttachmentIds?: (value: string[] | null) => void;
+  // Legacy props kept for compatibility (no-ops)
   acknowledgeStreamFinish?: () => void;
-  /**
-   * ✅ STREAMING BUG FIX: Callback to mark when message actually sent to AI SDK
-   * Called AFTER aiSendMessage() returns in startRound (not synchronously during startRound).
-   * Guards the flag-clearing effect in use-streaming-trigger.ts to prevent premature clearing.
-   */
-  setHasSentPendingMessage?: (value: boolean) => void;
-  /**
-   * ✅ PRE-SEARCH RACE FIX: Callback to get current pre-searches from store
-   * Used in continueFromParticipant as defense in depth to prevent triggering
-   * participants while pre-search is still streaming.
-   */
+  clearAnimations?: () => void;
+  completeAnimation?: (participantIndex: number) => void;
   getPreSearches?: () => { roundNumber: number; status: string; createdAt: string }[];
+  hasEarlyOptimisticMessage?: boolean;
+  nextParticipantToTrigger?: number | null;
+  onComplete?: (messages: UIMessage[]) => void;
+  onPreSearchComplete?: (data: { successfulSearches: number; totalResults: number }) => void;
+  onPreSearchError?: (data: { error: string }) => void;
+  onPreSearchQuery?: (data: { query: string; rationale: string; index: number; total: number }) => void;
+  onPreSearchResult?: (data: { query: string; resultCount: number; index: number }) => void;
+  onPreSearchStart?: (data: { userQuery: string; totalQueries: number }) => void;
+  onReconcileWithActiveStream?: (streamingParticipantIndex: number) => void;
+  onResumedStreamComplete?: (roundNumber: number, participantIndex: number) => void;
+  onRetry?: (roundNumber: number) => void;
+  regenerateRoundNumber?: number;
+  resumptionRoundNumber?: number | null;
+  setHasSentPendingMessage?: (value: boolean) => void;
+  setNextParticipantToTrigger?: (value: { index: number; participantId: string } | number | null) => void;
+  setParticipantHandoffInProgress?: (value: boolean) => void;
+  streamResumptionPrefilled?: boolean;
 };
 
 /**
  * Return value from the multi-participant chat hook
  */
-type UseMultiParticipantChatReturn = {
+export type UseMultiParticipantChatReturn = {
   /** All messages in the conversation */
   messages: UIMessage[];
-  /** Send a new user message and start a round */
+  /** Send a new user message (used for initial message flow) */
   sendMessage: (content: string, filePartsOverride?: ExtendedFilePart[]) => Promise<void>;
-  /**
-   * Start a new round with the existing participants (used for manual round triggering)
-   * @param participantsOverride - Optional fresh participants (used by store subscription to avoid stale data)
-   * @param messagesOverride - Optional fresh messages (used to avoid stale closure in queueMicrotask)
-   */
+  /** Start P0 streaming for a round */
   startRound: (participantsOverride?: ChatParticipant[], messagesOverride?: UIMessage[]) => void;
-  /**
-   * Continue a round from a specific participant index (used for incomplete round resumption)
-   * @param fromIndexOrTarget - The participant index or object with index + participantId for validation
-   * @param participantsOverride - Optional fresh participants
-   * @param messagesOverride - Optional fresh messages (used to avoid stale closure)
-   */
+  /** Continue from participant (legacy - backend handles via subscriptions) */
   continueFromParticipant: (
     fromIndexOrTarget: number | { index: number; participantId: string },
     participantsOverride?: ChatParticipant[],
     messagesOverride?: UIMessage[],
   ) => void;
-  /** Whether participants are currently streaming responses */
+  /** Whether streaming is active */
   isStreaming: boolean;
-  /**
-   * Ref to check streaming state synchronously (for use in async callbacks/microtasks)
-   * Avoids race conditions between store state and hook state
-   */
+  /** Ref to check streaming state synchronously */
   isStreamingRef: React.RefObject<boolean>;
-  /**
-   * Ref to check if a trigger is in progress (for provider guards)
-   * Prevents race conditions between startRound and pendingMessage effects
-   */
+  /** Ref to check if triggering is in progress */
   isTriggeringRef: React.RefObject<boolean>;
-  /** The index of the currently active participant */
+  /** Current participant index (always 0 for P0) */
   currentParticipantIndex: number;
-  /** Any error that occurred during the chat */
+  /** Error from chat */
   error: Error | null;
-  /** Retry the last round (regenerate entire round from scratch - deletes all messages and re-sends user prompt) */
+  /** Retry function (legacy) */
   retry: () => void;
-  /** Manually set messages (used for optimistic updates or message deletion) */
+  /** Set messages in AI SDK */
   setMessages: (messages: UIMessage[] | ((messages: UIMessage[]) => UIMessage[])) => void;
-  /**
-   * Whether the AI SDK is ready to accept new messages
-   * Used by provider to delay continueFromParticipant until SDK is initialized
-   */
+  /** Whether AI SDK is ready */
   isReady: boolean;
-  /**
-   * Stop any active streaming (for navigation cleanup)
-   * Used by store's reset functions to stop streaming before clearing state
-   */
+  /** Stop streaming */
   stop: () => void;
 };
 
-/**
- * Multi-Participant Chat Hook - Simplified Orchestration for AI Conversations
- *
- * Coordinates multiple AI participants responding sequentially to user messages.
- * Simplified to trust backend for round tracking and participant management.
- *
- * The hook maintains minimal client state and delegates complex logic to the backend,
- * following the FLOW_DOCUMENTATION.md principle of backend authority.
- *
- * AI SDK v6 Pattern: Message Metadata Flow
- * ========================================
- *
- * 1. STREAMING STATE (no metadata yet):
- *    - Message is being generated by AI SDK
- *    - No model/participant metadata available yet
- *    - UI uses currentParticipantIndex to show correct avatar/name
- *    - flushSync ensures index updates before next participant streams
- *
- * 2. ON FINISH (metadata added):
- *    - AI SDK calls onFinish with complete message
- *    - mergeParticipantMetadata adds: model, participantId, participantIndex, role, roundNumber
- *    - flushSync ensures metadata is committed BEFORE next participant starts
- *    - This prevents UI from showing wrong participant info during streaming
- *
- * 3. COMPLETED STATE (has metadata):
- *    - Message has full metadata from backend
- *    - UI trusts saved metadata and ignores currentParticipantIndex
- *    - No re-rendering when currentParticipantIndex changes
- *
- * CRITICAL SYNCHRONIZATION POINTS:
- * --------------------------------
- * 1. Before triggering next participant: flushSync(setCurrentParticipantIndex)
- * 2. After finishing current participant: flushSync(setMessages with metadata)
- * 3. These ensure React commits state BEFORE triggering next API call
- *
- * Without flushSync, React batches updates and causes:
- * - Wrong participant avatars/names during streaming
- * - Message UI flickering between participants
- * - Completed messages showing as streaming
- *
- * @example
- * const chat = useMultiParticipantChat({
- *   threadId: 'thread-123',
- *   participants: [
- *     { id: '1', modelId: 'gpt-4', isEnabled: true, priority: 0 },
- *     { id: '2', modelId: 'claude-3', isEnabled: true, priority: 1 },
- *   ],
- *   onComplete: () => {
- *     // Round complete callback
- *   }
- * });
- *
- * await chat.sendMessage("What's the best way to learn React?");
- */
+// ============================================================================
+// HOOK IMPLEMENTATION
+// ============================================================================
+
 export function useMultiParticipantChat(
   options: UseMultiParticipantChatOptions,
 ): UseMultiParticipantChatReturn {
-  // Validate critical options at hook entry point (excluding callbacks to preserve types)
-  const validationResult = UseMultiParticipantChatOptionsSchema.safeParse(options);
-
-  if (!validationResult.success) {
-    throw new Error(`Invalid hook options: ${validationResult.error.message}`);
-  }
-
   const {
-    // ✅ RACE CONDITION FIX: Callback to acknowledge stream finish
-    acknowledgeStreamFinish,
-    clearAnimations,
-    completeAnimation,
     enableWebSearch = false,
-    // ✅ PRE-SEARCH RACE FIX: Get current pre-searches from store
-    getPreSearches,
-    hasEarlyOptimisticMessage = false,
     messages: initialMessages = [],
     mode,
-    nextParticipantToTrigger: nextParticipantToTriggerProp = null,
-    onComplete,
     onError,
-    onPreSearchComplete,
-    onPreSearchError,
-    onPreSearchQuery,
-    onPreSearchResult,
-    onPreSearchStart,
-    onReconcileWithActiveStream,
-    onResumedStreamComplete,
-    onRetry,
     participants,
     pendingAttachmentIds = null,
-    pendingFileParts = null,
-    regenerateRoundNumber: regenerateRoundNumberParam,
-    // ✅ SMART STALE DETECTION: Prefilled state for stream validation
-    resumptionRoundNumber = null,
-    // ✅ STREAMING BUG FIX: Mark when message actually sent to AI SDK
-    setHasSentPendingMessage,
-    // ✅ HANDOFF FIX: Callback to set store.isStreaming directly
-    setIsStreaming,
-    // ✅ HANDOFF FIX: Callback to notify store when next participant is being triggered
-    setNextParticipantToTrigger,
-    // ✅ HANDOFF FIX: Callback to clear handoff flag when participant starts streaming
-    setParticipantHandoffInProgress,
+    setIsStreaming: setIsStreamingCallback,
     setPendingAttachmentIds,
-    // ✅ NAVIGATION CLEANUP: Callbacks to clear pending state on navigation abort
     setPendingFileParts,
-    streamResumptionPrefilled = false,
     threadId,
   } = options;
 
-  // ✅ CONSOLIDATED: Sync all callbacks and state values into refs
-  // Prevents stale closures by keeping refs in sync with latest values
-  // Uses useSyncedRefs to reduce boilerplate (replaces 9 separate useLayoutEffect calls)
-  //
-  // NOTE: useEffectEvent would be ideal here but React's rules-of-hooks linter
-  // restricts it to only being called from inside effects, not stored in objects.
-  // useSyncedRefs achieves the same goal: stable references that read latest values.
+  // Sync callbacks into refs to avoid stale closures
   const callbackRefs = useSyncedRefs({
-    // ✅ RACE CONDITION FIX: Acknowledge stream finish to signal completion
-    acknowledgeStreamFinish,
     enableWebSearch,
-    // ✅ PRE-SEARCH RACE FIX: Get current pre-searches from store
-    getPreSearches,
-    hasEarlyOptimisticMessage, // ✅ RACE CONDITION FIX: Track submission in progress
-    mode, // ✅ FIX: Add mode to refs to prevent transport recreation
-    nextParticipantToTriggerProp,
-    onComplete,
+    mode,
     onError,
-    onPreSearchComplete,
-    onPreSearchError,
-    onPreSearchQuery,
-    onPreSearchResult,
-    onPreSearchStart,
-    onReconcileWithActiveStream,
-    onResumedStreamComplete, // ✅ STREAM RESUMPTION: Queue next participant when participants aren't loaded
-    onRetry,
-    pendingAttachmentIds, // ✅ ATTACHMENTS: Pass attachment IDs to streaming request
-    pendingFileParts, // ✅ ATTACHMENTS: Pass file parts for AI SDK message (display in UI)
-    // ✅ SMART STALE DETECTION: Prefilled state for stream validation
-    resumptionRoundNumber,
-    // ✅ STREAMING BUG FIX: Mark when message actually sent to AI SDK
-    setHasSentPendingMessage,
-    // ✅ HANDOFF FIX: Set store.isStreaming directly for immediate effect
-    setIsStreaming,
-    // ✅ HANDOFF FIX: Callback to notify store when next participant is being triggered
-    setNextParticipantToTrigger,
-    // ✅ HANDOFF FIX: Clear handoff flag when participant starts streaming
-    setParticipantHandoffInProgress,
+    pendingAttachmentIds,
+    setIsStreamingCallback,
     setPendingAttachmentIds,
-    // ✅ NAVIGATION CLEANUP: Callbacks to clear pending state on navigation abort
     setPendingFileParts,
     threadId,
   });
 
-  // Participant error tracking - simple Set-based tracking to prevent duplicate responses
-  // Key format: `${participant.modelId}-${participantIndex}`
-  const respondedParticipantsRef = useRef<Set<string>>(new Set());
-  const hasResponded = useCallback((participantKey: string) => {
-    return respondedParticipantsRef.current.has(participantKey);
-  }, []);
-  const markAsResponded = useCallback((participantKey: string) => {
-    respondedParticipantsRef.current.add(participantKey);
-  }, []);
-  // ✅ RACE CONDITION FIX: Track processed message IDs to prevent double-processing in onFinish
-  // AI SDK may call onFinish multiple times or the same message may complete while we're awaiting RAF
-  const processedMessageIdsRef = useRef<Set<string>>(new Set());
-  const resetErrorTracking = useCallback(() => {
-    respondedParticipantsRef.current.clear();
-    processedMessageIdsRef.current.clear();
-  }, []);
-
-  // Track regenerate round number for backend communication
-  const regenerateRoundNumberRef = useRef<number | null>(regenerateRoundNumberParam || null);
-
-  // Simple round tracking state - backend is source of truth
-  // ✅ 0-BASED: First round is round 0
-  const [_currentRound, setCurrentRound] = useState(0);
-  const currentRoundRef = useRef<number>(0);
-
-  // Simple participant state - index-based iteration
+  // Simple state
   const [currentParticipantIndex, setCurrentParticipantIndex] = useState(0);
   const [isExplicitlyStreaming, setIsExplicitlyStreaming] = useState(false);
-
-  // ✅ RACE CONDITION FIX: Ref to track streaming state for synchronous checks in microtasks
-  // This prevents race conditions where store.isStreaming and hook.isExplicitlyStreaming are out of sync
   const isStreamingRef = useRef<boolean>(false);
-
-  // Participant refs for round stability
-  const participantsRef = useRef<ChatParticipant[]>(participants);
-  const roundParticipantsRef = useRef<ChatParticipant[]>([]);
-  const currentIndexRef = useRef<number>(currentParticipantIndex);
-
-  // Track if we're currently triggering to prevent double triggers
   const isTriggeringRef = useRef<boolean>(false);
-
-  // TODO: BACKEND-CONTROLLED - Remove when backend handles participant ordering
-  // ✅ CRITICAL FIX: Use a FIFO queue to prevent race conditions with participant indices
-  // The AI SDK processes requests in order, so a queue ensures each transport callback
-  // gets the correct participant index regardless of timing or concurrent calls
-  // Queue stores participant indices in the order aiSendMessage is called
-  const participantIndexQueue = useRef<number[]>([]);
-
-  // ✅ CRITICAL FIX: Track last used index to prevent queue drainage on retries
-  // AI SDK transport may call prepareSendMessagesRequest multiple times per message
-  // (retries, preflight, etc.), so we track the last used index to avoid shifting
-  // multiple times for the same participant
-  const lastUsedParticipantIndex = useRef<number | null>(null);
-
-  // TODO: BACKEND-CONTROLLED - Remove when backend tracks queued participants
-  // ✅ RACE CONDITION FIX: Track which participants have been queued this round
-  // Prevents duplicate network requests when multiple entry points trigger concurrently
-  // Key: participantIndex, Value: true if queued
-  // Reset at start of each round (in startRound/sendMessage)
-  const queuedParticipantsThisRoundRef = useRef<Set<number>>(new Set());
-
-  // TODO: BACKEND-CONTROLLED - Remove when backend queue handles idempotency
-  // ✅ PHANTOM GUARD: Track which (round, participantIndex) pairs have already triggered next participant
-  // AI SDK calls onFinish multiple times for the same message (phantom calls)
-  // This prevents duplicate triggerNextParticipantWithRefs() calls before round completes
-  // Key format: "r{round}_p{participantIndex}"
-  const triggeredNextForRef = useRef<Set<string>>(new Set());
-
-  // ✅ STALE STREAM STOP GUARD: Track when we intentionally stopped a stale AI SDK stream
-  // When stopAiSdk() is called due to server prefill, AI SDK's onFinish fires.
-  // We need to skip processing in onFinish to avoid clearing waitingToStartStreaming
-  // and preventing the moderator from being triggered.
-  const stoppedStaleStreamRef = useRef<boolean>(false);
-
-  // ✅ RACE CONDITION FIX: Abort flag for pending microtasks during navigation
-  // When user navigates between threads, pending queueMicrotask callbacks may execute
-  // with stale AI SDK Chat instances, causing "Cannot read properties of undefined (reading 'state')"
-  // This ref is set to true on navigation and reset after cleanup, allowing microtasks to abort safely
-  const abortMicrotaskRef = useRef<boolean>(false);
-  // Track the abort reset timeout for cleanup
-  const abortResetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  // ✅ CRITICAL FIX: Track expected user message ID for backend lookup
-  // AI SDK's sendMessage creates messages with its own nanoid-style IDs, but user messages
-  // are pre-persisted via PATCH/POST with backend ULIDs. This ref allows us to pass the
-  // correct ID to the streaming endpoint so backend can find the pre-persisted message.
+  const isMountedRef = useRef<boolean>(true);
+  const participantsRef = useRef<ChatParticipant[]>(participants);
+  const currentRoundRef = useRef<number>(0);
+  const currentIndexRef = useRef<number>(0);
+  const messagesRef = useRef<UIMessage[]>([]);
+  const statusRef = useRef<string>(AiSdkStatuses.READY);
+  const hasHydratedRef = useRef<boolean>(false);
   const expectedUserMessageIdRef = useRef<string | null>(null);
 
-  // ✅ RACE CONDITION FIX V2: Track AI SDK status in ref for microtask checks
-  // Microtasks capture closure values at schedule time, so checking `status` directly
-  // may use a stale value. This ref is synced in useLayoutEffect and reads current status.
-  // Initialized to 'ready' but immediately synced after useChat hook returns.
-  const statusRef = useRef<string>(AiSdkStatuses.READY);
+  // Track mount/unmount
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
-  // Refs to hold values needed for triggering (to avoid closure issues in callbacks)
-  const messagesRef = useRef<UIMessage[]>([]);
-  // ✅ TYPE-SAFE: Use DbUserMessageMetadata (without createdAt which is added by backend)
-  const aiSendMessageRef = useRef<((message: { text: string; metadata?: Omit<DbUserMessageMetadata, 'createdAt'> }) => void) | null>(null);
+  // Keep participantsRef in sync
+  useLayoutEffect(() => {
+    participantsRef.current = participants;
+  }, [participants]);
 
-  // Track previous threadId for navigation reset (effect defined after hasHydratedRef)
-  const prevThreadIdRef = useRef<string>(threadId);
-
-  // ✅ UNMOUNT GUARD: Track component lifecycle to prevent stale sendMessage calls
-  // AI SDK's internal state may be cleared on unmount, causing "Cannot read properties of undefined (reading 'state')"
-  const isMountedRef = useRef<boolean>(true);
-
-  /**
-   * Trigger the next participant using refs (safe to call from useChat callbacks)
-   */
-  const triggerNextParticipantWithRefs = useCallback(() => {
-    // Prevent double triggers
-    if (isTriggeringRef.current) {
-      return;
-    }
-
-    let totalParticipants = roundParticipantsRef.current.length;
-
-    // ✅ CRITICAL GUARD: Prevent premature round completion
-    // If roundParticipantsRef is empty but we have participants, populate it first
-    // This can happen during resumed streams or race conditions
-    // Store guarantees participants are sorted by priority
-    if (totalParticipants === 0 && participantsRef.current.length > 0) {
-      const enabled = getEnabledParticipants(participantsRef.current);
-      roundParticipantsRef.current = enabled;
-      totalParticipants = enabled.length;
-    }
-
-    // ✅ BUG FIX: Detect stale roundParticipantsRef when participant config changed between rounds
-    // When user changes participants (add/remove/enable/disable) between rounds:
-    // - roundParticipantsRef still has OLD participants from previous round
-    // - participantsRef has CURRENT participants
-    // - Round completion check uses OLD count, causing system to wait for non-existent participants
-    // or triggering onComplete prematurely
-    // Solution: Compare IDs and use current count if participants changed
-    // Store guarantees participants are sorted by priority
-    const currentEnabled = getEnabledParticipants(participantsRef.current);
-    const roundParticipantIds = new Set(roundParticipantsRef.current.map(p => p.id));
-    const currentParticipantIds = new Set(currentEnabled.map(p => p.id));
-
-    // Check if participants changed (different IDs or different count)
-    const participantsChanged = roundParticipantIds.size !== currentParticipantIds.size
-      || ![...currentParticipantIds].every(id => roundParticipantIds.has(id));
-
-    if (participantsChanged && currentEnabled.length > 0) {
-      // ✅ BUG FIX: Update BOTH totalParticipants AND roundParticipantsRef
-      // Previously only updated totalParticipants, causing subsequent lookups
-      // (e.g., in onFinish) to use wrong/old participants from stale ref
-      // This caused participant 1 to not be triggered correctly after config changes
-      totalParticipants = currentEnabled.length;
-      roundParticipantsRef.current = currentEnabled;
-    }
-
-    // ✅ SAFETY CHECK: Don't complete round if we have no participants at all
-    // This prevents triggering onComplete when participants haven't loaded yet
-    if (totalParticipants === 0) {
-      return;
-    }
-
-    // ✅ CRITICAL FIX: Check for missing/incomplete participants before incrementing
-    // Bug: During stream resumption, P1 might finish but P0 never responded
-    // Bug 2: P1 might have a partial message (interrupted stream) that looks like it responded
-    // Old logic: nextIndex = currentIndex + 1 (blindly skips P0)
-    // New logic: Find first participant without a COMPLETE message in current round
-    const currentRound = currentRoundRef.current;
-
-    // ✅ DEBUG: Log message state before recovery check
-    const allMsgs = messagesRef.current;
-    const assistantMsgsInRound = allMsgs.filter((m) => {
-      if (m.role !== MessageRoles.ASSISTANT) {
-        return false;
-      }
-      const md = m.metadata;
-      if (!md || typeof md !== 'object') {
-        return false;
-      }
-      if ('isModerator' in md && md.isModerator === true) {
-        return false;
-      }
-      const msgRound = 'roundNumber' in md ? md.roundNumber : null;
-      return msgRound === currentRound;
-    });
-    rlog.trigger('check', `r${currentRound} idx=${currentIndexRef.current} total=${totalParticipants} assistInRnd=${assistantMsgsInRound.length}`);
-
-    const participantIndicesWithCompleteMessages = new Set<number>();
-    // ✅ RESUMPTION DEBUG: Track what messages the orchestrator sees
-    const orchestratorMsgLog: string[] = [];
-    for (const msg of messagesRef.current) {
-      if (msg.role !== MessageRoles.ASSISTANT) {
-        continue;
-      }
-      const metadata = msg.metadata;
-      if (!metadata || typeof metadata !== 'object') {
-        continue;
-      }
-      // Skip moderator messages
-      if ('isModerator' in metadata && metadata.isModerator === true) {
-        continue;
-      }
-      // Check if message is for current round
-      const msgRound = 'roundNumber' in metadata ? metadata.roundNumber : null;
-      const pIdx = 'participantIndex' in metadata && typeof metadata.participantIndex === 'number' ? metadata.participantIndex : null;
-      if (msgRound !== currentRound) {
-        // Log skipped messages from other rounds for debugging
-        if (pIdx !== null) {
-          orchestratorMsgLog.push(`P${pIdx}:r${msgRound}(skip)`);
-        }
-        continue;
-      }
-
-      // ✅ FIX: Check if message is COMPLETE, not just exists
-      // A message is incomplete ONLY if:
-      // - Any text part has state='streaming' (still actively streaming)
-      // - hasError is true (explicit error from backend)
-      // NOTE: finishReason='unknown' is NOT a reliable indicator - many complete
-      // messages have this value. Only rely on explicit signals.
-      const hasError = 'hasError' in metadata ? metadata.hasError : false;
-      const hasStreamingParts = msg.parts?.some(
-        p => 'state' in p && p.state === TextPartStates.STREAMING,
-      );
-      // Only explicit errors or active streaming indicate incompleteness
-      const isIncomplete = hasError === true || hasStreamingParts === true;
-
-      if (isIncomplete) {
-        if (pIdx !== null) {
-          orchestratorMsgLog.push(`P${pIdx}:incomplete(err=${hasError ? 1 : 0},stream=${hasStreamingParts ? 1 : 0})`);
-        }
-        continue;
-      }
-
-      // Get participant index for complete messages only
-      if (pIdx !== null) {
-        participantIndicesWithCompleteMessages.add(pIdx);
-        orchestratorMsgLog.push(`P${pIdx}:done`);
-      }
-    }
-    // Log what orchestrator sees vs what it marks as done
-    if (orchestratorMsgLog.length > 0 || participantIndicesWithCompleteMessages.size === 0) {
-      rlog.resume('orch-scan', `r${currentRound} sdkMsgs=${messagesRef.current.length} found=[${orchestratorMsgLog.join(',')}] done=[${[...participantIndicesWithCompleteMessages]}]`);
-    }
-
-    // Find first participant without a COMPLETE message (0 to totalParticipants-1)
-    // ✅ FIX: Default to totalParticipants (round complete) - only set lower if incomplete found
-    //
-    // ✅ SEQUENTIAL ORDER FIX: Participants respond in sequential order (P0 → P1 → P2 → ...)
-    // If ANY higher-indexed participant has a complete message, ALL lower-indexed participants
-    // MUST be complete (even if their messages haven't been detected yet due to race conditions).
-    // This prevents triggering P0 after P1 finishes when P0's message wasn't detected.
-    //
-    // ✅ RESUMPTION FIX: Only apply sequential order if ALL earlier messages EXIST.
-    // During page refresh, P0 might have never been created (user refreshed before P0 streamed).
-    // In this case, P1 completing doesn't mean P0 is complete - P0 never existed.
-    // We detect this by checking if messages exist for indices 0 to highestCompleteIndex.
-    let nextIndex = totalParticipants;
-
-    // Find the highest index that has a complete message
-    // All participants before this index are implicitly complete due to sequential order
-    let highestCompleteIndex = -1;
-    for (const idx of participantIndicesWithCompleteMessages) {
-      if (idx > highestCompleteIndex) {
-        highestCompleteIndex = idx;
-      }
-    }
-
-    // ✅ RESUMPTION FIX: Check if ALL messages 0 to highestCompleteIndex exist
-    // If any message is missing, sequential order assumption doesn't apply
-    let allEarlierMessagesExist = true;
-    if (highestCompleteIndex > 0) {
-      for (let i = 0; i < highestCompleteIndex; i++) {
-        // Check if message EXISTS (regardless of complete status)
-        const expectedMsgId = `${callbackRefs.threadId.current}_r${currentRound}_p${i}`;
-        const msgExists = messagesRef.current.some(m => m.id === expectedMsgId);
-        if (!msgExists) {
-          allEarlierMessagesExist = false;
-          rlog.trigger('gap-detect', `P${i} message missing - cannot assume sequential order`);
-          break;
-        }
-      }
-    }
-
-    // Start searching from after the highest complete index (if sequential order applies)
-    // OR from 0 if sequential order doesn't apply (messages missing)
-    const startIndex = (highestCompleteIndex >= 0 && allEarlierMessagesExist) ? highestCompleteIndex + 1 : 0;
-
-    for (let i = startIndex; i < totalParticipants; i++) {
-      if (!participantIndicesWithCompleteMessages.has(i)) {
-        // Found a participant without a complete message - trigger them
-        // Clear from queue if they were previously queued but message is missing
-        if (queuedParticipantsThisRoundRef.current.has(i)) {
-          queuedParticipantsThisRoundRef.current.delete(i);
-        }
-        nextIndex = i;
-        break;
-      }
-    }
-
-    // Round complete - reset state
-    // Moderator triggering now handled automatically by store subscription
-    if (nextIndex >= totalParticipants) {
-      // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
-      isStreamingRef.current = false;
-
-      // ✅ PHANTOM GUARD: Increment round ref so phantom calls from previous round are blocked
-      // Without this, phantom onFinish calls would see `msgRound < currentRoundRef` as false
-      // because currentRoundRef would still be the old round number
-      currentRoundRef.current = currentRoundRef.current + 1;
-
-      // eslint-disable-next-line react-dom/no-flush-sync -- Required for moderator trigger synchronization
-      flushSync(() => {
-        setIsExplicitlyStreaming(false);
-        setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
-      });
-
-      resetErrorTracking();
-      regenerateRoundNumberRef.current = null;
-      lastUsedParticipantIndex.current = null; // Reset for next round
-
-      // ✅ CRITICAL FIX: Pass messages directly to avoid stale ref issue
-      // messagesRef.current has the latest messages with complete metadata
-      callbackRefs.onComplete.current?.(messagesRef.current);
-
-      return;
-    }
-
-    // More participants to process - trigger next one
-    // ✅ RESUMPTION DEBUG: Log why this participant is being triggered
-    rlog.trigger('next', `P${nextIndex} r${currentRound} done=[${[...participantIndicesWithCompleteMessages]}] queuedThis=[${[...queuedParticipantsThisRoundRef.current]}]`);
-    isTriggeringRef.current = true;
-
-    // Race condition fix: Check if participant is already queued
-    if (queuedParticipantsThisRoundRef.current.has(nextIndex)) {
-      isTriggeringRef.current = false;
-      return;
-    }
-
-    // CRITICAL: Update ref BEFORE setting state to avoid race condition
-    // The prepareSendMessagesRequest reads from currentIndexRef.current
-    // so we must update it synchronously before calling aiSendMessage
-    currentIndexRef.current = nextIndex;
-
-    // CRITICAL FIX: Use flushSync to ensure participant index update is committed BEFORE triggering next participant
-    // Without flushSync, React batches this state update and may re-render with the new index
-    // before the first participant's message metadata is properly evaluated, causing both messages
-    // to show the second participant's icon/name during the batched render.
-    // AI SDK v6 Pattern: Prevents UI from showing wrong participant info during sequential streaming
-    // eslint-disable-next-line react-dom/no-flush-sync -- Required for multi-participant chat synchronization
-    flushSync(() => {
-      setCurrentParticipantIndex(nextIndex);
-    });
-
-    // Find the last user message using ref
-    const lastUserMessage = [...messagesRef.current].reverse().find((m: UIMessage) => m.role === MessageRoles.USER);
-    if (!lastUserMessage) {
-      // Restore to previous index on error
-      currentIndexRef.current = currentIndexRef.current - 1;
-      isTriggeringRef.current = false;
-      return;
-    }
-
-    const textPart = lastUserMessage.parts?.find((p: { type: string; text?: string }) => p.type === MessagePartTypes.TEXT && 'text' in p);
-    const userText = textPart && 'text' in textPart ? String(textPart.text || '') : '';
-
-    if (!userText.trim()) {
-      // Restore to previous index on error
-      currentIndexRef.current = currentIndexRef.current - 1;
-      isTriggeringRef.current = false;
-      return;
-    }
-
-    // ✅ CRITICAL FIX: Extract file parts from existing user message for participant 1+
-    // Without this, participant 1+ sends only text - model never sees uploaded files
-    // Uses shared extractValidFileParts utility for consistent file part handling
-    // Backend can use uploadId fallback to load content from R2 for parts with empty URLs
-    const fileParts = extractValidFileParts(lastUserMessage.parts);
-
-    // ✅ CRITICAL FIX: Push participant index to queue BEFORE calling aiSendMessage
-    // Mark as queued to prevent duplicate triggers
-    queuedParticipantsThisRoundRef.current.add(nextIndex);
-    participantIndexQueue.current.push(nextIndex);
-
-    // ✅ HANDOFF FIX: Notify store that next participant is being triggered
-    // This prevents stale-streaming-cleanup from firing during P0->P1 handoff
-    // The cleanup at use-stale-streaming-cleanup.ts:100 checks nextParticipantToTrigger !== null
-    // Without this notification, store sees nextParticipantToTrigger=null → cleanup fires at 10s
-    const participantId = roundParticipantsRef.current[nextIndex]?.id ?? '';
-    if (callbackRefs.setNextParticipantToTrigger.current) {
-      callbackRefs.setNextParticipantToTrigger.current({ index: nextIndex, participantId });
-    }
-
-    // ✅ ASYNC GAP FIX: Set isStreamingRef=true SYNCHRONOUSLY to block cleanup during handoff
-    // Problem: setNextParticipantToTrigger() is async - Zustand state update is queued, not immediate.
-    // The cleanup interval at use-stale-streaming-cleanup.ts:96 calls store.getState() which may
-    // see the OLD value of nextParticipantToTrigger (null) if the async update hasn't propagated.
-    // Fix: Also set isStreamingRef.current=true here AND call setIsStreaming(true) directly.
-    // The ref is for internal hook state, the callback updates store.isStreaming IMMEDIATELY
-    // so cleanup's store.getState().isStreaming sees true right away.
-    // This prevents the 10s forced cleanup from firing during P0→P1 handoff.
-    isStreamingRef.current = true;
-
-    // ✅ HANDOFF FIX: Call setIsStreaming(true) DIRECTLY on store
-    // The ref assignment above doesn't sync to store (that sync is one-way: derived → ref)
-    // Calling setIsStreaming ensures store.isStreaming=true IMMEDIATELY so cleanup sees it
-    if (callbackRefs.setIsStreaming.current) {
-      callbackRefs.setIsStreaming.current(true);
-    }
-
-    // ✅ V4 FIX: DO NOT clear handoff flag here (too early!)
-    // Flag must stay TRUE until sendMessage succeeds inside microtask
-    // Otherwise cleanup sees handoff=0 and fires 10s forced cleanup
-
-    // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
-    // Same pattern as startRound for consistent error handling
-    //
-    // ✅ CRITICAL: isTriggeringRef stays TRUE until async work completes
-    if (aiSendMessageRef.current) {
-      queueMicrotask(async () => {
-        // ✅ UNMOUNT GUARD: Re-check refs inside microtask to handle race conditions
-        // Component may unmount or AI SDK may reinitialize between scheduling and execution
-        // This prevents "Cannot read properties of undefined (reading 'state')" errors
-        if (!isMountedRef.current || !aiSendMessageRef.current) {
-          // Clear handoff flag on unmount
-          if (callbackRefs.setParticipantHandoffInProgress.current) {
-            callbackRefs.setParticipantHandoffInProgress.current(false);
-          }
-          isTriggeringRef.current = false;
-          return;
-        }
-
-        const sendMessage = aiSendMessageRef.current;
-
-        try {
-          await sendMessage({
-            text: userText,
-            // ✅ CRITICAL FIX: Include file parts so AI SDK sends them to participant 1+
-            // Bug: Without files, backend receives message without file parts, causing
-            // "Invalid file URL: filename" errors when AI provider uses filename as fallback URL
-            ...(fileParts.length > 0 && { files: fileParts }),
-            metadata: {
-              isParticipantTrigger: true,
-              role: UIMessageRoles.USER,
-              roundNumber: currentRoundRef.current,
-            },
-          });
-          // ✅ V4 FIX: Clear handoff flag AFTER sendMessage succeeds (P1 now streaming)
-          if (callbackRefs.setParticipantHandoffInProgress.current) {
-            callbackRefs.setParticipantHandoffInProgress.current(false);
-          }
-          // ✅ SUCCESS: Reset trigger lock after aiSendMessage succeeds
-          isTriggeringRef.current = false;
-        } catch (error) {
-          // ✅ V4 FIX: Clear handoff flag on error so we don't leave it stuck
-          if (callbackRefs.setParticipantHandoffInProgress.current) {
-            callbackRefs.setParticipantHandoffInProgress.current(false);
-          }
-          // ✅ GRACEFUL ERROR HANDLING: Reset state to allow retry
-          console.error('[triggerNextParticipant] aiSendMessage failed, resetting state:', error);
-          isStreamingRef.current = false;
-          isTriggeringRef.current = false;
-          queuedParticipantsThisRoundRef.current.clear();
-          participantIndexQueue.current = [];
-          lastUsedParticipantIndex.current = null;
-        }
-      });
-    } else {
-      // No sendMessage ref available, clear handoff flag and reset
-      if (callbackRefs.setParticipantHandoffInProgress.current) {
-        callbackRefs.setParticipantHandoffInProgress.current(false);
-      }
-      isTriggeringRef.current = false;
-    }
-    // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
-    // Note: callbackRefs not in deps - we use callbackRefs.onComplete.current to always get latest value
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs.onComplete accessed via .current (ref pattern)
-  }, [resetErrorTracking]);
-
-  /**
-   * Prepare request body for AI SDK chat transport
-   *
-   * AI SDK v6 Pattern: Use callback to access refs safely
-   * Refs should only be accessed in callbacks/effects, not during render
-   *
-   * ✅ CRITICAL FIX: Uses FIFO queue with retry protection
-   * Queue approach prevents race conditions where currentIndexRef changes
-   * before transport callback executes. Tracks last used index to prevent
-   * queue drainage when AI SDK retries or calls multiple times per participant.
-   */
+  // Prepare transport request body for AI SDK
   const prepareSendMessagesRequest = useCallback(
-    // ✅ TYPE-SAFE: Properly typed AI SDK transport message format
     ({ id, messages }: { id: string; messages: { role?: string; content?: string; id?: string; parts?: { type: string; text?: string }[] }[] }) => {
-      // ✅ CRITICAL FIX: Prevent queue drainage on retries/duplicate calls
-      // AI SDK transport may call this function multiple times for the same message
-      // (retries, preflight, etc.). We only shift from queue when processing a NEW participant.
+      const participantIndexToUse = currentIndexRef.current;
 
-      // Peek at the next queued index without removing it
-      const queuedIndex = participantIndexQueue.current[0];
-
-      let participantIndexToUse: number;
-
-      if (queuedIndex !== undefined && queuedIndex !== lastUsedParticipantIndex.current) {
-        // New participant detected - shift from queue and remember it
-        const shiftedIndex = participantIndexQueue.current.shift();
-        participantIndexToUse = shiftedIndex ?? currentIndexRef.current;
-        lastUsedParticipantIndex.current = participantIndexToUse;
-      } else if (lastUsedParticipantIndex.current !== null) {
-        // Same participant (retry/duplicate call) - reuse last index without shifting queue
-        participantIndexToUse = lastUsedParticipantIndex.current;
-      } else {
-        // Fallback to current index ref (shouldn't normally happen)
-        participantIndexToUse = currentIndexRef.current;
-      }
-
-      // ✅ ATTACHMENTS: Only send attachment IDs with first participant (when user message is created)
+      // Only send attachment IDs with first participant
       const attachmentIdsForRequest = participantIndexToUse === 0
         ? (callbackRefs.pendingAttachmentIds.current || undefined)
         : undefined;
 
-      // ✅ DEBUG: Log attachment IDs being sent
-      rlog.msg('cite-send', `pIdx=${participantIndexToUse} pending=${callbackRefs.pendingAttachmentIds.current?.length ?? 0} sending=${attachmentIdsForRequest?.length ?? 0}`);
-
-      // ✅ SANITIZATION: Filter message parts for backend transmission
-      // Uses shared isValidFilePartForTransmission type guard for consistent handling
-      // - Keeps all non-file parts (text, etc.)
-      // - Keeps file parts with valid URL or uploadId (backend uses uploadId fallback)
-      // - Filters out file parts with neither (invalid blob/empty URLs without uploadId)
+      // Sanitize message parts
       const lastMessage = messages[messages.length - 1];
       const sanitizedMessage = lastMessage && lastMessage.parts
         ? {
             ...lastMessage,
             parts: lastMessage.parts.filter((part) => {
-              // Keep non-file parts (text, etc.)
               if (part.type !== 'file') {
                 return true;
               }
-              // For file parts, use shared validation logic
               return isValidFilePartForTransmission(part);
             }),
           }
@@ -962,92 +210,46 @@ export function useMultiParticipantChat(
         message: sanitizedMessage,
         participantIndex: participantIndexToUse,
         participants: participantsRef.current,
-        ...(regenerateRoundNumberRef.current && { regenerateRound: regenerateRoundNumberRef.current }),
-        // ✅ CRITICAL FIX: Access mode via ref to prevent transport recreation
-        // Previously mode was in closure, causing callback to recreate on mode change
-        // This recreated transport mid-stream, corrupting AI SDK's Chat instance state
         ...(callbackRefs.mode.current && { mode: callbackRefs.mode.current }),
-        // ✅ CRITICAL FIX: Pass enableWebSearch to backend for ALL rounds
-        // BUG FIX: Previously only round 0 (thread creation) included enableWebSearch
-        // Now all subsequent rounds will also trigger pre-search when enabled
-        // Backend uses this to create PENDING pre-search records before participant streaming
         enableWebSearch: callbackRefs.enableWebSearch.current,
-        // ✅ ATTACHMENTS: Include attachment IDs for message association (first participant only)
         ...(attachmentIdsForRequest && attachmentIdsForRequest.length > 0 && { attachmentIds: attachmentIdsForRequest }),
-        // ✅ CRITICAL FIX: Pass expected user message ID for backend DB lookup
-        // AI SDK's sendMessage creates messages with its own nanoid-style IDs, but user messages
-        // are pre-persisted via PATCH/POST with backend ULIDs. This allows backend to find the
-        // correct pre-persisted message instead of using AI SDK's generated ID.
         ...(expectedUserMessageIdRef.current && participantIndexToUse === 0 && { userMessageId: expectedUserMessageIdRef.current }),
       };
 
       return { body };
     },
-    // ✅ CRITICAL FIX: Empty dependencies - callback is stable across renders
-    // All dynamic values accessed via callbackRefs.*.current (stable refs)
-    // This prevents transport recreation which corrupts AI SDK's Chat instance
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs is stable, all values accessed via .current
     [],
   );
 
-  // AI SDK v6 Pattern: Create transport with callback that accesses refs safely
-  // Reference: https://github.com/vercel/ai/blob/ai_6_0_0/content/cookbook/01-next/80-send-custom-body-from-use-chat.mdx
-  // The prepareSendMessagesRequest callback is invoked by the transport at request time (not during render),
-  // so accessing refs inside the callback is safe and follows the recommended AI SDK v6 pattern.
-  // The callback is stable (only depends on 'mode') and refs are only accessed during callback invocation.
-
+  // Create AI SDK transport
   const transport = useMemo(
     () =>
       new DefaultChatTransport({
         api: '/api/v1/chat',
-        // ✅ RESUMABLE STREAMS: Configure resume endpoint for stream reconnection
-        // When resume: true, AI SDK calls this on mount to check for active streams
-        // Returns the GET endpoint that serves buffered SSE chunks from Cloudflare KV
-        //
-        // Following AI SDK documentation pattern: Backend tracks active stream per thread
-        // Frontend doesn't need to construct stream ID - backend looks it up
         prepareReconnectToStreamRequest: ({ id }) => {
-          // ✅ FIX: Only include 'api' field when we have a valid ID
-          // AI SDK v6 skips reconnection when 'api' field is omitted from returned object
-          // This prevents constructing invalid endpoints like /api/v1/chat/threads//stream
           if (!id || id.trim() === '') {
-            // Return object without 'api' field to signal SDK to skip reconnection
             return { credentials: 'include' };
           }
-
           return {
-            // ✅ SIMPLIFIED: Resume endpoint looks up active stream by thread ID
-            // Backend determines which stream to resume (round/participant)
-            // No need to construct stream ID on frontend
             api: `/api/v1/chat/threads/${id}/stream`,
-            credentials: 'include', // Required for session auth
+            credentials: 'include',
           };
         },
         prepareSendMessagesRequest,
       }),
     [prepareSendMessagesRequest],
-    // threadId accessed in closure at call time, doesn't affect transport creation
   );
 
-  // ✅ CRITICAL FIX: NEVER pass messages prop - use uncontrolled AI SDK
-  // Problem: Passing messages makes useChat controlled, causing updates to be overwritten
-  // Solution: Let AI SDK manage its own state via id-based persistence
-  // We'll sync external messages using setMessages in an effect below
-
+  // Build useChat options
   const useChatId = threadId && threadId.trim() !== '' ? threadId : undefined;
-
-  // ✅ exactOptionalPropertyTypes: Build useChat options conditionally
-  // Only include id when it has a value to avoid passing undefined to optional property
   const useChatOptions = useMemo(() => {
-    const baseOptions = {
-      // onData, onError, onFinish, transport, resume will be added below
-    };
     if (useChatId !== undefined) {
-      return { ...baseOptions, id: useChatId };
+      return { id: useChatId };
     }
-    return baseOptions;
+    return {};
   }, [useChatId]);
 
+  // AI SDK hook
   const {
     error: chatError,
     messages,
@@ -1056,1051 +258,80 @@ export function useMultiParticipantChat(
     status,
     stop: stopAiSdk,
   } = useChat({
-    // ✅ CRITICAL FIX: Spread useChatOptions which conditionally includes id
-    // AI SDK's Chat class expects either valid ID or undefined, not empty string
-    // Empty string causes "Cannot read properties of undefined (reading 'state')" error
-    // in Chat.makeRequest because internal state initialization fails
     ...useChatOptions,
-    // ✅ DEBUG: Log all streaming data parts to trace when metadata arrives
-    onData: (dataPart) => {
-      rlog.msg('cite-data', `type=${dataPart?.type} keys=[${dataPart && typeof dataPart === 'object' ? Object.keys(dataPart).join(',') : 'null'}]`);
-
-      // ✅ V5 FIX: Clear handoff flag when streaming data arrives
-      // This is the TRUE signal that P1 started - not when sendMessage returns
-      // Called on every chunk but setter is idempotent (no-op if already false)
-      if (callbackRefs.setParticipantHandoffInProgress.current) {
-        callbackRefs.setParticipantHandoffInProgress.current(false);
-      }
-    },
-
-    /**
-     * Handle participant errors - create error UI and continue to next participant
-     */
     onError: (error) => {
-      // Ensure roundParticipantsRef is populated before any transitions
-      // Store guarantees participants are sorted by priority
-      if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
-        const enabled = getEnabledParticipants(participantsRef.current);
-        roundParticipantsRef.current = enabled;
-      }
-
-      // CRITICAL: Use ref for current index to avoid stale closure
-      const currentIndex = currentIndexRef.current;
-      const participant = roundParticipantsRef.current[currentIndex];
-
-      // ✅ FIX: Handle edge case where error is undefined, null, or empty object
-      // AI SDK might call onError with unexpected values in edge cases
-      if (!error || (typeof error === 'object' && Object.keys(error).length === 0)) {
-        console.error('[Chat Streaming Error] Received empty or undefined error', {
-          currentIndex,
-          errorType: typeof error,
-          errorValue: error,
-          modelId: participant?.modelId,
-          participantId: participant?.id,
-          roundParticipantsCount: roundParticipantsRef.current.length,
-        });
-      }
-
-      // ✅ SINGLE SOURCE OF TRUTH: Parse and validate error metadata with schema
-      let errorMessage = error instanceof Error
-        ? error.message
-        : (error ? String(error) : 'Unknown streaming error');
-      let errorMetadata: z.infer<typeof ErrorMetadataSchema> | undefined;
-
-      try {
-        if (typeof errorMessage === 'string' && (errorMessage.startsWith('{') || errorMessage.includes('errorCategory') || errorMessage.includes('errorMessage'))) {
-          const parsed = JSON.parse(errorMessage);
-          const validated = ErrorMetadataSchema.safeParse(parsed);
-          if (validated.success) {
-            errorMetadata = validated.data;
-          } else {
-            // ✅ FIX: Even if schema validation fails, try to extract key fields
-            // This handles cases where backend sends extra fields or slightly different types
-            errorMetadata = {
-              errorCategory: parsed.errorCategory,
-              errorMessage: parsed.errorMessage,
-              isTransient: parsed.isTransient,
-              modelId: parsed.modelId,
-              openRouterCode: parsed.openRouterCode,
-              openRouterError: parsed.openRouterError,
-              participantId: parsed.participantId,
-              rawErrorMessage: parsed.rawErrorMessage,
-              responseBody: parsed.responseBody,
-              statusCode: parsed.statusCode,
-              traceId: parsed.traceId,
-            };
-          }
-          // Extract the most descriptive error message available
-          errorMessage = errorMetadata.rawErrorMessage
-            || errorMetadata.errorMessage
-            || (typeof errorMetadata.openRouterError === 'string' ? errorMetadata.openRouterError : null)
-            || errorMessage;
-        }
-      } catch {
-        // Invalid JSON - use original error message
-      }
-
-      // ✅ ERROR LOGGING: Log full error details for debugging
-      console.error('[Chat Streaming Error]', {
-        errorCategory: errorMetadata?.errorCategory,
-        errorMessage,
-        isTransient: errorMetadata?.isTransient,
-        modelId: errorMetadata?.modelId || participant?.modelId,
-        participantId: errorMetadata?.participantId || participant?.id,
-        participantIndex: currentIndex,
-        // Include response body for provider errors (truncated)
-        responseBody: errorMetadata?.responseBody?.substring(0, 300),
-        statusCode: errorMetadata?.statusCode,
-        traceId: errorMetadata?.traceId,
-        // Full metadata in dev mode
-        ...(import.meta.env.MODE === 'development' && { fullMetadata: errorMetadata }),
-      });
-
-      // ✅ BUG FIX: Update EXISTING participant message with hasError: true
-      // Previously created a NEW error message with random ID, leaving the original
-      // message (deterministic ID: threadId_r{round}_p{index}) with hasError: false.
-      // This caused infinite retry loops because resumption checked the original message.
-      if (participant) {
-        const errorKey = `${participant.modelId}-${currentIndex}`;
-
-        if (!hasResponded(errorKey)) {
-          markAsResponded(errorKey);
-
-          // ✅ TYPE-SAFE: Convert ErrorCategory to UIMessageErrorType using mapping function
-          const errorType = errorMetadata?.errorCategory
-            ? errorCategoryToUIType(errorMetadata.errorCategory)
-            : UIMessageErrorTypeSchema.enum.failed;
-
-          // ✅ FIX: Update existing message instead of creating new one
-          // The deterministic message ID allows us to find and update the original
-          // ✅ CRITICAL: Use callbackRefs.threadId.current, not threadId prop (stale in closure)
-          const effectiveThreadId = callbackRefs.threadId.current;
-          const expectedMessageId = `${effectiveThreadId}_r${currentRoundRef.current}_p${currentIndex}`;
-
-          setMessages((prev) => {
-            const existingIndex = prev.findIndex(m => m.id === expectedMessageId);
-            if (existingIndex >= 0) {
-              // Update existing message with error metadata
-              const updated = [...prev];
-              const existing = updated[existingIndex];
-              if (existing) {
-                updated[existingIndex] = {
-                  ...existing,
-                  metadata: {
-                    ...(typeof existing.metadata === 'object' ? existing.metadata : {}),
-                    errorCategory: errorMetadata?.errorCategory || errorType,
-                    errorMessage,
-                    errorType,
-                    finishReason: FinishReasons.FAILED,
-                    hasError: true,
-                  },
-                  parts: existing.parts?.length ? existing.parts : [{ text: '', type: MessagePartTypes.TEXT }],
-                };
-              }
-              // ✅ FROZEN ARRAY FIX: Deep clone to break Immer freeze
-              // AI SDK needs mutable arrays for streaming - frozen refs cause
-              // "Cannot add property 0, object is not extensible" errors
-              return structuredClone(updated);
-            }
-            // Fallback: create new error message if original not found
-            const errorUIMessage = createErrorUIMessage(
-              participant,
-              currentIndex,
-              errorMessage,
-              errorType,
-              errorMetadata,
-              currentRoundRef.current,
-            );
-            // ✅ FROZEN ARRAY FIX: Clone prev to break Immer freeze
-            return structuredClone([...prev, errorUIMessage]);
-          });
-        }
-      }
-
-      // ✅ FIX: Complete animation for errored participant before moving to next
-      // Without this, the animation timeout would trigger because:
-      // 1. Original message is created with empty parts and hasError: false
-      // 2. Error message is a NEW message that doesn't complete the original's animation
-      // 3. Animation for currentIndex never completes, causing 5s timeout
-      if (completeAnimation) {
-        completeAnimation(currentIndex);
-      }
-
-      // Phantom guard: Check if we've already triggered next for this (round, participant)
-      const triggerKey = `r${currentRoundRef.current}_p${currentIndex}`;
-      if (triggeredNextForRef.current.has(triggerKey)) {
-        return;
-      }
-      triggeredNextForRef.current.add(triggerKey);
-
-      // ✅ CRITICAL FIX: Reset AI SDK state before triggering next participant
-      // When an error occurs, AI SDK status becomes 'error' and won't accept new sendMessage calls.
-      // Calling setMessages forces the SDK back to 'ready' state, allowing the next participant to send.
-      // Use flushSync to ensure the state reset is committed BEFORE triggering next participant.
-      // eslint-disable-next-line react-dom/no-flush-sync -- Required for AI SDK state reset
-      flushSync(() => {
-        setMessages(structuredClone(messagesRef.current));
-      });
-
-      // Trigger next participant immediately (no delay needed)
-      triggerNextParticipantWithRefs();
-      callbackRefs.onError.current?.(error instanceof Error ? error : new Error(errorMessage));
+      rlog.stuck('ai-sdk', `error: ${error.message}`);
+      callbackRefs.onError.current?.(error);
     },
-
-    /**
-     * Handle successful participant response
-     * AI SDK v6 Pattern: Trust the SDK's built-in deduplication
-     */
-    onFinish: async (data) => {
-      const msgId = data.message?.id;
-      const pIdxMatch = msgId?.match(/_p(\d+)$/);
-      const rndMatch = msgId?.match(/_r(\d+)_/);
-      // ✅ DEBUG: Log metadata to trace availableSources (only for real messages)
-      const availableSources = getAvailableSources(data.message?.metadata);
-      const hasAvail = availableSources?.length ?? 0;
-      rlog.stream('end', `r${rndMatch?.[1] ?? '-'} p${pIdxMatch?.[1] ?? '-'} reason=${data.finishReason ?? '-'} parts=${data.message?.parts?.length ?? 0} avail=${hasAvail}`);
-
-      // ✅ STALE STREAM STOP GUARD: Skip processing if we intentionally stopped a stale stream
-      // When stopAiSdk() is called due to server prefill, AI SDK's onFinish fires.
-      // Processing this would clear waitingToStartStreaming and prevent moderator trigger.
-      // Reset the flag after skipping so future legitimate onFinish calls are processed.
-      if (stoppedStaleStreamRef.current) {
-        rlog.stream('end', `SKIP: stale stream stop - letting custom resumption handle`);
-        stoppedStaleStreamRef.current = false; // Reset for future use
-        return;
-      }
-
-      // ✅ Skip phantom resume completions (no active stream to resume)
-      // Use OR logic - skip if message ID is malformed OR completely empty
-      const notOurMessageId = !data.message?.id?.includes('_r');
-      const emptyParts = data.message?.parts?.length === 0;
-      const noFinishReason = data.finishReason === undefined;
-      const notStreaming = !isStreamingRef.current;
-
-      const isMalformedMessage = notOurMessageId || (emptyParts && noFinishReason);
-      if (isMalformedMessage && notStreaming) {
-        rlog.stream('end', `SKIP: phantom completion (malformed=${notOurMessageId} empty=${emptyParts} noReason=${noFinishReason})`);
-        return;
-      }
-
-      // ✅ CRITICAL FIX: Skip moderator messages completely
-      // Moderator messages are handled by useModeratorStream hook, NOT by this participant hook
-      // After page refresh, AI SDK may incorrectly call onFinish for moderator messages
-      // that were loaded from the database. This causes participant state corruption.
-      const isModeratorMessage = data.message?.id?.includes('_moderator');
-      const hasModeratorFlag = data.message?.metadata && typeof data.message.metadata === 'object'
-        && 'isModerator' in data.message.metadata && data.message.metadata.isModerator === true;
-      if (isModeratorMessage || hasModeratorFlag) {
-        return; // Moderator messages handled by useModeratorTrigger
-      }
-
-      // ✅ RACE CONDITION FIX: Skip if this message ID was already processed
-      // This prevents double-processing when AI SDK calls onFinish multiple times
-      // or when the same completion arrives while we're awaiting requestAnimationFrame
-      const messageId = data.message?.id;
-      if (messageId && processedMessageIdsRef.current.has(messageId)) {
-        return;
-      }
-      if (messageId) {
-        processedMessageIdsRef.current.add(messageId);
-      }
-
-      // ✅ RACE CONDITION FIX: Acknowledge stream finish to signal completion
-      // This replaces the 50ms timeout workaround in incomplete-round-resumption.ts
-      // Called early in onFinish to unblock resumption logic waiting for this signal
-      callbackRefs.acknowledgeStreamFinish.current?.();
-
-      // ✅ RESUMABLE STREAMS: Detect and handle resumed stream completion
-      // After page reload, refs are reset but message metadata has correct values
-      // Check if this is a resumed stream by looking at the message metadata
-      // ✅ TYPE-SAFE: Use metadata utility functions instead of Record<string, unknown>
-      const metadataRoundNumber = getRoundNumber(data.message?.metadata);
-      const metadataParticipantIndex = getParticipantIndex(data.message?.metadata);
-
-      // ✅ CRITICAL FIX: Handle case where participants haven't loaded yet after page refresh
-      // If we have valid metadata from resumed stream but participants aren't loaded,
-      // queue the continuation via callback and let provider effect handle it
-      if (roundParticipantsRef.current.length === 0
-        && participantsRef.current.length === 0
-        && metadataParticipantIndex !== null
-        && metadataRoundNumber !== null
-      ) {
-        // Call the callback to queue next participant trigger in the store
-        // Provider effect will pick this up when participants load
-        callbackRefs.onResumedStreamComplete.current?.(metadataRoundNumber, metadataParticipantIndex);
-        return;
-      }
-
-      // Determine the actual participant index - prefer metadata for resumed streams
-      let currentIndex = currentIndexRef.current;
-
-      // ✅ CRITICAL FIX: Detect resumed stream when roundParticipantsRef is empty
-      // After page reload, roundParticipantsRef is [] but we receive onFinish from resumed stream
-      // Detection: roundParticipantsRef is empty AND we have valid metadata
-      const isResumedStream = roundParticipantsRef.current.length === 0
-        && metadataParticipantIndex !== null
-        && participantsRef.current.length > 0;
-
-      if (isResumedStream) {
-        // ✅ RACE CONDITION FIX: Don't set streaming state if a form submission is in progress
-        // When hasEarlyOptimisticMessage is true, handleUpdateThreadAndSend is executing
-        // and will call prepareForNewMessage soon. Setting isStreaming=true here would
-        // create a deadlock state where isStreaming=true but pendingMessage=null.
-        //
-        // IMPORTANT: We still process the refs update and let onFinish continue - we only
-        // skip setting isStreaming=true. Otherwise, we'd ignore the message data entirely
-        // and cause a stuck stream!
-        const isFormSubmissionInProgress = callbackRefs.hasEarlyOptimisticMessage.current;
-
-        // Update refs from metadata for resumed stream (even during submission - safe)
-        currentIndex = metadataParticipantIndex;
-        currentIndexRef.current = currentIndex;
-
-        if (metadataRoundNumber !== null) {
-          currentRoundRef.current = metadataRoundNumber;
-        }
-
-        // Populate roundParticipantsRef before triggerNextParticipantWithRefs checks totalParticipants
-        // Store guarantees participants are sorted by priority
-        const enabled = getEnabledParticipants(participantsRef.current);
-        roundParticipantsRef.current = enabled;
-
-        // Only set streaming state if NOT in the middle of a form submission
-        // This prevents the deadlock but still allows the message to be processed
-        if (!isFormSubmissionInProgress) {
-          setIsExplicitlyStreaming(true);
-        }
-      }
-
-      // Ensure roundParticipantsRef is populated before any transitions
-      // Store guarantees participants are sorted by priority
-      if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
-        const enabled = getEnabledParticipants(participantsRef.current);
-        roundParticipantsRef.current = enabled;
-      }
-
-      const participant = roundParticipantsRef.current[currentIndex];
-
-      // Handle silent failure (no message object from AI SDK)
-      if (!data.message) {
-        if (participant) {
-          const errorKey = `${participant.modelId}-${currentIndex}`;
-
-          // Only create error message if not already tracked
-          if (!hasResponded(errorKey)) {
-            markAsResponded(errorKey);
-
-            const errorUIMessage = createErrorUIMessage(
-              participant,
-              currentIndex,
-              'This model failed to generate a response. The AI SDK did not create a message object.',
-              'silent_failure',
-              { providerMessage: 'No response text available' },
-              currentRoundRef.current,
-            );
-
-            // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
-            setMessages(prev => structuredClone([...prev, errorUIMessage]));
-          }
-        }
-
-        // ✅ PHANTOM GUARD: Check if we've already triggered next for this (round, participant)
-        const triggerKey = `r${currentRoundRef.current}_p${currentIndex}`;
-        if (triggeredNextForRef.current.has(triggerKey)) {
-          rlog.gate('dup-skip', triggerKey);
-          return;
-        }
-        triggeredNextForRef.current.add(triggerKey);
-
-        // ✅ CRITICAL FIX: Reset AI SDK state before triggering next participant
-        // Same fix as in onError - ensures SDK is in 'ready' state to accept sendMessage
-        // eslint-disable-next-line react-dom/no-flush-sync -- Required for AI SDK state reset
-        flushSync(() => {
-          setMessages(structuredClone(messagesRef.current));
-        });
-
-        // Trigger next participant immediately
-        triggerNextParticipantWithRefs();
-        const error = new Error(`Participant ${currentIndex} failed: data.message is missing`);
-        callbackRefs.onError.current?.(error);
-        return;
-      }
-
-      // AI SDK v6 Pattern: ALWAYS update message metadata on finish
-      // The AI SDK adds the message during streaming; we update it with proper metadata
-
-      if (participant && data.message) {
-        // ✅ CRITICAL FIX: Skip metadata merge for pre-search messages
-        // Pre-search messages have isPreSearch: true and complete metadata from backend
-        // They should NOT be modified with participant metadata
-        const isPreSearchMsg = isPreSearch(data.message.metadata);
-
-        if (isPreSearchMsg) {
-          // Pre-search messages already have complete metadata - skip this flow entirely
-          return;
-        }
-
-        // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe metadata access
-        const backendRoundNumber = getRoundNumber(data.message.metadata);
-
-        // ✅ CRITICAL FIX: Extract round AND participant from message ID as PRIMARY source
-        // Bug: AI SDK sometimes calls onFinish again after round completion (phantom calls)
-        // When this happens, refs and even backend metadata can be stale/wrong
-        // The message ID is generated by backend and NEVER changes - it's the source of truth
-        const idMatch = data.message?.id?.match(/_r(\d+)_p(\d+)/);
-        const roundFromId = idMatch?.[1] ? Number.parseInt(idMatch[1], 10) : null;
-        const participantFromId = idMatch?.[2] ? Number.parseInt(idMatch[2], 10) : null;
-        // ✅ FIX: Prioritize ID over metadata - metadata can be stale on phantom calls
-        const finalRoundNumber = roundFromId ?? backendRoundNumber ?? currentRoundRef.current;
-        // ✅ FIX: Use participant index from ID to prevent phantom calls from corrupting messages
-        const finalParticipantIndex = participantFromId ?? currentIndex;
-        const expectedId = `${threadId}_r${finalRoundNumber}_p${finalParticipantIndex}`;
-
-        // ✅ CRITICAL FIX: Check if message has generated text to avoid false empty_response errors
-        // For some fast models (e.g., gemini-flash-lite), parts might not be populated yet when onFinish fires
-        // ✅ REASONING MODELS: Include REASONING parts (Claude thinking, etc.)
-        // AI SDK v6 Pattern: Reasoning models emit type='reasoning' parts before type='text' parts
-        // ✅ FIX: Filter out [REDACTED]-only reasoning (GPT-5 Nano, o3-mini encrypted reasoning)
-        // Uses centralized isRenderableContent from message-schemas.ts for consistency
-        const textParts = data.message.parts?.filter(
-          p => p.type === MessagePartTypes.TEXT || p.type === MessagePartTypes.REASONING,
-        ) || [];
-        const hasTextInParts = textParts.some(
-          part => 'text' in part && typeof part.text === 'string' && isRenderableContent(part.text),
-        );
-
-        // ✅ RACE CONDITION FIX: Multiple signals for successful generation
-        // Some models return finishReason='unknown' even on success
-        const metadata = data.message.metadata;
-        const metadataObj = metadata && typeof metadata === 'object' ? metadata : {};
-
-        // Signal 1: finishReason='stop' indicates successful completion
-        const hasSuccessfulFinish = 'finishReason' in metadataObj && metadataObj.finishReason === FinishReasons.STOP;
-
-        // Signal 2: Backend explicitly marked hasError=false (successful generation)
-        const backendMarkedSuccess = 'hasError' in metadataObj && metadataObj.hasError === false;
-
-        // Signal 3: Output tokens > 0 indicates content was generated
-        const hasOutputTokens = Boolean(
-          'usage' in metadataObj
-          && metadataObj.usage
-          && typeof metadataObj.usage === 'object'
-          && 'completionTokens' in metadataObj.usage
-          && typeof metadataObj.usage.completionTokens === 'number'
-          && metadataObj.usage.completionTokens > 0,
-        );
-
-        // Signal 4: finishReason is NOT an explicit error state
-        // 'unknown' is ambiguous - could be success or failure, so don't treat as error signal
-        // Valid finish reasons: stop, length, tool-calls, content-filter, other, failed, unknown
-        const finishReason = 'finishReason' in metadataObj ? metadataObj.finishReason : FinishReasons.UNKNOWN;
-        const isExplicitErrorFinish = finishReason === FinishReasons.FAILED;
-
-        // ✅ FIX: Signal 5 - Check if any parts are still streaming
-        // AI SDK v6 marks parts with state: 'streaming' while content is still being generated
-        // If parts are still streaming, we should NOT set hasError=true yet
-        // This prevents premature "No Response Generated" errors while stream is active
-        const isStillStreaming = data.message.parts?.some(
-          p => 'state' in p && p.state === TextPartStates.STREAMING,
-        ) || false;
-
-        // ✅ CRITICAL: Consider it successful if ANY positive signal is present
-        // and there's no explicit error signal
-        const hasGeneratedText = hasTextInParts
-          || hasSuccessfulFinish
-          || backendMarkedSuccess
-          || hasOutputTokens
-          || (!isExplicitErrorFinish && textParts.length > 0)
-          || isStillStreaming; // ← Parts still streaming = content generation in progress
-
-        // ✅ FIX: Detect empty completion (stream ended with no content, no finishReason, no tokens)
-        // This happens when a model returns immediately with no output (rate-limited, failed to start, etc.)
-        // Without marking as error, the message stays in a "gray zone" preventing moderator trigger
-        const isEmptyCompletion = !hasTextInParts
-          && !hasSuccessfulFinish
-          && !backendMarkedSuccess
-          && !hasOutputTokens
-          && !isStillStreaming
-          && (finishReason === FinishReasons.UNKNOWN || finishReason === undefined);
-
-        // ✅ STRICT TYPING: mergeParticipantMetadata now requires roundNumber parameter
-        // Returns complete AssistantMessageMetadata with ALL required fields
-        // ✅ FIX: Use finalParticipantIndex from message ID, not currentIndex from ref
-        // ✅ exactOptionalPropertyTypes: Build options object conditionally
-        const mergeOptions: { hasGeneratedText?: boolean; forceError?: boolean; errorCode?: string } = {
-          forceError: isEmptyCompletion,
-          hasGeneratedText: Boolean(hasGeneratedText),
-        };
-        if (isEmptyCompletion) {
-          mergeOptions.errorCode = 'empty_completion';
-        }
-
-        const completeMetadata = mergeParticipantMetadata(
-          data.message,
-          participant,
-          finalParticipantIndex,
-          finalRoundNumber, // REQUIRED: Pass round number explicitly
-          mergeOptions,
-        );
-
-        // Use flushSync to force React to commit metadata update synchronously
-        // AI SDK v6 Pattern: Prevents race conditions between sequential participants
-        // eslint-disable-next-line react-dom/no-flush-sync -- Required for multi-participant chat synchronization
-        flushSync(() => {
-          setMessages((prev) => {
-            // ✅ CRITICAL FIX: Correct message ID if AI SDK sent wrong ID
-            // AI SDK sometimes reuses message IDs from previous rounds
-            // Backend sends correct ID in metadata, so use that as source of truth
-            const receivedId = data.message.id;
-            const correctId = expectedId;
-            const needsIdCorrection = receivedId !== correctId;
-
-            if (needsIdCorrection) {
-              // This is expected behavior in multi-round conversations
-              // AI SDK v6 caches messages by threadId and may reuse IDs from previous rounds
-              // We correct this using the backend's deterministic ID format
-            }
-
-            // ✅ CRITICAL FIX: Ensure all parts have state='done' when onFinish is called
-            // AI SDK may leave parts with state='streaming' even after stream completes
-            // This causes the participant completion gate to fail, preventing moderator trigger
-            const partsWithDone = data.message.parts?.map((part) => {
-              if ('state' in part && part.state === TextPartStates.STREAMING) {
-                return { ...part, state: TextPartStates.DONE };
-              }
-              return part;
-            }) ?? [];
-
-            // ✅ DEDUPLICATION FIX: AI SDK can emit duplicate parts (with and without state)
-            // During streaming, parts may be added without state, then again with state
-            // Keep only the version with state='done', remove stateless duplicates
-            const seenParts = new Map<string, typeof partsWithDone[0]>();
-            for (const part of partsWithDone) {
-              let key: string;
-              if (part.type === MessagePartTypes.TEXT && 'text' in part) {
-                key = `text:${part.text}`;
-              } else if (part.type === MessagePartTypes.REASONING && 'text' in part) {
-                key = `reasoning:${part.text}`;
-              } else if (part.type === MessagePartTypes.STEP_START) {
-                key = 'step-start';
-              } else {
-                // For other part types, keep all of them
-                key = `other:${Math.random()}`;
-              }
-              const existing = seenParts.get(key);
-              if (!existing) {
-                seenParts.set(key, part);
-              } else {
-                // Keep the one with state='done', discard the one without state
-                const existingHasState = 'state' in existing && existing.state === TextPartStates.DONE;
-                const currentHasState = 'state' in part && part.state === TextPartStates.DONE;
-                if (currentHasState && !existingHasState) {
-                  seenParts.set(key, part);
-                }
-              }
-            }
-            const completedParts = Array.from(seenParts.values());
-
-            const completeMessage: UIMessage = {
-              ...data.message,
-              id: correctId, // ✅ Use correct ID from backend metadata
-              metadata: completeMetadata, // ✅ Now uses strictly typed metadata
-              parts: completedParts, // ✅ Ensure all parts have state='done' and deduplicated
-            };
-
-            // ✅ DETERMINISTIC IDs: No duplicate detection needed
-            // Backend generates IDs using composite key: {threadId}_r{roundNumber}_p{participantId}
-            // Each participant can only respond ONCE per round - collisions are impossible
-            // No defensive suffix generation required
-            const idToSearchFor = correctId; // Search for correct ID, not wrong one from AI SDK
-
-            // ✅ CRITICAL FIX: Handle AI SDK message ID mismatch
-            // If AI SDK sent wrong ID, we need to:
-            // 1. Remove the wrongly-ID'd streaming message (if it exists)
-            // 2. Add/update the message with the correct ID
-            if (needsIdCorrection) {
-              // Remove any message with the wrong ID from this participant AND this round
-              // ✅ CRITICAL FIX: Must check BOTH participant AND round to avoid removing messages from other rounds
-              const filteredMessages = prev.filter((msg: UIMessage) => {
-                if (msg.id !== receivedId) {
-                  return true;
-                } // Keep messages with different IDs
-
-                // ✅ TYPE-SAFE: Use extraction utility instead of force casting
-                const msgMetadata = getAssistantMetadata(msg.metadata);
-                const msgRoundNumber = getRoundNumber(msg.metadata);
-
-                // Remove ONLY if it's from the same participant AND same round
-                // This prevents removing legitimate messages from other rounds with the same ID pattern
-                const sameParticipant = msgMetadata?.participantId === participant.id;
-                const sameRound = msgRoundNumber === finalRoundNumber;
-
-                // Remove if BOTH participant and round match (this is the wrongly-ID'd streaming message)
-                // Keep if either doesn't match (legitimate message from another round)
-                return !(sameParticipant && sameRound);
-              });
-
-              // Check if correct ID already exists (from previous completion or DB load)
-              const correctIdExists = filteredMessages.some(msg => msg.id === correctId);
-
-              if (correctIdExists) {
-                // Update existing message with correct ID
-                // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
-                return structuredClone(filteredMessages.map((msg: UIMessage) =>
-                  msg.id === correctId ? completeMessage : msg,
-                ));
-              } else {
-                // Add new message with correct ID
-                // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
-                return structuredClone([...filteredMessages, completeMessage]);
-              }
-            }
-
-            // ✅ FIX: First, find ALL messages with this ID and deduplicate
-            // AI SDK can create streaming messages without our metadata, causing duplicates
-            // We need to find any message with matching ID and update it
-            const messagesWithSameId = prev.filter(msg => msg.id === idToSearchFor);
-
-            // ✅ FIX: If multiple messages exist with same ID, something went wrong - deduplicate first
-            if (messagesWithSameId.length > 1) {
-              // Remove all duplicates, keep only the first one, then update it
-              const deduplicatedPrev = prev.filter((msg, index) => {
-                if (msg.id !== idToSearchFor) {
-                  return true;
-                }
-                // Keep only the first occurrence
-                return prev.findIndex(m => m.id === idToSearchFor) === index;
-              });
-              // Now update the single remaining message
-              // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
-              return structuredClone(deduplicatedPrev.map((msg: UIMessage) =>
-                msg.id === idToSearchFor ? completeMessage : msg,
-              ));
-            }
-
-            // ✅ STRICT TYPING FIX: Check if message exists AND belongs to current participant AND current round
-            // No more loose optional chaining - completeMetadata has ALL required fields
-            // ✅ CRITICAL FIX: Search for idToSearchFor (original ID if we changed it, otherwise the current ID)
-            const existingMessageIndex = prev.findIndex((msg: UIMessage) => {
-              if (msg.id !== idToSearchFor) {
-                return false;
-              }
-
-              // ✅ TYPE-SAFE: Use extraction utility instead of force casting
-              const msgMetadata = getAssistantMetadata(msg.metadata);
-
-              // If message has no metadata, it's unclaimed - safe to use
-              if (!msgMetadata) {
-                return true;
-              }
-
-              // ✅ CRITICAL: Must match BOTH participant AND round (no optional chaining!)
-              // This prevents round 3 from overwriting round 2's message
-              const participantMatches = msgMetadata.participantId === participant.id
-                || msgMetadata.participantIndex === currentIndex;
-              const roundMatches = msgMetadata.roundNumber === finalRoundNumber;
-
-              return participantMatches && roundMatches;
-            });
-
-            if (existingMessageIndex === -1) {
-              // ✅ FIX: Even if metadata doesn't match, check if message with same ID exists
-              // AI SDK creates streaming messages without metadata - we should update them
-              const anyMessageWithSameId = prev.findIndex(msg => msg.id === completeMessage.id);
-              if (anyMessageWithSameId !== -1) {
-                // Message exists but metadata didn't match - update it anyway
-                // This handles the case where AI SDK created a streaming message without our metadata
-                // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
-                return structuredClone(prev.map((msg: UIMessage, idx: number) =>
-                  idx === anyMessageWithSameId ? completeMessage : msg,
-                ));
-              }
-              // Message truly doesn't exist - add new message
-              // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
-              return structuredClone([...prev, completeMessage]);
-            }
-
-            // Update existing message with complete metadata (verified to be same participant)
-            // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
-            return structuredClone(prev.map((msg: UIMessage, idx: number) => {
-              if (idx === existingMessageIndex) {
-                return completeMessage;
-              }
-              return msg;
-            }));
-          });
-        });
-
-        // Track this response to prevent duplicate error messages
-        const responseKey = `${participant.modelId}-${currentIndex}`;
-        markAsResponded(responseKey);
-
-        // ✅ BUG FIX: Skip animation wait for error messages
-        // Error messages from backend (hasError=true) never go through streaming phase
-        // They're rendered immediately with status='failed', so no animation to wait for
-        // If we wait, the animation never completes and next participant never starts
-        const hasErrorInMetadata = completeMetadata?.hasError === true;
-
-        if (hasErrorInMetadata) {
-          // Phantom guard: Check if already triggered for this (round, participant)
-          const triggerKey = `r${currentRoundRef.current}_p${currentIndex}`;
-          if (triggeredNextForRef.current.has(triggerKey)) {
-            return;
-          }
-          triggeredNextForRef.current.add(triggerKey);
-
-          // Error messages don't animate - trigger next after double RAF
-          await new Promise((resolve) => {
-            requestAnimationFrame(() => {
-              requestAnimationFrame(resolve);
-            });
-          });
-          // Skip if from a previous round
-          if (finalRoundNumber < currentRoundRef.current) {
-            return;
-          }
-          // ✅ CRITICAL FIX: Reset AI SDK state before triggering next participant
-          // Same fix as in onError - ensures SDK is in 'ready' state to accept sendMessage
-          // eslint-disable-next-line react-dom/no-flush-sync -- Required for AI SDK state reset
-          flushSync(() => {
-            setMessages(structuredClone(messagesRef.current));
-          });
-          triggerNextParticipantWithRefs();
-          return;
-        }
-      }
-
-      // CRITICAL: Trigger next participant after current one finishes
-      // ✅ SIMPLIFIED: Removed animation waiting - it was causing 5s delays
-      // Animation coordination is now handled by the store's waitForAllAnimations in handleComplete
-      // which has its own timeout mechanism for moderator creation
-
-      // ✅ PHANTOM GUARD: Check if we've already triggered next for this (round, participant)
-      // AI SDK calls onFinish multiple times for the same message (phantom calls)
-      // This check MUST happen BEFORE the await to prevent interleaved duplicates
-      const triggerKey = `r${currentRoundRef.current}_p${currentIndex}`;
-      if (triggeredNextForRef.current.has(triggerKey)) {
-        return;
-      }
-      triggeredNextForRef.current.add(triggerKey);
-
-      // ✅ FIX: Must await to block onFinish from returning before next participant triggers
-      // Without await, onFinish returns immediately and AI SDK status changes,
-      // allowing multiple streams to start concurrently (race condition)
-      // ✅ CRITICAL FIX: Double RAF ensures React has flushed all state updates
-      // Single RAF only waits for next paint, but React might batch updates across frames
-      await new Promise((resolve) => {
-        requestAnimationFrame(() => {
-          requestAnimationFrame(resolve);
-        });
-      });
-      // ✅ PHANTOM GUARD: Skip trigger if message is from a previous round
-      // AI SDK calls onFinish twice (phantom call) after round completion when refs are reset
-      // Must re-extract round from ID since we're outside the if(participant && data.message) block
-      const msgIdMatch = data.message?.id?.match(/_r(\d+)_p/);
-      const msgRoundNumber = msgIdMatch?.[1] ? Number.parseInt(msgIdMatch[1], 10) : currentRoundRef.current;
-      if (msgRoundNumber < currentRoundRef.current) {
-        return;
-      }
-      triggerNextParticipantWithRefs();
-    },
-    // ✅ NEVER pass messages - let AI SDK be uncontrolled
-    // Initial hydration happens via setMessages effect below
-
-    // ✅ AI SDK RESUME PATTERN: Enable automatic stream resumption after page reload
-    // When true, AI SDK calls prepareReconnectToStreamRequest on mount to check for active streams
-    // GET endpoint at /api/v1/chat/threads/{threadId}/stream serves buffered chunks
-    //
-    // ⚠️ CLOUDFLARE KV LIMITATION: Unlike Redis with resumable-stream package,
-    // Cloudflare KV doesn't support true pub/sub. Our implementation:
-    // 1. POST: Buffers chunks to KV synchronously via consumeSseStream
-    // 2. GET: Returns buffered chunks + polls for new ones until stream completes
-    //
-    // ✅ FIX: Only enable resume when we have a valid thread ID AND it's not a newly created thread
-    // This prevents "Cannot read properties of undefined (reading 'state')" errors
-    // that occur when AI SDK tries to resume on new threads without an ID.
-    // When useChatId is undefined (new thread), resume is disabled to prevent corruption.
-    // When useChatId is valid (existing thread), resume enables automatic reconnection.
-    // ✅ SERVER-DRIVEN RESUMPTION: Re-enable AI SDK resume for existing threads
-    // Server now handles round continuation via queue-based orchestration:
-    // - onFinish queues next participant/moderator via ROUND_ORCHESTRATION_QUEUE
-    // - GET /stream auto-triggers recovery via queueRoundCompletionCheck
-    // - Client just observes streams, server drives the round forward
-    resume: !!useChatId,
-
+    resume: true,
     transport,
-
-    /**
-     * NOTE: Pre-search progress streaming is not implemented
-     *
-     * AI SDK useChat does not support onStreamEvent for custom data streaming.
-     * Pre-search results are displayed through persisted messages instead.
-     */
   });
 
-  /**
-   * Keep refs in sync with latest values from useChat and props
-   */
+  // Sync status to ref for microtask checks
+  useLayoutEffect(() => {
+    statusRef.current = status;
+  }, [status]);
+
+  // Keep messages ref in sync
   useLayoutEffect(() => {
     messagesRef.current = messages;
-    aiSendMessageRef.current = aiSendMessage;
-    participantsRef.current = participants;
-    // ✅ RACE CONDITION FIX V2: Sync status to ref for microtask checks
-    statusRef.current = status;
-  }, [messages, aiSendMessage, participants, status]);
+  }, [messages]);
 
-  /**
-   * ✅ UNMOUNT CLEANUP: Set isMountedRef to false when component unmounts
-   * This prevents stale sendMessage calls in queueMicrotask from executing
-   * after the AI SDK's internal state has been cleaned up
-   */
-  useLayoutEffect(() => {
-    isMountedRef.current = true;
-    return () => {
-      isMountedRef.current = false;
-    };
-  }, []);
-
-  /**
-   * ✅ CRITICAL FIX: Sync external messages ONLY for initial hydration
-   *
-   * Problem: Syncing continuously overwrites AI SDK's internal updates from sendMessage
-   * Solution: Only sync when AI SDK is empty and we have messages to hydrate
-   *
-   * Scenarios:
-   * 1. ChatOverviewScreen → Thread created → Backend returns messages → Hydrate AI SDK
-   * 2. ChatThreadScreen loads → Fetch thread → Backend returns messages → Hydrate AI SDK
-   * 3. After hydration → AI SDK manages its own state → DON'T sync again
-   *
-   * AI SDK persists state per threadId, so we only need to hydrate on first load,
-   * not on every prop change.
-   */
-  const hasHydratedRef = useRef(false);
-  useLayoutEffect(() => {
-    // Only hydrate if:
-    // 1. Haven't hydrated yet for this hook instance
-    // 2. AI SDK has no messages (empty state)
-    // 3. We have external messages to hydrate with
-    const shouldHydrate
-      = !hasHydratedRef.current
-        && messages.length === 0
-        && initialMessages
-        && initialMessages.length > 0;
-
-    if (shouldHydrate) {
-      // ✅ RESUMPTION DEBUG: Log AI SDK hydration
-      rlog.resume('hydrate', `AI SDK empty, hydrating with ${initialMessages.length} msgs t=${threadId?.slice(-8) ?? '-'}`);
-      // ✅ CRITICAL FIX: Deep clone messages to break Immer proxy freeze
-      // Store messages come from Zustand+Immer which freezes all arrays (Object.freeze)
-      // AI SDK needs mutable arrays to push streaming parts during response generation
-      // Without this, streaming fails with "Cannot add property 0, object is not extensible"
-      const mutableMessages = structuredClone(initialMessages);
-      setMessages(mutableMessages);
+  // Track hydration from initial messages
+  useEffect(() => {
+    if (messages.length > 0 && !hasHydratedRef.current) {
       hasHydratedRef.current = true;
     }
-  }, [messages.length, initialMessages, setMessages, threadId]);
-
-  // ✅ NAVIGATION FIX: Reset all refs when threadId changes (to empty OR different thread)
-  // This handles:
-  // 1. Navigation from /chat/[slug] to /chat overview (threadId becomes empty)
-  // 2. Navigation between different threads (threadId changes to different value)
-  // Without this reset, refs persist and cause stale state issues
-  useLayoutEffect(() => {
-    const prevId = prevThreadIdRef.current;
-    const currentId = threadId;
-
-    const wasValidThread = prevId && prevId.trim() !== '';
-    const isNowValidThread = currentId && currentId.trim() !== '';
-    const isNowEmpty = !isNowValidThread;
-    const isNowDifferentThread = wasValidThread && isNowValidThread && prevId !== currentId;
-    // ✅ RACE CONDITION FIX V2: Also reset when entering thread from overview
-    // If user was on overview (empty threadId) and navigates to a thread,
-    // we need to reset refs to clear any stale state (e.g., isTriggeringRef=true from previous thread)
-    const isEnteringFromOverview = !wasValidThread && isNowValidThread;
-
-    // Reset all refs when:
-    // 1. Transitioning from valid thread to empty (overview)
-    // 2. Transitioning between different threads
-    // 3. Transitioning from overview to a valid thread (entering from overview)
-    //
-    // ✅ V5 FIX: Only abort for EXISTING stream cancellation, not new thread creation
-    // When entering from overview, there's nothing to abort yet - streaming hasn't started
-    const shouldAbort = (wasValidThread && isNowEmpty) || isNowDifferentThread;
-    const shouldCleanup = shouldAbort || isEnteringFromOverview;
-
-    if (shouldCleanup) {
-      // ✅ RACE CONDITION FIX: Signal pending microtasks to abort FIRST
-      // Any queueMicrotask callbacks from startRound/continueFromParticipant that are
-      // pending execution will check this flag and abort gracefully instead of
-      // executing against a corrupted/stale AI SDK Chat instance
-      // ✅ V5 FIX: Only set abort flag when we're actually canceling existing streams
-      if (shouldAbort) {
-        abortMicrotaskRef.current = true;
-      }
-
-      // ✅ NAVIGATION CLEANUP: Clear stale pending state to prevent cross-thread file reuse
-      // Without this, pendingFileParts and pendingAttachmentIds persist in store after
-      // navigation abort, and may be incorrectly reused on the next thread or round.
-      // This is especially problematic for overview→thread navigation during submission:
-      // 1. User on overview uploads files, submits
-      // 2. Navigation triggers abort before files are sent
-      // 3. Files persist in store but were never sent
-      // 4. New thread page loads, resumption might incorrectly reuse wrong files
-      callbackRefs.setPendingFileParts.current?.(null);
-      callbackRefs.setPendingAttachmentIds.current?.(null);
-
-      // Reset participant tracking refs
-      respondedParticipantsRef.current = new Set();
-      regenerateRoundNumberRef.current = null;
-
-      // Reset round state refs
-      currentRoundRef.current = 0;
-      roundParticipantsRef.current = [];
-      currentIndexRef.current = 0;
-
-      // ✅ STALE REF FIX: Clear messagesRef to prevent thread A's messages bleeding into thread B
-      // Without this, resumption logic may use stale messages from the previous thread
-      messagesRef.current = [];
-
-      // Reset queue and triggering refs
-      participantIndexQueue.current = [];
-      lastUsedParticipantIndex.current = null;
-      isTriggeringRef.current = false;
-      isStreamingRef.current = false;
-      queuedParticipantsThisRoundRef.current = new Set();
-      // ✅ BUG FIX: Clear phantom guard to prevent blocking participant continuation
-      // in subsequent conversations. Without this, keys like "r0_p0" from a previous
-      // conversation would block the same round/participant in a new conversation.
-      triggeredNextForRef.current = new Set();
-      // ✅ BUG FIX: Clear processed message IDs to prevent duplicate filtering
-      // in subsequent conversations.
-      processedMessageIdsRef.current = new Set();
-
-      // Reset hydration flag to allow re-hydration on next thread
-      hasHydratedRef.current = false;
-
-      // ✅ STALE STREAM GUARD: Reset the stoppedStaleStreamRef for the new thread
-      stoppedStaleStreamRef.current = false;
-
-      // ✅ CRITICAL FIX: Reset AI SDK's internal messages on navigation
-      // Without this, AI SDK retains messages from the previous thread, causing:
-      // 1. Wrong round number calculations (using old messages)
-      // 2. Stale participant data being processed
-      // 3. Infinite loops replaying old content
-      // The AI SDK needs to be re-hydrated from scratch when switching threads.
-      setMessages([]);
-
-      // Reset state synchronously on navigation - legitimate useLayoutEffect pattern
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
-      setCurrentRound(0);
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
-      setCurrentParticipantIndex(0);
-      // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- synchronous reset on navigation required
-      setIsExplicitlyStreaming(false);
-
-      // ✅ RACE CONDITION FIX: Reset abort flag after cleanup completes
-      // Use setTimeout to ensure this runs AFTER any pending microtasks have had a chance to check the flag
-      // This prevents the flag from being reset before microtasks can observe it
-      // Clear any existing timeout before setting a new one
-      if (abortResetTimeoutRef.current) {
-        clearTimeout(abortResetTimeoutRef.current);
-      }
-      abortResetTimeoutRef.current = setTimeout(() => {
-        abortMicrotaskRef.current = false;
-        abortResetTimeoutRef.current = null;
-      }, 0);
-    }
-
-    prevThreadIdRef.current = currentId;
-
-    // Cleanup timeout on unmount
-    return () => {
-      if (abortResetTimeoutRef.current) {
-        clearTimeout(abortResetTimeoutRef.current);
-        abortResetTimeoutRef.current = null;
-      }
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs.setPendingFileParts/setPendingAttachmentIds accessed via .current (ref pattern)
-  }, [threadId, setMessages, setCurrentRound, setCurrentParticipantIndex, setIsExplicitlyStreaming]);
+  }, [messages.length]);
 
   /**
-   * Start a new round with existing participants
-   *
-   * AI SDK v6 Pattern: Used when initializing a thread with existing messages
-   * (e.g., from backend after thread creation) and need to trigger streaming
-   * for the first participant. This is the pattern from Exercise 01.07, 04.02, 04.03.
-   *
-   * ✅ FIX: Removed AI SDK status check - store subscription guards prevent premature calls
-   * The AI SDK status may not be 'ready' when this is called from the subscription,
-   * but the store subscription has proper guards (messages exist, not already streaming, etc.)
-   * Only check isExplicitlyStreaming to prevent concurrent rounds
+   * Start P0 streaming for a round
+   * Only triggers the first participant via AI SDK
    */
   const startRound = useCallback((
     participantsOverride?: ChatParticipant[],
     messagesOverride?: UIMessage[],
   ) => {
-    // ✅ STALE CLOSURE FIX: Accept messagesOverride to avoid stale closure in queueMicrotask
-    // When passed from trigger, these messages are guaranteed to be persisted (from PATCH response)
+    rlog.stream('start', `ENTER - status=${status}, isTriggeringRef=${isTriggeringRef.current}, isExplicitlyStreaming=${isExplicitlyStreaming}`);
+
     const freshMessages = messagesOverride || initialMessages;
 
-    // ✅ CRITICAL FIX: ATOMIC check-and-set to prevent race conditions
-    // Must happen FIRST before any other logic. Two effects calling startRound simultaneously
-    // could both pass guards before either sets the lock, causing duplicate aiSendMessage calls
-    // which corrupts AI SDK's Chat instance state ("Cannot read properties of undefined (reading 'state')")
+    // Atomic guard
     if (isTriggeringRef.current) {
+      rlog.stream('start', `BLOCKED: already triggering`);
       return;
     }
     isTriggeringRef.current = true;
 
-    // ✅ CRITICAL FIX: Allow caller to pass fresh participants (from store subscription)
-    // When subscription calls this before provider re-renders, ref is stale
-    // Subscription can pass participants directly from store.getState()
     const currentParticipants = participantsOverride || participantsRef.current;
-
-    // ✅ CRITICAL FIX: Update participantsRef synchronously when fresh participants provided
-    // This ensures prepareSendMessagesRequest uses up-to-date participants with real DB IDs
-    // Without this, the transport callback may read stale ref data with temp frontend IDs,
-    // causing the backend to create duplicate participants (race condition)
     if (participantsOverride) {
       participantsRef.current = participantsOverride;
     }
 
-    // ✅ FIX: When messagesOverride provided with messages, bypass AI SDK hydration checks
-    // The streaming trigger passes fresh messages from store - no need to wait for AI SDK hydration
     const hasMessagesOverride = messagesOverride && messagesOverride.length > 0;
 
-    // ✅ Guards: Wait for dependencies to be ready (effect will retry)
-    // ✅ FIX: Bypass messages.length check when messagesOverride provided
-    // Previously required AI SDK to be hydrated first, but caller can provide fresh messages
+    // Guards
     if (!hasMessagesOverride && (messages.length === 0 || status !== AiSdkStatuses.READY || isExplicitlyStreaming)) {
+      rlog.stream('start', `BLOCKED: not ready (msgs=${messages.length}, status=${status})`);
       isTriggeringRef.current = false;
       return;
     }
 
-    // Still check isExplicitlyStreaming even with override - prevent concurrent rounds
     if (hasMessagesOverride && isExplicitlyStreaming) {
+      rlog.stream('start', `BLOCKED: already streaming`);
       isTriggeringRef.current = false;
       return;
     }
 
-    // ✅ FIX: Ensure threadId is valid before proceeding
-    // AI SDK's Chat instance requires a valid id to initialize its internal state map
-    // Calling sendMessage before this is ready causes "Cannot read properties of undefined (reading 'state')"
     const effectiveThreadId = callbackRefs.threadId.current;
     if (!effectiveThreadId || effectiveThreadId.trim() === '') {
+      rlog.stream('start', `BLOCKED: no threadId`);
       isTriggeringRef.current = false;
       return;
     }
 
-    // ✅ FIX: Bypass hydration check when messagesOverride provided
-    // When caller provides fresh messages, we don't need AI SDK to have been hydrated
     if (!hasMessagesOverride && !hasHydratedRef.current) {
-      isTriggeringRef.current = false;
-      return;
-    }
-
-    // ✅ FIX: Bypass AI SDK messages check when messagesOverride provided
-    if (!hasMessagesOverride && messages.length === 0) {
+      rlog.stream('start', `BLOCKED: not hydrated`);
       isTriggeringRef.current = false;
       return;
     }
@@ -2109,17 +340,16 @@ export function useMultiParticipantChat(
     const enabled = getEnabledParticipants(uniqueParticipants);
 
     if (enabled.length === 0) {
+      rlog.stream('start', `BLOCKED: no enabled participants`);
       isTriggeringRef.current = false;
       return;
     }
 
-    // ✅ STALE CLOSURE FIX: Use freshMessages (messagesOverride or initialMessages)
-    // For round 1+, messages are now persisted via PATCH before streaming
-    // freshMessages contains the guaranteed-persisted messages from the trigger
     const messagesToSearch = freshMessages.length > 0 ? freshMessages : messages;
     const lastUserMessage = [...messagesToSearch].reverse().find(m => m.role === MessageRoles.USER);
 
     if (!lastUserMessage) {
+      rlog.stream('start', `BLOCKED: no user message`);
       isTriggeringRef.current = false;
       return;
     }
@@ -2128,198 +358,64 @@ export function useMultiParticipantChat(
     const userText = textPart && 'text' in textPart ? textPart.text : '';
 
     if (!userText.trim()) {
+      rlog.stream('start', `BLOCKED: empty user text`);
       isTriggeringRef.current = false;
       return;
     }
 
-    // ✅ CRITICAL FIX: Extract file parts from existing user message
-    // Round 0 user message already has file parts from thread creation
-    // Without this, AI SDK sends only text - model never sees uploaded files
-    // Uses shared extractValidFileParts utility for consistent file part handling
     const fileParts = extractValidFileParts(lastUserMessage.parts);
-
-    // ✅ STALE CLOSURE FIX: Use freshMessages (persisted messages) for round number calculation
-    // Messages are now persisted via PATCH before streaming starts (round 1+)
-    // freshMessages contains guaranteed-persisted messages, avoiding stale closure issues
     const roundNumber = getCurrentRoundNumber(messagesToSearch);
 
-    // ✅ ROUND DECREMENT GUARD: Prevent corruption from stale messages
-    // After a round completes, currentRoundRef is incremented. If startRound is called
-    // with stale messages (missing the just-completed round), getCurrentRoundNumber
-    // returns the OLD round number. Setting currentRoundRef to a lower value corrupts
-    // state and causes re-triggering of already-completed rounds.
-    //
-    // EXCEPTION: Allow going back to an INCOMPLETE round (missing participants).
-    // During page refresh, currentRoundRef might have been prematurely incremented
-    // when P1 finished but P0's message doesn't exist. This is legitimate resumption.
-    //
-    // ✅ RACE CONDITION FIX: Also check for streaming parts, not just message existence
-    // When round increments but streaming hasn't fully settled, messages may exist
-    // but still have streaming parts. Allow resumption in this case.
-    if (roundNumber < currentRoundRef.current) {
-      // Check if roundNumber's round actually completed (has all participants AND no streaming)
-      const effectiveThreadId = callbackRefs.threadId.current;
-      let roundIsComplete = true;
-      let hasStreamingParts = false;
+    rlog.stream('start', `ALL GUARDS PASSED - starting round ${roundNumber} with ${enabled.length} participants`);
 
-      for (let i = 0; i < enabled.length; i++) {
-        const expectedMsgId = `${effectiveThreadId}_r${roundNumber}_p${i}`;
-        const msg = messagesRef.current.find(m => m.id === expectedMsgId);
-        if (!msg) {
-          roundIsComplete = false;
-          break;
-        }
-        // ✅ FIX: Check if message has streaming parts using Zod-validated helper
-        const msgHasStreaming = msg.parts?.some(isStreamingPart);
-        if (msgHasStreaming) {
-          hasStreamingParts = true;
-        }
-      }
-
-      // Only block if round is TRULY complete (all messages exist AND no streaming parts)
-      if (roundIsComplete && !hasStreamingParts) {
-        // Round actually completed - this is a stale trigger, block it
-        rlog.stream('start', `BLOCKED: stale round r${roundNumber} < current r${currentRoundRef.current} (round complete)`);
-        isTriggeringRef.current = false;
-        return;
-      }
-      // Round is incomplete (missing participants or still streaming) - allow resumption
-      rlog.stream('start', `ALLOW: incomplete round r${roundNumber} (currentRef=${currentRoundRef.current}, allMsgs=${roundIsComplete ? 1 : 0}, streaming=${hasStreamingParts ? 1 : 0})`);
-    }
-
-    // CRITICAL: Update refs FIRST to avoid race conditions
+    // Update refs
     currentIndexRef.current = DEFAULT_PARTICIPANT_INDEX;
-    roundParticipantsRef.current = enabled;
     currentRoundRef.current = roundNumber;
-    lastUsedParticipantIndex.current = null; // Reset for new round
-    queuedParticipantsThisRoundRef.current = new Set(); // Reset queued tracking for new round
-    participantIndexQueue.current = []; // ✅ FIX: Clear stale queue entries from previous round
-    // ✅ BUG FIX: Clear phantom guard at start of each round to prevent stale entries
-    // from blocking participant continuation. This is especially important after
-    // navigation to new chat where refs might not be reset if threadId stays empty.
-    triggeredNextForRef.current = new Set();
-
-    // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
-    // This prevents race condition where pendingMessage effect checks ref
-    // before React re-renders with new isExplicitlyStreaming state
     isStreamingRef.current = true;
 
-    // CRITICAL FIX: Use flushSync to ensure state updates are committed synchronously
-    // before the API call is made. This prevents chat.isStreaming from being false
-    // when the sync effect runs, which would cause streaming content to not update gradually.
-    // eslint-disable-next-line react-dom/no-flush-sync -- Required for proper streaming sync
-    flushSync(() => {
-      // Reset all state for new round - INSIDE flushSync so they commit immediately
-      setIsExplicitlyStreaming(true);
-      setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
-      setCurrentRound(roundNumber);
+    // Update state
+    queueMicrotask(() => {
+      // eslint-disable-next-line react-dom/no-flush-sync -- Required for proper streaming sync
+      flushSync(() => {
+        setIsExplicitlyStreaming(true);
+        setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
+      });
     });
 
-    // These don't need to be in flushSync
-    resetErrorTracking();
-    clearAnimations?.(); // Clear any pending animations from previous round
-
-    // ✅ CRITICAL FIX: Push participant 0 index to queue before calling aiSendMessage
-    // Guard against double-push if startRound is called multiple times
-    if (!queuedParticipantsThisRoundRef.current.has(0)) {
-      queuedParticipantsThisRoundRef.current.add(0);
-      participantIndexQueue.current.push(0);
-    }
-
-    // ✅ CRITICAL FIX: Store the expected user message ID for backend DB lookup
-    // AI SDK's sendMessage creates messages with its own nanoid-style IDs, but the user message
-    // was already persisted via PATCH/POST with a backend ULID. Store the correct ID so
-    // prepareSendMessagesRequest can pass it to the backend for correct DB lookup.
+    // Store expected user message ID for backend lookup
     expectedUserMessageIdRef.current = lastUserMessage.id;
 
-    // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
-    // The AI SDK's Chat instance can be in an invalid state during:
-    // - Hot Module Replacement (Fast Refresh in development)
-    // - Component remount
-    // - ThreadId changes during initialization
-    // By deferring to microtask and catching errors, we can recover gracefully
-    //
-    // ✅ CRITICAL: isTriggeringRef stays TRUE until async work completes
-    // This prevents other functions (continueFromParticipant, etc.) from calling aiSendMessage concurrently
-    //
-    // ✅ RACE CONDITION FIX: Capture threadId at schedule time for validation in microtask
-    // Navigation can change threadId between schedule and execution, corrupting AI SDK state
+    // Send P0 message via AI SDK
     const scheduledThreadId = effectiveThreadId;
     queueMicrotask(async () => {
       try {
-        // ✅ RACE CONDITION FIX V2: Check if component unmounted during microtask delay
-        // AI SDK's internal state may be cleared on unmount, causing "Cannot read properties of undefined"
         if (!isMountedRef.current) {
-          rlog.resume('abort-guard', `startRound ABORTED: component unmounted`);
           isTriggeringRef.current = false;
           isStreamingRef.current = false;
           return;
         }
 
-        // ✅ RACE CONDITION GUARD: Verify thread hasn't changed since scheduling
-        // If navigation occurred, the AI SDK Chat instance may be invalid or for different thread
-        const currentThreadId = callbackRefs.threadId.current;
-        if (currentThreadId !== scheduledThreadId) {
-          rlog.resume('abort-guard', `startRound ABORTED: thread changed ${scheduledThreadId?.slice(-8) ?? '-'} → ${currentThreadId?.slice(-8) ?? '-'}`);
+        if (callbackRefs.threadId.current !== scheduledThreadId) {
+          rlog.stream('start', `ABORTED: thread changed`);
           isTriggeringRef.current = false;
           isStreamingRef.current = false;
-          // ✅ RACE CONDITION FIX V2: Also reset React state in abort guards
           // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
-          flushSync(() => {
-            setIsExplicitlyStreaming(false);
-          });
+          flushSync(() => setIsExplicitlyStreaming(false));
           return;
         }
 
-        // ✅ ABORT GUARD: Check if navigation cleanup signaled abort
-        if (abortMicrotaskRef.current) {
-          rlog.resume('abort-guard', `startRound ABORTED: navigation abort signaled`);
-          isTriggeringRef.current = false;
-          isStreamingRef.current = false;
-          // ✅ RACE CONDITION FIX V2: Also reset React state in abort guards
-          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
-          flushSync(() => {
-            setIsExplicitlyStreaming(false);
-          });
-          return;
-        }
-
-        // ✅ AI SDK HEALTH GUARD: Verify AI SDK is in a valid state
-        // ✅ RACE CONDITION FIX V2: Use statusRef.current instead of closure-captured status
-        // The closure captures status at callback creation time, which may be stale by execution
         if (statusRef.current !== AiSdkStatuses.READY) {
-          rlog.resume('abort-guard', `startRound ABORTED: AI SDK status=${statusRef.current} (not ready)`);
+          rlog.stream('start', `ABORTED: AI SDK not ready (${statusRef.current})`);
           isTriggeringRef.current = false;
           isStreamingRef.current = false;
           // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
-          flushSync(() => {
-            setIsExplicitlyStreaming(false);
-          });
+          flushSync(() => setIsExplicitlyStreaming(false));
           return;
         }
 
-        // ✅ RACE CONDITION FIX V2: Use aiSendMessageRef.current instead of closure value
-        // Closure captures aiSendMessage at callback creation, which may point to stale Chat instance
-        const sendFn = aiSendMessageRef.current;
-        if (!sendFn) {
-          rlog.resume('abort-guard', `startRound ABORTED: aiSendMessage ref is null`);
-          isTriggeringRef.current = false;
-          isStreamingRef.current = false;
-          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
-          flushSync(() => {
-            setIsExplicitlyStreaming(false);
-          });
-          return;
-        }
-
-        // ✅ DEBUG: Track when aiSendMessage is called
-        rlog.stream('start', `startRound r${roundNumber} userText="${userText.slice(0, 20)}..." files=${fileParts.length} msgId=${lastUserMessage.id.slice(-8)}`);
-        // Trigger streaming with the existing user message
-        // Use isParticipantTrigger:true to indicate this is triggering the first participant
-        await sendFn({
+        rlog.stream('start', `sending P0 message r${roundNumber}`);
+        await aiSendMessage({
           text: userText,
-          // ✅ CRITICAL FIX: Include file parts so AI SDK sends them to the model
-          // Without this, Round 0 attachments are never seen by the participant
           ...(fileParts.length > 0 && { files: fileParts }),
           metadata: {
             isParticipantTrigger: true,
@@ -2327,567 +423,41 @@ export function useMultiParticipantChat(
             roundNumber,
           },
         });
-        // ✅ STREAMING BUG FIX: Mark that message was actually sent to AI SDK
-        // This MUST happen AFTER sendFn returns, not synchronously in startRound
-        // The flag-clearing effect in use-streaming-trigger.ts guards on this
-        callbackRefs.setHasSentPendingMessage.current?.(true);
-        rlog.stream('start', `setHasSentPendingMessage(true) after aiSendMessage success`);
-        // ✅ SUCCESS: Reset trigger lock after aiSendMessage succeeds
         isTriggeringRef.current = false;
       } catch (error) {
-        // ✅ GRACEFUL ERROR HANDLING: Reset state to allow retry
-        // This handles the "Cannot read properties of undefined (reading 'state')" error
-        // that occurs when AI SDK's Chat instance is corrupted (e.g., during Fast Refresh)
-        console.error('[startRound] aiSendMessage failed, resetting state:', error);
+        console.error('[startRound] aiSendMessage failed:', error);
         isStreamingRef.current = false;
         isTriggeringRef.current = false;
-        queuedParticipantsThisRoundRef.current.clear();
-        participantIndexQueue.current = [];
-        lastUsedParticipantIndex.current = null;
         // eslint-disable-next-line react-dom/no-flush-sync -- Required for error recovery
-        flushSync(() => {
-          setIsExplicitlyStreaming(false);
-        });
+        flushSync(() => setIsExplicitlyStreaming(false));
       }
     });
-    // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
-    // This prevents concurrent aiSendMessage calls from startRound/continueFromParticipant/etc.
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs provides stable ref access to threadId (intentionally omitted to avoid effect re-runs)
-  }, [messages, initialMessages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage]);
+  }, [messages, initialMessages, status, isExplicitlyStreaming, aiSendMessage]);
 
   /**
-   * Continue a round from a specific participant index
-   * Used for incomplete round resumption when user navigates away during streaming
-   * and returns later to find some participants have responded but not all
-   *
-   * @param fromIndexOrTarget - The participant index (0-based) or object with index and participantId for validation
-   * @param participantsOverride - Optional fresh participants to use
-   * @param messagesOverride - Optional fresh messages (used to avoid stale closure)
+   * Continue from participant - legacy function
+   * Backend handles resumption via subscriptions now
    */
   const continueFromParticipant = useCallback((
-    fromIndexOrTarget: number | { index: number; participantId: string },
-    participantsOverride?: ChatParticipant[],
-    messagesOverride?: UIMessage[],
+    _fromIndexOrTarget: number | { index: number; participantId: string },
+    _participantsOverride?: ChatParticipant[],
+    _messagesOverride?: UIMessage[],
   ) => {
-    // ✅ TYPE-SAFE: Extract index and optional participantId for validation
-    const fromIndex = typeof fromIndexOrTarget === 'number' ? fromIndexOrTarget : fromIndexOrTarget.index;
-    const expectedParticipantId = typeof fromIndexOrTarget === 'object' ? fromIndexOrTarget.participantId : undefined;
-    // ✅ STALE CLOSURE FIX: Accept messagesOverride to avoid stale closure
-    // When passed from trigger, these messages are guaranteed to be persisted (from PATCH response)
-    const freshMessages = messagesOverride || initialMessages;
-
-    // ✅ RESUMPTION DEBUG: Log entry to continueFromParticipant
-    rlog.resume('cfp-entry', `P${fromIndex} status=${status} sdkMsgs=${messages.length} override=${messagesOverride?.length ?? '-'} hydrated=${hasHydratedRef.current ? 1 : 0}`);
-
-    // ✅ FIX: When messagesOverride provided with messages, bypass AI SDK hydration checks
-    // Same pattern as startRound - caller can provide fresh messages from store
-    const hasMessagesOverride = messagesOverride && messagesOverride.length > 0;
-
-    // ✅ CRITICAL FIX: ATOMIC check-and-set to prevent race conditions
-    // Same pattern as startRound - must happen FIRST before any other logic
-    if (isTriggeringRef.current) {
-      rlog.resume('cfp-exit', `P${fromIndex} EXIT: already triggering`);
-      return;
-    }
-    isTriggeringRef.current = true;
-
-    // ✅ CRITICAL FIX: Allow caller to pass fresh participants (from store subscription)
-    const currentParticipants = participantsOverride || participantsRef.current;
-
-    // ✅ CRITICAL FIX: Update participantsRef synchronously when fresh participants provided
-    // Same fix as startRound - ensures prepareSendMessagesRequest uses up-to-date participants
-    if (participantsOverride) {
-      participantsRef.current = participantsOverride;
-    }
-
-    // ✅ STALE STREAMING STATE FIX: If AI SDK is ready but we think we're streaming,
-    // the isExplicitlyStreaming state is stale (from page refresh or race condition).
-    // AI SDK status 'ready' means it's NOT streaming, so clear the stale state.
-    // This happens when page refreshes during streaming - isExplicitlyStreaming gets
-    // stuck true while AI SDK resets to 'ready' state.
-    if (status === AiSdkStatuses.READY && isExplicitlyStreaming) {
-      setIsExplicitlyStreaming(false);
-      isStreamingRef.current = false;
-    }
-
-    // ✅ Guards: Wait for dependencies to be ready
-    // ✅ FIX: Bypass messages.length check when messagesOverride provided (same as startRound)
-    if (!hasMessagesOverride && (messages.length === 0 || status !== AiSdkStatuses.READY)) {
-      rlog.resume('cfp-exit', `P${fromIndex} EXIT: sdk not ready (msgs=${messages.length} status=${status})`);
-      isTriggeringRef.current = false;
-      return;
-    }
-
-    // Still check status even with override - need AI SDK to be in ready state
-    if (hasMessagesOverride && status !== AiSdkStatuses.READY) {
-      rlog.resume('cfp-exit', `P${fromIndex} EXIT: sdk status not ready (status=${status})`);
-      isTriggeringRef.current = false;
-      return;
-    }
-
-    // ✅ FIX: Ensure threadId is valid before proceeding
-    const effectiveThreadId = callbackRefs.threadId.current;
-    if (!effectiveThreadId || effectiveThreadId.trim() === '') {
-      rlog.resume('cfp-exit', `P${fromIndex} EXIT: no threadId`);
-      isTriggeringRef.current = false;
-      return;
-    }
-
-    // ✅ FIX: Bypass hydration check when messagesOverride provided (same as startRound)
-    if (!hasMessagesOverride && !hasHydratedRef.current) {
-      rlog.resume('cfp-exit', `P${fromIndex} EXIT: not hydrated yet`);
-      isTriggeringRef.current = false;
-      return;
-    }
-
-    const uniqueParticipants = deduplicateParticipants(currentParticipants);
-    const enabled = getEnabledParticipants(uniqueParticipants);
-
-    if (enabled.length === 0) {
-      isTriggeringRef.current = false;
-      return;
-    }
-
-    // Validate fromIndex is within bounds
-    if (fromIndex < 0 || fromIndex >= enabled.length) {
-      isTriggeringRef.current = false;
-      return;
-    }
-
-    // ✅ CONFIG CHANGE VALIDATION: Verify participant at index matches expected ID
-    // This prevents triggering wrong participant if config changed between when
-    // nextParticipantToTrigger was set and when continueFromParticipant is called
-    if (expectedParticipantId) {
-      const actualParticipant = enabled[fromIndex];
-      if (actualParticipant && actualParticipant.id !== expectedParticipantId) {
-        console.error(
-          `[continueFromParticipant] Participant mismatch at index ${fromIndex}: `
-          + `expected ${expectedParticipantId}, got ${actualParticipant.id}. `
-          + `Config may have changed. Skipping to prevent wrong participant from streaming.`,
-        );
-        isTriggeringRef.current = false;
-        return;
-      }
-    }
-
-    // ✅ STALE CLOSURE FIX: Use freshMessages (messagesOverride or initialMessages)
-    // Messages are now persisted via PATCH before streaming (round 1+)
-    // freshMessages contains guaranteed-persisted messages, avoiding stale closure issues
-    const messagesToSearch = freshMessages.length > 0 ? freshMessages : messages;
-    const lastUserMessage = [...messagesToSearch].reverse().find(m => m.role === MessageRoles.USER);
-
-    if (!lastUserMessage) {
-      isTriggeringRef.current = false;
-      return;
-    }
-
-    const textPart = lastUserMessage.parts?.find(p => p.type === MessagePartTypes.TEXT && 'text' in p);
-    const userText = textPart && 'text' in textPart ? textPart.text : '';
-
-    if (!userText.trim()) {
-      isTriggeringRef.current = false;
-      return;
-    }
-
-    // ✅ STALE CLOSURE FIX: Use freshMessages (persisted messages) for round number calculation
-    // Messages are now persisted via PATCH before streaming starts (round 1+)
-    const roundNumber = getCurrentRoundNumber(messagesToSearch);
-
-    // ✅ ROUND DECREMENT GUARD: Prevent corruption from stale messages
-    // Same guard as startRound - if calculated round is less than current, messages are stale.
-    // This can happen when continueFromParticipant is called from an effect with outdated deps.
-    //
-    // EXCEPTION: Allow going back to an INCOMPLETE round (missing participants).
-    // During page refresh, currentRoundRef might have been prematurely incremented
-    // when P1 finished but P0's message doesn't exist. This is legitimate resumption.
-    if (roundNumber < currentRoundRef.current) {
-      // Check if roundNumber's round actually completed (has all participants' messages)
-      let roundIsComplete = true;
-      for (let i = 0; i < enabled.length; i++) {
-        const expectedMsgId = `${effectiveThreadId}_r${roundNumber}_p${i}`;
-        const msgExists = messagesRef.current.some(m => m.id === expectedMsgId);
-        if (!msgExists) {
-          roundIsComplete = false;
-          break;
-        }
-      }
-      if (roundIsComplete) {
-        // Round actually completed - this is a stale trigger, block it
-        rlog.resume('cfp-exit', `P${fromIndex} BLOCKED: stale round r${roundNumber} < current r${currentRoundRef.current} (round complete)`);
-        isTriggeringRef.current = false;
-        return;
-      }
-      // Round is incomplete (missing participants) - allow resumption
-      rlog.resume('cfp-allow', `P${fromIndex} ALLOW: incomplete round r${roundNumber} (currentRef=${currentRoundRef.current})`);
-    }
-
-    rlog.resume('continue', `P${fromIndex} r${roundNumber} msgs=${messages.length} search=${messagesToSearch.length} enabled=${enabled.length}`);
-
-    // =========================================================================
-    // ✅ PRE-SEARCH RACE FIX: Block if pre-search still streaming (defense in depth)
-    // =========================================================================
-    // The primary guard is in use-streaming-trigger.ts, but this provides defense
-    // in depth to prevent triggering participants from multiple code paths while
-    // pre-search is still active.
-    const webSearchEnabled = callbackRefs.enableWebSearch.current;
-    if (webSearchEnabled && callbackRefs.getPreSearches.current) {
-      const preSearches = callbackRefs.getPreSearches.current();
-      const preSearchForRound = preSearches.find(ps => ps.roundNumber === roundNumber);
-      if (shouldWaitForPreSearch(webSearchEnabled, preSearchForRound)) {
-        rlog.resume('cfp-exit', `P${fromIndex} EXIT: pre-search not complete r${roundNumber}`);
-        isTriggeringRef.current = false;
-        return;
-      }
-    }
-
-    // =========================================================================
-    // ✅ MISSING EARLIER PARTICIPANT FIX: Validate all earlier participants have messages
-    // =========================================================================
-    // Race condition: Server says "start from P1" (P0 completed in DB), but SSR returns
-    // messages WITHOUT P0's response (DB propagation delay). If we blindly start P1,
-    // P0's message is lost and never re-triggered.
-    //
-    // Fix: Before proceeding, verify all participants 0..(fromIndex-1) have messages.
-    // If any are missing, start from the first missing participant instead.
-    let actualFromIndex = fromIndex;
-
-    // ✅ FIX: Check BOTH messages AND messagesToSearch to find earlier participants
-    // messages = hook state, messagesToSearch = persisted messages from PATCH
-    // Either source having the message is sufficient
-    if (effectiveThreadId && fromIndex > 0) {
-      for (let i = 0; i < fromIndex; i++) {
-        const expectedMsgId = `${effectiveThreadId}_r${roundNumber}_p${i}`;
-        const existingInMessages = messages.find(m => m.id === expectedMsgId);
-        const existingInSearch = messagesToSearch.find(m => m.id === expectedMsgId);
-        const existingInRef = messagesRef.current.find(m => m.id === expectedMsgId);
-        const existingMsg = existingInMessages || existingInSearch || existingInRef;
-
-        // Check if message exists and has actual content
-        const hasContent = existingMsg?.parts?.some(
-          p => p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
-        );
-
-        if (!existingMsg || !hasContent) {
-          rlog.resume('gap', `P${i} missing (wanted P${fromIndex}) → start P${i}`);
-          actualFromIndex = i;
-          break;
-        }
-      }
-    }
-
-    const fromIndexToUse = actualFromIndex;
-
-    // =========================================================================
-    // ✅ DUPLICATE MESSAGE FIX: Check if participant already has a complete message
-    // =========================================================================
-    // Before triggering a participant, check if they already have a message.
-    // This prevents duplicate messages when:
-    // 1. User refreshes mid-stream
-    // 2. Participant's message was saved to DB before refresh
-    // 3. On refresh, resumption logic triggers the same participant again
-    // 4. Without this check, a NEW message would be created (duplicate)
-    //
-    // The deterministic message ID format is: {threadId}_r{roundNumber}_p{participantIndex}
-    const participant = enabled[fromIndexToUse];
-    if (participant && threadId) {
-      const expectedMessageId = `${threadId}_r${roundNumber}_p${fromIndexToUse}`;
-      // ✅ FIX: Check BOTH AI SDK messages AND store messages for existing complete message
-      // Race condition: AI SDK (messages) might be empty, but store (messagesToSearch) has the message
-      // Without checking both, we'd re-stream and create a duplicate
-      const existingMessage = messages.find(m => m.id === expectedMessageId)
-        || messagesToSearch.find(m => m.id === expectedMessageId);
-
-      if (existingMessage) {
-        // Check if the existing message is TRULY complete (has finishReason AND content)
-        const existingMetadata = getAssistantMetadata(existingMessage.metadata);
-        const hasFinishReason = !!existingMetadata?.finishReason
-          && existingMetadata.finishReason !== FinishReasons.UNKNOWN;
-        const hasContent = existingMessage.parts?.some(
-          p => p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
-        ) || false;
-
-        // ✅ CONTENT DUPLICATION FIX: Only skip if message is TRULY complete
-        // A message is truly complete if it has BOTH valid finishReason AND content.
-        // If it only has partial content (no finishReason), we need to re-stream.
-        if (hasFinishReason && hasContent) {
-          rlog.resume('skip-complete', `P${fromIndexToUse} already complete, notifying store`);
-          // ✅ RACE CONDITION FIX: Notify store when skipping a completed participant
-          // Previously, this would return early without notifying anyone, leaving
-          // the system stuck with nextParticipantToTrigger set but no streaming starting.
-          // Now we call onResumedStreamComplete which tells the store to advance to next participant.
-          isTriggeringRef.current = false;
-          // Notify store that this participant was "completed" (already had content)
-          // Store will then find and trigger the NEXT incomplete participant
-          onResumedStreamComplete?.(roundNumber, fromIndexToUse);
-          return;
-        }
-
-        // ✅ CONTENT DUPLICATION FIX (AGGRESSIVE): ALWAYS clear parts when resuming
-        // This is necessary because:
-        // 1. Cross-contamination can occur if AI SDK picks up from wrong stream position
-        // 2. Partial content from interrupted streams MUST be cleared before re-streaming
-        // 3. Even "empty" messages might have stale state from previous session
-        // 4. The AI SDK appends to existing parts - we need a clean slate
-        //
-        // ✅ CRITICAL: Use flushSync to ensure AI SDK sees cleared state BEFORE streaming starts
-        // Without flushSync, setMessages is async and AI SDK may use stale internal state
-        // eslint-disable-next-line react-dom/no-flush-sync -- Required for race condition fix: AI SDK must see cleared state synchronously
-        flushSync(() => {
-          // ✅ FROZEN ARRAY FIX: Clone to break Immer freeze for AI SDK mutability
-          setMessages(currentMessages =>
-            structuredClone(currentMessages.map(m =>
-              m.id === expectedMessageId
-                ? { ...m, metadata: isObject(m.metadata) ? { ...m.metadata, finishReason: undefined } : { finishReason: undefined }, parts: [] }
-                : m,
-            )),
-          );
-        });
-      }
-    }
-
-    // =========================================================================
-    // ✅ P0 RE-STREAMING FIX: Sync earlier participants' messages to AI SDK
-    // =========================================================================
-    // Problem: When resuming from P1, the orchestrator scans messagesRef.current
-    // (AI SDK's internal state) to find which participants are complete. But AI SDK
-    // may not have P0's message if it wasn't hydrated or was reset on navigation.
-    //
-    // Fix: Before starting P1, sync earlier participants' complete messages from
-    // messagesOverride to AI SDK. This ensures the orchestrator sees P0 as done
-    // when P1 finishes, preventing P0 from being re-triggered.
-    //
-    // Also sync the user message for the current round - the orchestrator needs it
-    // to find the user text for triggering subsequent participants.
-    if (fromIndexToUse > 0 && effectiveThreadId) {
-      const currentSdkMessages = messagesRef.current;
-      const messagesToMerge: UIMessage[] = [];
-
-      // Sync user message if missing
-      const userMsgExistsInSdk = currentSdkMessages.some(
-        m => m.role === MessageRoles.USER && getRoundNumber(m.metadata) === roundNumber,
-      );
-      if (!userMsgExistsInSdk && lastUserMessage) {
-        messagesToMerge.push(lastUserMessage);
-        rlog.resume('sdk-sync', `user msg r${roundNumber} missing from SDK, syncing`);
-      }
-
-      // Sync earlier participants' messages
-      for (let i = 0; i < fromIndexToUse; i++) {
-        const expectedMsgId = `${effectiveThreadId}_r${roundNumber}_p${i}`;
-        const existsInSdk = currentSdkMessages.some(m => m.id === expectedMsgId);
-
-        if (!existsInSdk) {
-          // Find in messagesOverride or messagesToSearch
-          const msgFromStore = messagesToSearch.find(m => m.id === expectedMsgId);
-          if (msgFromStore) {
-            // Verify it has content (truly complete)
-            const hasContent = msgFromStore.parts?.some(
-              p => p.type === MessagePartTypes.TEXT && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
-            );
-            if (hasContent) {
-              messagesToMerge.push(msgFromStore);
-              rlog.resume('sdk-sync', `P${i} missing from SDK, syncing from store`);
-            }
-          }
-        }
-      }
-
-      // If we have messages to merge, sync them to AI SDK
-      if (messagesToMerge.length > 0) {
-        rlog.resume('sdk-merge', `syncing ${messagesToMerge.length} msgs to AI SDK before P${fromIndexToUse}`);
-        // ✅ CRITICAL: Use flushSync to ensure AI SDK sees merged state BEFORE streaming
-        // eslint-disable-next-line react-dom/no-flush-sync -- Required: orchestrator must see earlier participants as complete
-        flushSync(() => {
-          setMessages((currentMessages) => {
-            // Clone to break Immer freeze
-            const merged = structuredClone([...currentMessages]);
-            for (const msg of messagesToMerge) {
-              // Only add if not already present (defensive)
-              if (!merged.some(m => m.id === msg.id)) {
-                merged.push(structuredClone(msg));
-              }
-            }
-            // Sort by role (user first), then round, then participant index
-            merged.sort((a, b) => {
-              // User messages come first
-              if (a.role === MessageRoles.USER && b.role !== MessageRoles.USER) {
-                return -1;
-              }
-              if (a.role !== MessageRoles.USER && b.role === MessageRoles.USER) {
-                return 1;
-              }
-              const aRound = getRoundNumber(a.metadata) ?? 0;
-              const bRound = getRoundNumber(b.metadata) ?? 0;
-              if (aRound !== bRound) {
-                return aRound - bRound;
-              }
-              const aIdx = getParticipantIndex(a.metadata) ?? 999;
-              const bIdx = getParticipantIndex(b.metadata) ?? 999;
-              return aIdx - bIdx;
-            });
-            return merged;
-          });
-        });
-      }
-    }
-
-    // CRITICAL: Update refs to start from the specified participant index
-    currentIndexRef.current = fromIndexToUse;
-    roundParticipantsRef.current = enabled;
-    currentRoundRef.current = roundNumber;
-    lastUsedParticipantIndex.current = null; // Reset for new continuation
-    queuedParticipantsThisRoundRef.current = new Set(); // Reset queued tracking for continuation
-    participantIndexQueue.current = []; // ✅ FIX: Clear stale queue entries from previous round
-
-    // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
-    isStreamingRef.current = true;
-
-    // Reset state for continuation
-    setIsExplicitlyStreaming(true);
-    setCurrentParticipantIndex(fromIndexToUse);
-    setCurrentRound(roundNumber);
-    resetErrorTracking();
-    clearAnimations?.(); // Clear any pending animations
-
-    // ✅ CRITICAL FIX: Push participant index to queue before calling aiSendMessage
-    // Guard against double-push if continueFromParticipant is called concurrently
-    if (!queuedParticipantsThisRoundRef.current.has(fromIndexToUse)) {
-      queuedParticipantsThisRoundRef.current.add(fromIndexToUse);
-      participantIndexQueue.current.push(fromIndexToUse);
-    }
-
-    // ✅ CRITICAL FIX: Store expected user message ID for backend DB lookup
-    // Only needed when this is triggering the first participant (index 0)
-    // AI SDK's sendMessage will create a message with its own ID, but we need
-    // the backend to look up by the correct pre-persisted message ID.
-    if (fromIndexToUse === 0) {
-      expectedUserMessageIdRef.current = lastUserMessage.id;
-    }
-
-    // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
-    // Same pattern as startRound for consistent error handling
-    //
-    // ✅ CRITICAL: isTriggeringRef stays TRUE until async work completes
-    //
-    // ✅ RACE CONDITION FIX: Capture threadId at schedule time for validation in microtask
-    // Navigation can change threadId between schedule and execution, corrupting AI SDK state
-    const scheduledThreadId = effectiveThreadId;
-    queueMicrotask(async () => {
-      try {
-        // ✅ RACE CONDITION FIX V2: Check if component unmounted during microtask delay
-        // AI SDK's internal state may be cleared on unmount, causing "Cannot read properties of undefined"
-        if (!isMountedRef.current) {
-          rlog.resume('cfp-abort', `P${fromIndexToUse} ABORTED: component unmounted`);
-          isTriggeringRef.current = false;
-          isStreamingRef.current = false;
-          return;
-        }
-
-        // ✅ RACE CONDITION GUARD: Verify thread hasn't changed since scheduling
-        // If navigation occurred, the AI SDK Chat instance may be invalid or for different thread
-        const currentThreadId = callbackRefs.threadId.current;
-        if (currentThreadId !== scheduledThreadId) {
-          rlog.resume('cfp-abort', `P${fromIndexToUse} ABORTED: thread changed ${scheduledThreadId?.slice(-8) ?? '-'} → ${currentThreadId?.slice(-8) ?? '-'}`);
-          isTriggeringRef.current = false;
-          isStreamingRef.current = false;
-          // ✅ RACE CONDITION FIX V2: Also reset React state in abort guards
-          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
-          flushSync(() => {
-            setIsExplicitlyStreaming(false);
-          });
-          return;
-        }
-
-        // ✅ ABORT GUARD: Check if navigation cleanup signaled abort
-        if (abortMicrotaskRef.current) {
-          rlog.resume('cfp-abort', `P${fromIndexToUse} ABORTED: navigation abort signaled`);
-          isTriggeringRef.current = false;
-          isStreamingRef.current = false;
-          // ✅ RACE CONDITION FIX V2: Also reset React state in abort guards
-          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
-          flushSync(() => {
-            setIsExplicitlyStreaming(false);
-          });
-          return;
-        }
-
-        // ✅ AI SDK HEALTH GUARD: Verify AI SDK is in a valid state
-        // ✅ RACE CONDITION FIX V2: Use statusRef.current instead of closure-captured status
-        // The closure captures status at callback creation time, which may be stale by execution
-        if (statusRef.current !== AiSdkStatuses.READY) {
-          rlog.resume('cfp-abort', `P${fromIndexToUse} ABORTED: AI SDK status=${statusRef.current} (not ready)`);
-          isTriggeringRef.current = false;
-          isStreamingRef.current = false;
-          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
-          flushSync(() => {
-            setIsExplicitlyStreaming(false);
-          });
-          return;
-        }
-
-        // ✅ RACE CONDITION FIX V2: Use aiSendMessageRef.current instead of closure value
-        // Closure captures aiSendMessage at callback creation, which may point to stale Chat instance
-        const sendFn = aiSendMessageRef.current;
-        if (!sendFn) {
-          rlog.resume('cfp-abort', `P${fromIndexToUse} ABORTED: aiSendMessage ref is null`);
-          isTriggeringRef.current = false;
-          isStreamingRef.current = false;
-          // eslint-disable-next-line react-dom/no-flush-sync -- Required for state reset
-          flushSync(() => {
-            setIsExplicitlyStreaming(false);
-          });
-          return;
-        }
-
-        // ✅ DEBUG: Track when aiSendMessage is called from continueFromParticipant
-        rlog.stream('resume', `continue r${roundNumber} fromIdx=${fromIndexToUse} userText="${userText.slice(0, 20)}..." msgId=${lastUserMessage.id.slice(-8)}`);
-        // Trigger streaming for the specified participant
-        await sendFn({
-          metadata: {
-            isParticipantTrigger: true,
-            role: UIMessageRoles.USER,
-            roundNumber,
-          },
-          text: userText,
-        });
-        // ✅ SUCCESS: Reset trigger lock after aiSendMessage succeeds
-        isTriggeringRef.current = false;
-      } catch (error) {
-        // ✅ GRACEFUL ERROR HANDLING: Reset state to allow retry
-        console.error('[continueFromParticipant] aiSendMessage failed, resetting state:', error);
-        isStreamingRef.current = false;
-        isTriggeringRef.current = false;
-        queuedParticipantsThisRoundRef.current.clear();
-        participantIndexQueue.current = [];
-        lastUsedParticipantIndex.current = null;
-        // eslint-disable-next-line react-dom/no-flush-sync -- Required for error recovery
-        flushSync(() => {
-          setIsExplicitlyStreaming(false);
-        });
-      }
-    });
-    // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs provides stable ref access to threadId (intentionally omitted to avoid effect re-runs)
-  }, [messages, initialMessages, status, resetErrorTracking, clearAnimations, isExplicitlyStreaming, aiSendMessage, threadId, onResumedStreamComplete]);
+    // No-op - backend handles resumption via useRoundSubscription
+    rlog.stream('resume', 'continueFromParticipant called but backend handles resumption');
+  }, []);
 
   /**
-   * Send a user message and start a new round
-   *
-   * If enableWebSearch is true, executes pre-search BEFORE participant streaming
+   * Send a new user message
+   * Used for initial thread creation flow
    */
   const sendMessage = useCallback(
-    async (content: string, filePartsOverride?: ExtendedFilePart[]) => {
-      // ✅ CRITICAL FIX: ATOMIC check-and-set to prevent race conditions
-      // Same pattern as startRound - must happen FIRST before any other logic
+    async (content: string, _filePartsOverride?: ExtendedFilePart[]) => {
       if (isTriggeringRef.current) {
         return;
       }
       isTriggeringRef.current = true;
 
-      // ✅ FIX: Require AI SDK to be fully ready before sending
-      // Previously used relaxed check (not STREAMING/SUBMITTED) but this allowed calls
-      // when Chat instance wasn't initialized, causing "Cannot read properties of undefined (reading 'state')" error
-      // The 204 resume response case will eventually set status to 'ready', so callers should wait
       if (status !== AiSdkStatuses.READY || isExplicitlyStreaming) {
         isTriggeringRef.current = false;
         return;
@@ -2899,7 +469,6 @@ export function useMultiParticipantChat(
         return;
       }
 
-      // AI SDK v6 Pattern: Simple, straightforward participant filtering
       const uniqueParticipants = deduplicateParticipants(participants);
       const enabled = getEnabledParticipants(uniqueParticipants);
 
@@ -2908,644 +477,82 @@ export function useMultiParticipantChat(
         throw new Error('No enabled participants');
       }
 
-      // CRITICAL: Update refs FIRST to avoid race conditions
-      // These refs are used in prepareSendMessagesRequest and must be set before the API call
       currentIndexRef.current = DEFAULT_PARTICIPANT_INDEX;
-      roundParticipantsRef.current = enabled;
-      lastUsedParticipantIndex.current = null; // Reset for new round
-      queuedParticipantsThisRoundRef.current = new Set(); // Reset queued tracking for new round
-      participantIndexQueue.current = []; // ✅ FIX: Clear stale queue entries from previous round
-
-      // ✅ CRITICAL FIX: Validate regenerate round matches current round
-      // If regenerateRoundNumberRef is set but doesn't match current round,
-      // it's stale state from a previous operation - clear it
-      const currentRound = getCurrentRoundNumber(messages);
-      const isActuallyRegenerating = regenerateRoundNumberRef.current !== null
-        && regenerateRoundNumberRef.current === currentRound;
-
-      // Use regenerate round number if retrying current round, otherwise calculate next
-      const newRoundNumber = isActuallyRegenerating
-        ? (regenerateRoundNumberRef.current ?? calculateNextRoundNumber(messages))
-        : calculateNextRoundNumber(messages);
-
-      // Clear regenerate flag if we're not actually regenerating
-      if (!isActuallyRegenerating) {
-        regenerateRoundNumberRef.current = null;
-      }
-
-      // CRITICAL: Update round number in ref BEFORE sending message
-      // This ensures the backend receives the correct round number
-      currentRoundRef.current = newRoundNumber;
-
-      // ========================================================================
-      // PRE-SEARCH: Handled by provider wrapper (sendMessageWithQuotaInvalidation)
-      // Provider executes pre-search before calling this function
-      // This ensures proper timing - pre-search completes before participant streaming
-      // ========================================================================
-
-      // ========================================================================
-      // PARTICIPANT STREAMING: Starts after pre-search (handled by provider)
-      // ========================================================================
-
-      // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
-      // This prevents race condition where pendingMessage effect checks ref
-      // before React re-renders with new isExplicitlyStreaming state
       isStreamingRef.current = true;
+      setIsExplicitlyStreaming(true);
+      setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
 
-      // CRITICAL FIX: Use flushSync to ensure state updates are committed synchronously
-      // before the API call is made. This prevents:
-      // 1. First participant's response appearing before user message during streaming
-      // 2. chat.isStreaming being false when sync effect runs, causing content updates to be skipped
-      //
-      // Without this, React batches state updates and the sync effect runs before
-      // isExplicitlyStreaming is committed, so streaming content doesn't update gradually.
-      // eslint-disable-next-line react-dom/no-flush-sync -- Required for proper streaming sync
-      flushSync(() => {
-        // AI SDK v6 Pattern: Synchronization for proper message ordering
-        // Reset all state for new round - INSIDE flushSync so they commit immediately
-        setIsExplicitlyStreaming(true);
-        setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
-        setCurrentRound(newRoundNumber);
-      });
-
-      // These don't need to be in flushSync
-      resetErrorTracking();
-      clearAnimations?.(); // Clear any pending animations from previous round
-
-      // ✅ CRITICAL FIX: Push participant 0 index to queue before calling aiSendMessage
-      // Guard against double-push if sendMessage is called concurrently
-      if (!queuedParticipantsThisRoundRef.current.has(0)) {
-        queuedParticipantsThisRoundRef.current.add(0);
-        participantIndexQueue.current.push(0);
+      try {
+        await aiSendMessage({
+          metadata: {
+            isParticipantTrigger: true,
+            role: UIMessageRoles.USER,
+            roundNumber: 0,
+          },
+          text: trimmed,
+        });
+        isTriggeringRef.current = false;
+      } catch (error) {
+        isStreamingRef.current = false;
+        isTriggeringRef.current = false;
+        setIsExplicitlyStreaming(false);
+        throw error;
       }
-
-      // ✅ ATTACHMENTS: Get file parts - prefer override to bypass ref timing race condition
-      // The ref may not be synced yet if sendMessage is called in the same render cycle
-      // that set pendingFileParts in the store. Override allows caller to pass directly.
-      const fileParts = filePartsOverride ?? callbackRefs.pendingFileParts.current ?? [];
-
-      // ✅ CRITICAL FIX: Use queueMicrotask and try-catch to handle AI SDK state errors
-      // Same pattern as startRound for consistent error handling
-      //
-      // ✅ CRITICAL: isTriggeringRef stays TRUE until async work completes
-      queueMicrotask(async () => {
-        try {
-          // ✅ DEBUG: Track when aiSendMessage is called from sendMessage (user-initiated)
-          rlog.stream('start', `sendMsg r${newRoundNumber} userText="${trimmed.slice(0, 20)}..." files=${fileParts.length}`);
-          // Send message without custom ID - let backend generate unique IDs
-          // ✅ exactOptionalPropertyTypes: Build message object with inline type
-          // AI SDK expects minimal metadata, not full DbUserMessageMetadata
-          if (fileParts.length > 0) {
-            // With files
-            await aiSendMessage({
-              files: fileParts,
-              metadata: {
-                role: 'user' as const,
-                roundNumber: newRoundNumber,
-              },
-              text: trimmed,
-            });
-          } else {
-            // Without files - omit the property entirely
-            await aiSendMessage({
-              metadata: {
-                role: 'user' as const,
-                roundNumber: newRoundNumber,
-              },
-              text: trimmed,
-            });
-          }
-          // ✅ SUCCESS: Reset trigger lock after aiSendMessage succeeds
-          isTriggeringRef.current = false;
-        } catch (error) {
-          // ✅ GRACEFUL ERROR HANDLING: Reset state to allow retry
-          console.error('[sendMessage] aiSendMessage failed, resetting state:', error);
-          isStreamingRef.current = false;
-          isTriggeringRef.current = false;
-          queuedParticipantsThisRoundRef.current.clear();
-          participantIndexQueue.current = [];
-          lastUsedParticipantIndex.current = null;
-          // eslint-disable-next-line react-dom/no-flush-sync -- Required for error recovery
-          flushSync(() => {
-            setIsExplicitlyStreaming(false);
-          });
-        }
-      });
-      // ✅ NOTE: isTriggeringRef is NOT reset here - it stays true until async work completes
     },
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs is stable, all values accessed via .current
-    [participants, status, aiSendMessage, messages, resetErrorTracking, clearAnimations, isExplicitlyStreaming],
+    [status, isExplicitlyStreaming, participants, aiSendMessage],
   );
 
   /**
-   * Retry the last round (regenerate entire round from scratch)
-   * AI SDK v6 Pattern: Clean state management for round regeneration
-   *
-   * This completely removes ALL messages from the round (user + assistant)
-   * and re-sends the user's prompt to regenerate the round from ground up.
+   * Retry - legacy function
    */
   const retry = useCallback(() => {
-    // ✅ FIX: Require AI SDK to be fully ready before sending
-    // Previously used relaxed check (not STREAMING/SUBMITTED) but this allowed calls
-    // when Chat instance wasn't initialized, causing "Cannot read properties of undefined (reading 'state')" error
+    rlog.resume('retry', 'retry called - no-op in backend-first architecture');
+  }, []);
+
+  // Sync streaming state to callback
+  useEffect(() => {
+    callbackRefs.setIsStreamingCallback.current?.(isExplicitlyStreaming);
+  }, [isExplicitlyStreaming, callbackRefs]);
+
+  // Recovery: Reset stuck state when AI SDK is ready
+  useLayoutEffect(() => {
     if (status !== AiSdkStatuses.READY) {
       return;
     }
 
-    // Find the last substantive user message (not a participant trigger)
-    const lastUserMessage = [...messages].reverse().find((m) => {
-      if (m.role !== MessageRoles.USER) {
-        return false;
-      }
-
-      // ✅ TYPE-SAFE: Use extraction utility for user metadata
-      const userMetadata = getUserMetadata(m.metadata);
-      const isParticipantTrigger = userMetadata?.isParticipantTrigger === true;
-
-      if (isParticipantTrigger) {
-        return false;
-      }
-
-      const textPart = m.parts?.find(p => p.type === MessagePartTypes.TEXT && 'text' in p);
-      const hasContent = textPart && 'text' in textPart && textPart.text.trim().length > 0;
-
-      return hasContent;
-    });
-
-    if (!lastUserMessage) {
-      return;
-    }
-
-    const textPart = lastUserMessage.parts?.find(p => p.type === MessagePartTypes.TEXT && 'text' in p);
-    if (!textPart || !('text' in textPart) || !textPart.text.trim()) {
-      return;
-    }
-
-    // Save the user's prompt text before we delete everything
-    const userPromptText = textPart.text;
-
-    // ✅ CRITICAL FIX: Extract file parts from the original message for retry
-    // Without this, retrying a round with attachments loses the attachments
-    // Uses shared extractValidFileParts utility for consistent file part handling
-    const originalFileParts = extractValidFileParts(lastUserMessage.parts);
-
-    const roundNumber = getCurrentRoundNumber(messages);
-
-    // STEP 1: Set regenerate flag to preserve round numbering
-    regenerateRoundNumberRef.current = roundNumber;
-
-    // STEP 2: Call onRetry FIRST to remove moderator and cleanup state
-    // This must happen before setMessages to ensure UI updates properly
-    callbackRefs.onRetry.current?.(roundNumber);
-
-    // STEP 3: Remove ALL messages from the current round (user + assistant)
-    // Find the first message of the current round and remove everything from that point
-    const firstMessageIndexOfRound = messages.findIndex((m) => {
-      // ✅ SINGLE SOURCE OF TRUTH: Use extraction utility for type-safe metadata access
-      const msgRoundNumber = getRoundNumber(m.metadata);
-      return msgRoundNumber === roundNumber;
-    });
-
-    // If we found the round, remove all messages from that point onward
-    const messagesBeforeRound = firstMessageIndexOfRound >= 0
-      ? messages.slice(0, firstMessageIndexOfRound)
-      : messages.slice(0, -1); // Fallback: remove last message if round not found
-
-    // ✅ CRITICAL FIX: Deep clone messages to break Immer freeze
-    // Messages may contain frozen objects from Zustand store (via sync)
-    // AI SDK needs mutable arrays to push streaming parts during response generation
-    // Without this, streaming fails with "Cannot add property 0, object is not extensible"
-    setMessages(structuredClone(messagesBeforeRound));
-
-    // STEP 4: Reset streaming state to start fresh
-    // ✅ CRITICAL FIX: Update streaming ref SYNCHRONOUSLY before setState
-    isStreamingRef.current = false;
-    setIsExplicitlyStreaming(false);
-
-    // CRITICAL: Update ref BEFORE setting state
-    currentIndexRef.current = DEFAULT_PARTICIPANT_INDEX;
-    lastUsedParticipantIndex.current = null; // Reset for retry
-    queuedParticipantsThisRoundRef.current = new Set(); // Reset queued tracking for retry
-    participantIndexQueue.current = []; // ✅ FIX: Clear stale queue entries before retry
-
-    // Update participant index synchronously (no flushSync needed)
-    setCurrentParticipantIndex(DEFAULT_PARTICIPANT_INDEX);
-
-    resetErrorTracking();
-    clearAnimations?.(); // Clear any pending animations before retry
-    isTriggeringRef.current = false;
-
-    // ✅ CRITICAL FIX: Set pendingFileParts ref so sendMessage includes attachments
-    // Without this, file attachments are lost when retrying a round
-    // sendMessage reads from callbackRefs.pendingFileParts.current
-    // originalFileParts is ExtendedFilePart[] from extractValidFileParts
-    if (originalFileParts.length > 0) {
-      callbackRefs.pendingFileParts.current = originalFileParts;
-    }
-
-    // STEP 5: Send message to start regeneration (as if user just sent the message)
-    // This will create a new round with fresh messages (user + assistant)
-    // React will batch the state updates naturally
-    // The sendMessage function will handle participant orchestration properly
-    sendMessage(userPromptText);
-    // Note: callbackRefs not in deps - we use callbackRefs.onRetry.current to always get latest value
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- callbackRefs.onRetry/pendingFileParts accessed via .current (ref pattern)
-  }, [messages, sendMessage, status, setMessages, resetErrorTracking, clearAnimations]);
-
-  // ✅ REACT 19 PATTERN: useEffectEvent for resumed stream handling
-  // This event handler reads latest values (hasEarlyOptimisticMessage, threadId, messages)
-  // without causing the effect to re-run when those values change
-  const handleResumedStreamDetection = useEffectEvent(() => {
-    // ✅ GUARD: Don't set during form submission (hasEarlyOptimisticMessage check)
-    if (hasEarlyOptimisticMessage) {
-      return false;
-    }
-
-    // ✅ GUARD: Only if we have a valid thread ID (not on overview page initial load)
-    if (!threadId || threadId.trim() === '') {
-      return false;
-    }
-
-    // ✅ GUARD: Need messages to determine round/participant context
-    if (messagesRef.current.length === 0) {
-      return false;
-    }
-
-    // ✅ CRITICAL GUARD: Only detect resume on PAGE REFRESH, not normal round transitions
-    // On page refresh: roundParticipantsRef is empty (not populated yet)
-    // On normal round start: roundParticipantsRef is populated from previous round
-    // Without this guard, the phantom timeout would be set on every new round,
-    // causing the first participant to wait 5 seconds before streaming shows in UI
-    if (roundParticipantsRef.current.length > 0) {
-      return false; // Normal round transition, not a page refresh
-    }
-
-    // ✅ SMART STALE DETECTION: When server has prefilled resumption state, VALIDATE the stream
-    // Problem: AI SDK auto-resumes any active stream for this chat ID via `resume: true`.
-    // This might be a STALE stream (wrong round/participant) OR a VALID server-triggered stream.
-    //
-    // OLD BEHAVIOR (buggy): Always stop when streamResumptionPrefilled=true
-    // This incorrectly stopped valid P2 streams that server triggered via queue.
-    //
-    // NEW BEHAVIOR: Check if auto-resumed stream matches expected state
-    // - Same round as prefilled
-    // - Participant index >= expected next (server may have triggered ahead)
-    // If valid, keep streaming and reconcile state. If stale, stop.
-    if (streamResumptionPrefilled) {
-      // Extract participant info from the currently streaming message
-      const streamingMessage = messagesRef.current.find((m) => {
-        if (m.role !== MessageRoles.ASSISTANT) {
-          return false;
-        }
-        // Look for message with streaming parts (incomplete)
-        const hasStreamingParts = m.parts?.some(
-          p => 'state' in p && p.state === TextPartStates.STREAMING,
-        );
-        return hasStreamingParts;
-      });
-
-      // ✅ TYPE-SAFE: Use Zod-validated helpers for metadata extraction
-      const streamingMeta = streamingMessage?.metadata;
-      const streamingParticipantIdx = getParticipantIndex(streamingMeta) ?? undefined;
-      const streamingRound = getRoundNumber(streamingMeta) ?? undefined;
-
-      // Get expected state from prefilled values via refs
-      const expectedRound = callbackRefs.resumptionRoundNumber.current;
-      const expectedNextP = callbackRefs.nextParticipantToTriggerProp.current;
-
-      // ✅ FIX V3: Don't stop streams that don't have metadata yet
-      // AI SDK may resume a stream before metadata is populated (happens in onFinish)
-      // If both round and participant are undefined, we can't determine if it's stale
-      // Let the stream continue and re-evaluate when metadata becomes available
-      if (streamingRound === undefined && streamingParticipantIdx === undefined) {
-        rlog.resume('sdk-resume', `DEFERRING stream validation - metadata not yet populated (expected r${expectedRound} nextP=${expectedNextP})`);
-
-        // Let the stream continue - set streaming flags
-        isStreamingRef.current = true;
-        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- called from useEffectEvent in response to AI SDK status
-        setIsExplicitlyStreaming(true);
-
-        // Populate roundParticipantsRef for proper orchestration
-        if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
-          const enabled = getEnabledParticipants(participantsRef.current);
-          roundParticipantsRef.current = enabled;
-        }
-
-        // ✅ Reconcile with expected participant since we don't know actual yet
-        // This ensures participants are visible during streaming recovery
-        if (expectedNextP !== null) {
-          callbackRefs.onReconcileWithActiveStream.current?.(expectedNextP);
-        }
-
-        return true; // Let stream continue, metadata will be validated in onFinish
-      }
-
-      // ✅ FIX V3: When metadata IS present, validate properly
-      // Stream is VALID if:
-      // 1. Same round as prefilled
-      // 2. Participant index >= expected next (server may have triggered ahead)
-      const isValidStream = streamingRound === expectedRound
-        && streamingParticipantIdx !== undefined
-        && streamingParticipantIdx >= (expectedNextP ?? 0);
-
-      if (isValidStream) {
-        rlog.resume('sdk-resume', `KEEPING valid server-triggered stream r${streamingRound} P${streamingParticipantIdx} (expected r${expectedRound} nextP=${expectedNextP})`);
-        // ✅ Reconcile store state to reflect actual streaming state
-        callbackRefs.onReconcileWithActiveStream.current?.(streamingParticipantIdx);
-
-        // Let the stream continue - set streaming flags
-        isStreamingRef.current = true;
-        // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- called from useEffectEvent in response to AI SDK status
-        setIsExplicitlyStreaming(true);
-
-        // Populate roundParticipantsRef for proper orchestration
-        if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
-          const enabled = getEnabledParticipants(participantsRef.current);
-          roundParticipantsRef.current = enabled;
-        }
-
-        return true; // Valid stream continues
-      }
-
-      // ✅ FIX V3: Stream has metadata but doesn't match expected - it's STALE
-      // This handles the case where AI SDK resumes P1's stream but server expects P0
-
-      // ✅ FIX: Early return if we already stopped a stale stream
-      // Prevents multiple stopAiSdk() calls which trigger phantom onFinish events
-      if (stoppedStaleStreamRef.current) {
-        rlog.resume('sdk-resume', `SKIP: already stopped stale stream`);
-        return 'blocked';
-      }
-
-      rlog.resume('sdk-resume', `STOPPING stale stream r${streamingRound} P${streamingParticipantIdx} (expected r${expectedRound} nextP=${expectedNextP})`);
-      stoppedStaleStreamRef.current = true; // Signal onFinish to skip processing
-      stopAiSdk(); // Stop the stale auto-resumed stream
-      return 'blocked'; // Let custom resumption handle triggering the correct participant
-    }
-
-    // Detected resumed stream - set streaming flag FIRST
-    // This ensures store.isStreaming reflects the actual state for message sync
-    isStreamingRef.current = true;
-    // eslint-disable-next-line react-hooks-extra/no-direct-set-state-in-use-effect -- called from useEffectEvent in response to AI SDK status
-    setIsExplicitlyStreaming(true);
-
-    // Also populate roundParticipantsRef if needed for proper orchestration
-    // Store guarantees participants are sorted by priority
-    if (roundParticipantsRef.current.length === 0 && participantsRef.current.length > 0) {
-      const enabled = getEnabledParticipants(participantsRef.current);
-      roundParticipantsRef.current = enabled;
-    }
-
-    return true;
-  });
-
-  // Track whether we've detected a phantom resume (no data flowing)
-  const phantomResumeTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const messagesAtResumeDetectionRef = useRef<number>(0);
-
-  // ✅ CRITICAL FIX: Detect resumed stream from AI SDK status
-  // When AI SDK auto-resumes via `resume: true`, its status becomes 'streaming'
-  // but isExplicitlyStreaming stays false because none of the entry points were called.
-  //
-  // ✅ PHANTOM RESUME FIX: After setting isExplicitlyStreaming=true, start a 5-second timeout.
-  // If no new messages arrive in that time, the resume was phantom (204 response or stale stream).
-  // Clear isExplicitlyStreaming to allow incomplete round resumption to take over.
-  //
-  // ✅ BLOCKED FIX: When streamResumptionPrefilled=true, DON'T let AI SDK take over.
-  // Custom resumption will handle triggering the correct participant.
-  useLayoutEffect(() => {
-    // Only act when AI SDK says it's streaming but we haven't acknowledged it
-    if (status === AiSdkStatuses.STREAMING && !isExplicitlyStreaming && !isTriggeringRef.current) {
-      // ✅ RESUMPTION DEBUG: Log AI SDK resume detection attempt
-      rlog.resume('sdk-resume', `AI SDK streaming, explicit=${isExplicitlyStreaming ? 1 : 0} triggering=${isTriggeringRef.current ? 1 : 0} msgs=${messagesRef.current.length}`);
-      const streamResult = handleResumedStreamDetection();
-
-      // ✅ FIX: Handle 'blocked' - server prefilled, let custom resumption handle
-      // Don't set any streaming state, let incomplete-round-resumption.ts handle it
-      if (streamResult === 'blocked') {
-        // ✅ RESUMPTION DEBUG: Log blocked resume
-        rlog.resume('sdk-resume', `BLOCKED - server prefilled, letting custom resumption handle`);
-        return;
-      }
-
-      if (streamResult === true) {
-        // ✅ RESUMPTION DEBUG: Log successful resume detection
-        rlog.resume('sdk-resume', `✓ detected resumed stream, waiting for data...`);
-        // Record message count at resume detection for phantom detection
-        messagesAtResumeDetectionRef.current = messagesRef.current.length;
-
-        // ✅ PHANTOM RESUME TIMEOUT: If no new messages in 5 seconds, this was a phantom resume
-        // Clear the streaming flag to allow incomplete round resumption to work
-        phantomResumeTimeoutRef.current = setTimeout(() => {
-          // Check if we're still streaming and no new messages arrived
-          if (isStreamingRef.current && messagesRef.current.length === messagesAtResumeDetectionRef.current) {
-            // ✅ RESUMPTION DEBUG: Log phantom resume detection
-            rlog.resume('phantom', `⚠ no data in 5s, msgs still ${messagesRef.current.length} - clearing streaming for retry`);
-            // Phantom resume detected - no actual data flowing
-            // Clear streaming state to allow incomplete round resumption to trigger
-            isStreamingRef.current = false;
-            setIsExplicitlyStreaming(false);
-          }
-        }, 5000);
-      }
-    }
-
-    // Cleanup timeout on unmount or when status changes
-    return () => {
-      if (phantomResumeTimeoutRef.current) {
-        clearTimeout(phantomResumeTimeoutRef.current);
-        phantomResumeTimeoutRef.current = null;
-      }
-    };
-  }, [status, isExplicitlyStreaming]);
-
-  // ✅ CLEAR PHANTOM TIMEOUT: When new messages arrive, cancel the phantom detection
-  // This means real data is flowing and the resume was successful
-  useLayoutEffect(() => {
-    if (phantomResumeTimeoutRef.current && messages.length > messagesAtResumeDetectionRef.current) {
-      // ✅ RESUMPTION DEBUG: Log successful data flow after resume
-      rlog.resume('sdk-resume', `✓ data flowing, msgs ${messagesAtResumeDetectionRef.current}→${messages.length}, canceling phantom timeout`);
-      clearTimeout(phantomResumeTimeoutRef.current);
-      phantomResumeTimeoutRef.current = null;
-    }
-  }, [messages.length]);
-
-  // Track previous status for transition detection
-  const previousStatusRef = useRef<typeof status>(status);
-
-  // ✅ DEAD STREAM DETECTION: Detect when resumed stream dies without completing
-  // When AI SDK status transitions streaming → ready AND we have isExplicitlyStreaming=true,
-  // check if current participant completed. If not, clear streaming state so
-  // incomplete-round-resumption can retry.
-  //
-  // This fixes the bug where:
-  // 1. User refreshes mid-stream
-  // 2. AI SDK resumes and receives buffered data
-  // 3. Original worker is dead, so stream ends with partial data
-  // 4. AI SDK status goes to 'ready'
-  // 5. But isExplicitlyStreaming stays true, blocking retry
-  useLayoutEffect(() => {
-    const prevStatus = previousStatusRef.current;
-    previousStatusRef.current = status;
-
-    // Only check on streaming → ready transition
-    if (prevStatus !== AiSdkStatuses.STREAMING || status !== AiSdkStatuses.READY) {
-      return;
-    }
-
-    // Only relevant when we think we're streaming
-    if (!isExplicitlyStreaming) {
-      return;
-    }
-
-    // Check if the last assistant message completed properly
-    const assistantMessages = messagesRef.current.filter(m => m.role === UIMessageRoles.ASSISTANT);
-    const lastAssistantMessage = assistantMessages[assistantMessages.length - 1];
-
-    if (!lastAssistantMessage) {
-      return;
-    }
-
-    // Extract finishReason from metadata
-    const metadata = lastAssistantMessage.metadata;
-    const finishReason = metadata && typeof metadata === 'object' && 'finishReason' in metadata && typeof metadata.finishReason === 'string'
-      ? metadata.finishReason
-      : undefined;
-    const isComplete = finishReason === FinishReasons.STOP || finishReason === FinishReasons.LENGTH;
-
-    // If participant completed, normal orchestration will handle next steps
-    if (isComplete) {
-      return;
-    }
-
-    // ✅ DEAD STREAM DETECTED: Stream ended but participant didn't complete
-    // ✅ RESUMPTION DEBUG: Log dead stream detection
-    rlog.resume('dead-stream', `⚠ stream→ready but no finishReason, clearing for retry`);
-    // Clear streaming state so incomplete-round-resumption can retry
-    // Use a short timeout to avoid race with legitimate stream continuation
-    const deadStreamTimeoutId = setTimeout(() => {
-      // Double-check we're still in the same state
-      if (isStreamingRef.current) {
-        rlog.resume('dead-stream', `clearing stuck streaming state after 500ms`);
-        isStreamingRef.current = false;
-        setIsExplicitlyStreaming(false);
-      }
-    }, 500); // Short delay to allow for legitimate reconnections
-
-    return () => {
-      clearTimeout(deadStreamTimeoutId);
-    };
-  }, [status, isExplicitlyStreaming]);
-
-  // ✅ STALE TRIGGER RECOVERY: Reset stuck refs and state
-  // When AI SDK completes processing but our refs/state are stuck, this causes a deadlock:
-  // - isTriggeringRef.current = true blocks new triggers
-  // - isStreamingRef.current = true blocks new streaming
-  // - isExplicitlyStreaming = true prevents triggering next participant
-  //
-  // Recovery: When AI SDK status is 'ready' but state is stuck for 1.5s, reset everything.
-  // This allows incomplete-round-resumption to retry.
-  //
-  // NOTE: We DON'T skip when isExplicitlyStreaming is true - that's exactly the state we
-  // need to recover from when AI SDK resume completes but state wasn't cleared properly.
-  useLayoutEffect(() => {
-    // Only apply when AI SDK says it's ready
-    if (status !== AiSdkStatuses.READY) {
-      return;
-    }
-
-    // Check if any state indicates we think we're processing but AI SDK is done
     const hasStuckState = isTriggeringRef.current || isStreamingRef.current || isExplicitlyStreaming;
-
     if (!hasStuckState) {
       return;
     }
 
-    // Give a delay to avoid false positives during legitimate operations
-    // Increased to 1.5s to ensure any in-flight operations complete
-    const staleRecoveryTimeoutId = setTimeout(() => {
-      // Double-check AI SDK is still ready (no new operation started)
+    const timeoutId = setTimeout(() => {
       if (status !== AiSdkStatuses.READY) {
         return;
       }
-
-      // Reset all stuck state
       if (isTriggeringRef.current) {
         isTriggeringRef.current = false;
       }
       if (isStreamingRef.current) {
         isStreamingRef.current = false;
       }
-      // Always reset isExplicitlyStreaming if we get here - AI SDK is ready but we think we're streaming
       setIsExplicitlyStreaming(false);
-    }, 1500); // 1.5s delay to avoid false positives
+    }, 1500);
 
-    return () => {
-      clearTimeout(staleRecoveryTimeoutId);
-    };
+    return () => clearTimeout(timeoutId);
   }, [status, isExplicitlyStreaming]);
 
-  // ✅ ERROR STATE RECOVERY: Reset state when AI SDK transitions to error
-  // When AI SDK resume fails (e.g., nothing to resume, network error), status becomes 'error'.
-  // This blocks all retry attempts because isReady checks status === 'ready'.
-  //
-  // Recovery: When status transitions to 'error' and we're not actively streaming,
-  // call setMessages to reset AI SDK state back to 'ready'.
-  // This allows incomplete-round-resumption to retry triggering participants.
-  const previousErrorCheckRef = useRef(status);
-  useLayoutEffect(() => {
-    const prevStatus = previousErrorCheckRef.current;
-    previousErrorCheckRef.current = status;
-
-    // Only handle transitions TO error state (not from initial render)
-    if (status !== AiSdkStatuses.ERROR || prevStatus === AiSdkStatuses.ERROR) {
-      return;
-    }
-
-    // Skip if we're in the middle of explicit streaming (error will be handled by onError callback)
-    if (isExplicitlyStreaming) {
-      return;
-    }
-
-    // Reset AI SDK state by re-setting current messages
-    // This typically causes AI SDK to transition back to 'ready' state
-    // Use a microtask to avoid race conditions with ongoing state updates
-    // ✅ CRITICAL FIX: Deep clone to ensure mutable arrays for AI SDK streaming
-    queueMicrotask(() => {
-      setMessages(structuredClone(messagesRef.current));
-    });
-  }, [status, isExplicitlyStreaming, setMessages]);
-
-  // ✅ CRITICAL FIX: Derive isStreaming from manual flag as primary source of truth
-  // AI SDK v6 Pattern: status can be 'ready' | 'submitted' | 'streaming' | 'error'
-  // - isExplicitlyStreaming: Our manual flag for participant orchestration
-  // - We rely primarily on isExplicitlyStreaming which is set/cleared by our logic
-  // - This prevents false positives on initial mount
-  // ✅ ENUM PATTERN: Use isExplicitlyStreaming as single source of truth
+  // Derive streaming state
   const isActuallyStreaming = isExplicitlyStreaming;
-
-  // ✅ RACE CONDITION FIX: Keep ref in sync with streaming state
-  // This allows synchronous checks in microtasks to use the latest value
   isStreamingRef.current = isActuallyStreaming;
 
-  // ✅ AI SDK READINESS: Derive from status for provider's continueFromParticipant guard
-  // When AI SDK isn't ready, continueFromParticipant returns early silently.
-  // Provider needs this flag to wait before calling continueFromParticipant.
-  //
-  // ✅ BUG FIX: MUST match the internal guard in continueFromParticipant (line 1511)
-  // Internal guard: status !== AiSdkStatuses.READY → return early
-  // External isReady MUST be false when internal guard would trigger
-  // Otherwise: isReady=true, caller proceeds, but continueFromParticipant returns early silently!
-  //
-  // Previously: allowed 'error' status, causing silent failures after AI SDK errors
-  // Now: requires status === 'ready' (matches internal guard)
-  const isReady = messages.length > 0
-    && status === AiSdkStatuses.READY;
+  // AI SDK readiness
+  const isReady = messages.length > 0 && status === AiSdkStatuses.READY;
 
-  // ✅ INFINITE LOOP FIX: Memoize return value to prevent new object reference on every render
-  // Without this, the chat object creates a new reference each render, causing any effect
-  // that depends on `chat` to re-run infinitely (e.g., message sync effect in chat-store-provider)
-  // The chat object is used as dependency in provider effects - stable reference is critical.
+  // Debug logging
+  useEffect(() => {
+    rlog.trigger('isReady-calc', `status=${status} msgs=${messages.length} isReady=${isReady}`);
+  }, [status, messages.length, isReady]);
+
   return useMemo(
     () => ({
       continueFromParticipant,
@@ -3554,29 +561,29 @@ export function useMultiParticipantChat(
       isReady,
       isStreaming: isActuallyStreaming,
       isStreamingRef,
-      isTriggeringRef, // ✅ RACE CONDITION FIX: Expose for provider guards
+      isTriggeringRef,
       messages,
       retry,
       sendMessage,
       setMessages,
       startRound,
-      // ✅ NAVIGATION CLEANUP: Expose stop function for route change cleanup
       stop: stopAiSdk,
     }),
     [
-      messages,
-      sendMessage,
-      startRound,
       continueFromParticipant,
-      isActuallyStreaming,
-      // isStreamingRef is stable (useRef)
-      // isTriggeringRef is stable (useRef)
       currentParticipantIndex,
       chatError,
-      retry,
-      setMessages,
       isReady,
+      isActuallyStreaming,
+      messages,
+      retry,
+      sendMessage,
+      setMessages,
+      startRound,
       stopAiSdk,
     ],
   );
 }
+
+// Re-export types for backwards compatibility
+export type { ExtendedFilePart } from '@/lib/schemas/message-schemas';

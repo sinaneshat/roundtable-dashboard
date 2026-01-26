@@ -1,6 +1,6 @@
 import { MessageStatuses } from '@roundtable/shared';
 import { useQueryClient } from '@tanstack/react-query';
-import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { Icons } from '@/components/icons';
@@ -11,7 +11,6 @@ import { queryKeys } from '@/lib/data/query-keys';
 import { useTranslations } from '@/lib/i18n';
 import { cn } from '@/lib/ui/cn';
 import type { PreSearchDataPayload, PreSearchResult, StoredPreSearch } from '@/services/api';
-import { AnimationIndices } from '@/stores/chat';
 
 import { PreSearchStream } from './pre-search-stream';
 
@@ -41,8 +40,6 @@ export function PreSearchCard({
   // Use optional store hook - returns undefined on public pages without ChatStoreProvider
   const storeData = useChatStoreOptional(
     useShallow(s => ({
-      completeAnimation: s.completeAnimation,
-      registerAnimation: s.registerAnimation,
       updatePreSearchData: s.updatePreSearchData,
       updatePreSearchStatus: s.updatePreSearchStatus,
     })),
@@ -51,10 +48,6 @@ export function PreSearchCard({
   // Fallback values for read-only pages (public threads) without ChatStoreProvider
   const updatePreSearchStatus = storeData?.updatePreSearchStatus ?? NOOP;
   const updatePreSearchData = storeData?.updatePreSearchData ?? NOOP;
-  const registerAnimation = storeData?.registerAnimation ?? NOOP;
-  const completeAnimation = storeData?.completeAnimation ?? NOOP;
-  const hasRegisteredRef = useRef(false);
-  const prevStatusRef = useRef(preSearch.status);
 
   const [manualControl, setManualControl] = useState<{ round: number; open: boolean } | null>(null);
 
@@ -64,37 +57,6 @@ export function PreSearchCard({
     }
     return true;
   }, [manualControl, streamingRoundNumber]);
-
-  useLayoutEffect(() => {
-    const isStreaming = preSearch.status === MessageStatuses.STREAMING;
-    if (isStreaming && !hasRegisteredRef.current) {
-      registerAnimation(AnimationIndices.PRE_SEARCH);
-      hasRegisteredRef.current = true;
-    }
-  }, [preSearch.status, registerAnimation]);
-
-  useLayoutEffect(() => {
-    return () => {
-      if (hasRegisteredRef.current) {
-        completeAnimation(AnimationIndices.PRE_SEARCH);
-        hasRegisteredRef.current = false;
-      }
-    };
-  }, [completeAnimation]);
-
-  useLayoutEffect(() => {
-    const wasStreaming = prevStatusRef.current === MessageStatuses.STREAMING;
-    const nowComplete = preSearch.status !== MessageStatuses.STREAMING
-      && preSearch.status !== MessageStatuses.PENDING;
-
-    if (wasStreaming && nowComplete && hasRegisteredRef.current) {
-      completeAnimation(AnimationIndices.PRE_SEARCH);
-      hasRegisteredRef.current = false;
-    }
-
-    prevStatusRef.current = preSearch.status;
-    return undefined;
-  }, [preSearch.status, completeAnimation]);
 
   const handleStreamComplete = useCallback((completedData?: PreSearchDataPayload) => {
     if (!completedData) {

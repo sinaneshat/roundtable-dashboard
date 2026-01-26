@@ -26,6 +26,7 @@ import type { DbModeratorMessageMetadata } from '@/db/schemas/chat-metadata';
 import { extractTextFromParts } from '@/lib/schemas/message-schemas';
 import { NO_PARTICIPANT_SENTINEL } from '@/lib/schemas/participant-schemas';
 import { getParticipantIndex } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import {
   AI_TIMEOUT_CONFIG,
   checkFreeUserHasCompletedRound,
@@ -227,6 +228,18 @@ async function generateCouncilModerator(
         // ✅ RESUMABLE STREAMS: Clear thread active stream now that moderator is complete
         // This marks the round as fully complete (participants + moderator done)
         await clearThreadActiveStream(threadId, env);
+
+        // ✅ DEDUP CLEANUP: Clear the moderator lock now that it's complete
+        const moderatorLockKey = `moderator-lock:${threadId}:r${roundNumber}`;
+        await env.KV.delete(moderatorLockKey).catch(() => {}); // Best-effort cleanup
+
+        // ✅ FRAME 6/12: Round complete - moderator finished
+        const isRound1 = roundNumber === 0;
+        if (isRound1) {
+          rlog.frame(6, 'api-mod-complete', `r${roundNumber} Moderator streaming done → round COMPLETE`);
+        } else {
+          rlog.frame(12, 'api-mod-complete', `r${roundNumber} Moderator streaming done → round COMPLETE`);
+        }
 
         // ✅ FIX: Mark stream buffer as COMPLETED and clear active key immediately
         // The consumeSseStream callback runs in waitUntil (background), so if user refreshes
@@ -567,10 +580,30 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
   async (c) => {
     const { user } = c.auth();
     const { roundNumber, threadId } = c.validated.params;
+    const roundNum = Number.parseInt(roundNumber, 10);
+
+    // ✅ KV DEDUP: Prevent concurrent moderator triggers (frontend + queue race)
+    // Use KV lock with short TTL to allow retries on actual failures
+    const moderatorLockKey = `moderator-lock:${threadId}:r${roundNum}`;
+    const existingLock = await c.env.KV.get(moderatorLockKey);
+    if (existingLock) {
+      rlog.race('mod-concurrent', `r${roundNum} SKIP: concurrent moderator trigger, lock exists`);
+      // Return 204 No Content - caller should poll for the stream that's already running
+      return c.body(null, 204);
+    }
+
+    // Set lock with 60s TTL (enough for moderator to complete or fail)
+    await c.env.KV.put(moderatorLockKey, Date.now().toString(), { expirationTtl: 60 });
+
+    // ✅ DEBUG: Log moderator handler entry (only reaches here if not locked)
+    console.error('[MOD-HANDLER] ENTER', {
+      roundNumber,
+      threadId: threadId.slice(-8),
+      userId: user.id.slice(0, 8),
+    });
     // Note: body.participantMessageIds is validated but D1 is source of truth for finding messages
 
     const db = await getDbAsync();
-    const roundNum = Number.parseInt(roundNumber, 10);
 
     // Validate round number (0-based)
     if (Number.isNaN(roundNum) || roundNum < 0) {

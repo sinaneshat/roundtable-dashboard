@@ -1,2081 +1,723 @@
 /**
- * Unified Chat Store - Zustand v5 for TanStack Start
+ * Roundtable Chat Store - Frame-Based Flow
  *
- * Factory pattern (`createChatStore`) using vanilla store for SSR isolation.
- * Context + useRef pattern in ChatStoreProvider ensures per-request store instances.
- * Types inferred from Zod schemas in store-schemas.ts (single source of truth).
+ * Follows the documented flow exactly (see docs/FLOW_DOCUMENTATION.md):
  *
- * Architecture:
- * - store.ts: Slice implementations + vanilla factory (createStore from zustand/vanilla)
- * - store-schemas.ts: Zod schemas + type inference
- * - store-action-types.ts: Explicit action type definitions
- * - store-defaults.ts: Default values + reset state groups
- * - provider.tsx: Context provider with useRef store creation
- * - context.ts: useChatStore hook with zustand useStore
+ * ROUND 1 (Frames 1-6):
+ *   Frame 1: User types message on Overview Screen
+ *   Frame 2: Send clicked → ALL placeholders appear instantly
+ *   Frame 3: Participant 1 starts streaming (others waiting)
+ *   Frame 4: P1 complete → P2 starts (baton passed)
+ *   Frame 5: All participants complete → Moderator starts
+ *   Frame 6: Round 1 complete
+ *
+ * ROUND 2 (Frames 7-12):
+ *   Frame 7: User enables web search + changes participants
+ *   Frame 8: Send clicked → Changelog + all placeholders appear
+ *   Frame 9: Changelog expanded (click to see details)
+ *   Frame 10: Web Research streaming (blocks participants)
+ *   Frame 11: Web Research complete → Participants start
+ *   Frame 12: Round 2 complete
+ *
+ * Simple phase machine: idle → participants → moderator → complete → idle
  */
 
-import type { ChatMode, FeedbackType, ScreenMode } from '@roundtable/shared';
-import { ChatModeSchema, DEFAULT_CHAT_MODE, MessagePartTypes, MessageRoles, MessageStatuses, RoundFlowStates, RoundPhases, ScreenModes, StreamStatuses, TextPartStates, UploadStatuses, WebSearchDepths } from '@roundtable/shared';
+import { ScreenModes } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
-import { castDraft, enableMapSet } from 'immer';
-import type { StateCreator } from 'zustand';
+import { enableMapSet } from 'immer';
 import { devtools } from 'zustand/middleware';
 import { immer } from 'zustand/middleware/immer';
 import { createStore } from 'zustand/vanilla';
 
-// Direct imports avoid circular dependency through @/hooks/utils barrel
+import type { PendingAttachment } from '@/hooks/utils/attachment-schemas';
 import type { FilePreview } from '@/hooks/utils/use-file-preview';
 import type { UploadItem } from '@/hooks/utils/use-file-upload';
-import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
-import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
-import { getEnabledSortedParticipants, getParticipantIndex, getRoundNumber, isModeratorMessage, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
-import type { ApiChangelog, ChatParticipant, ChatThread, PreSearchQuery, PreSearchResult, StoredPreSearch, WebSearchResultItem } from '@/services/api';
+import type { ApiChangelog, ChatParticipant, ChatThread, StoredPreSearch } from '@/services/api';
 
-import type { SendMessage, StartRound } from './store-action-types';
-import { isUpsertOptions } from './store-action-types';
-import type { ResetFormPreferences } from './store-defaults';
 import {
-  ANIMATION_DEFAULTS,
-  ATTACHMENTS_DEFAULTS,
-  CALLBACKS_DEFAULTS,
-  CHANGELOG_DEFAULTS,
-  COMPLETE_RESET_STATE,
-  DATA_DEFAULTS,
-  FEEDBACK_DEFAULTS,
-  FLAGS_DEFAULTS,
   FORM_DEFAULTS,
-  MODERATOR_STATE_RESET,
-  NAVIGATION_DEFAULTS,
-  PENDING_MESSAGE_STATE_RESET,
-  PRESEARCH_DEFAULTS,
-  REGENERATION_STATE_RESET,
-  ROUND_FLOW_DEFAULTS,
-  SCREEN_DEFAULTS,
-  SIDEBAR_ANIMATION_DEFAULTS,
-  STREAM_RESUMPTION_DEFAULTS,
-  STREAM_RESUMPTION_STATE_RESET,
-  STREAMING_STATE_RESET,
-  THREAD_DEFAULTS,
-  THREAD_NAVIGATION_RESET_STATE,
-  THREAD_RESET_STATE,
-  TRACKING_DEFAULTS,
-  UI_DEFAULTS,
+  OVERVIEW_RESET,
+  STORE_DEFAULTS,
+  STREAMING_COMPLETE_RESET,
+  SUBSCRIPTION_DEFAULTS,
+  THREAD_NAVIGATION_RESET,
 } from './store-defaults';
-import type {
-  AnimationSlice,
-  AttachmentsSlice,
-  CallbacksSlice,
-  ChangelogSlice,
-  ChatStore,
-  ConfigChangeState,
-  DataSlice,
-  FeedbackSlice,
-  FlagsSlice,
-  FormSlice,
-  NavigationSlice,
-  OperationsActions,
-  PreSearchSlice,
-  RoundFlowSlice,
-  ScreenSlice,
-  SidebarAnimationSlice,
-  StreamResumptionPrefillUpdate,
-  StreamResumptionSlice,
-  ThreadSlice,
-  TitleAnimationPhase,
-  TrackingSlice,
-  UISlice,
-} from './store-schemas';
+import type { ChatPhase, ChatStore, EntityStatus, TitleAnimationPhase } from './store-schemas';
+import { ChatPhases } from './store-schemas';
 
-// Enable immer Map/Set support lazily to avoid module initialization order issues
-let immerMapSetEnabled = false;
-function ensureMapSetEnabled() {
-  if (!immerMapSetEnabled) {
-    enableMapSet();
-    immerMapSetEnabled = true;
-  }
-}
+enableMapSet();
+
+export type ChatStoreApi = ReturnType<typeof createChatStore>;
 
 /**
- * Sort messages within a round: user first, participants by index, moderator LAST
- *
- * Sorting order:
- * 1. Sort by round number (ascending)
- * 2. Within a round: user messages come first
- * 3. For assistant messages: moderator messages come LAST (after all participants)
- * 4. Participant messages sorted by participantIndex
- */
-function sortMessagesWithinRound(a: UIMessage, b: UIMessage): number {
-  const aRound = getRoundNumber(a.metadata) ?? 0;
-  const bRound = getRoundNumber(b.metadata) ?? 0;
-  if (aRound !== bRound) {
-    return aRound - bRound;
-  }
-
-  // User messages come first within a round
-  if (a.role !== b.role) {
-    return a.role === MessageRoles.USER ? -1 : 1;
-  }
-
-  // For assistant messages, check for moderator
-  if (a.role === MessageRoles.ASSISTANT && b.role === MessageRoles.ASSISTANT) {
-    const aIsModerator = isModeratorMessage(a);
-    const bIsModerator = isModeratorMessage(b);
-
-    // Moderator always comes AFTER participants
-    if (aIsModerator && !bIsModerator) {
-      return 1;
-    }
-    if (!aIsModerator && bIsModerator) {
-      return -1;
-    }
-
-    // Neither is moderator - sort by participantIndex
-    const aPIdx = getParticipantIndex(a.metadata) ?? 999;
-    const bPIdx = getParticipantIndex(b.metadata) ?? 999;
-    return aPIdx - bPIdx;
-  }
-
-  return 0;
-}
-
-/**
- * Slice creator type with middleware chain for type inference
- * Middleware applied at combined level: devtools(immer(...))
- * All slices inherit this chain for proper type safety
- *
- * Pattern:
- * - First param: Combined store type (ChatStore)
- * - Second param: Middleware chain [['zustand/devtools', never], ['zustand/immer', never]]
- * - Third param: Empty array [] (no additional middleware in slices)
- * - Fourth param: Slice type (S)
- */
-type SliceCreator<S> = StateCreator<
-  ChatStore,
-  [['zustand/devtools', never], ['zustand/immer', never]],
-  [],
-  S
->;
-
-const createFormSlice: SliceCreator<FormSlice> = (set, _get) => ({
-  ...FORM_DEFAULTS,
-
-  // ✅ IMMER: Direct mutations instead of spread patterns
-  addParticipant: (participant: ParticipantConfig) =>
-    set((draft) => {
-      if (!draft.selectedParticipants.some(p => p.modelId === participant.modelId)) {
-        draft.selectedParticipants.push({ ...participant, priority: draft.selectedParticipants.length });
-      }
-    }, false, 'form/addParticipant'),
-  removeParticipant: (participantId: string) =>
-    set((draft) => {
-      const idx = draft.selectedParticipants.findIndex(p => p.id === participantId || p.modelId === participantId);
-      if (idx !== -1) {
-        draft.selectedParticipants.splice(idx, 1);
-        draft.selectedParticipants.forEach((p, i) => {
-          p.priority = i;
-        });
-      }
-    }, false, 'form/removeParticipant'),
-  reorderParticipants: (fromIndex: number, toIndex: number) =>
-    set((draft) => {
-      const [removed] = draft.selectedParticipants.splice(fromIndex, 1);
-      if (removed) {
-        draft.selectedParticipants.splice(toIndex, 0, removed);
-        draft.selectedParticipants.forEach((p, i) => {
-          p.priority = i;
-        });
-      }
-    }, false, 'form/reorderParticipants'),
-  resetForm: () =>
-    set(FORM_DEFAULTS, false, 'form/resetForm'),
-  setAutoMode: (enabled: boolean) =>
-    set({ autoMode: enabled }, false, 'form/setAutoMode'),
-  setEnableWebSearch: (enabled: boolean) =>
-    set({ enableWebSearch: enabled }, false, 'form/setEnableWebSearch'),
-  setInputValue: (value: string) =>
-    set({ inputValue: value }, false, 'form/setInputValue'),
-  setModelOrder: (modelIds: string[]) =>
-    set({ modelOrder: modelIds }, false, 'form/setModelOrder'),
-  setSelectedMode: (mode: ChatMode | null) =>
-    set({ selectedMode: mode }, false, 'form/setSelectedMode'),
-  setSelectedParticipants: (participants: ParticipantConfig[]) =>
-    set({ selectedParticipants: participants }, false, 'form/setSelectedParticipants'),
-  updateParticipant: (participantId: string, updates: Partial<ParticipantConfig>) =>
-    set((draft) => {
-      const p = draft.selectedParticipants.find(p => p.id === participantId || p.modelId === participantId);
-      if (p) {
-        Object.assign(p, updates);
-      }
-    }, false, 'form/updateParticipant'),
-});
-
-const createFeedbackSlice: SliceCreator<FeedbackSlice> = set => ({
-  ...FEEDBACK_DEFAULTS,
-
-  loadFeedbackFromServer: (data) => {
-    set({
-      feedbackByRound: new Map(data.map((f) => {
-        const feedback = f as { roundNumber: number; feedbackType: FeedbackType | null };
-        return [feedback.roundNumber, feedback.feedbackType];
-      })),
-      hasLoadedFeedback: true,
-    }, false, 'feedback/loadFeedbackFromServer');
-  },
-  setFeedback: (roundNumber, type) =>
-    set((draft) => {
-      draft.feedbackByRound.set(roundNumber, type);
-    }, false, 'feedback/setFeedback'),
-  setPendingFeedback: feedback =>
-    set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
-});
-
-const createUISlice: SliceCreator<UISlice> = set => ({
-  ...UI_DEFAULTS,
-
-  resetUI: () =>
-    set(UI_DEFAULTS, false, 'ui/resetUI'),
-  setCreatedThreadId: (id: string | null) =>
-    set({ createdThreadId: id }, false, 'ui/setCreatedThreadId'),
-  setCreatedThreadProjectId: (projectId: string | null) =>
-    set({ createdThreadProjectId: projectId }, false, 'ui/setCreatedThreadProjectId'),
-  setIsAnalyzingPrompt: (analyzing: boolean) =>
-    set({ isAnalyzingPrompt: analyzing }, false, 'ui/setIsAnalyzingPrompt'),
-  setIsCreatingThread: (creating: boolean) =>
-    set({ isCreatingThread: creating }, false, 'ui/setIsCreatingThread'),
-  setShowInitialUI: (show: boolean) =>
-    set({ showInitialUI: show }, false, 'ui/setShowInitialUI'),
-  setWaitingToStartStreaming: (waiting: boolean) =>
-    set({ waitingToStartStreaming: waiting }, false, 'ui/setWaitingToStartStreaming'),
-});
-
-const createPreSearchSlice: SliceCreator<PreSearchSlice> = (set, get) => ({
-  ...PRESEARCH_DEFAULTS,
-
-  addPreSearch: (preSearch: StoredPreSearch) =>
-    set((draft) => {
-      const existingIndex = draft.preSearches.findIndex(
-        ps => ps.threadId === preSearch.threadId && ps.roundNumber === preSearch.roundNumber,
-      );
-
-      if (existingIndex !== -1) {
-        const existing = draft.preSearches[existingIndex];
-        if (!existing) {
-          return;
-        }
-
-        // Race condition fix: STREAMING > PENDING (provider wins over orchestrator)
-        if (existing.status === MessageStatuses.PENDING && preSearch.status === MessageStatuses.STREAMING) {
-          Object.assign(existing, preSearch, { status: MessageStatuses.STREAMING });
-        }
-        // Otherwise skip duplicate
-        return;
-      }
-
-      draft.preSearches.push(preSearch);
-    }, false, 'preSearch/addPreSearch'),
-  checkStuckPreSearches: () =>
-    set((draft) => {
-      const now = Date.now();
-      draft.preSearches.forEach((ps) => {
-        if (ps.status !== MessageStatuses.STREAMING && ps.status !== MessageStatuses.PENDING) {
-          return;
-        }
-        const lastActivityTime = draft.preSearchActivityTimes.get(ps.roundNumber);
-        if (shouldPreSearchTimeout(ps, lastActivityTime, now)) {
-          ps.status = MessageStatuses.COMPLETE;
-        }
-      });
-    }, false, 'preSearch/checkStuckPreSearches'),
-  clearAllPreSearches: () =>
-    set({
-      ...PRESEARCH_DEFAULTS,
-      triggeredPreSearchRounds: new Set<number>(),
-    }, false, 'preSearch/clearAllPreSearches'),
-  clearPreSearchActivity: roundNumber =>
-    set((draft) => {
-      draft.preSearchActivityTimes.delete(roundNumber);
-    }, false, 'preSearch/clearPreSearchActivity'),
-  getPreSearchActivityTime: roundNumber => get().preSearchActivityTimes.get(roundNumber),
-  removePreSearch: roundNumber =>
-    set((draft) => {
-      const idx = draft.preSearches.findIndex(ps => ps.roundNumber === roundNumber);
-      if (idx !== -1) {
-        draft.preSearches.splice(idx, 1);
-      }
-    }, false, 'preSearch/removePreSearch'),
-  setPreSearches: (preSearches: StoredPreSearch[]) => {
-    set({ preSearches }, false, 'preSearch/setPreSearches');
-  },
-  updatePartialPreSearchData: (roundNumber, partialData) =>
-    set((draft) => {
-      const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
-      if (ps) {
-        const existingSummary = ps.searchData?.summary ?? '';
-        const results = partialData.results ?? [];
-        // TYPE BOUNDARY: Build search data with defaults for optional fields
-        ps.searchData = {
-          failureCount: 0,
-          queries: (partialData.queries ?? []).map((q: PreSearchQuery) => ({
-            index: q.index,
-            query: q.query,
-            rationale: q.rationale ?? '',
-            searchDepth: q.searchDepth ?? WebSearchDepths.BASIC,
-            total: q.total ?? 1,
-          })),
-          results: results.map((r: PreSearchResult) => ({
-            answer: r.answer ?? null,
-            index: r.index,
-            query: r.query,
-            responseTime: r.responseTime ?? 0,
-            results: r.results.map((item: WebSearchResultItem) => ({
-              content: item.content ?? '',
-              excerpt: item.excerpt,
-              score: 0,
-              title: item.title,
-              url: item.url,
-            })),
-          })),
-          successCount: results.length,
-          summary: partialData.summary ?? existingSummary,
-          totalResults: partialData.totalResults ?? results.length,
-          totalTime: partialData.totalTime ?? 0,
-        } as typeof ps.searchData;
-      }
-    }, false, 'preSearch/updatePartialPreSearchData'),
-
-  updatePreSearchActivity: roundNumber =>
-    set((draft) => {
-      draft.preSearchActivityTimes.set(roundNumber, Date.now());
-    }, false, 'preSearch/updatePreSearchActivity'),
-
-  updatePreSearchData: (roundNumber, data) =>
-    set((draft) => {
-      const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
-      if (ps) {
-        // TYPE BOUNDARY: Zod streaming type → RPC store type (safe - defaults filled by backend)
-        ps.searchData = data as typeof ps.searchData;
-        ps.status = MessageStatuses.COMPLETE;
-        ps.completedAt = new Date().toISOString();
-      }
-    }, false, 'preSearch/updatePreSearchData'),
-
-  updatePreSearchStatus: (roundNumber, status) =>
-    set((draft) => {
-      const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
-      if (ps) {
-        ps.status = status;
-        if (status === MessageStatuses.COMPLETE) {
-          ps.completedAt = new Date().toISOString();
-        }
-      }
-    }, false, 'preSearch/updatePreSearchStatus'),
-});
-
-const createChangelogSlice: SliceCreator<ChangelogSlice> = (set, get) => ({
-  ...CHANGELOG_DEFAULTS,
-
-  addChangelogItems: (items: ApiChangelog[]) => {
-    const existing = get().changelogItems;
-    const ids = new Set(existing.map(i => i.id));
-    const newItems = items.filter(i => !ids.has(i.id));
-    if (newItems.length > 0) {
-      set({ changelogItems: [...existing, ...newItems] }, false, 'changelog/addChangelogItems');
-    }
-  },
-
-  setChangelogItems: (items: ApiChangelog[]) =>
-    set({ changelogItems: items }, false, 'changelog/setChangelogItems'),
-});
-
-const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
-  ...THREAD_DEFAULTS,
-
-  acknowledgeStreamFinish: () =>
-    set({ streamFinishAcknowledged: true }, false, 'thread/acknowledgeStreamFinish'),
-  checkStuckStreams: () =>
-    set((state) => {
-      if (!state.isStreaming) {
-        return state;
-      }
-      return { isStreaming: false };
-    }, false, 'thread/checkStuckStreams'),
-  deduplicateMessages: () => {
-    set((draft) => {
-      const seen = new Map<string, number>(); // key -> index
-      const toRemove: number[] = [];
-
-      for (let i = 0; i < draft.messages.length; i++) {
-        const msg = draft.messages[i];
-        if (!msg) {
-          continue;
-        }
-
-        // TYPE-SAFE: Use metadata extraction utilities instead of type casting
-        const roundNum = getRoundNumber(msg.metadata);
-        const pIdx = getParticipantIndex(msg.metadata);
-
-        if (roundNum === null || pIdx === null) {
-          continue;
-        }
-        if (msg.role !== MessageRoles.ASSISTANT) {
-          continue;
-        }
-
-        const key = `r${roundNum}_p${pIdx}`;
-        const existingIdx = seen.get(key);
-
-        if (existingIdx !== undefined) {
-          // Duplicate found - decide which to keep
-          const existing = draft.messages[existingIdx];
-          const existingIsDeterministic = existing?.id.includes('_r') && existing.id.includes('_p');
-          const newIsDeterministic = msg.id.includes('_r') && msg.id.includes('_p');
-
-          if (newIsDeterministic && !existingIsDeterministic) {
-            // Keep new (deterministic), remove existing (temp)
-            toRemove.push(existingIdx);
-            seen.set(key, i);
-          } else {
-            // Keep existing, remove new
-            toRemove.push(i);
-          }
-        } else {
-          seen.set(key, i);
-        }
-      }
-
-      // Remove in reverse order to preserve indices
-      for (const idx of toRemove.sort((a, b) => b - a)) {
-        draft.messages.splice(idx, 1);
-      }
-    }, false, 'thread/deduplicateMessages');
-  },
-  finalizeMessageId: (tempId, deterministicId, finalMessage) => {
-    set((draft) => {
-      const tempIdx = draft.messages.findIndex(m => m.id === tempId);
-      const deterministicIdx = draft.messages.findIndex(m => m.id === deterministicId);
-
-      if (tempIdx !== -1 && deterministicIdx === -1) {
-        // Replace temp message with final message using deterministic ID
-        draft.messages[tempIdx] = castDraft({
-          ...finalMessage,
-          id: deterministicId,
-        });
-      } else if (tempIdx !== -1 && deterministicIdx !== -1) {
-        // Both exist - keep deterministic, remove temp
-        draft.messages.splice(tempIdx, 1);
-      } else if (tempIdx === -1 && deterministicIdx === -1) {
-        // Neither exists - insert final message
-        draft.messages.push(castDraft({
-          ...finalMessage,
-          id: deterministicId,
-        }));
-      }
-      // If only deterministic exists, nothing to do
-    }, false, 'thread/finalizeMessageId');
-  },
-  resetStreamFinishAcknowledgment: () =>
-    set({ streamFinishAcknowledged: false }, false, 'thread/resetStreamFinishAcknowledgment'),
-  setChatSetMessages: (fn?: ((messages: UIMessage[]) => void)) =>
-    set({ chatSetMessages: fn }, false, 'thread/setChatSetMessages'),
-  // ✅ NAVIGATION CLEANUP: Store AI SDK's stop function to abort streaming on route change
-  setChatStop: (fn?: () => void) =>
-    set({ chatStop: fn }, false, 'thread/setChatStop'),
-  setCurrentParticipantIndex: (currentParticipantIndex: number) =>
-    set({ currentParticipantIndex }, false, 'thread/setCurrentParticipantIndex'),
-  setError: (error: Error | null) =>
-    set({ error }, false, 'thread/setError'),
-  setIsStreaming: (isStreaming: boolean) =>
-    set({ isStreaming }, false, 'thread/setIsStreaming'),
-  setMessages: (messages: UIMessage[] | ((prev: UIMessage[]) => UIMessage[])) => {
-    const prevMessages = get().messages;
-    const newMessages = typeof messages === 'function' ? messages(prevMessages) : messages;
-
-    // ✅ PERF FIX: Early return if message arrays are reference-equal
-    if (prevMessages === newMessages) {
-      return;
-    }
-
-    // ✅ PERF FIX: Build Map for O(1) lookup instead of O(n) find per message
-    // Previously O(n²) - now O(n) with single Map construction pass
-    const prevMessagesById = new Map(prevMessages.map(m => [m.id, m]));
-
-    // ✅ PERF FIX: Check if IDs are identical first (cheap string comparison)
-    // If IDs match, then check if content has actually changed
-    const prevIds = prevMessages.map(m => m.id).join(',');
-    const newIds = newMessages.map(m => m.id).join(',');
-
-    if (prevIds === newIds) {
-      // Same message IDs - check if any content actually changed
-      let contentChanged = false;
-      for (const newMsg of newMessages) {
-        const existingMsg = prevMessagesById.get(newMsg.id);
-        if (!existingMsg) {
-          contentChanged = true;
-          break;
-        }
-        // Compare parts length as a quick proxy for content changes
-        const existingPartsLen = existingMsg.parts?.length ?? 0;
-        const newPartsLen = newMsg.parts?.length ?? 0;
-        if (existingPartsLen !== newPartsLen) {
-          contentChanged = true;
-          break;
-        }
-        // Check if any text part content changed (streaming updates)
-        const existingText = existingMsg.parts?.find(
-          p => p.type === MessagePartTypes.TEXT && 'text' in p,
-        );
-        const newText = newMsg.parts?.find(
-          p => p.type === MessagePartTypes.TEXT && 'text' in p,
-        );
-        const existingTextLen = (existingText && 'text' in existingText) ? existingText.text?.length ?? 0 : 0;
-        const newTextLen = (newText && 'text' in newText) ? newText.text?.length ?? 0 : 0;
-        if (existingTextLen !== newTextLen) {
-          contentChanged = true;
-          break;
-        }
-      }
-
-      if (!contentChanged) {
-        // No actual changes - skip update to prevent re-renders
-        return;
-      }
-    }
-
-    const mergedMessages = newMessages.map((newMsg) => {
-      const existingMsg = prevMessagesById.get(newMsg.id);
-      if (!existingMsg) {
-        return newMsg;
-      }
-
-      const existingHasContent = existingMsg.parts?.some(
-        p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
-      );
-      const newHasContent = newMsg.parts?.some(
-        p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
-      );
-
-      const existingIsComplete = isObject(existingMsg.metadata) && 'finishReason' in existingMsg.metadata;
-      const newIsComplete = isObject(newMsg.metadata) && 'finishReason' in newMsg.metadata;
-
-      if (existingHasContent && !newHasContent) {
-        return {
-          ...newMsg,
-          parts: existingMsg.parts,
-        };
-      }
-
-      if (existingIsComplete && !newIsComplete && existingHasContent) {
-        return {
-          ...newMsg,
-          metadata: existingMsg.metadata,
-          parts: existingMsg.parts,
-        };
-      }
-
-      return newMsg;
-    });
-
-    // ✅ DEBUG: Log message content changes during streaming
-    set({ messages: mergedMessages }, false, 'thread/setMessages');
-  },
-
-  // ============================================================================
-  // STREAMING MESSAGE ACTIONS
-  // ============================================================================
-
-  setParticipants: (participants: ChatParticipant[]) =>
-    set({ participants: sortByPriority(participants) }, false, 'thread/setParticipants'),
-
-  setSendMessage: (fn?: SendMessage) =>
-    set({ sendMessage: fn }, false, 'thread/setSendMessage'),
-
-  setStartRound: (fn?: StartRound) =>
-    set({ startRound: fn }, false, 'thread/setStartRound'),
-
-  // ============================================================================
-  // ✅ RACE CONDITION FIX: STREAM FINISH ACKNOWLEDGMENT ACTIONS
-  // ============================================================================
-
-  setThread: (thread: ChatThread | null) => {
-    // ✅ UNIFIED FIX: Sync BOTH enableWebSearch AND selectedMode from thread
-    // This ensures form state stays in sync with thread after PATCH responses
-    // But preserve user's form selections if they have pending config changes
-    const currentState = get();
-    const shouldSyncFormValues = thread && !currentState.hasPendingConfigChanges;
-
-    set({
-      thread,
-      ...(shouldSyncFormValues
-        ? {
-            enableWebSearch: thread.enableWebSearch,
-            selectedMode: ChatModeSchema.catch(DEFAULT_CHAT_MODE).parse(thread.mode),
-          }
-        : {}),
-    }, false, 'thread/setThread');
-  },
-
-  upsertStreamingMessage: (optionsOrMessage) => {
-    // Accepts UIMessage directly or { message, insertOnly } options object
-    // Use type guard for proper type narrowing
-    const isOptionsObject = isUpsertOptions(optionsOrMessage);
-
-    const message = (isOptionsObject
-      ? optionsOrMessage.message
-      : optionsOrMessage);
-    const insertOnly = isOptionsObject ? optionsOrMessage.insertOnly : undefined;
-
-    set((draft) => {
-      const existingIdx = draft.messages.findIndex(m => m.id === message.id);
-
-      if (existingIdx !== -1) {
-        // Message exists - update if we have more content
-        if (insertOnly) {
-          return; // Skip update in insertOnly mode
-        }
-
-        const existing = draft.messages[existingIdx];
-        const existingHasContent = existing?.parts?.some(
-          p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
-        );
-        const newHasContent = message.parts?.some(
-          p => p.type === MessagePartTypes.TEXT && 'text' in p && p.text,
-        );
-
-        // Only update if new message has content when existing doesn't,
-        // or if new message has more content
-        if (newHasContent && !existingHasContent) {
-          draft.messages[existingIdx] = castDraft(message);
-        } else if (newHasContent && existingHasContent) {
-          // Both have content - keep newer if it has more text
-          // TYPE-SAFE: extractTextFromMessage handles unknown parts via isMessagePart type guard
-          const existingTextLength = extractTextFromMessage(existing).length;
-          const newTextLength = extractTextFromMessage(message).length;
-
-          if (newTextLength >= existingTextLength) {
-            draft.messages[existingIdx] = castDraft(message);
-          }
-        }
-      } else {
-        // Message doesn't exist - insert in round order
-        const msgRoundNumber = getRoundNumber(message.metadata);
-
-        if (msgRoundNumber === null) {
-          // No round number - append to end
-          draft.messages.push(castDraft(message));
-        } else {
-          // Find correct position (after messages from same or earlier rounds)
-          let insertIdx = draft.messages.length;
-          for (let i = draft.messages.length - 1; i >= 0; i--) {
-            const existingRound = getRoundNumber(draft.messages[i]?.metadata);
-            if (existingRound !== null && existingRound <= msgRoundNumber) {
-              insertIdx = i + 1;
-              break;
-            }
-            if (existingRound === null) {
-              insertIdx = i + 1;
-              break;
-            }
-          }
-          draft.messages.splice(insertIdx, 0, castDraft(message));
-        }
-      }
-    }, false, 'thread/upsertStreamingMessage');
-  },
-});
-
-const createFlagsSlice: SliceCreator<FlagsSlice> = set => ({
-  ...FLAGS_DEFAULTS,
-
-  atomicUpdateConfigChangeState: (update: Partial<ConfigChangeState>) =>
-    set(
-      () => ({
-        ...(update.configChangeRoundNumber !== undefined && { configChangeRoundNumber: update.configChangeRoundNumber }),
-        ...(update.isWaitingForChangelog !== undefined && { isWaitingForChangelog: update.isWaitingForChangelog }),
-        ...(update.isPatchInProgress !== undefined && { isPatchInProgress: update.isPatchInProgress }),
-        ...(update.hasPendingConfigChanges !== undefined && { hasPendingConfigChanges: update.hasPendingConfigChanges }),
-      }),
-      false,
-      'flags/atomicUpdateConfigChangeState',
-    ),
-  clearConfigChangeState: () =>
-    set(
-      {
-        configChangeRoundNumber: null,
-        hasPendingConfigChanges: false,
-        isPatchInProgress: false,
-        isWaitingForChangelog: false,
-      },
-      false,
-      'flags/clearConfigChangeState',
-    ),
-  // ⚠️ CRITICAL: Only clear isModeratorStreaming here, NOT isWaitingForChangelog!
-  // The changelog blocking flag must ONLY be cleared by use-changelog-sync.ts
-  // after the changelog has been fetched. Clearing it here causes pre-search
-  // to execute before changelog is fetched, breaking the ordering guarantee:
-  // PATCH → changelog → pre-search/streaming
-  completeModeratorStream: () =>
-    set({
-      isModeratorStreaming: false,
-    }, false, 'flags/completeModeratorStream'),
-  setHasInitiallyLoaded: (value: boolean) =>
-    set({ hasInitiallyLoaded: value }, false, 'flags/setHasInitiallyLoaded'),
-  setHasPendingConfigChanges: (value: boolean) =>
-    set({ hasPendingConfigChanges: value }, false, 'flags/setHasPendingConfigChanges'),
-  setIsModeratorStreaming: (value: boolean) =>
-    set({ isModeratorStreaming: value }, false, 'flags/setIsModeratorStreaming'),
-  setIsPatchInProgress: (value: boolean) =>
-    set({ isPatchInProgress: value }, false, 'flags/setIsPatchInProgress'),
-  setIsRegenerating: (value: boolean) =>
-    set({ isRegenerating: value }, false, 'flags/setIsRegenerating'),
-
-  // ============================================================================
-  // ✅ RACE CONDITION FIX: ATOMIC CONFIG CHANGE STATE UPDATES
-  // ============================================================================
-
-  setIsWaitingForChangelog: (value: boolean) =>
-    set({ isWaitingForChangelog: value }, false, 'flags/setIsWaitingForChangelog'),
-
-  setParticipantHandoffInProgress: (value: boolean) =>
-    set({ participantHandoffInProgress: value }, false, 'flags/setParticipantHandoffInProgress'),
-});
-
-const createDataSlice: SliceCreator<DataSlice> = (set, get) => ({
-  ...DATA_DEFAULTS,
-
-  // ✅ PERF: Batch update pending state to prevent multiple re-renders
-  batchUpdatePendingState: (pendingMessage: string | null, expectedParticipantIds: string[] | null) => {
-    rlog.msg('batchPending', `msg=${pendingMessage === null ? 'null' : 'set'} expected=${expectedParticipantIds === null ? 'null' : 'set'}`);
-    set({ expectedParticipantIds, pendingMessage }, false, 'data/batchUpdatePendingState');
-  },
-  getRoundEpoch: () => get().roundEpoch,
-  setConfigChangeRoundNumber: (value: number | null) =>
-    set({ configChangeRoundNumber: value }, false, 'data/setConfigChangeRoundNumber'),
-  setCurrentRoundNumber: (value: number | null) =>
-    set({ currentRoundNumber: value }, false, 'data/setCurrentRoundNumber'),
-  setExpectedParticipantIds: (value: string[] | null) =>
-    set({ expectedParticipantIds: value }, false, 'data/setExpectedParticipantIds'),
-  setPendingAttachmentIds: (value: string[] | null) =>
-    set({ pendingAttachmentIds: value }, false, 'data/setPendingAttachmentIds'),
-  setPendingFileParts: (value: ExtendedFilePart[] | null) =>
-    set({ pendingFileParts: value }, false, 'data/setPendingFileParts'),
-  setPendingMessage: (value: string | null) => {
-    rlog.msg('setPendingMsg', `${value === null ? 'CLEAR' : `SET="${value.slice(0, 20)}..."`}`);
-    set({ pendingMessage: value }, false, 'data/setPendingMessage');
-  },
-  setRegeneratingRoundNumber: (value: number | null) =>
-    set({ regeneratingRoundNumber: value }, false, 'data/setRegeneratingRoundNumber'),
-
-  // ============================================================================
-  // ✅ RACE CONDITION FIX: ROUND EPOCH MANAGEMENT
-  // ============================================================================
-
-  setStreamingRoundNumber: (value: number | null) =>
-    set({ streamingRoundNumber: value }, false, 'data/setStreamingRoundNumber'),
-
-  startNewRound: (roundNumber: number) => {
-    let newEpoch = 0;
-    set(
-      (state) => {
-        newEpoch = state.roundEpoch + 1;
-        return {
-          roundEpoch: newEpoch,
-          streamingRoundNumber: roundNumber,
-        };
-      },
-      false,
-      'data/startNewRound',
-    );
-    return newEpoch;
-  },
-});
-
-const createTrackingSlice: SliceCreator<TrackingSlice> = (set, get) => ({
-  ...TRACKING_DEFAULTS,
-
-  clearAllPreSearchTracking: () =>
-    set((draft) => {
-      draft.triggeredPreSearchRounds = new Set<number>();
-    }, false, 'tracking/clearAllPreSearchTracking'),
-  clearModeratorStreamTracking: roundNumber =>
-    set((draft) => {
-      draft.triggeredModeratorRounds.delete(roundNumber);
-      for (const id of draft.triggeredModeratorIds) {
-        if (id.includes(`-${roundNumber}-`) || id.includes(`round-${roundNumber}`)) {
-          draft.triggeredModeratorIds.delete(id);
-        }
-      }
-    }, false, 'tracking/clearModeratorStreamTracking'),
-  clearModeratorTracking: roundNumber =>
-    set((draft) => {
-      draft.createdModeratorRounds.delete(roundNumber);
-    }, false, 'tracking/clearModeratorTracking'),
-  clearPreSearchTracking: roundNumber =>
-    set((draft) => {
-      draft.triggeredPreSearchRounds.delete(roundNumber);
-    }, false, 'tracking/clearPreSearchTracking'),
-  hasModeratorBeenCreated: roundNumber =>
-    get().createdModeratorRounds.has(roundNumber),
-  hasModeratorStreamBeenTriggered: (moderatorMessageId, roundNumber) => {
-    const state = get();
-    return state.triggeredModeratorIds.has(moderatorMessageId) || state.triggeredModeratorRounds.has(roundNumber);
-  },
-  hasPreSearchBeenTriggered: roundNumber =>
-    get().triggeredPreSearchRounds.has(roundNumber),
-  markModeratorCreated: roundNumber =>
-    set((draft) => {
-      draft.createdModeratorRounds.add(roundNumber);
-    }, false, 'tracking/markModeratorCreated'),
-  markModeratorStreamTriggered: (moderatorMessageId, roundNumber) =>
-    set((draft) => {
-      draft.triggeredModeratorIds.add(moderatorMessageId);
-      draft.triggeredModeratorRounds.add(roundNumber);
-    }, false, 'tracking/markModeratorStreamTriggered'),
-  markPreSearchTriggered: roundNumber =>
-    set((draft) => {
-      draft.triggeredPreSearchRounds.add(roundNumber);
-    }, false, 'tracking/markPreSearchTriggered'),
-  setHasEarlyOptimisticMessage: value =>
-    set({ hasEarlyOptimisticMessage: value }, false, 'tracking/setHasEarlyOptimisticMessage'),
-  setHasSentPendingMessage: value =>
-    set({ hasSentPendingMessage: value }, false, 'tracking/setHasSentPendingMessage'),
-  tryMarkModeratorCreated: (roundNumber) => {
-    const state = get();
-    if (state.createdModeratorRounds.has(roundNumber)) {
-      return false;
-    }
-    set((draft) => {
-      draft.createdModeratorRounds.add(roundNumber);
-    }, false, 'tracking/tryMarkModeratorCreated');
-    return true;
-  },
-  tryMarkPreSearchTriggered: (roundNumber) => {
-    const state = get();
-    if (state.triggeredPreSearchRounds.has(roundNumber)) {
-      return false;
-    }
-    set((draft) => {
-      draft.triggeredPreSearchRounds.add(roundNumber);
-    }, false, 'tracking/tryMarkPreSearchTriggered');
-    return true;
-  },
-});
-
-const createCallbacksSlice: SliceCreator<CallbacksSlice> = set => ({
-  ...CALLBACKS_DEFAULTS,
-
-  setOnComplete: (callback?: () => void) =>
-    set({ onComplete: callback }, false, 'callbacks/setOnComplete'),
-});
-
-const createScreenSlice: SliceCreator<ScreenSlice> = set => ({
-  ...SCREEN_DEFAULTS,
-
-  resetScreenMode: () =>
-    set(SCREEN_DEFAULTS, false, 'screen/resetScreenMode'),
-  setScreenMode: (mode: ScreenMode | null) =>
-    set({
-      isReadOnly: mode === ScreenModes.PUBLIC,
-      screenMode: mode,
-    }, false, 'screen/setScreenMode'),
-});
-
-const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, get) => ({
-  ...STREAM_RESUMPTION_DEFAULTS,
-
-  clearStreamResumption: () =>
-    set({
-      // ✅ UNIFIED PHASES: Clear phase-based resumption state
-      currentResumptionPhase: null,
-      moderatorResumption: null,
-      nextParticipantToTrigger: null,
-      prefilledForThreadId: null,
-      preSearchResumption: null,
-      resumptionAttempts: new Set<string>(),
-      resumptionRoundNumber: null,
-      streamResumptionPrefilled: false,
-      streamResumptionState: null,
-    }, false, 'streamResumption/clearStreamResumption'),
-
-  handleResumedStreamComplete: (roundNumber, participantIndex) => {
-    const state = get();
-    const { participants } = state;
-    const enabledParticipants = participants.filter(p => p.isEnabled);
-    const nextIndex = participantIndex + 1;
-    const hasMoreParticipants = nextIndex < enabledParticipants.length;
-
-    if (hasMoreParticipants) {
-      // More participants to trigger
-      set({
-        nextParticipantToTrigger: nextIndex,
-        streamResumptionState: null,
-        waitingToStartStreaming: true,
-      }, false, 'streamResumption/handleResumedStreamComplete');
-    } else {
-      // ✅ MODERATOR TRIGGER FIX: All participants done, transition to moderator phase
-      // This triggers the moderator effect in use-moderator-trigger.ts
-      // Previously, we just set nextParticipantToTrigger: null without triggering moderator
-      set({
-        // Transition to moderator phase so moderator trigger effect fires
-        currentResumptionPhase: RoundPhases.MODERATOR,
-        isModeratorStreaming: true,
-        nextParticipantToTrigger: null,
-        resumptionRoundNumber: roundNumber,
-        streamResumptionState: null,
-        waitingToStartStreaming: false,
-      }, false, 'streamResumption/handleResumedStreamComplete');
-    }
-  },
-
-  handleStreamResumptionFailure: (_error) => {
-    set({
-      nextParticipantToTrigger: null,
-      resumptionAttempts: new Set<string>(),
-      streamResumptionState: null,
-    }, false, 'streamResumption/handleStreamResumptionFailure');
-  },
-
-  isStreamResumptionStale: () => {
-    const resumptionState = get().streamResumptionState;
-    if (!resumptionState) {
-      return false;
-    }
-
-    const ONE_HOUR_MS = 60 * 60 * 1000;
-    // createdAt is always a string (ISO format from JSON serialization)
-    const createdAtTime = new Date(resumptionState.createdAt).getTime();
-    const age = Date.now() - createdAtTime;
-    return age > ONE_HOUR_MS;
-  },
-
-  isStreamResumptionValid: () => {
-    const state = get();
-    const resumptionState = state.streamResumptionState;
-    if (!resumptionState) {
-      return false;
-    }
-
-    // Check if participant index is valid
-    const participantCount = state.participants.length;
-    if (resumptionState.participantIndex >= participantCount) {
-      return false;
-    }
-
-    // Check if thread ID matches
-    const currentThreadId = state.thread?.id || state.createdThreadId;
-    if (!currentThreadId || resumptionState.threadId !== currentThreadId) {
-      return false;
-    }
-
-    return true;
-  },
-
-  markResumptionAttempted: (roundNumber, participantIndex) => {
-    const key = `${roundNumber}_${participantIndex}`;
-    if (get().resumptionAttempts.has(key)) {
-      return false;
-    }
-    set((draft) => {
-      draft.resumptionAttempts.add(key);
-    }, false, 'streamResumption/markResumptionAttempted');
-    return true;
-  },
-
-  needsMessageSync: () => {
-    const resumptionState = get().streamResumptionState;
-    if (!resumptionState) {
-      return false;
-    }
-
-    // Need to sync if stream completed but we don't have the message
-    return resumptionState.state === StreamStatuses.COMPLETED;
-  },
-
-  needsStreamResumption: () => {
-    const state = get();
-    const resumptionState = state.streamResumptionState;
-
-    // No resumption state
-    if (!resumptionState) {
-      return false;
-    }
-
-    // Stream must be ACTIVE to need resumption
-    if (resumptionState.state !== StreamStatuses.ACTIVE) {
-      return false;
-    }
-
-    // Must match current thread
-    const currentThreadId = state.thread?.id || state.createdThreadId;
-    if (!currentThreadId || resumptionState.threadId !== currentThreadId) {
-      return false;
-    }
-
-    // Check if stale (>1 hour old)
-    if (state.isStreamResumptionStale()) {
-      return false;
-    }
-
-    // Check if valid (participant index in bounds)
-    if (!state.isStreamResumptionValid()) {
-      return false;
-    }
-
-    return true;
-  },
-
-  prefillStreamResumptionState: (threadId, serverState) => {
-    rlog.phase('prefill', `t=${threadId.slice(-8)} phase=${serverState.currentPhase} r${serverState.roundNumber} done=${serverState.roundComplete ? 1 : 0} nextP=${serverState.participants?.nextParticipantToTrigger ?? '-'}`);
-
-    // ✅ FIX: For complete/idle phases, still set prefilled state to block incomplete-round-resumption
-    // Previously we skipped entirely, leaving streamResumptionPrefilled=false and currentResumptionPhase=null.
-    // This caused the guard `streamResumptionPrefilled && currentResumptionPhase` to be falsy,
-    // allowing incomplete-round-resumption to run and re-trigger participants for completed rounds.
-    // Now we set the phase to COMPLETE/IDLE so the guard works: `if (phase === COMPLETE) return`.
-    //
-    // ✅ CRITICAL FIX: Also reset isModeratorStreaming when round is complete
-    // Without this, stale isModeratorStreaming=true from previous session causes rendering issues:
-    // - The moderator placeholder IIFE uses isModeratorStreaming to decide visibility
-    // - When true with phase=complete, neither placeholder section nor messageGroups renders moderator properly
-    if (serverState.roundComplete || serverState.currentPhase === RoundPhases.COMPLETE || serverState.currentPhase === RoundPhases.IDLE) {
-      rlog.phase('prefill-block', 'round complete/idle - blocking resumption');
-      set({
-        currentResumptionPhase: serverState.currentPhase === RoundPhases.IDLE ? RoundPhases.IDLE : RoundPhases.COMPLETE,
-        // ✅ Reset streaming flags when round is complete to prevent stale state
-        isModeratorStreaming: false,
-        isStreaming: false,
-        prefilledForThreadId: threadId,
-        resumptionRoundNumber: serverState.roundNumber,
-        streamingRoundNumber: null,
-        streamResumptionPrefilled: true,
-        waitingToStartStreaming: false,
-      }, false, 'streamResumption/prefillStreamResumptionState_complete');
-      return;
-    }
-
-    const stateUpdate: StreamResumptionPrefillUpdate = {
-      currentResumptionPhase: serverState.currentPhase,
-      prefilledForThreadId: threadId,
-      resumptionRoundNumber: serverState.roundNumber,
-      streamResumptionPrefilled: true,
-    };
-
-    // Handle phase-specific state
-    switch (serverState.currentPhase) {
-      case RoundPhases.PRE_SEARCH:
-        // Pre-search phase needs resumption
-        if (serverState.preSearch) {
-          stateUpdate.preSearchResumption = {
-            enabled: serverState.preSearch.enabled,
-            preSearchId: serverState.preSearch.preSearchId,
-            status: serverState.preSearch.status,
-            streamId: serverState.preSearch.streamId,
-          };
-        }
-        stateUpdate.waitingToStartStreaming = true;
-        break;
-
-      case RoundPhases.PARTICIPANTS: {
-        // Participants phase needs resumption
-        // Convert server's index-only value to include participant ID for validation
-        const serverNextIndex = serverState.participants.nextParticipantToTrigger;
-        if (serverNextIndex !== null) {
-          const currentParticipants = get().participants;
-          const participant = currentParticipants[serverNextIndex];
-          if (participant) {
-            stateUpdate.nextParticipantToTrigger = {
-              index: serverNextIndex,
-              participantId: participant.id,
-            };
-          } else {
-            // Participant not found (likely because prefill happens before initializeThread)
-            // Store the index as a number for now; it will be validated later
-            stateUpdate.nextParticipantToTrigger = serverNextIndex;
-          }
-        }
-        // In PARTICIPANTS phase, we're always waiting to start streaming for resumption
-        // Set waitingToStartStreaming regardless of whether nextParticipantToTrigger is set
-        // (prefill happens before initializeThread, so participants array may be empty)
-        stateUpdate.waitingToStartStreaming = true;
-        break;
-      }
-
-      case RoundPhases.MODERATOR:
-        if (serverState.moderator) {
-          stateUpdate.moderatorResumption = {
-            moderatorMessageId: serverState.moderator.moderatorMessageId,
-            status: serverState.moderator.status,
-            streamId: serverState.moderator.streamId,
-          };
-        }
-        stateUpdate.waitingToStartStreaming = true;
-        stateUpdate.isModeratorStreaming = true;
-        break;
-    }
-
-    set(stateUpdate, false, 'streamResumption/prefillStreamResumptionState');
-  },
-
-  // ✅ SMART STALE DETECTION: Reconcile prefilled state with actual active stream
-  // Called when AI SDK auto-resumes a valid stream that matches expected state
-  reconcileWithActiveStream: (streamingParticipantIndex) => {
-    const state = get();
-    const currentNextP = state.nextParticipantToTrigger;
-
-    // Extract index from either object form or raw number
-    const expectedNextIndex = typeof currentNextP === 'object' && currentNextP !== null
-      ? currentNextP.index
-      : currentNextP;
-
-    // If server triggered a later participant than prefilled, update state
-    if (streamingParticipantIndex >= (expectedNextIndex ?? 0)) {
-      rlog.resume('reconcile', `P${streamingParticipantIndex} active, updating nextP from ${expectedNextIndex} to ${streamingParticipantIndex + 1}`);
-      set({
-        currentParticipantIndex: streamingParticipantIndex,
-        // Next AFTER current streaming participant
-        nextParticipantToTrigger: streamingParticipantIndex + 1,
-        // Already streaming - don't need to wait
-        waitingToStartStreaming: false,
-      }, false, 'streamResumption/reconcileWithActiveStream');
-    }
-  },
-
-  // ✅ FIX: Allow setting phase directly for SSR stale abort handling
-  // When moderator resumption aborts due to SSR stale data, we transition to IDLE
-  // while keeping streamResumptionPrefilled=true to block incomplete-round-resumption
-  setCurrentResumptionPhase: phase =>
-    set({
-      currentResumptionPhase: phase,
-    }, false, 'streamResumption/setCurrentResumptionPhase'),
-
-  setNextParticipantToTrigger: value =>
-    set({ nextParticipantToTrigger: value }, false, 'streamResumption/setNextParticipantToTrigger'),
-
-  // ✅ SCOPE VERSIONING: Set thread scope for resumption validation
-  setResumptionScope: threadId =>
-    set({
-      resumptionScopeThreadId: threadId,
-    }, false, 'resumption/setScope'),
-
-  setStreamResumptionState: state =>
-    set({ streamResumptionState: state }, false, 'streamResumption/setStreamResumptionState'),
-
-  transitionToModeratorPhase: (roundNumber?: number) =>
-    set({
-      currentResumptionPhase: RoundPhases.MODERATOR,
-      isModeratorStreaming: true,
-      ...(roundNumber !== undefined && { resumptionRoundNumber: roundNumber }),
-    }, false, 'streamResumption/transitionToModeratorPhase'),
-
-  transitionToParticipantsPhase: () =>
-    set({
-      currentResumptionPhase: RoundPhases.PARTICIPANTS,
-      preSearchResumption: null,
-    }, false, 'streamResumption/transitionToParticipantsPhase'),
-});
-
-// ============================================================================
-// ROUND FLOW SLICE (FSM-based round orchestration)
-// ============================================================================
-
-const createRoundFlowSlice: SliceCreator<RoundFlowSlice> = (set, get) => ({
-  ...ROUND_FLOW_DEFAULTS,
-
-  dispatchFlowEvent: (event, payload) => {
-    const state = get();
-    const currentFlowState = state.flowState;
-
-    // Log event dispatch in development
-    rlog.phase('fsm-dispatch', `Event: ${event}, Current: ${currentFlowState}${payload ? `, Payload: ${JSON.stringify(payload)}` : ''}`);
-
-    // Record event in history (dev mode only, limit to 50 entries)
-    set((draft) => {
-      if (draft.flowEventHistory.length >= 50) {
-        draft.flowEventHistory.shift();
-      }
-      draft.flowEventHistory.push({
-        event,
-        fromState: currentFlowState,
-        timestamp: Date.now(),
-        toState: currentFlowState, // Will be updated after transition
-      });
-    }, false, `roundFlow/dispatch_${event}`);
-  },
-
-  resetFlowState: () =>
-    set(ROUND_FLOW_DEFAULTS, false, 'roundFlow/resetFlowState'),
-
-  setFlowError: error =>
-    set({ flowLastError: error, flowState: error ? RoundFlowStates.ERROR : get().flowState }, false, 'roundFlow/setFlowError'),
-
-  setFlowParticipantCount: count =>
-    set({ flowParticipantCount: count }, false, 'roundFlow/setFlowParticipantCount'),
-
-  setFlowParticipantIndex: index =>
-    set({ flowParticipantIndex: index }, false, 'roundFlow/setFlowParticipantIndex'),
-
-  setFlowRoundNumber: roundNumber =>
-    set({ flowRoundNumber: roundNumber }, false, 'roundFlow/setFlowRoundNumber'),
-
-  setFlowState: state =>
-    set({ flowState: state }, false, 'roundFlow/setFlowState'),
-});
-
-/**
- * Resolve all pending animation promises before clearing.
- * Prevents memory leak from hanging promises when navigating away or completing streaming.
- */
-function resolveAllPendingAnimations(resolvers: Map<number, () => void>) {
-  resolvers.forEach(resolver => resolver());
-}
-
-const createAnimationSlice: SliceCreator<AnimationSlice> = (set, get) => ({
-  ...ANIMATION_DEFAULTS,
-
-  clearAnimations: () => {
-    resolveAllPendingAnimations(get().animationResolvers);
-    set({ ...ANIMATION_DEFAULTS }, false, 'animation/clearAnimations');
-  },
-
-  completeAnimation: participantIndex =>
-    set((draft) => {
-      draft.pendingAnimations.delete(participantIndex);
-      const resolver = draft.animationResolvers.get(participantIndex);
-      if (resolver) {
-        resolver();
-        draft.animationResolvers.delete(participantIndex);
-      }
-    }, false, 'animation/completeAnimation'),
-
-  registerAnimation: participantIndex =>
-    set((draft) => {
-      draft.pendingAnimations.add(participantIndex);
-    }, false, 'animation/registerAnimation'),
-
-  waitForAllAnimations: async () => {
-    const state = get();
-    const pendingIndices = Array.from(state.pendingAnimations);
-
-    if (pendingIndices.length === 0) {
-      return Promise.resolve();
-    }
-
-    // ✅ REMOVED TIMEOUT: Previously used 5s timeout as fallback
-    // Problem: Timeout-based fallback caused premature animation clearing
-    // Solution: Let animations complete naturally via their resolvers
-    // Each animation component calls completeAnimation() when done, which resolves its promise
-    // If an animation never completes (bug), the promise hangs - but this is better than
-    // prematurely clearing animations and causing visual glitches
-    const animationPromises = pendingIndices.map(index => state.waitForAnimation(index));
-
-    await Promise.all(animationPromises);
-  },
-
-  waitForAnimation: (participantIndex: number) => {
-    const state = get();
-
-    // If animation is not pending, resolve immediately
-    if (!state.pendingAnimations.has(participantIndex)) {
-      return Promise.resolve();
-    }
-
-    return new Promise<void>((resolve) => {
-      set((current) => {
-        const newResolvers = new Map(current.animationResolvers);
-        newResolvers.set(participantIndex, resolve);
-        return { animationResolvers: newResolvers };
-      }, false, 'animation/waitForAnimationPromise');
-    });
-  },
-});
-
-const createAttachmentsSlice: SliceCreator<AttachmentsSlice> = (set, get) => ({
-  ...ATTACHMENTS_DEFAULTS,
-
-  addAttachments: (files: File[]) =>
-    set((draft) => {
-      files.forEach((file) => {
-        draft.pendingAttachments.push({
-          file,
-          id: `attachment-${Date.now()}-${Math.random().toString(36).slice(2, 9)}`,
-          status: UploadStatuses.PENDING,
-        });
-      });
-    }, false, 'attachments/addAttachments'),
-
-  clearAttachments: () =>
-    set({ pendingAttachments: [] }, false, 'attachments/clearAttachments'),
-
-  getAttachments: () => get().pendingAttachments,
-
-  hasAttachments: () => get().pendingAttachments.length > 0,
-
-  removeAttachment: (id: string) =>
-    set((draft) => {
-      const idx = draft.pendingAttachments.findIndex(a => a.id === id);
-      if (idx !== -1) {
-        draft.pendingAttachments.splice(idx, 1);
-      }
-    }, false, 'attachments/removeAttachment'),
-
-  updateAttachmentPreview: (id: string, preview: FilePreview) =>
-    set((draft) => {
-      const attachment = draft.pendingAttachments.find(a => a.id === id);
-      if (attachment) {
-        attachment.preview = preview;
-      }
-    }, false, 'attachments/updateAttachmentPreview'),
-
-  updateAttachmentUpload: (id: string, uploadItem: UploadItem) =>
-    set((draft) => {
-      const attachment = draft.pendingAttachments.find(a => a.id === id);
-      if (attachment) {
-        attachment.uploadItem = castDraft(uploadItem);
-      }
-    }, false, 'attachments/updateAttachmentUpload'),
-});
-
-const createSidebarAnimationSlice: SliceCreator<SidebarAnimationSlice> = set => ({
-  ...SIDEBAR_ANIMATION_DEFAULTS,
-
-  completeTitleAnimation: () =>
-    set({
-      ...SIDEBAR_ANIMATION_DEFAULTS,
-    }, false, 'sidebarAnimation/completeTitleAnimation'),
-
-  setAnimationPhase: (phase: TitleAnimationPhase) =>
-    set({ animationPhase: phase }, false, 'sidebarAnimation/setAnimationPhase'),
-
-  startTitleAnimation: (threadId: string, oldTitle: string, newTitle: string) =>
-    set({
-      animatingThreadId: threadId,
-      animationPhase: 'deleting',
-      displayedTitle: oldTitle,
-      newTitle,
-      oldTitle,
-    }, false, 'sidebarAnimation/startTitleAnimation'),
-
-  updateDisplayedTitle: (title: string) =>
-    set({ displayedTitle: title }, false, 'sidebarAnimation/updateDisplayedTitle'),
-});
-
-// ============================================================================
-// NAVIGATION SLICE (Deferred thread navigation for atomic reset-on-hydrate)
-// ============================================================================
-
-const createNavigationSlice: SliceCreator<NavigationSlice> = (set, get) => ({
-  ...NAVIGATION_DEFAULTS,
-
-  /**
-   * ✅ ATOMIC THREAD SWITCH: Combines reset + initialization in ONE set() call
-   * This prevents the blank page issue caused by the race condition:
-   * 1. Old: resetForThreadNavigation clears store → blank state
-   * 2. Old: Route loader fetches data → async delay
-   * 3. Old: Component renders with empty store → BLANK PAGE
-   *
-   * New: We defer the reset until data is ready, then do both atomically:
-   * 1. Navigation starts → mark pending, stop streaming (minimal cleanup)
-   * 2. Route loader fetches data → async
-   * 3. Hydration detects pending navigation complete → atomic reset + init
-   */
-  atomicThreadSwitch: (newThread, newParticipants, newMessages) => {
-    const state = get();
-
-    // 1. Stop streaming
-    state.chatStop?.();
-    state.chatSetMessages?.([]);
-
-    // 2. Resolve pending animations
-    resolveAllPendingAnimations(state.animationResolvers);
-
-    // 3. Increment scope version
-    const newScopeVersion = (state.resumptionScopeVersion ?? 0) + 1;
-
-    // 4. ATOMIC: Reset + new data in ONE set() call - no empty state window
-    set({
-      // Reset state (from THREAD_NAVIGATION_RESET_STATE)
-      ...THREAD_NAVIGATION_RESET_STATE,
-      animationResolvers: new Map(),
-      // Fresh Set/Map instances
-      createdModeratorRounds: new Set<number>(),
-      // Mark initialized
-      hasInitiallyLoaded: true,
-      messages: newMessages,
-      participants: sortByPriority(newParticipants),
-      pendingAnimations: new Set<number>(),
-      // Clear navigation flag
-      pendingNavigationTargetSlug: null,
-      preSearchActivityTimes: new Map<number, number>(),
-      resumptionAttempts: new Set<string>(),
-      // Scope versioning
-      resumptionScopeThreadId: newThread.id,
-
-      resumptionScopeVersion: newScopeVersion,
-      showInitialUI: false,
-      // NEW data immediately - this is the key fix!
-      thread: newThread,
-
-      triggeredModeratorIds: new Set<string>(),
-
-      triggeredModeratorRounds: new Set<number>(),
-      triggeredPreSearchRounds: new Set<number>(),
-    }, false, 'operations/atomicThreadSwitch');
-  },
-
-  clearPendingNavigationTarget: () =>
-    set({ pendingNavigationTargetSlug: null }, false, 'navigation/clearPendingTarget'),
-
-  setPendingNavigationTarget: (slug: string | null) =>
-    set({ pendingNavigationTargetSlug: slug }, false, 'navigation/setPendingTarget'),
-});
-
-const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
-  completeRegeneration: (_roundNumber: number) =>
-    set({
-      ...STREAMING_STATE_RESET,
-      ...MODERATOR_STATE_RESET,
-      ...PENDING_MESSAGE_STATE_RESET,
-      ...REGENERATION_STATE_RESET,
-    }, false, 'operations/completeRegeneration'),
-
-  completeStreaming: () => {
-    const currentState = get();
-    const needsNewPendingAnimations = currentState.pendingAnimations.size > 0;
-    const needsNewAnimationResolvers = currentState.animationResolvers.size > 0;
-
-    // ✅ FIX A1: Resolve animation promises before clearing
-    if (needsNewAnimationResolvers) {
-      resolveAllPendingAnimations(currentState.animationResolvers);
-    }
-
-    // ✅ DEBUG: Track when completeStreaming clears pendingMessage
-    rlog.stream('end', `completeStreaming clearing pendingMessage=${currentState.pendingMessage ? 1 : 0}`);
-
-    set({
-      ...STREAMING_STATE_RESET,
-      ...MODERATOR_STATE_RESET,
-      ...PENDING_MESSAGE_STATE_RESET,
-      ...REGENERATION_STATE_RESET,
-      ...STREAM_RESUMPTION_STATE_RESET,
-      // ✅ IMPORTANT: Do NOT clear tracking Sets here!
-      // triggeredPreSearchRounds, createdModeratorRounds, triggeredModeratorRounds, triggeredModeratorIds
-      // must PERSIST across completeStreaming calls to prevent duplicate triggers for completed rounds.
-      // These are only cleared on thread navigation (resetForThreadNavigation).
-      // ✅ Clear pre-search activity times (these are per-streaming-session, not persistent tracking)
-      preSearchActivityTimes: new Map<number, number>(),
-      ...(needsNewPendingAnimations ? { pendingAnimations: new Set<number>() } : {}),
-      ...(needsNewAnimationResolvers ? { animationResolvers: new Map<number, () => void>() } : {}),
-    }, false, 'operations/completeStreaming');
-
-    // Clean up any duplicate messages after streaming completes
-    // This ensures the store is always in a consistent state
-    get().deduplicateMessages();
-  },
-
-  initializeThread: (thread: ChatThread, participants: ChatParticipant[], initialMessages?: UIMessage[]) => {
-    rlog.init('initThread', `START t=${thread.id?.slice(-8)} newMsgs=${initialMessages?.length ?? 0} newParts=${participants.length}`);
-    const currentState = get();
-    const isSameThread = currentState.thread?.id === thread.id || currentState.createdThreadId === thread.id;
-    const storeMessages = currentState.messages;
-    const newMessages = initialMessages || [];
-
-    // ✅ CRITICAL FIX: Check resumption state BEFORE deciding messages
-    // If server detected incomplete round (streamResumptionPrefilled=true), we MUST
-    // preserve store messages - they contain the latest round data that might not
-    // be in DB yet. Without this, round 2 messages get replaced with round 0-1 DB data.
-    const isResumingStream = currentState.streamResumptionPrefilled;
-    const resumptionRound = currentState.resumptionRoundNumber;
-
-    rlog.init('thread', `resum=${isResumingStream ? 1 : 0} same=${isSameThread ? 1 : 0} store=${storeMessages.length} db=${newMessages.length} resumR=${resumptionRound ?? '-'}`);
-
-    // ✅ CRITICAL FIX: Clear AI SDK messages when switching to a DIFFERENT thread
-    // Without this, the AI SDK still has old thread's messages, and useMinimalMessageSync
-    // will merge them back into the store, causing stale data to flash briefly on navigation.
-    // Must happen BEFORE we set new messages to prevent the sync hook from mixing threads.
-    //
-    // ✅ EXCEPTION: Don't clear when resuming stream (isResumingStream=true)
-    // On page refresh, store is empty so isSameThread=false, but we're resuming the SAME thread.
-    // Clearing AI SDK messages would lose any in-progress streaming content.
-    // The prefilled resumption state tells us we should preserve AI SDK data.
-    if (!isSameThread && !isResumingStream && currentState.chatSetMessages) {
-      currentState.chatSetMessages([]);
-    }
-
-    let messagesToSet: UIMessage[];
-
-    if (isSameThread && storeMessages.length > 0) {
-      // ✅ BUG FIX: Detect stale streaming parts in store messages
-      // After page refresh, store messages from Zustand persist may have stale
-      // `state: 'streaming'` parts from an interrupted session. These are NOT
-      // actively streaming - they're artifacts of the previous session.
-      // Fresh DB messages (newMessages) have complete data with finishReason.
-      // If store has any stale streaming parts, ALWAYS prefer DB messages.
-      const hasStaleStreamingParts = storeMessages.some(msg =>
-        msg.parts?.some(p => 'state' in p && p.state === TextPartStates.STREAMING),
-      );
-
-      // ✅ FIX: During stream resumption, keep store messages even if they have stale parts
-      // The store has the latest round data that might not be in DB yet
-      // We only replace with DB messages if NOT resuming
-      if (hasStaleStreamingParts && newMessages.length > 0 && !isResumingStream) {
-        // ✅ RACE CONDITION FIX: Don't blindly replace - MERGE messages
-        // Race condition: P0 completes → backend saves → user refreshes immediately
-        // SSR might fetch BEFORE the transaction commits, missing the latest message.
-        // Solution: Use DB as base but preserve store messages that aren't in DB yet.
-        const dbMessageIds = new Set(newMessages.map(m => m.id));
-        const storeMsgsNotInDb = storeMessages.filter(m => !dbMessageIds.has(m.id));
-
-        if (storeMsgsNotInDb.length > 0) {
-          messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort(sortMessagesWithinRound);
-        } else {
-          messagesToSet = newMessages;
-        }
-      } else if (isResumingStream) {
-        // ✅ FIX: During resumption, compare round numbers but prefer store messages for resumption round
-        const storeMaxRound = storeMessages.reduce((max, m) => {
-          const round = getRoundNumber(m.metadata) ?? 0;
-          return Math.max(max, round);
-        }, 0);
-
-        const newMaxRound = newMessages.reduce((max, m) => {
-          const round = getRoundNumber(m.metadata) ?? 0;
-          return Math.max(max, round);
-        }, 0);
-
-        // During resumption: keep store if it has resumption round data OR has more/equal messages
-        if (storeMaxRound >= (resumptionRound ?? 0) || storeMaxRound >= newMaxRound) {
-          messagesToSet = storeMessages;
-        } else {
-          // ✅ RACE CONDITION FIX: Even during resumption, merge if store has messages DB doesn't
-          const dbMessageIds = new Set(newMessages.map(m => m.id));
-          const storeMsgsNotInDb = storeMessages.filter(m => !dbMessageIds.has(m.id));
-
-          if (storeMsgsNotInDb.length > 0) {
-            messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort(sortMessagesWithinRound);
-          } else {
-            messagesToSet = newMessages;
-          }
-        }
-      } else {
-        // Original logic: Compare round numbers for active streaming scenarios
-        const storeMaxRound = storeMessages.reduce((max, m) => {
-          const round = getRoundNumber(m.metadata) ?? 0;
-          return Math.max(max, round);
-        }, 0);
-
-        const newMaxRound = newMessages.reduce((max, m) => {
-          const round = getRoundNumber(m.metadata) ?? 0;
-          return Math.max(max, round);
-        }, 0);
-
-        if (storeMaxRound > newMaxRound || (storeMaxRound === newMaxRound && storeMessages.length >= newMessages.length)) {
-          messagesToSet = storeMessages;
-        } else {
-          // ✅ RACE CONDITION FIX: Merge if store has messages DB doesn't
-          const dbMessageIds = new Set(newMessages.map(m => m.id));
-          const storeMsgsNotInDb = storeMessages.filter(m => !dbMessageIds.has(m.id));
-
-          if (storeMsgsNotInDb.length > 0) {
-            messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort(sortMessagesWithinRound);
-          } else {
-            messagesToSet = newMessages;
-          }
-        }
-      }
-    } else {
-      messagesToSet = newMessages;
-    }
-
-    const sortedParticipants = sortByPriority(participants);
-    const enabledParticipants = getEnabledSortedParticipants(participants);
-
-    // ✅ HYDRATION DEBUG: Track message count before final set()
-    const hasStaleStreamingParts = storeMessages.some(msg =>
-      msg.parts?.some(p => 'state' in p && p.state === TextPartStates.STREAMING),
-    );
-    rlog.init('initThread', `SET msgs=${messagesToSet.length} parts=${sortedParticipants.length} stale=${hasStaleStreamingParts ? 1 : 0}`);
-
-    // DEBUG: Track thread initialization result
-    rlog.moderator('initThread', `msgs=${messagesToSet.length} parts=${enabledParticipants.length}`);
-
-    const formParticipants = enabledParticipants.map((p, index) => ({
-      customRoleId: p.customRoleId || undefined,
-      id: p.id,
-      modelId: p.modelId,
-      priority: index,
-      role: p.role,
-    }));
-
-    // ✅ STALE PREFILL VALIDATION: Check if prefilled round has messages to support it
-    // KV stream resumption state can be stale if user navigated away during streaming
-    // and the KV wasn't updated when the stream completed/failed.
-    // If resumptionRoundNumber says we need to resume round N, but messages don't have
-    // a user message for round N, the prefill is stale and should be cleared.
-    let validatedResumption = currentState.streamResumptionPrefilled;
-    let validatedResumptionPhase = currentState.currentResumptionPhase;
-    let validatedResumptionRoundNumber = currentState.resumptionRoundNumber;
-
-    if (currentState.streamResumptionPrefilled && currentState.resumptionRoundNumber !== null) {
-      const resumeRound = currentState.resumptionRoundNumber;
-      const hasUserMessageForResumeRound = messagesToSet.some((m) => {
-        if (m.role !== MessageRoles.USER) {
-          return false;
-        }
-        const msgRound = getRoundNumber(m.metadata);
-        return msgRound === resumeRound;
-      });
-
-      // If prefill says round N but no user message exists for round N, prefill is stale
-      if (!hasUserMessageForResumeRound && resumeRound > 0) {
-        rlog.init('thread', `⚠️ STALE PREFILL: r${resumeRound} has no user msg, clearing resumption`);
-        validatedResumption = false;
-        validatedResumptionPhase = null;
-        validatedResumptionRoundNumber = null;
-      }
-    }
-
-    // ✅ BUG FIX: Preserve streaming state during active operations
-    // Preserve state when:
-    // 1. streamResumptionPrefilled: Server detected incomplete round (resumption)
-    // 2. Active form submission: handleUpdateThreadAndSend set up streaming state
-    //
-    // Active form submission detection (must be specific, not just waitingToStartStreaming):
-    // - configChangeRoundNumber !== null: Set by handleUpdateThreadAndSend BEFORE PATCH
-    //   This is the key indicator that a form submission is in progress
-    // - isWaitingForChangelog: Set AFTER PATCH (always set, cleared by use-changelog-sync)
-    //
-    // NOTE: waitingToStartStreaming alone is NOT sufficient because it could be stale
-    // state from a previous session. configChangeRoundNumber and isWaitingForChangelog
-    // are only set during active form submissions and cleared after completion.
-    //
-    // Without this guard, PATCH response updating thread/participants can trigger
-    // initializeThread which would reset all streaming state and break placeholders.
-    //
-    // ✅ FIX: For COMPLETE/IDLE phases, streamResumptionPrefilled=true is ONLY used
-    // to block incomplete-round-resumption hook from triggering. We should NOT preserve
-    // streaming state (like streamingRoundNumber) because there's nothing to resume.
-    //
-    // ✅ STALE PREFILL FIX: Use validated resumption variables (cleared if stale)
-    const resumptionPhase = validatedResumptionPhase;
-    const isActiveResumption = validatedResumption
-      && resumptionPhase !== RoundPhases.COMPLETE
-      && resumptionPhase !== RoundPhases.IDLE;
-    const hasActiveFormSubmission
-      = currentState.configChangeRoundNumber !== null
-        || currentState.isWaitingForChangelog;
-    // ✅ FIX v5: Detect newly created thread by ONLY checking createdThreadId matches
-    // Race condition: route loader triggers initializeThread BEFORE prepareForNewMessage completes
-    // So pendingMessage is still null when initializeThread runs. We can't rely on it.
-    // createdThreadId is:
-    // - Set by handleCreateThread after API success, BEFORE navigation
-    // - Cleared by resetForThreadNavigation on any navigation away
-    // So if createdThreadId matches thread.id, we KNOW this is the thread being created
-    const isNewlyCreatedThread = currentState.createdThreadId === thread.id;
-
-    rlog.init('newThreadCheck', `created=${currentState.createdThreadId?.slice(-8) ?? '-'} thread=${thread.id.slice(-8)} pending=${!!currentState.pendingMessage} sent=${currentState.hasSentPendingMessage} waiting=${currentState.waitingToStartStreaming} creating=${currentState.isCreatingThread} isNew=${isNewlyCreatedThread ? 1 : 0}`);
-
-    // ✅ FIX: Detect completed round to prevent stale streaming state after refresh
-    // When user refreshes after round completes, createdThreadId may still match (causing isNewlyCreatedThread=true)
-    // but the round is actually complete. Check if moderator message exists with content.
-    // If round is complete, don't preserve streaming state - there's nothing to stream.
-    const latestRoundNumber = messagesToSet.reduce((max, m) => {
-      const round = getRoundNumber(m.metadata) ?? -1;
-      return Math.max(max, round);
-    }, -1);
-
-    const isRoundActuallyComplete = latestRoundNumber >= 0 && messagesToSet.some((m) => {
-      const meta = m.metadata;
-      if (!meta || typeof meta !== 'object') {
-        return false;
-      }
-      const isModerator = 'isModerator' in meta && meta.isModerator === true;
-      if (!isModerator) {
-        return false;
-      }
-      const msgRound = getRoundNumber(meta);
-      if (msgRound !== latestRoundNumber) {
-        return false;
-      }
-      // Check if moderator message has actual text content (more robust than checking state)
-      // DB messages might not have state field, or it might be in different format
-      const hasContent = m.parts?.some(p =>
-        p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
-      );
-      return hasContent;
-    });
-
-    rlog.init('roundCheck', `latestRound=${latestRoundNumber} complete=${isRoundActuallyComplete ? 1 : 0} msgs=${messagesToSet.length} hasMod=${messagesToSet.some(m => m.metadata && typeof m.metadata === 'object' && 'isModerator' in m.metadata) ? 1 : 0}`);
-
-    // Override isNewlyCreatedThread if round is actually complete
-    // This prevents stale streaming state from persisting after refresh
-    const effectiveIsNewlyCreatedThread = isNewlyCreatedThread && !isRoundActuallyComplete;
-    if (isNewlyCreatedThread && isRoundActuallyComplete) {
-      rlog.init('newThreadCheck', `⚠️ OVERRIDE: createdThreadId matches but round r${latestRoundNumber} is complete - clearing stale state`);
-    }
-
-    const preserveStreamingState = isActiveResumption || hasActiveFormSubmission || effectiveIsNewlyCreatedThread;
-    const resumptionRoundNumber = validatedResumptionRoundNumber;
-
-    // ✅ FIX B2: Validate nextParticipantToTrigger after config change
-    // If stored as object with participantId, verify the index still points to same participant
-    // Participant config can change during resumption, causing indices to shift
-    // NOTE: Use enabledParticipants since streaming only iterates over enabled participants
-    let validatedNextParticipantToTrigger = currentState.nextParticipantToTrigger;
-    const rawNextP = currentState.nextParticipantToTrigger;
-    if (preserveStreamingState && typeof rawNextP === 'object' && rawNextP !== null && 'participantId' in rawNextP) {
-      const expectedParticipant = enabledParticipants[rawNextP.index];
-      if (!expectedParticipant || expectedParticipant.id !== rawNextP.participantId) {
-        // Participant config changed - find correct index or invalidate
-        const correctIndex = enabledParticipants.findIndex(p => p.id === rawNextP.participantId);
-        validatedNextParticipantToTrigger = correctIndex >= 0 ? correctIndex : null;
-        rlog.init('nextP-validate', `stale: idx ${rawNextP.index} -> ${correctIndex}`);
-      }
-    }
-
-    set({
-      animationResolvers: preserveStreamingState ? currentState.animationResolvers : new Map(),
-      configChangeRoundNumber: preserveStreamingState ? currentState.configChangeRoundNumber : null,
-      // ✅ FIX: Preserve tracking sets during active submission to avoid duplicate triggers
-      createdModeratorRounds: preserveStreamingState ? currentState.createdModeratorRounds : new Set<number>(),
-      currentResumptionPhase: validatedResumptionPhase,
-      currentRoundNumber: preserveStreamingState ? currentState.currentRoundNumber : null,
-      // ✅ FIX: Preserve form state if user has pending config changes
-      // Without this, toggling web search and then a query refetch would wipe the user's change
-      // hasPendingConfigChanges is set when user toggles any config (mode, web search, participants)
-      enableWebSearch: currentState.hasPendingConfigChanges ? currentState.enableWebSearch : thread.enableWebSearch,
-      error: null,
-      expectedParticipantIds: preserveStreamingState ? currentState.expectedParticipantIds : null,
-      hasEarlyOptimisticMessage: preserveStreamingState ? currentState.hasEarlyOptimisticMessage : false,
-      hasInitiallyLoaded: true,
-      hasPendingConfigChanges: preserveStreamingState ? currentState.hasPendingConfigChanges : false,
-      hasSentPendingMessage: preserveStreamingState ? currentState.hasSentPendingMessage : false,
-      isModeratorStreaming: preserveStreamingState ? currentState.isModeratorStreaming : false,
-      // These can always be reset
-      isRegenerating: false,
-      isStreaming: false,
-      // ✅ FIX: Also preserve changelog-related flags during active submission
-      isWaitingForChangelog: preserveStreamingState ? currentState.isWaitingForChangelog : false,
-      messages: messagesToSet,
-      nextParticipantToTrigger: preserveStreamingState ? validatedNextParticipantToTrigger : null,
-      participants: sortedParticipants,
-      pendingAnimations: preserveStreamingState ? currentState.pendingAnimations : new Set<number>(),
-      pendingAttachmentIds: preserveStreamingState ? currentState.pendingAttachmentIds : null,
-      pendingFileParts: preserveStreamingState ? currentState.pendingFileParts : null,
-      // ✅ FIX: Preserve pending message state during active submission
-      pendingMessage: preserveStreamingState ? currentState.pendingMessage : null,
-      prefilledForThreadId: validatedResumption ? currentState.prefilledForThreadId : null,
-      preSearchActivityTimes: preserveStreamingState ? currentState.preSearchActivityTimes : new Map<number, number>(),
-      regeneratingRoundNumber: null,
-      resumptionAttempts: preserveStreamingState ? currentState.resumptionAttempts : new Set<string>(),
-      resumptionRoundNumber: validatedResumptionRoundNumber,
-      selectedMode: currentState.hasPendingConfigChanges
-        ? currentState.selectedMode
-        : ChatModeSchema.catch(DEFAULT_CHAT_MODE).parse(thread.mode),
-      selectedParticipants: currentState.hasPendingConfigChanges ? currentState.selectedParticipants : formParticipants,
-      showInitialUI: false,
-      streamingRoundNumber: preserveStreamingState
-        ? (currentState.streamingRoundNumber ?? resumptionRoundNumber)
-        : null,
-      // ✅ STALE PREFILL FIX: Apply validated resumption state (cleared if stale)
-      streamResumptionPrefilled: validatedResumption,
-      streamResumptionState: preserveStreamingState ? currentState.streamResumptionState : null,
-      thread,
-      triggeredModeratorIds: preserveStreamingState ? currentState.triggeredModeratorIds : new Set<string>(),
-      triggeredModeratorRounds: preserveStreamingState ? currentState.triggeredModeratorRounds : new Set<number>(),
-      triggeredPreSearchRounds: preserveStreamingState ? currentState.triggeredPreSearchRounds : new Set<number>(),
-      // ✅ CONDITIONAL: Only reset streaming state if NOT resuming or active submission
-      // ✅ FIX v4: For newly created threads, FORCE waitingToStartStreaming=true
-      // Even if prepareForNewMessage reset it to false, we need it true to trigger streaming
-      // ✅ FIX v5: Use effectiveIsNewlyCreatedThread which is false when round is actually complete
-      waitingToStartStreaming: effectiveIsNewlyCreatedThread
-        ? true
-        : (preserveStreamingState ? currentState.waitingToStartStreaming : false),
-    }, false, 'operations/initializeThread');
-
-    // ✅ DEBUG v7: Log AFTER set() to confirm waitingToStartStreaming value
-    const afterState = get();
-    rlog.init('postSet', `wait=${afterState.waitingToStartStreaming ? 1 : 0} isNew=${effectiveIsNewlyCreatedThread ? 1 : 0} preserve=${preserveStreamingState ? 1 : 0} roundComplete=${isRoundActuallyComplete ? 1 : 0}`);
-    rlog.flow('init-thread', `DONE t=${thread.id.slice(-8)} wait=${afterState.waitingToStartStreaming ? 1 : 0} pending=${afterState.pendingMessage ? 1 : 0} hasSent=${afterState.hasSentPendingMessage ? 1 : 0} nextP=${afterState.nextParticipantToTrigger !== null ? 1 : 0}`);
-  },
-
-  prepareForNewMessage: (message: string, participantIds: string[], attachmentIds?: string[], providedFileParts?: ExtendedFilePart[]) => {
-    // ✅ DEBUG: Log attachment IDs being prepared
-    rlog.msg('cite-prepare', `msgLen=${message.length} parts=${participantIds.length} attIds=${attachmentIds?.length ?? 0} fileParts=${providedFileParts?.length ?? 0}`);
-
-    return set((draft) => {
-      const messageCount = draft.messages.length;
-      const lastMessage = messageCount > 0 ? draft.messages[messageCount - 1] : null;
-      const lastRoundNum = lastMessage ? getRoundNumber(lastMessage.metadata) : null;
-      const nextRoundNumber = lastRoundNum !== null ? lastRoundNum + 1 : 0;
-
-      const isOnThreadScreen = draft.screenMode === ScreenModes.THREAD;
-      const hasExistingOptimisticMessage = draft.hasEarlyOptimisticMessage;
-      const fileParts = providedFileParts || [];
-
-      const targetRound = draft.streamingRoundNumber ?? nextRoundNumber;
-      const hasOptimisticForTargetRound = draft.messages.some(
-        (m) => {
-          if (m.role !== MessageRoles.USER) {
-            return false;
-          }
-          const roundNumber = getRoundNumber(m.metadata);
-          const isOptimistic = m.metadata && typeof m.metadata === 'object' && 'isOptimistic' in m.metadata
-            ? m.metadata.isOptimistic
-            : false;
-          return roundNumber === targetRound && isOptimistic === true;
-        },
-      );
-
-      // ✅ FIX v6: Don't reset waitingToStartStreaming during thread creation
-      // initializeThread sets it to true, but prepareForNewMessage runs AFTER and resets it
-      // THEN setWaitingToStartStreaming(true) runs - but effects fire between prepareForNewMessage
-      // and setWaitingToStartStreaming, seeing wait=0. Preserve it if createdThreadId is set.
-      const isThreadCreationFlow = draft.createdThreadId !== null;
-      const waitBefore = draft.waitingToStartStreaming;
-      if (!isThreadCreationFlow) {
-        draft.waitingToStartStreaming = false;
-      }
-      rlog.msg('prepareFlags', `createFlow=${isThreadCreationFlow ? 1 : 0} created=${draft.createdThreadId?.slice(-8) ?? '-'} waitBefore=${waitBefore ? 1 : 0} waitAfter=${draft.waitingToStartStreaming ? 1 : 0}`);
-      draft.isStreaming = false;
-      draft.currentParticipantIndex = 0;
-      draft.error = null;
-
-      draft.isRegenerating = false;
-      draft.regeneratingRoundNumber = null;
-
-      draft.streamResumptionState = null;
-      draft.resumptionAttempts = new Set<string>();
-      draft.nextParticipantToTrigger = null;
-      // ✅ FIX: Clear stale resumption state from previous round
-      // Without this, new submissions are blocked by stale COMPLETE phase
-      draft.currentResumptionPhase = null;
-      draft.streamResumptionPrefilled = false;
-
-      draft.isModeratorStreaming = false;
-      // ⚠️ NOTE: Do NOT set changelog flags here!
-      // prepareForNewMessage is called for:
-      // 1. Initial thread creation (via handleCreateThread) - POST doesn't create changelog
-      // 2. Incomplete round resumption - changelog was handled when round originally started
-      // For subsequent rounds, handleUpdateThreadAndSend sets changelog flags AFTER PATCH
-      draft.pendingMessage = message;
-      draft.pendingAttachmentIds = attachmentIds && attachmentIds.length > 0 ? attachmentIds : null;
-      draft.pendingFileParts = fileParts.length > 0 ? fileParts : null;
-      draft.expectedParticipantIds = participantIds.length > 0 ? participantIds : draft.expectedParticipantIds;
-      draft.hasSentPendingMessage = false;
-      draft.hasEarlyOptimisticMessage = false;
-
-      // Preserve or calculate streamingRoundNumber
-      draft.streamingRoundNumber = hasExistingOptimisticMessage
-        ? draft.streamingRoundNumber
-        : (isOnThreadScreen ? nextRoundNumber : null);
-
-      if (isOnThreadScreen && !hasExistingOptimisticMessage && !hasOptimisticForTargetRound) {
-        draft.messages.push({
-          id: `optimistic-user-${Date.now()}-r${nextRoundNumber}`,
-          metadata: {
-            isOptimistic: true,
-            role: MessageRoles.USER,
-            roundNumber: nextRoundNumber,
-          },
-          parts: [
-            ...fileParts,
-            { text: message, type: MessagePartTypes.TEXT },
-          ],
-          role: MessageRoles.USER,
-        });
-      }
-    }, false, 'operations/prepareForNewMessage');
-  },
-
-  resetForThreadNavigation: () => {
-    const state = get();
-
-    // 1. ABORT: Stop all active operations
-    state.chatStop?.();
-
-    // 2. CLEAR: Reset AI SDK messages synchronously
-    state.chatSetMessages?.([]);
-
-    // ✅ FIX A1: Resolve pending animation promises before clearing
-    resolveAllPendingAnimations(state.animationResolvers);
-
-    // 3. INCREMENT: Bump scope version to invalidate ALL in-flight operations
-    // This prevents stale effects from executing after navigation
-    const newScopeVersion = (state.resumptionScopeVersion ?? 0) + 1;
-
-    set({
-      ...THREAD_NAVIGATION_RESET_STATE,
-      animationResolvers: new Map(),
-      createdModeratorRounds: new Set<number>(),
-      pendingAnimations: new Set<number>(),
-      preSearchActivityTimes: new Map<number, number>(),
-      resumptionAttempts: new Set<string>(),
-      // ✅ SCOPE VERSIONING: Clear scope thread and increment version
-      resumptionScopeThreadId: null,
-      resumptionScopeVersion: newScopeVersion,
-      triggeredModeratorIds: new Set<string>(),
-      triggeredModeratorRounds: new Set<number>(),
-      triggeredPreSearchRounds: new Set<number>(),
-    }, false, 'operations/resetForThreadNavigation');
-  },
-
-  resetThreadState: () =>
-    set(THREAD_RESET_STATE, false, 'operations/resetThreadState'),
-
-  resetToNewChat: (preferences?: ResetFormPreferences) => {
-    const state = get();
-    // ✅ NAVIGATION CLEANUP: Stop any active streaming BEFORE clearing messages
-    state.chatStop?.();
-    state.chatSetMessages?.([]);
-
-    const selectedParticipants = preferences?.selectedModelIds?.length
-      ? preferences.selectedModelIds.map((modelId, index) => ({
-          id: modelId,
-          modelId,
-          priority: index,
-          role: null,
-        }))
-      : FORM_DEFAULTS.selectedParticipants;
-
-    const selectedMode = preferences?.selectedMode
-      ? (ChatModeSchema.safeParse(preferences.selectedMode).success
-          ? ChatModeSchema.parse(preferences.selectedMode)
-          : FORM_DEFAULTS.selectedMode)
-      : FORM_DEFAULTS.selectedMode;
-
-    set({
-      ...COMPLETE_RESET_STATE,
-      createdModeratorRounds: new Set(),
-      enableWebSearch: preferences?.enableWebSearch ?? FORM_DEFAULTS.enableWebSearch,
-      modelOrder: preferences?.modelOrder ?? FORM_DEFAULTS.modelOrder,
-      preSearchActivityTimes: new Map<number, number>(),
-      screenMode: ScreenModes.OVERVIEW,
-      selectedMode,
-      selectedParticipants,
-      triggeredModeratorIds: new Set(),
-      triggeredModeratorRounds: new Set(),
-      triggeredPreSearchRounds: new Set(),
-    }, false, 'operations/resetToNewChat');
-  },
-
-  resetToOverview: () => {
-    const state = get();
-    // ✅ NAVIGATION CLEANUP: Stop any active streaming BEFORE clearing messages
-    state.chatStop?.();
-    state.chatSetMessages?.([]);
-
-    set({
-      ...COMPLETE_RESET_STATE,
-      createdModeratorRounds: new Set(),
-      preSearchActivityTimes: new Map<number, number>(),
-      screenMode: ScreenModes.OVERVIEW,
-      triggeredModeratorIds: new Set(),
-      triggeredModeratorRounds: new Set(),
-      triggeredPreSearchRounds: new Set(),
-    }, false, 'operations/resetToOverview');
-  },
-
-  startRegeneration: (roundNumber: number) => {
-    const { clearModeratorStreamTracking, clearModeratorTracking, clearPreSearchActivity, clearPreSearchTracking, selectedParticipants } = get();
-    clearModeratorTracking(roundNumber);
-    clearPreSearchTracking(roundNumber);
-    clearModeratorStreamTracking(roundNumber);
-    clearPreSearchActivity(roundNumber);
-    const participantIds = selectedParticipants.map(p => p.modelId);
-    set({
-      ...STREAMING_STATE_RESET,
-      ...MODERATOR_STATE_RESET,
-      ...PENDING_MESSAGE_STATE_RESET,
-      ...STREAM_RESUMPTION_DEFAULTS,
-      expectedParticipantIds: participantIds.length > 0 ? participantIds : null,
-      isRegenerating: true,
-      regeneratingRoundNumber: roundNumber,
-    }, false, 'operations/startRegeneration');
-  },
-
-  updateParticipants: (participants: ChatParticipant[]) => {
-    set({ participants: sortByPriority(participants) }, false, 'operations/updateParticipants');
-  },
-
-});
-
-/**
- * Create a new vanilla chat store instance
- *
- * ✅ ZUSTAND V5 SSR PATTERN (TanStack Start):
- * - Factory function returns new store per request
- * - Uses createStore from zustand/vanilla (NOT create hook)
- * - Called in ChatStoreProvider's useRef for per-request isolation
- * - Middleware: devtools (dev only) + immer (direct mutations)
- *
- * ⚠️ CRITICAL: This is NOT a global store!
- * - Each ChatStoreProvider creates its own instance
- * - ChatStoreProvider uses useRef to create store once per component instance
- * - Multiple providers = multiple isolated stores (correct for SSR)
- *
- * Reference: Official Zustand SSR docs for vanilla stores + Context
+ * Create chat store with frame-based flow tracking
  */
 export function createChatStore() {
-  ensureMapSetEnabled();
-  const baseStore = createStore<ChatStore>()(
+  return createStore<ChatStore>()(
     devtools(
-      immer(
-        (...args) => ({
-          ...createFormSlice(...args),
-          ...createFeedbackSlice(...args),
-          ...createUISlice(...args),
-          ...createPreSearchSlice(...args),
-          ...createChangelogSlice(...args),
-          ...createThreadSlice(...args),
-          ...createFlagsSlice(...args),
-          ...createDataSlice(...args),
-          ...createTrackingSlice(...args),
-          ...createCallbacksSlice(...args),
-          ...createScreenSlice(...args),
-          ...createStreamResumptionSlice(...args),
-          ...createRoundFlowSlice(...args),
-          ...createAnimationSlice(...args),
-          ...createAttachmentsSlice(...args),
-          ...createSidebarAnimationSlice(...args),
-          ...createNavigationSlice(...args),
-          ...createOperationsSlice(...args),
-        }),
-      ),
-      {
-        anonymousActionType: 'unknown-action',
-        enabled: import.meta.env.MODE !== 'production',
-        name: 'ChatStore',
-      },
+      immer((set, get) => ({
+        ...STORE_DEFAULTS,
+
+        // ============================================================
+        // PHASE TRANSITIONS - Core Flow Machine
+        // ============================================================
+
+        addAttachments: (attachments: PendingAttachment[]) => {
+          set((draft) => {
+            (draft.pendingAttachments as PendingAttachment[]).push(...attachments);
+          }, false, 'attachments/addAttachments');
+        },
+
+        /**
+         * ADD CHANGELOG - Frame 8/9
+         * "Changelog + All Placeholders Appear" / "Changelog Expanded"
+         */
+        addChangelogItems: (items: ApiChangelog[]) => {
+          const existing = get().changelogItems;
+          const ids = new Set(existing.map(i => i.id));
+          const newItems = items.filter(i => !ids.has(i.id));
+          if (newItems.length > 0) {
+            rlog.frame(9, 'changelog-added', `${newItems.length} config changes detected`);
+            rlog.changelog('add', `${newItems.length} items`);
+            set({ changelogItems: [...existing, ...newItems] }, false, 'changelog/addChangelogItems');
+          }
+        },
+
+        addParticipant: (participant: ParticipantConfig) => {
+          set((draft) => {
+            if (!draft.selectedParticipants.some(p => p.modelId === participant.modelId)) {
+              draft.selectedParticipants.push({ ...participant, priority: draft.selectedParticipants.length });
+            }
+          }, false, 'form/addParticipant');
+        },
+
+        /**
+         * ADD PRE-SEARCH - Frame 10
+         * "Web Research Streaming (Blocks Participants)"
+         */
+        addPreSearch: (preSearch: StoredPreSearch) => {
+          rlog.frame(10, 'pre-search-start', `r${preSearch.roundNumber} - Web Research blocks all participants`);
+          set((draft) => {
+            const existing = draft.preSearches.findIndex(
+              ps => ps.threadId === preSearch.threadId && ps.roundNumber === preSearch.roundNumber,
+            );
+            if (existing === -1) {
+              draft.preSearches.push(preSearch);
+            }
+          }, false, 'preSearch/addPreSearch');
+        },
+
+        // ============================================================
+        // MESSAGES
+        // ============================================================
+
+        batchUpdatePendingState: (pendingMessage, expectedParticipantIds) => {
+          set({ expectedParticipantIds, pendingMessage }, false, 'thread/batchUpdatePendingState');
+        },
+
+        // ============================================================
+        // THREAD STATE
+        // ============================================================
+
+        chatStop: null,
+        clearAllPreSearches: () => set({ preSearches: [] }, false, 'preSearch/clearAllPreSearches'),
+        clearAllPreSearchTracking: () => {
+          set({
+            preSearchActivityTimes: new Map<number, number>(),
+            triggeredPreSearchRounds: new Set<number>(),
+          }, false, 'preSearch/clearAllPreSearchTracking');
+        },
+        clearAttachments: () => set({ pendingAttachments: [] }, false, 'attachments/clearAttachments'),
+        clearModeratorTracking: () => {
+          set({
+            triggeredModeratorIds: new Set<string>(),
+            triggeredModeratorRounds: new Set<number>(),
+          }, false, 'tracking/clearModeratorTracking');
+        },
+        clearPreSearchActivity: (roundNumber: number) => {
+          set((draft) => {
+            draft.preSearchActivityTimes.delete(roundNumber);
+          }, false, 'preSearch/clearPreSearchActivity');
+        },
+        clearPreSearchTracking: (roundNumber: number) => {
+          set((draft) => {
+            draft.triggeredPreSearchRounds.delete(roundNumber);
+            draft.preSearchActivityTimes.delete(roundNumber);
+          }, false, 'preSearch/clearPreSearchTracking');
+        },
+        /**
+         * Clear all subscription state (on thread navigation or round end)
+         */
+        clearSubscriptionState: () => {
+          set({ subscriptionState: SUBSCRIPTION_DEFAULTS }, false, 'subscription/clear');
+        },
+        completeRegeneration: () => {
+          set({
+            isRegenerating: false,
+            regeneratingRoundNumber: null,
+          }, false, 'operations/completeRegeneration');
+        },
+        completeStreaming: () => {
+          const state = get();
+          const roundNumber = state.currentRoundNumber ?? 0;
+          rlog.stream('end', `completeStreaming r${roundNumber} phase=${state.phase}`);
+
+          if (state.phase === ChatPhases.MODERATOR) {
+            // ✅ FRAME 6/12: Log round completion when transitioning from MODERATOR
+            const isRound1 = roundNumber === 0;
+            if (isRound1) {
+              rlog.frame(6, 'round-complete', `r${roundNumber} - Input re-enabled, ready for Round 2`);
+            } else {
+              rlog.frame(12, 'round-complete', `r${roundNumber} - Input re-enabled, ready for next round`);
+            }
+
+            rlog.phase('completeStreaming', `MODERATOR→COMPLETE r${roundNumber}`);
+            rlog.moderator('complete', `r${roundNumber} - Round fully complete`);
+
+            set({
+              ...STREAMING_COMPLETE_RESET,
+              phase: ChatPhases.COMPLETE as ChatPhase,
+            }, false, 'operations/completeStreaming');
+          } else {
+            set(STREAMING_COMPLETE_RESET, false, 'operations/completeStreaming');
+          }
+        },
+        completeTitleAnimation: () => {
+          set({
+            animatingThreadId: null,
+            animationPhase: 'idle' as TitleAnimationPhase,
+            displayedTitle: null,
+            newTitle: null,
+            oldTitle: null,
+          }, false, 'titleAnimation/complete');
+        },
+
+        getAttachments: () => get().pendingAttachments,
+
+        // ============================================================
+        // FORM STATE
+        // ============================================================
+
+        hasAttachments: () => get().pendingAttachments.length > 0,
+        hasModeratorStreamBeenTriggered: (moderatorId: string, roundNumber: number) => {
+          const state = get();
+          return state.triggeredModeratorIds.has(moderatorId) || state.triggeredModeratorRounds.has(roundNumber);
+        },
+        hasPreSearchBeenTriggered: (roundNumber: number) => get().triggeredPreSearchRounds.has(roundNumber),
+        /**
+         * Initialize subscriptions for a new round
+         * Creates participant subscription state slots for each participant
+         */
+        initializeSubscriptions: (roundNumber: number, participantCount: number) => {
+          rlog.stream('start', `initializeSubscriptions r${roundNumber} pCount=${participantCount}`);
+          set((draft) => {
+            draft.subscriptionState = {
+              activeRoundNumber: roundNumber,
+              moderator: { errorMessage: undefined, lastSeq: 0, status: 'idle' as EntityStatus },
+              participants: Array.from({ length: participantCount }, () => ({
+                errorMessage: undefined,
+                lastSeq: 0,
+                status: 'idle' as EntityStatus,
+              })),
+              presearch: { errorMessage: undefined, lastSeq: 0, status: 'idle' as EntityStatus },
+            };
+          }, false, 'subscription/initialize');
+        },
+        /**
+         * INITIALIZE THREAD
+         * Sets up thread state, preserving streaming state if active
+         */
+        initializeThread: (thread: ChatThread, participants: ChatParticipant[], messages: UIMessage[]) => {
+          const currentState = get();
+
+          // Preserve phase if streaming is pending or active
+          const isStreamingPending = currentState.waitingToStartStreaming;
+          const isStreamingActive = currentState.isStreaming
+            || currentState.phase === ChatPhases.PARTICIPANTS
+            || currentState.phase === ChatPhases.MODERATOR;
+          const preservePhase = isStreamingPending || isStreamingActive;
+
+          const newPhase = isStreamingActive
+            ? currentState.phase
+            : isStreamingPending
+              ? ChatPhases.IDLE
+              : (messages.length > 0 ? ChatPhases.COMPLETE : ChatPhases.IDLE);
+
+          rlog.init('initializeThread', `tid=${thread.id.slice(-8)} msgs=${messages.length} phase=${currentState.phase}→${newPhase} preserve=${preservePhase}`);
+
+          set({
+            changelogItems: [],
+            feedbackByRound: new Map(),
+            hasInitiallyLoaded: true,
+            hasLoadedFeedback: false,
+            hasSentPendingMessage: false,
+            messages,
+            participants,
+            phase: newPhase as ChatPhase,
+            preSearchActivityTimes: new Map<number, number>(),
+            preSearches: [],
+            screenMode: ScreenModes.THREAD,
+            showInitialUI: false,
+            thread,
+            triggeredModeratorIds: new Set<string>(),
+            triggeredModeratorRounds: new Set<number>(),
+            triggeredPreSearchRounds: new Set<number>(),
+          }, false, 'operations/initializeThread');
+        },
+        loadFeedbackFromServer: (data) => {
+          set({
+            feedbackByRound: new Map(data.map(f => [f.roundNumber, f.feedbackType])),
+            hasLoadedFeedback: true,
+          }, false, 'feedback/loadFeedbackFromServer');
+        },
+        markModeratorStreamTriggered: (moderatorId: string, roundNumber: number) => {
+          rlog.moderator('triggered', `r${roundNumber} id=${moderatorId.slice(-8)}`);
+          set((draft) => {
+            draft.triggeredModeratorIds.add(moderatorId);
+            draft.triggeredModeratorRounds.add(roundNumber);
+          }, false, 'tracking/markModeratorStreamTriggered');
+        },
+        markPreSearchTriggered: (roundNumber: number) => {
+          rlog.presearch('triggered', `r${roundNumber}`);
+          set((draft) => {
+            draft.triggeredPreSearchRounds.add(roundNumber);
+          }, false, 'preSearch/markPreSearchTriggered');
+        },
+
+        /**
+         * MODERATOR COMPLETE - Frame 6/12
+         * Called when moderator finishes streaming
+         *
+         * Frame 6: "Round 1 Complete"
+         * Frame 12: "Round 2 Complete"
+         */
+        onModeratorComplete: () => {
+          const state = get();
+          const roundNumber = state.currentRoundNumber ?? 0;
+          const isRound1 = roundNumber === 0;
+
+          if (isRound1) {
+            rlog.frame(6, 'round-complete', `r${roundNumber} - Input re-enabled, ready for Round 2`);
+          } else {
+            rlog.frame(12, 'round-complete', `r${roundNumber} - Input re-enabled, ready for next round`);
+          }
+
+          rlog.phase('onModeratorComplete', `MODERATOR→COMPLETE r${roundNumber}`);
+          rlog.moderator('complete', `r${roundNumber} - Round fully complete`);
+
+          set({
+            isModeratorStreaming: false,
+            isStreaming: false,
+            phase: ChatPhases.COMPLETE as ChatPhase,
+          }, false, 'phase/complete');
+        },
+
+        /**
+         * PARTICIPANT COMPLETE - Frame 3/4/5 or 10/11
+         * Called when a participant finishes streaming
+         *
+         * Frame 3: "Participant 1 Starts Streaming (Others Still Waiting)"
+         * Frame 4: "Participant 1 Complete → Participant 2 Starts" (baton pass)
+         * Frame 5: "All Participants Complete → Moderator Starts"
+         * Frame 11: "Web Research Complete → Participants Start"
+         */
+        onParticipantComplete: (participantIndex: number) => {
+          const state = get();
+          const enabledCount = state.participants.filter(p => p.isEnabled).length;
+          const isLastParticipant = participantIndex >= enabledCount - 1;
+          const roundNumber = state.currentRoundNumber ?? 0;
+          const isRound1 = roundNumber === 0;
+
+          if (isLastParticipant) {
+            // Frame 5 (R1) / Frame 11→moderator transition (R2)
+            // "All Participants Complete → Moderator Starts"
+            if (isRound1) {
+              rlog.frame(5, 'all-participants-complete', `P${participantIndex} was LAST → Moderator will start`);
+            } else {
+              rlog.frame(11, 'all-participants-complete', `P${participantIndex} was LAST → Moderator will start`);
+            }
+
+            rlog.phase('onParticipantComplete', `PARTICIPANTS→MODERATOR r${roundNumber} (all ${enabledCount} done)`);
+            rlog.handoff('baton-to-moderator', `P${participantIndex} → Moderator`);
+
+            set({
+              currentParticipantIndex: participantIndex,
+              phase: ChatPhases.MODERATOR as ChatPhase,
+            }, false, 'phase/toModerator');
+          } else {
+            // Frame 4: "Participant 1 Complete → Participant 2 Starts"
+            const nextIndex = participantIndex + 1;
+
+            if (isRound1) {
+              rlog.frame(4, 'participant-handoff', `P${participantIndex}→P${nextIndex} (baton passed)`);
+            } else {
+              rlog.frame(11, 'participant-handoff', `P${participantIndex}→P${nextIndex}`);
+            }
+
+            rlog.handoff('baton-pass', `P${participantIndex} done → P${nextIndex} starts`);
+
+            set({
+              currentParticipantIndex: nextIndex,
+            }, false, 'phase/nextParticipant');
+          }
+        },
+
+        prepareForNewMessage: () => {
+          set({
+            hasSentPendingMessage: false,
+            pendingMessage: null,
+            phase: ChatPhases.IDLE as ChatPhase,
+          }, false, 'operations/prepareForNewMessage');
+        },
+
+        removeAttachment: (id: string) => {
+          set((draft) => {
+            const idx = draft.pendingAttachments.findIndex(a => a.id === id);
+            if (idx !== -1) {
+              draft.pendingAttachments.splice(idx, 1);
+            }
+          }, false, 'attachments/removeAttachment');
+        },
+
+        // ============================================================
+        // UI STATE
+        // ============================================================
+
+        removeParticipant: (participantId: string) => {
+          set((draft) => {
+            const idx = draft.selectedParticipants.findIndex(p => p.id === participantId || p.modelId === participantId);
+            if (idx !== -1) {
+              draft.selectedParticipants.splice(idx, 1);
+              draft.selectedParticipants.forEach((p, i) => {
+                p.priority = i;
+              });
+            }
+          }, false, 'form/removeParticipant');
+        },
+        reorderParticipants: (fromIndex: number, toIndex: number) => {
+          set((draft) => {
+            const [removed] = draft.selectedParticipants.splice(fromIndex, 1);
+            if (removed) {
+              draft.selectedParticipants.splice(toIndex, 0, removed);
+              draft.selectedParticipants.forEach((p, i) => {
+                p.priority = i;
+              });
+            }
+          }, false, 'form/reorderParticipants');
+        },
+        resetForm: () => set(FORM_DEFAULTS, false, 'form/resetForm'),
+        resetForThreadNavigation: () => {
+          rlog.init('resetForThreadNavigation', 'Clearing for new thread');
+          set({
+            ...THREAD_NAVIGATION_RESET,
+            feedbackByRound: new Map(),
+            preSearchActivityTimes: new Map<number, number>(),
+            triggeredModeratorIds: new Set<string>(),
+            triggeredModeratorRounds: new Set<number>(),
+            triggeredPreSearchRounds: new Set<number>(),
+          }, false, 'operations/resetForThreadNavigation');
+        },
+        resetToIdle: () => {
+          rlog.phase('resetToIdle', '→IDLE');
+          set({ phase: ChatPhases.IDLE as ChatPhase }, false, 'phase/toIdle');
+        },
+        resetToNewChat: () => {
+          rlog.init('resetToNewChat', 'Starting new chat');
+          set({
+            ...OVERVIEW_RESET,
+            feedbackByRound: new Map(),
+            preSearchActivityTimes: new Map<number, number>(),
+            triggeredModeratorIds: new Set<string>(),
+            triggeredModeratorRounds: new Set<number>(),
+            triggeredPreSearchRounds: new Set<number>(),
+          }, false, 'operations/resetToNewChat');
+        },
+        resetToOverview: () => {
+          rlog.init('resetToOverview', 'Returning to overview');
+          set({
+            ...OVERVIEW_RESET,
+            feedbackByRound: new Map(),
+            preSearchActivityTimes: new Map<number, number>(),
+            triggeredModeratorIds: new Set<string>(),
+            triggeredModeratorRounds: new Set<number>(),
+            triggeredPreSearchRounds: new Set<number>(),
+          }, false, 'operations/resetToOverview');
+        },
+        setAnimationPhase: phase => set({ animationPhase: phase }, false, 'titleAnimation/setAnimationPhase'),
+
+        setAutoMode: enabled => set({ autoMode: enabled }, false, 'form/setAutoMode'),
+
+        // ============================================================
+        // FEEDBACK STATE
+        // ============================================================
+
+        setChangelogItems: items => set({ changelogItems: items }, false, 'changelog/setChangelogItems'),
+        setChatStop: stop => set({ chatStop: stop }, false, 'external/setChatStop'),
+        setCreatedThreadId: id => set({ createdThreadId: id }, false, 'ui/setCreatedThreadId'),
+
+        // ============================================================
+        // ATTACHMENTS STATE
+        // ============================================================
+
+        setCreatedThreadProjectId: projectId => set({ createdThreadProjectId: projectId }, false, 'ui/setCreatedThreadProjectId'),
+        setCurrentParticipantIndex: index => set({ currentParticipantIndex: index }, false, 'thread/setCurrentParticipantIndex'),
+        setCurrentRoundNumber: round => set({ currentRoundNumber: round }, false, 'thread/setCurrentRoundNumber'),
+        setEnableWebSearch: enabled => set({ enableWebSearch: enabled }, false, 'form/setEnableWebSearch'),
+        setError: error => set({ error }, false, 'thread/setError'),
+        setExpectedParticipantIds: ids => set({ expectedParticipantIds: ids }, false, 'thread/setExpectedParticipantIds'),
+        setFeedback: (roundNumber, type) => {
+          set((draft) => {
+            draft.feedbackByRound.set(roundNumber, type);
+          }, false, 'feedback/setFeedback');
+        },
+        setHasInitiallyLoaded: loaded => set({ hasInitiallyLoaded: loaded }, false, 'ui/setHasInitiallyLoaded'),
+        setHasSentPendingMessage: sent => set({ hasSentPendingMessage: sent }, false, 'thread/setHasSentPendingMessage'),
+
+        // ============================================================
+        // PRE-SEARCH STATE - Frame 10
+        // ============================================================
+
+        setInputValue: value => set({ inputValue: value }, false, 'form/setInputValue'),
+
+        setIsAnalyzingPrompt: analyzing => set({ isAnalyzingPrompt: analyzing }, false, 'ui/setIsAnalyzingPrompt'),
+
+        setIsCreatingThread: creating => set({ isCreatingThread: creating }, false, 'ui/setIsCreatingThread'),
+
+        setIsModeratorStreaming: streaming => set({ isModeratorStreaming: streaming }, false, 'ui/setIsModeratorStreaming'),
+
+        setIsRegenerating: regenerating => set({ isRegenerating: regenerating }, false, 'thread/setIsRegenerating'),
+
+        setIsStreaming: streaming => set({ isStreaming: streaming }, false, 'thread/setIsStreaming'),
+        setMessages: (messages) => {
+          const prevMessages = get().messages;
+          const newMessages = typeof messages === 'function' ? messages(prevMessages) : messages;
+          if (prevMessages === newMessages) {
+            return;
+          }
+          set({ messages: newMessages }, false, 'thread/setMessages');
+        },
+        setModelOrder: modelIds => set({ modelOrder: modelIds }, false, 'form/setModelOrder'),
+        setParticipants: participants => set({ participants }, false, 'thread/setParticipants'),
+        setPendingAttachmentIds: ids => set({ pendingAttachmentIds: ids }, false, 'attachments/setPendingAttachmentIds'),
+        setPendingFeedback: feedback => set({ pendingFeedback: feedback }, false, 'feedback/setPendingFeedback'),
+        setPendingFileParts: parts => set({ pendingFileParts: parts }, false, 'attachments/setPendingFileParts'),
+        setPendingMessage: message => set({ pendingMessage: message }, false, 'form/setPendingMessage'),
+
+        // ============================================================
+        // CHANGELOG STATE - Frame 8/9
+        // ============================================================
+
+        setPreSearches: preSearches => set({ preSearches }, false, 'preSearch/setPreSearches'),
+
+        setRegeneratingRoundNumber: round => set({ regeneratingRoundNumber: round }, false, 'thread/setRegeneratingRoundNumber'),
+
+        // ============================================================
+        // TITLE ANIMATION STATE
+        // ============================================================
+
+        setScreenMode: mode => set({ screenMode: mode }, false, 'ui/setScreenMode'),
+        setSelectedMode: mode => set({ selectedMode: mode }, false, 'form/setSelectedMode'),
+        setSelectedParticipants: participants => set({ selectedParticipants: participants }, false, 'form/setSelectedParticipants'),
+        setShowInitialUI: show => set({ showInitialUI: show }, false, 'ui/setShowInitialUI'),
+
+        // ============================================================
+        // TRACKING STATE (deduplication)
+        // ============================================================
+
+        setStreamingRoundNumber: round => set({ streamingRoundNumber: round }, false, 'thread/setStreamingRoundNumber'),
+        setThread: thread => set({ thread }, false, 'thread/setThread'),
+        /**
+         * WAITING TO START - Frame 1/7
+         * User is typing, about to send
+         */
+        setWaitingToStartStreaming: (waiting) => {
+          const state = get();
+          if (waiting) {
+            const isRound1 = state.currentRoundNumber === null || state.currentRoundNumber === 0;
+            if (isRound1) {
+              rlog.frame(1, 'waiting-to-start', 'User ready to send (Overview Screen)');
+            } else {
+              rlog.frame(7, 'waiting-to-start', 'User ready to send follow-up');
+            }
+          }
+          set({ waitingToStartStreaming: waiting }, false, 'ui/setWaitingToStartStreaming');
+        },
+
+        // ============================================================
+        // OPERATIONS
+        // ============================================================
+
+        startRegeneration: (roundNumber: number) => {
+          rlog.stream('start', `Regenerating r${roundNumber}`);
+          set({
+            isRegenerating: true,
+            isStreaming: true,
+            regeneratingRoundNumber: roundNumber,
+            streamingRoundNumber: roundNumber,
+          }, false, 'operations/startRegeneration');
+        },
+
+        /**
+         * START ROUND - Frame 2/8
+         * Called when user sends message and placeholders should appear
+         *
+         * Frame 2 (R1): "User Clicks Send → ALL Placeholders Appear Instantly"
+         * Frame 8 (R2): "Send Clicked → Changelog + All Placeholders Appear"
+         */
+        startRound: (roundNumber: number, participantCount: number) => {
+          const isRound1 = roundNumber === 0;
+
+          // Log the appropriate frame
+          if (isRound1) {
+            rlog.frame(2, 'startRound', `r${roundNumber} pCount=${participantCount} - ALL placeholders appear`);
+          } else {
+            rlog.frame(8, 'startRound', `r${roundNumber} pCount=${participantCount} - Changelog + placeholders appear`);
+          }
+
+          rlog.phase('startRound', `IDLE→PARTICIPANTS r${roundNumber} with ${participantCount} participants`);
+
+          set({
+            currentParticipantIndex: 0,
+            currentRoundNumber: roundNumber,
+            isStreaming: true,
+            phase: ChatPhases.PARTICIPANTS as ChatPhase,
+            waitingToStartStreaming: false,
+          }, false, 'phase/startRound');
+        },
+
+        startTitleAnimation: (threadId: string, oldTitle: string | null, newTitle: string) => {
+          set({
+            animatingThreadId: threadId,
+            animationPhase: 'deleting' as TitleAnimationPhase,
+            displayedTitle: oldTitle,
+            newTitle,
+            oldTitle,
+          }, false, 'titleAnimation/start');
+        },
+
+        subscriptionState: SUBSCRIPTION_DEFAULTS,
+
+        tryMarkPreSearchTriggered: (roundNumber: number) => {
+          const state = get();
+          if (state.triggeredPreSearchRounds.has(roundNumber)) {
+            return false;
+          }
+          set((draft) => {
+            draft.triggeredPreSearchRounds.add(roundNumber);
+          }, false, 'preSearch/tryMarkPreSearchTriggered');
+          return true;
+        },
+
+        updateAttachmentPreview: (id: string, preview: FilePreview) => {
+          set((draft) => {
+            const attachment = draft.pendingAttachments.find(a => a.id === id);
+            if (attachment) {
+              attachment.preview = preview;
+            }
+          }, false, 'attachments/updateAttachmentPreview');
+        },
+
+        updateAttachmentUpload: (id: string, upload: UploadItem) => {
+          set((draft) => {
+            const attachment = draft.pendingAttachments.find(a => a.id === id);
+            if (attachment) {
+              (attachment as PendingAttachment).uploadItem = upload;
+            }
+          }, false, 'attachments/updateAttachmentUpload');
+        },
+
+        updateDisplayedTitle: (title: string) => set({ displayedTitle: title }, false, 'titleAnimation/updateDisplayedTitle'),
+
+        /**
+         * Update a specific entity's subscription status
+         * @param entity - 'presearch', 'moderator', or participant index (number)
+         */
+        updateEntitySubscriptionStatus: (
+          entity: 'presearch' | 'moderator' | number,
+          status: EntityStatus,
+          lastSeq?: number,
+          errorMessage?: string,
+        ) => {
+          set((draft) => {
+            const target = typeof entity === 'number'
+              ? draft.subscriptionState.participants[entity]
+              : draft.subscriptionState[entity];
+
+            if (target) {
+              target.status = status;
+              if (lastSeq !== undefined) {
+                target.lastSeq = lastSeq;
+              }
+              if (errorMessage !== undefined) {
+                target.errorMessage = errorMessage;
+              }
+            }
+          }, false, `subscription/update-${entity}`);
+        },
+
+        // ============================================================
+        // EXTERNAL CALLBACKS
+        // ============================================================
+
+        updatePartialPreSearchData: (roundNumber: number, partialData: unknown) => {
+          set((draft) => {
+            const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
+            if (ps) {
+              (ps as { searchData: unknown }).searchData = partialData;
+            }
+          }, false, 'preSearch/updatePartialPreSearchData');
+        },
+        updateParticipant: (participantId: string, updates: Partial<ParticipantConfig>) => {
+          set((draft) => {
+            const p = draft.selectedParticipants.find(p => p.id === participantId || p.modelId === participantId);
+            if (p) {
+              Object.assign(p, updates);
+            }
+          }, false, 'form/updateParticipant');
+        },
+
+        // ============================================================
+        // SUBSCRIPTION STATE (Backend-First Architecture)
+        // ============================================================
+
+        updateParticipants: (participants: ChatParticipant[]) => {
+          set({ participants }, false, 'operations/updateParticipants');
+        },
+
+        updatePreSearchActivity: (roundNumber: number) => {
+          set((draft) => {
+            draft.preSearchActivityTimes.set(roundNumber, Date.now());
+          }, false, 'preSearch/updatePreSearchActivity');
+        },
+
+        /**
+         * UPDATE PRE-SEARCH DATA - Frame 11 transition
+         * "Web Research Complete → Participants Start"
+         */
+        updatePreSearchData: (roundNumber: number, searchData: unknown) => {
+          rlog.frame(11, 'pre-search-complete', `r${roundNumber} - Web Research done, participants can start`);
+          set((draft) => {
+            const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
+            if (ps) {
+              (ps as { searchData: unknown }).searchData = searchData;
+              ps.status = 'complete' as typeof ps.status;
+              ps.completedAt = new Date().toISOString();
+            }
+          }, false, 'preSearch/updatePreSearchData');
+        },
+
+        updatePreSearchStatus: (roundNumber: number, status: string) => {
+          set((draft) => {
+            const ps = draft.preSearches.find(p => p.roundNumber === roundNumber);
+            if (ps) {
+              ps.status = status as typeof ps.status;
+            }
+          }, false, 'preSearch/updatePreSearchStatus');
+        },
+      })),
+      { enabled: process.env.NODE_ENV === 'development', name: 'ChatStore' },
     ),
   );
-
-  // ✅ TEST HELPER: Wrap getState to provide live access to participants
-  // Enables tests to access state.participants after calling setParticipants
-  // without needing to call getState() again
-  // This is safe because the Proxy only adds convenience for testing
-  const originalGetState = baseStore.getState.bind(baseStore);
-  const store = {
-    ...baseStore,
-    getState: () => {
-      const state = originalGetState();
-      return new Proxy(state, {
-        get(target, prop, receiver) {
-          // For participants, always read from current store state
-          if (prop === 'participants') {
-            return originalGetState().participants;
-          }
-          return Reflect.get(target, prop, receiver);
-        },
-      });
-    },
-  };
-
-  return store as typeof baseStore;
 }
-
-/**
- * Type of the vanilla store instance
- * Used by ChatStoreProvider to type the context value
- */
-export type ChatStoreApi = ReturnType<typeof createChatStore>;

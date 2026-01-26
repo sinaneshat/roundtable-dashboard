@@ -24,7 +24,6 @@ import { useCallback, useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore } from '@/components/providers/chat-store-provider/context';
-import { useModelPreferencesStore } from '@/components/providers/preferences-store-provider/context';
 import { invalidationPatterns } from '@/lib/data/query-keys';
 
 /**
@@ -52,15 +51,9 @@ export function useNavigationReset() {
   const previousPathnameRef = useRef(pathname);
   const queryClient = useQueryClient();
 
-  // Read from cookie-persisted model preferences store
-  const preferences = useModelPreferencesStore(useShallow(s => ({
-    enableWebSearch: s.enableWebSearch,
-    modelOrder: s.modelOrder,
-    selectedMode: s.selectedMode,
-    selectedModelIds: s.selectedModelIds,
-  })));
-
   // Shared reset logic - invalidate queries and reset store
+  // Note: preferences are stored in useModelPreferencesStore (cookie-persisted)
+  // and don't need to be passed to resetToNewChat
   const doReset = useCallback(() => {
     const effectiveThreadId = thread?.id || createdThreadId;
     if (effectiveThreadId) {
@@ -68,8 +61,8 @@ export function useNavigationReset() {
         queryClient.invalidateQueries({ queryKey: key });
       });
     }
-    resetToNewChat(preferences);
-  }, [thread, createdThreadId, queryClient, resetToNewChat, preferences]);
+    resetToNewChat();
+  }, [thread, createdThreadId, queryClient, resetToNewChat]);
 
   // Reset store when navigating FROM thread screen TO /chat
   useEffect(() => {

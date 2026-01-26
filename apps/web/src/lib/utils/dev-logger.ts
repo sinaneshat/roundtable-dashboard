@@ -204,6 +204,25 @@ function rlogNow(category: RlogCategory, message: string): void {
   console.log(`%c[${category}] ${message}`, getRlogStyle(category));
 }
 
+/**
+ * Frame descriptions from FLOW_DOCUMENTATION.md
+ * Each frame represents a specific UI state in the round flow
+ */
+const FRAME_DESCRIPTIONS: Record<number, string> = {
+  1: 'User Types Message on Overview Screen',
+  10: 'Web Research Streaming (Blocks Participants)',
+  11: 'Web Research Complete → Participants Start',
+  12: 'Round 2 Complete',
+  2: 'User Clicks Send → ALL Placeholders Appear Instantly',
+  3: 'Participant 1 Starts Streaming (Others Still Waiting)',
+  4: 'Participant 1 Complete → Participant 2 Starts',
+  5: 'All Participants Complete → Moderator Starts',
+  6: 'Round 1 Complete',
+  7: 'User Enables Web Search + Changes Participants',
+  8: 'Send Clicked → Changelog + All Placeholders Appear',
+  9: 'Changelog Expanded (Click to See Details)',
+};
+
 export const rlog = {
   changelog: (action: string, detail: string): void => rlogNow(RlogCategories.CHANGELOG, `${action}: ${detail}`),
   disable: (): void => {
@@ -217,7 +236,23 @@ export const rlog = {
     console.log('%c[RLOG] Resumption debug logging enabled', 'color: #4CAF50; font-weight: bold');
   },
   flow: (key: string, detail: string): void => rlogLog(RlogCategories.RESUME, key, detail),
+  /**
+   * Frame-based logging for documenting round flow states
+   * Frames 1-6: Round 1 flow (no web search)
+   * Frames 7-12: Round 2 flow (with config changes + web search)
+   *
+   * Usage: rlog.frame(2, 'placeholders created', { p1: 'Thinking', p2: 'Thinking', mod: 'Observing' })
+   */
+  frame: (frameNumber: number, action: string, detail?: string): void => {
+    const desc = FRAME_DESCRIPTIONS[frameNumber] || 'Unknown Frame';
+    const msg = detail
+      ? `Frame ${frameNumber}: ${desc} | ${action} | ${detail}`
+      : `Frame ${frameNumber}: ${desc} | ${action}`;
+    rlogNow(RlogCategories.FRAME, msg);
+  },
   gate: (check: string, result: string): void => rlogLog(RlogCategories.GATE, check, `${check}: ${result}`),
+  // ✅ Participant handoff logging (P0 → P1 → P2 transitions)
+  handoff: (action: string, detail: string): void => rlogNow(RlogCategories.HANDOFF, `${action}: ${detail}`),
   // ✅ DEBOUNCE FIX: Changed init from rlogNow to rlogLog
   // timeline-render fires on every re-render, causing excessive console spam
   init: (action: string, detail: string): void => rlogLog(RlogCategories.INIT, action, detail),
@@ -226,9 +261,13 @@ export const rlog = {
   msg: (key: string, detail: string): void => rlogLog(RlogCategories.MSG, key, detail),
   phase: (phase: string, detail: string): void => rlogNow(RlogCategories.PHASE, `${phase}: ${detail}`),
   presearch: (action: string, detail: string): void => rlogNow(RlogCategories.PRESRCH, `${action}: ${detail}`),
+  // ✅ Race condition detection logging
+  race: (action: string, detail: string): void => rlogNow(RlogCategories.RACE, `${action}: ${detail}`),
   resume: (key: string, detail: string): void => rlogLog(RlogCategories.RESUME, key, detail),
   state: (summary: string): void => rlogLog(RlogCategories.RESUME, 'state', summary),
   stream: (action: RlogStreamAction, detail: string): void => rlogNow(RlogCategories.STREAM, `${action}: ${detail}`),
+  // ✅ Stuck state detection logging (blockers, timeouts, stuck rounds)
+  stuck: (action: string, detail: string): void => rlogNow(RlogCategories.STUCK, `${action}: ${detail}`),
   submit: (action: string, detail: string): void => rlogNow(RlogCategories.SUBMIT, `${action}: ${detail}`),
   sync: (key: string, detail: string): void => rlogLog(RlogCategories.SYNC, key, detail),
   // ✅ DEBOUNCE FIX: Changed trigger/init from rlogNow to rlogLog

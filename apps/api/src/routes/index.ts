@@ -129,6 +129,9 @@ import {
   resumeThreadStreamHandler,
   setRoundFeedbackHandler,
   streamChatHandler,
+  subscribeToModeratorStreamHandler,
+  subscribeToParticipantStreamHandler,
+  subscribeToPreSearchStreamHandler,
   updateCustomRoleHandler,
   updateParticipantHandler,
   updateThreadHandler,
@@ -168,6 +171,9 @@ import {
   resumeThreadStreamRoute,
   setRoundFeedbackRoute,
   streamChatRoute,
+  subscribeToModeratorStreamRoute,
+  subscribeToParticipantStreamRoute,
+  subscribeToPreSearchStreamRoute,
   updateCustomRoleRoute,
   updateParticipantRoute,
   updateThreadRoute,
@@ -382,6 +388,15 @@ const chatFeatureRoutes = createOpenApiApp()
   .openapi(getThreadFeedbackRoute, getThreadFeedbackHandler);
 
 /**
+ * Group 5b: Chat - Entity Subscriptions (3 routes)
+ * ✅ BACKEND-FIRST ARCHITECTURE: Per FLOW_DOCUMENTATION.md
+ */
+const chatEntitySubscriptionRoutes = createOpenApiApp()
+  .openapi(subscribeToPreSearchStreamRoute, subscribeToPreSearchStreamHandler)
+  .openapi(subscribeToParticipantStreamRoute, subscribeToParticipantStreamHandler)
+  .openapi(subscribeToModeratorStreamRoute, subscribeToModeratorStreamHandler);
+
+/**
  * Group 6: Projects (18 routes)
  */
 const projectRoutes = createOpenApiApp()
@@ -467,6 +482,7 @@ export type BillingRoutesType = typeof billingRoutes;
 export type ChatThreadRoutesType = typeof chatThreadRoutes;
 export type ChatMessageRoutesType = typeof chatMessageRoutes;
 export type ChatFeatureRoutesType = typeof chatFeatureRoutes;
+export type ChatEntitySubscriptionRoutesType = typeof chatEntitySubscriptionRoutes;
 export type ProjectRoutesType = typeof projectRoutes;
 export type AdminRoutesType = typeof adminRoutes;
 export type UtilityRoutesType = typeof utilityRoutes;
@@ -486,6 +502,7 @@ const apiRoutes: OpenAPIHono<ApiEnv> = createOpenApiApp()
   .route('/', chatThreadRoutes)
   .route('/', chatMessageRoutes)
   .route('/', chatFeatureRoutes)
+  .route('/', chatEntitySubscriptionRoutes)
   .route('/', projectRoutes)
   .route('/', adminRoutes)
   .route('/', utilityRoutes)
@@ -501,6 +518,7 @@ export type AppType
     & ChatThreadRoutesType
     & ChatMessageRoutesType
     & ChatFeatureRoutesType
+    & ChatEntitySubscriptionRoutesType
     & ProjectRoutesType
     & AdminRoutesType
     & UtilityRoutesType

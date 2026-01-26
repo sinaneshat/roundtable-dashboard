@@ -11,6 +11,7 @@
 import type {
   AdminRoutesType,
   BillingRoutesType,
+  ChatEntitySubscriptionRoutesType,
   ChatFeatureRoutesType,
   ChatMessageRoutesType,
   ChatThreadRoutesType,
@@ -40,6 +41,7 @@ export type BillingClient = ReturnType<typeof hc<BillingRoutesType>>;
 export type ChatThreadClient = ReturnType<typeof hc<ChatThreadRoutesType>>;
 export type ChatMessageClient = ReturnType<typeof hc<ChatMessageRoutesType>>;
 export type ChatFeatureClient = ReturnType<typeof hc<ChatFeatureRoutesType>>;
+export type ChatEntitySubscriptionClient = ReturnType<typeof hc<ChatEntitySubscriptionRoutesType>>;
 export type ProjectClient = ReturnType<typeof hc<ProjectRoutesType>>;
 export type AdminClient = ReturnType<typeof hc<AdminRoutesType>>;
 export type UtilityClient = ReturnType<typeof hc<UtilityRoutesType>>;
@@ -64,6 +66,7 @@ export type TestClient = ReturnType<typeof hc<TestRoutesType>>;
 export interface ApiClientType {
   admin: AdminClient;
   billing: BillingClient;
+  chatEntitySubscription: ChatEntitySubscriptionClient;
   chatFeature: ChatFeatureClient;
   chatMessage: ChatMessageClient;
   chatThread: ChatThreadClient;
@@ -122,6 +125,7 @@ export function createApiClient(options?: ClientOptions): ApiClientType {
   const client: ApiClientType = {
     admin: hc<AdminRoutesType>(baseUrl, config),
     billing: hc<BillingRoutesType>(baseUrl, config),
+    chatEntitySubscription: hc<ChatEntitySubscriptionRoutesType>(baseUrl, config),
     chatFeature: hc<ChatFeatureRoutesType>(baseUrl, config),
     chatMessage: hc<ChatMessageRoutesType>(baseUrl, config),
     chatThread: hc<ChatThreadRoutesType>(baseUrl, config),
