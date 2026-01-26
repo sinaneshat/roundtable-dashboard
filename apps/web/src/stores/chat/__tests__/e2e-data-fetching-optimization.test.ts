@@ -16,6 +16,7 @@ import { MessageStatuses } from '@roundtable/shared';
 import { QueryClient } from '@tanstack/react-query';
 import type { UIMessage } from 'ai';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { queryKeys } from '@/lib/data/query-keys';
 import { POLLING_INTERVALS, STALE_TIMES } from '@/lib/data/stale-times';
@@ -27,7 +28,38 @@ import { createChatStore } from '../store';
 // Mock Utilities - Track Query Behavior
 // ============================================================================
 
-type QueryKey = readonly (string | number | Record<string, unknown>)[];
+/**
+ * Schema for query key segment types
+ * Query keys in TanStack Query can be primitives or filter objects
+ */
+const QueryKeyFilterSchema = z.object({
+  filters: z.object({
+    enabled: z.boolean().optional(),
+    status: z.string().optional(),
+  }).optional(),
+  id: z.string().optional(),
+  page: z.number().optional(),
+  type: z.string().optional(),
+});
+
+type _QueryKeyFilter = z.infer<typeof QueryKeyFilterSchema>;
+
+/**
+ * Schema for individual query key segment
+ * Discriminated union: either a primitive or a filter object
+ */
+const _QueryKeySegmentSchema = z.union([
+  z.string(),
+  z.number(),
+  QueryKeyFilterSchema,
+]);
+
+type QueryKeySegment = z.infer<typeof _QueryKeySegmentSchema>;
+
+/**
+ * Type for complete query key array
+ */
+type QueryKey = readonly QueryKeySegment[];
 
 type QueryFetchRecord = {
   queryKey: QueryKey;

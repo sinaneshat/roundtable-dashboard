@@ -14,7 +14,7 @@ import { createApiClient } from '@/lib/api/client';
 // Type Inference
 // ============================================================================
 
-type StreamChatEndpoint = ApiClientType['chat']['$post'];
+type StreamChatEndpoint = ApiClientType['chatMessage']['chat']['$post'];
 export type StreamChatRequest = InferRequestType<StreamChatEndpoint>;
 export type StreamChatResponse = InferResponseType<StreamChatEndpoint, 200>;
 
@@ -31,5 +31,5 @@ export type StreamChatResponse = InferResponseType<StreamChatEndpoint, 200>;
  */
 export async function streamChatService(data: StreamChatRequest) {
   const client = createApiClient();
-  return client.chat.$post(data);
+  return client.chatMessage.chat.$post(data);
 }

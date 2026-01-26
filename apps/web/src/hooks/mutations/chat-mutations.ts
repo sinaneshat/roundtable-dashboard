@@ -100,6 +100,9 @@ export function useCreateThreadMutation() {
       // Always invalidate thread lists and sidebar
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.lists() });
       queryClient.invalidateQueries({ queryKey: queryKeys.threads.sidebar() });
+
+      // Invalidate usage stats - thread creation affects user quotas
+      queryClient.invalidateQueries({ queryKey: queryKeys.usage.stats() });
     },
     retry: false,
     throwOnError: false,
@@ -122,13 +125,16 @@ export function useUpdateThreadMutation() {
 
       // Sync title to Zustand store so breadcrumb updates immediately
       if (chatStore && 'title' in variables.json) {
-        const currentThread = chatStore.getState().thread;
-        if (currentThread?.id === threadId) {
-          chatStore.setState(
-            { thread: { ...currentThread, title: variables.json.title as string } },
-            false,
-            'thread/updateTitle',
-          );
+        const titleResult = z.string().safeParse(variables.json.title);
+        if (titleResult.success) {
+          const currentThread = chatStore.getState().thread;
+          if (currentThread?.id === threadId) {
+            chatStore.setState(
+              { thread: { ...currentThread, title: titleResult.data } },
+              false,
+              'thread/updateTitle',
+            );
+          }
         }
       }
 
@@ -841,6 +847,8 @@ export function useUpdateCustomRoleMutation() {
     onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: queryKeys.customRoles.detail(variables.param.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.customRoles.lists() });
+      // Invalidate userPresets - presets reference roles and become stale when roles change
+      queryClient.invalidateQueries({ queryKey: queryKeys.userPresets.all });
     },
     retry: false,
     throwOnError: false,

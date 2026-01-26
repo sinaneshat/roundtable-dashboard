@@ -15,10 +15,54 @@
  * 2. ChatView uses useIsMounted() to ensure consistent initial loading state
  */
 
-import type { ComponentType } from 'react';
+import type { BorderVariant } from '@roundtable/shared';
+import type { ChatStatus } from 'ai';
+import type { FormEvent, ReactNode, RefObject } from 'react';
 import { beforeAll, describe, expect, it, vi } from 'vitest';
 
+import type { PendingAttachment } from '@/hooks/utils';
+import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
 import { render } from '@/lib/testing';
+
+/**
+ * ChatInput props type definition for type-safe test mocking
+ * Matches the exact props type from chat-input.tsx
+ */
+type ChatInputProps = {
+  value: string;
+  onChange: (value: string) => void;
+  onSubmit: (e: FormEvent) => void;
+  status: ChatStatus;
+  onStop?: () => void;
+  placeholder?: string;
+  disabled?: boolean;
+  autoFocus?: boolean;
+  toolbar?: ReactNode;
+  participants?: ParticipantConfig[];
+  className?: string;
+  enableSpeech?: boolean;
+  minHeight?: number;
+  maxHeight?: number;
+  showCreditAlert?: boolean;
+  attachments?: PendingAttachment[];
+  onAddAttachments?: (files: File[]) => void;
+  onRemoveAttachment?: (id: string) => void;
+  enableAttachments?: boolean;
+  attachmentClickRef?: RefObject<(() => void) | null>;
+  isUploading?: boolean;
+  isHydrating?: boolean;
+  isSubmitting?: boolean;
+  isModelsLoading?: boolean;
+  hideInternalAlerts?: boolean;
+  borderVariant?: BorderVariant;
+  autoMode?: boolean;
+};
+
+/**
+ * React.memo wrapped functional component type
+ * Matches the export type of ChatInput from chat-input.tsx
+ */
+type ChatInputComponent = React.MemoExoticComponent<(props: ChatInputProps) => React.JSX.Element>;
 
 // Mock all hooks used by ChatInput and its dependencies BEFORE importing
 vi.mock('@/hooks/queries', () => ({
@@ -49,7 +93,7 @@ vi.mock('@/hooks/utils', async (importOriginal) => {
   };
 });
 
-let ChatInput: ComponentType<any>;
+let ChatInput: ChatInputComponent;
 
 beforeAll(async () => {
   const module = await import('../chat-input');

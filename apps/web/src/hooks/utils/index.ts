@@ -81,6 +81,8 @@ export { useSessionQuerySync } from './use-session-query-sync';
 export type { UseSpeechRecognitionOptions } from './use-speech-recognition';
 export { useSpeechRecognition } from './use-speech-recognition';
 export { useSyncedRefs } from './use-synced-refs';
+export type { StreamChunk, StreamSubscriptionState, SubscriptionStatus, UseStreamSubscriptionOptions } from './use-stream-subscription';
+export { useStreamSubscription } from './use-stream-subscription';
 export type { TimelineItem, UseThreadTimelineOptions } from './use-thread-timeline';
 export { useThreadTimeline } from './use-thread-timeline';
 export { useIsFirstRender, useTimelineAnimations } from './use-timeline-animations';

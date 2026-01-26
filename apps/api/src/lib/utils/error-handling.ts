@@ -5,7 +5,7 @@ import * as z from 'zod';
 import type { ValidationError } from '@/core/schemas';
 import { ValidationErrorSchema } from '@/core/schemas';
 
-import { hasProperty, isNonEmptyString, isObject, isValidErrorCode } from './type-guards';
+import { isValidErrorCode } from './type-guards';
 
 // ============================================================================
 // ERROR MESSAGE CONSTANTS
@@ -66,59 +66,154 @@ export function isErrorCode(code: string): code is ErrorCode {
 }
 
 // ============================================================================
+// ERROR DETAILS EXTRACTION SCHEMAS
+// ============================================================================
+
+/**
+ * Schema for extracting errorType from context
+ */
+const ErrorTypeContextSchema = z.object({
+  errorType: z.string().min(1),
+}).partial();
+
+/**
+ * Schema for parsing context values that can be included in error details
+ */
+const ErrorContextValueSchema = z.union([z.string(), z.number(), z.boolean(), z.null()]);
+
+/**
+ * Schema for raw context object (allows any unknown values for filtering)
+ */
+const RawContextSchema = z.record(z.string(), z.unknown());
+
+// ============================================================================
 // ERROR DETAILS EXTRACTION
 // ============================================================================
 
 function extractErrorDetails(context: unknown): ClientErrorDetails | undefined {
-  if (!isObject(context)) {
-    return undefined;
-  }
-
   const details: NonNullable<ClientErrorDetails> = {};
 
-  if (hasProperty(context, 'errorType', isNonEmptyString)) {
-    details.errorType = context.errorType;
+  // Extract errorType using Zod
+  const errorTypeResult = ErrorTypeContextSchema.safeParse(context);
+  if (errorTypeResult.success && errorTypeResult.data.errorType) {
+    details.errorType = errorTypeResult.data.errorType;
   }
 
-  const contextRecord: Record<string, ErrorContextValue> = {};
-  let hasContextValues = false;
+  // Extract and filter context values using Zod
+  const rawContextResult = RawContextSchema.safeParse(context);
+  if (rawContextResult.success) {
+    const contextRecord: Record<string, ErrorContextValue> = {};
+    let hasContextValues = false;
 
-  for (const [key, value] of Object.entries(context)) {
-    if (key === 'errorType' || key === 'errorName' || key === 'stack') {
-      continue;
+    for (const [key, value] of Object.entries(rawContextResult.data)) {
+      if (key === 'errorType' || key === 'errorName' || key === 'stack') {
+        continue;
+      }
+      const valueResult = ErrorContextValueSchema.safeParse(value);
+      if (valueResult.success) {
+        contextRecord[key] = valueResult.data;
+        hasContextValues = true;
+      }
     }
-    if (typeof value === 'string' || typeof value === 'number' || typeof value === 'boolean' || value === null) {
-      contextRecord[key] = value;
-      hasContextValues = true;
-    }
-  }
 
-  if (hasContextValues) {
-    details.context = contextRecord;
+    if (hasContextValues) {
+      details.context = contextRecord;
+    }
   }
 
   return Object.keys(details).length > 0 ? details : undefined;
 }
+
+// ============================================================================
+// API ERROR PARSING SCHEMAS
+// ============================================================================
+
+/**
+ * Schema for error objects with direct status field
+ */
+const ErrorWithStatusSchema = z.object({
+  status: z.number().int().positive(),
+}).partial();
+
+/**
+ * Schema for error objects with nested response.status
+ */
+const ErrorWithResponseStatusSchema = z.object({
+  response: z.object({
+    status: z.number().int().positive(),
+  }).partial(),
+}).partial();
+
+/**
+ * Schema for validation error items
+ */
+const ValidationErrorItemSchema = z.object({
+  code: z.string().optional(),
+  field: z.string().optional(),
+  message: z.string().optional(),
+}).partial();
+
+/**
+ * Schema for nested API error object
+ */
+const NestedApiErrorSchema = z.object({
+  code: z.string().min(1).optional(),
+  context: z.unknown().optional(),
+  details: z.unknown().optional(),
+  message: z.string().min(1).optional(),
+  validation: z.array(z.unknown()).optional(),
+}).partial();
+
+/**
+ * Schema for error objects with nested error field
+ */
+const ErrorWithNestedErrorSchema = z.object({
+  error: z.unknown(),
+}).partial();
+
+/**
+ * Schema for error objects with direct message field
+ */
+const ErrorWithMessageSchema = z.object({
+  code: z.string().min(1).optional(),
+  message: z.string().min(1).optional(),
+  statusText: z.string().min(1).optional(),
+}).partial();
+
+/**
+ * Schema for error meta information
+ */
+const ErrorMetaSchema = z.object({
+  meta: z.object({
+    correlationId: z.string().optional(),
+    requestId: z.string().optional(),
+    timestamp: z.string().optional(),
+  }).partial(),
+}).partial();
 
 export function getApiErrorDetails(error: unknown): ApiErrorDetails {
   if (!error) {
     return { message: UNKNOWN_ERROR_MESSAGE };
   }
 
-  if (typeof error === 'string') {
-    // Attempt to parse stringified JSON error objects
+  // Handle string errors (may be stringified JSON)
+  const stringResult = z.string().safeParse(error);
+  if (stringResult.success) {
     try {
-      const parsed = JSON.parse(error);
-      if (typeof parsed === 'object' && parsed !== null) {
+      const parsed: unknown = JSON.parse(stringResult.data);
+      const objectCheck = z.object({}).passthrough().safeParse(parsed);
+      if (objectCheck.success) {
         return getApiErrorDetails(parsed);
       }
     } catch {
       // Not valid JSON, treat as plain string message
     }
-    return { message: error };
+    return { message: stringResult.data };
   }
 
-  if (typeof error !== 'object' || error === null) {
+  // Handle non-objects
+  const objectCheck = z.object({}).passthrough().safeParse(error);
+  if (!objectCheck.success) {
     return { message: String(error) };
   }
 
@@ -126,66 +221,88 @@ export function getApiErrorDetails(error: unknown): ApiErrorDetails {
     message: UNKNOWN_ERROR_MESSAGE,
   };
 
-  if ('status' in error && typeof error.status === 'number') {
-    result.status = error.status;
+  // Extract direct status using Zod
+  const statusResult = ErrorWithStatusSchema.safeParse(error);
+  if (statusResult.success && statusResult.data.status) {
+    result.status = statusResult.data.status;
   }
 
-  if ('response' in error && typeof error.response === 'object' && error.response !== null) {
-    if ('status' in error.response && typeof error.response.status === 'number' && !result.status) {
-      result.status = error.response.status;
-    }
-  }
-
-  if ('error' in error && typeof error.error === 'object' && error.error !== null) {
-    const apiError = error.error;
-
-    if ('message' in apiError && typeof apiError.message === 'string' && apiError.message.length > 0) {
-      result.message = apiError.message;
-    }
-
-    if ('code' in apiError && typeof apiError.code === 'string' && apiError.code.length > 0) {
-      result.code = apiError.code;
-    }
-
-    if ('validation' in apiError && Array.isArray(apiError.validation)) {
-      result.validationErrors = apiError.validation
-        .filter((v): v is { field?: unknown; message?: unknown; code?: unknown } => typeof v === 'object' && v !== null)
-        .map(v => ({
-          code: 'code' in v && typeof v.code === 'string' ? v.code : undefined,
-          field: 'field' in v && typeof v.field === 'string' ? v.field : 'unknown',
-          message: 'message' in v && typeof v.message === 'string' ? v.message : 'Validation failed',
-        }));
-    }
-
-    if ('details' in apiError && apiError.details !== undefined) {
-      result.details = extractErrorDetails(apiError.details);
-    }
-
-    if ('context' in apiError && isObject(apiError.context)) {
-      result.details = result.details ?? extractErrorDetails(apiError.context);
+  // Extract response.status using Zod
+  if (!result.status) {
+    const responseStatusResult = ErrorWithResponseStatusSchema.safeParse(error);
+    if (responseStatusResult.success && responseStatusResult.data.response?.status) {
+      result.status = responseStatusResult.data.response.status;
     }
   }
 
-  if (result.message === UNKNOWN_ERROR_MESSAGE && 'message' in error && typeof error.message === 'string' && error.message.length > 0) {
-    if (!error.message.startsWith('HTTP error!')) {
-      result.message = error.message;
-    }
+  // Extract nested error object using Zod
+  const nestedErrorResult = ErrorWithNestedErrorSchema.safeParse(error);
+  if (nestedErrorResult.success && nestedErrorResult.data.error) {
+    const apiErrorResult = NestedApiErrorSchema.safeParse(nestedErrorResult.data.error);
+    if (apiErrorResult.success) {
+      const apiError = apiErrorResult.data;
 
-    if ('code' in error && typeof error.code === 'string' && error.code.length > 0) {
-      result.code = error.code;
+      if (apiError.message) {
+        result.message = apiError.message;
+      }
+
+      if (apiError.code) {
+        result.code = apiError.code;
+      }
+
+      // Parse validation errors using Zod
+      if (apiError.validation && Array.isArray(apiError.validation)) {
+        const validationErrors: ValidationError[] = [];
+        for (const v of apiError.validation) {
+          const validationResult = ValidationErrorItemSchema.safeParse(v);
+          if (validationResult.success) {
+            validationErrors.push({
+              code: validationResult.data.code,
+              field: validationResult.data.field ?? 'unknown',
+              message: validationResult.data.message ?? 'Validation failed',
+            });
+          }
+        }
+        if (validationErrors.length > 0) {
+          result.validationErrors = validationErrors;
+        }
+      }
+
+      if (apiError.details !== undefined) {
+        result.details = extractErrorDetails(apiError.details);
+      }
+
+      if (apiError.context !== undefined) {
+        result.details = result.details ?? extractErrorDetails(apiError.context);
+      }
     }
   }
 
-  if (result.message === UNKNOWN_ERROR_MESSAGE && 'statusText' in error && typeof error.statusText === 'string' && error.statusText.length > 0) {
-    result.message = error.statusText;
+  // Extract direct message using Zod
+  if (result.message === UNKNOWN_ERROR_MESSAGE) {
+    const messageResult = ErrorWithMessageSchema.safeParse(error);
+    if (messageResult.success) {
+      if (messageResult.data.message && !messageResult.data.message.startsWith('HTTP error!')) {
+        result.message = messageResult.data.message;
+      }
+
+      if (messageResult.data.code) {
+        result.code = messageResult.data.code;
+      }
+
+      if (result.message === UNKNOWN_ERROR_MESSAGE && messageResult.data.statusText) {
+        result.message = messageResult.data.statusText;
+      }
+    }
   }
 
-  if ('meta' in error && typeof error.meta === 'object' && error.meta !== null) {
-    const meta = error.meta;
+  // Extract meta using Zod
+  const metaResult = ErrorMetaSchema.safeParse(error);
+  if (metaResult.success && metaResult.data.meta) {
     result.meta = {
-      correlationId: 'correlationId' in meta && typeof meta.correlationId === 'string' ? meta.correlationId : undefined,
-      requestId: 'requestId' in meta && typeof meta.requestId === 'string' ? meta.requestId : undefined,
-      timestamp: 'timestamp' in meta && typeof meta.timestamp === 'string' ? meta.timestamp : undefined,
+      correlationId: metaResult.data.meta.correlationId,
+      requestId: metaResult.data.meta.requestId,
+      timestamp: metaResult.data.meta.timestamp,
     };
   }
 

@@ -16,11 +16,11 @@ import type { ServiceOptions } from '@/services/api/types';
 // Type Inference - Thread Operations
 // ============================================================================
 
-type ListThreadsEndpoint = ApiClientType['chat']['threads']['$get'];
-type CreateThreadEndpoint = ApiClientType['chat']['threads']['$post'];
-type GetThreadEndpoint = ApiClientType['chat']['threads'][':id']['$get'];
-type UpdateThreadEndpoint = ApiClientType['chat']['threads'][':id']['$patch'];
-type DeleteThreadEndpoint = ApiClientType['chat']['threads'][':id']['$delete'];
+type ListThreadsEndpoint = ApiClientType['chatThread']['chat']['threads']['$get'];
+type CreateThreadEndpoint = ApiClientType['chatThread']['chat']['threads']['$post'];
+type GetThreadEndpoint = ApiClientType['chatThread']['chat']['threads'][':id']['$get'];
+type UpdateThreadEndpoint = ApiClientType['chatThread']['chat']['threads'][':id']['$patch'];
+type DeleteThreadEndpoint = ApiClientType['chatThread']['chat']['threads'][':id']['$delete'];
 
 export type ListThreadsRequest = InferRequestType<ListThreadsEndpoint>;
 export type ListThreadsResponse = InferResponseType<ListThreadsEndpoint, 200>;
@@ -37,10 +37,10 @@ export type DeleteThreadResponse = InferResponseType<DeleteThreadEndpoint, 200>;
 // Type Inference - Public Thread Operations
 // ============================================================================
 
-type GetPublicThreadEndpoint = ApiClientType['chat']['public'][':slug']['$get'];
-type ListPublicThreadSlugsEndpoint = ApiClientType['chat']['public']['slugs']['$get'];
-type GetThreadBySlugEndpoint = ApiClientType['chat']['threads']['slug'][':slug']['$get'];
-type GetThreadSlugStatusEndpoint = ApiClientType['chat']['threads'][':id']['slug-status']['$get'];
+type GetPublicThreadEndpoint = ApiClientType['chatThread']['chat']['public'][':slug']['$get'];
+type ListPublicThreadSlugsEndpoint = ApiClientType['chatThread']['chat']['public']['slugs']['$get'];
+type GetThreadBySlugEndpoint = ApiClientType['chatThread']['chat']['threads']['slug'][':slug']['$get'];
+type GetThreadSlugStatusEndpoint = ApiClientType['chatThread']['chat']['threads'][':id']['slug-status']['$get'];
 
 export type GetPublicThreadRequest = InferRequestType<GetPublicThreadEndpoint>;
 export type GetPublicThreadResponse = InferResponseType<GetPublicThreadEndpoint, 200>;
@@ -54,10 +54,10 @@ export type GetThreadSlugStatusResponse = InferResponseType<GetThreadSlugStatusE
 // Type Inference - Sidebar, Messages, Changelog
 // ============================================================================
 
-type ListSidebarThreadsEndpoint = ApiClientType['chat']['threads']['sidebar']['$get'];
-type GetThreadMessagesEndpoint = ApiClientType['chat']['threads'][':id']['messages']['$get'];
-type GetThreadChangelogEndpoint = ApiClientType['chat']['threads'][':id']['changelog']['$get'];
-type GetThreadRoundChangelogEndpoint = ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['changelog']['$get'];
+type ListSidebarThreadsEndpoint = ApiClientType['chatThread']['chat']['threads']['sidebar']['$get'];
+type GetThreadMessagesEndpoint = ApiClientType['chatMessage']['chat']['threads'][':id']['messages']['$get'];
+type GetThreadChangelogEndpoint = ApiClientType['chatMessage']['chat']['threads'][':id']['changelog']['$get'];
+type GetThreadRoundChangelogEndpoint = ApiClientType['chatMessage']['chat']['threads'][':threadId']['rounds'][':roundNumber']['changelog']['$get'];
 
 export type ListSidebarThreadsRequest = InferRequestType<ListSidebarThreadsEndpoint>;
 export type ListSidebarThreadsResponse = InferResponseType<ListSidebarThreadsEndpoint, 200>;
@@ -72,9 +72,9 @@ export type GetThreadRoundChangelogResponse = InferResponseType<GetThreadRoundCh
 // Type Inference - Stream Resumption & Auto Mode
 // ============================================================================
 
-type GetThreadStreamResumptionStateEndpoint = ApiClientType['chat']['threads'][':threadId']['stream-status']['$get'];
-type AnalyzePromptEndpoint = ApiClientType['chat']['analyze']['$post'];
-type GetThreadMemoryEventsEndpoint = ApiClientType['chat']['threads'][':threadId']['memory-events']['$get'];
+type GetThreadStreamResumptionStateEndpoint = ApiClientType['chatMessage']['chat']['threads'][':threadId']['stream-status']['$get'];
+type AnalyzePromptEndpoint = ApiClientType['chatMessage']['chat']['analyze']['$post'];
+type GetThreadMemoryEventsEndpoint = ApiClientType['chatThread']['chat']['threads'][':threadId']['memory-events']['$get'];
 
 export type GetThreadStreamResumptionStateRequest = InferRequestType<GetThreadStreamResumptionStateEndpoint>;
 export type GetThreadStreamResumptionStateResponse = InferResponseType<GetThreadStreamResumptionStateEndpoint, 200>;
@@ -89,27 +89,27 @@ export type GetThreadMemoryEventsResponse = InferResponseType<GetThreadMemoryEve
 
 export async function listThreadsService(data?: ListThreadsRequest, options?: ServiceOptions) {
   const client = createApiClient({ cookieHeader: options?.cookieHeader });
-  return parseResponse(client.chat.threads.$get(data ?? { query: {} }));
+  return parseResponse(client.chatThread.chat.threads.$get(data ?? { query: {} }));
 }
 
 export async function createThreadService(data: CreateThreadRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat.threads.$post(data));
+  return parseResponse(client.chatThread.chat.threads.$post(data));
 }
 
 export async function getThreadService(data: GetThreadRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat.threads[':id'].$get(data));
+  return parseResponse(client.chatThread.chat.threads[':id'].$get(data));
 }
 
 export async function updateThreadService(data: UpdateThreadRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat.threads[':id'].$patch(data));
+  return parseResponse(client.chatThread.chat.threads[':id'].$patch(data));
 }
 
 export async function deleteThreadService(data: DeleteThreadRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat.threads[':id'].$delete(data));
+  return parseResponse(client.chatThread.chat.threads[':id'].$delete(data));
 }
 
 // ============================================================================
@@ -118,7 +118,7 @@ export async function deleteThreadService(data: DeleteThreadRequest) {
 
 export async function listSidebarThreadsService(data?: ListSidebarThreadsRequest, options?: ServiceOptions) {
   const client = createApiClient({ cookieHeader: options?.cookieHeader });
-  return parseResponse(client.chat.threads.sidebar.$get(data ?? { query: {} }));
+  return parseResponse(client.chatThread.chat.threads.sidebar.$get(data ?? { query: {} }));
 }
 
 // ============================================================================
@@ -127,12 +127,12 @@ export async function listSidebarThreadsService(data?: ListSidebarThreadsRequest
 
 export async function getPublicThreadService(data: GetPublicThreadRequest) {
   const client = createPublicApiClient();
-  return parseResponse(client.chat.public[':slug'].$get(data));
+  return parseResponse(client.chatThread.chat.public[':slug'].$get(data));
 }
 
 export async function listPublicThreadSlugsService() {
   const client = createPublicApiClient();
-  return parseResponse(client.chat.public.slugs.$get());
+  return parseResponse(client.chatThread.chat.public.slugs.$get());
 }
 
 export async function getThreadBySlugService(
@@ -140,12 +140,12 @@ export async function getThreadBySlugService(
   options?: { cookieHeader?: string },
 ) {
   const client = createApiClient({ cookieHeader: options?.cookieHeader });
-  return parseResponse(client.chat.threads.slug[':slug'].$get(data));
+  return parseResponse(client.chatThread.chat.threads.slug[':slug'].$get(data));
 }
 
 export async function getThreadSlugStatusService(data: GetThreadSlugStatusRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat.threads[':id']['slug-status'].$get(data));
+  return parseResponse(client.chatThread.chat.threads[':id']['slug-status'].$get(data));
 }
 
 // ============================================================================
@@ -154,7 +154,7 @@ export async function getThreadSlugStatusService(data: GetThreadSlugStatusReques
 
 export async function getThreadMessagesService(data: GetThreadMessagesRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat.threads[':id'].messages.$get(data));
+  return parseResponse(client.chatMessage.chat.threads[':id'].messages.$get(data));
 }
 
 export async function getThreadChangelogService(
@@ -162,12 +162,12 @@ export async function getThreadChangelogService(
   options?: { cookieHeader?: string },
 ) {
   const client = createApiClient({ cookieHeader: options?.cookieHeader });
-  return parseResponse(client.chat.threads[':id'].changelog.$get(data));
+  return parseResponse(client.chatMessage.chat.threads[':id'].changelog.$get(data));
 }
 
 export async function getThreadRoundChangelogService(data: GetThreadRoundChangelogRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat.threads[':threadId'].rounds[':roundNumber'].changelog.$get(data));
+  return parseResponse(client.chatMessage.chat.threads[':threadId'].rounds[':roundNumber'].changelog.$get(data));
 }
 
 // ============================================================================
@@ -179,7 +179,7 @@ export async function getThreadStreamResumptionStateService(
   options?: { cookieHeader?: string },
 ) {
   const client = createApiClient({ cookieHeader: options?.cookieHeader });
-  return parseResponse(client.chat.threads[':threadId']['stream-status'].$get(data));
+  return parseResponse(client.chatMessage.chat.threads[':threadId']['stream-status'].$get(data));
 }
 
 // ============================================================================
@@ -192,7 +192,7 @@ export async function getThreadStreamResumptionStateService(
  */
 export async function getThreadMemoryEventsService(data: GetThreadMemoryEventsRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat.threads[':threadId']['memory-events'].$get(data));
+  return parseResponse(client.chatThread.chat.threads[':threadId']['memory-events'].$get(data));
 }
 
 // ============================================================================
@@ -212,7 +212,7 @@ export async function analyzePromptStreamService(
   options?: { signal?: AbortSignal },
 ) {
   const client = createApiClient({ signal: options?.signal });
-  return client.chat.analyze.$post(data);
+  return client.chatMessage.chat.analyze.$post(data);
 }
 
 // ============================================================================

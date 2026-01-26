@@ -28,6 +28,7 @@ import {
   chatThread,
   chatThreadChangelog,
   chatUserPreset,
+  roundExecution,
 } from '@/db/tables/chat';
 
 /**
@@ -112,6 +113,15 @@ export const chatUserPresetInsertSchema = createInsertSchema(chatUserPreset);
 export const chatUserPresetUpdateSchema = createUpdateSchema(chatUserPreset);
 
 /**
+ * Round Execution Schemas
+ * Durable round execution tracking for robust streaming resumption
+ * Note: Field validation applied at API layer
+ */
+export const roundExecutionSelectSchema = createSelectSchema(roundExecution);
+export const roundExecutionInsertSchema = createInsertSchema(roundExecution);
+export const roundExecutionUpdateSchema = createUpdateSchema(roundExecution);
+
+/**
  * Type exports
  */
 export type ChatThread = z.infer<typeof chatThreadSelectSchema>;
@@ -143,3 +153,7 @@ export type ChatRoundFeedbackUpdate = z.infer<typeof chatRoundFeedbackUpdateSche
 export type ChatUserPreset = z.infer<typeof chatUserPresetSelectSchema>;
 export type ChatUserPresetInsert = z.infer<typeof chatUserPresetInsertSchema>;
 export type ChatUserPresetUpdate = z.infer<typeof chatUserPresetUpdateSchema>;
+
+export type RoundExecution = z.infer<typeof roundExecutionSelectSchema>;
+export type RoundExecutionInsert = z.infer<typeof roundExecutionInsertSchema>;
+export type RoundExecutionUpdate = z.infer<typeof roundExecutionUpdateSchema>;

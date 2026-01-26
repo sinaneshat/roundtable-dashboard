@@ -394,20 +394,24 @@ export const DbModeratorMessageMetadataSchema = z.object({
 export type DbModeratorMessageMetadata = z.infer<typeof DbModeratorMessageMetadataSchema>;
 
 /**
- * Complete Message Metadata Schema - Discriminated Union with Moderator Extension
+ * Complete Message Metadata Schema - Union with Moderator Priority
  *
- * ✅ TYPE-SAFE DISCRIMINATION: Use 'role' field to determine message type
+ * ✅ TYPE-SAFE DISCRIMINATION: Use 'role' + 'isModerator' fields to determine message type
  * ✅ EXHAUSTIVE: All possible metadata shapes defined
  * ✅ NO ESCAPE HATCHES: No [key: string]: unknown
  *
  * NOTE: Moderator messages use role='assistant' like participants but are distinguished
- * by isModerator=true. The .or() pattern handles this edge case cleanly.
+ * by isModerator=true. Moderator schema MUST be checked FIRST because:
+ * - Moderator has role='assistant' but NO participantId
+ * - Regular assistant requires participantId
+ * - Using discriminatedUnion('role') would try assistant first and fail on moderator
  */
-export const DbMessageMetadataSchema = z.discriminatedUnion('role', [
+export const DbMessageMetadataSchema = z.union([
+  DbModeratorMessageMetadataSchema, // Check moderator FIRST (has isModerator: true)
   DbUserMessageMetadataSchema,
   DbAssistantMessageMetadataSchema,
   DbPreSearchMessageMetadataSchema,
-]).or(DbModeratorMessageMetadataSchema);
+]);
 
 export type DbMessageMetadata = z.infer<typeof DbMessageMetadataSchema>;
 

@@ -397,7 +397,8 @@ export function useRoundResumption({ chat, store }: UseRoundResumptionParams) {
           // Still not ready - schedule recursive retry with direct execution
           // ✅ FIX: Don't rely on toggle pattern (fails with React 18 batching)
           // Instead, recursively poll until ready and execute directly
-          const maxRetries = 20; // 2 seconds max (20 * 100ms)
+          // ✅ PERF: Reduced from 20 retries (2s) to 5 retries (500ms) - AI SDK typically hydrates within 200ms
+          const maxRetries = 5; // 500ms max (5 * 100ms)
           let retryCount = 0;
 
           const pollUntilReady = () => {

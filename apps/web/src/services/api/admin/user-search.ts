@@ -14,7 +14,7 @@ import { createApiClient, ServiceFetchError } from '@/lib/api/client';
 // Type Inference - Endpoint definitions
 // ============================================================================
 
-type AdminSearchUsersEndpoint = ApiClientType['admin']['users']['search']['$get'];
+type AdminSearchUsersEndpoint = ApiClientType['admin']['admin']['users']['search']['$get'];
 
 // ============================================================================
 // Type Exports - Request/Response types inferred from backend
@@ -38,7 +38,7 @@ export type AdminSearchUserResult = SearchData['users'][number];
  */
 export async function adminSearchUserService(data: AdminSearchUsersParams) {
   const client = createApiClient();
-  const res = await client.admin.users.search.$get(data);
+  const res = await client.admin.admin.users.search.$get(data);
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to search users: ${res.statusText}`, res.status, res.statusText);
   }

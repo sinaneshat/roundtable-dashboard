@@ -24,6 +24,7 @@
 
 import { FinishReasons, MessageRoles, MessageStatuses, ModelIds, TextPartStates } from '@roundtable/shared';
 import { describe, expect, it } from 'vitest';
+import { z } from 'zod';
 
 import type { DbMessageMetadata } from '@/services/api';
 
@@ -41,27 +42,59 @@ type UIMessage = {
   metadata?: DbMessageMetadata;
 };
 
-type PreSearchData = {
-  queries: {
-    query: string;
-    rationale: string;
-    searchDepth: string;
-    index: number;
-    total: number;
-  }[];
-  results: {
-    query: string;
-    answer: string | null;
-    results: Record<string, unknown>[];
-    responseTime: number;
-    index: number;
-  }[];
-  summary: string;
-  successCount: number;
-  failureCount: number;
-  totalResults: number;
-  totalTime: number;
-};
+/**
+ * Schema for individual web search result item
+ * Represents a single search result from the pre-search web query
+ */
+const WebSearchResultItemSchema = z.object({
+  content: z.string().optional(),
+  score: z.number().optional(),
+  title: z.string().optional(),
+  url: z.string().optional(),
+});
+
+type _WebSearchResultItem = z.infer<typeof WebSearchResultItemSchema>;
+
+/**
+ * Schema for pre-search query configuration
+ */
+const PreSearchQuerySchema = z.object({
+  index: z.number(),
+  query: z.string(),
+  rationale: z.string(),
+  searchDepth: z.string(),
+  total: z.number(),
+});
+
+type _PreSearchQuery = z.infer<typeof PreSearchQuerySchema>;
+
+/**
+ * Schema for pre-search result entry
+ */
+const PreSearchResultSchema = z.object({
+  answer: z.string().nullable(),
+  index: z.number(),
+  query: z.string(),
+  responseTime: z.number(),
+  results: z.array(WebSearchResultItemSchema),
+});
+
+type _PreSearchResult = z.infer<typeof PreSearchResultSchema>;
+
+/**
+ * Schema for complete pre-search data
+ */
+const _PreSearchDataSchema = z.object({
+  failureCount: z.number(),
+  queries: z.array(PreSearchQuerySchema),
+  results: z.array(PreSearchResultSchema),
+  successCount: z.number(),
+  summary: z.string(),
+  totalResults: z.number(),
+  totalTime: z.number(),
+});
+
+type PreSearchData = z.infer<typeof _PreSearchDataSchema>;
 
 type PreSearch = {
   id: string;

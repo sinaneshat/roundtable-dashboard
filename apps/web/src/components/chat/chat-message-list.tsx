@@ -704,11 +704,17 @@ export const ChatMessageList = memo(
           const finishReason = moderatorMeta && typeof moderatorMeta === 'object' && 'finishReason' in moderatorMeta ? (moderatorMeta as { finishReason?: string }).finishReason : undefined;
           const hasActuallyFinished = isCompletionFinishReason(finishReason);
           const modelId = moderatorMeta && typeof moderatorMeta === 'object' && 'model' in moderatorMeta ? (moderatorMeta as { model?: string }).model : undefined;
+
+          // FIX: Use store state as additional signal for streaming status
+          // When isModeratorStreaming is false, streaming is definitely done
+          // This handles the race condition where metadata finishReason hasn't updated yet
+          const isStillStreaming = isModeratorStreaming && !hasActuallyFinished;
+
           return {
             index,
             message,
             participantInfo: {
-              isStreaming: !hasActuallyFinished,
+              isStreaming: isStillStreaming,
               modelId, // Uses its own model ID from metadata
               participantIndex: MODERATOR_PARTICIPANT_INDEX, // -99 for sort order
               role: null, // No role badge displayed for moderator

@@ -57,7 +57,7 @@ export const listProductsRoute = createRoute({
 export const getProductRoute = createRoute({
   description: 'Get a specific product with all its pricing plans',
   method: 'get',
-  path: '/billing/products/:id',
+  path: '/billing/products/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -160,7 +160,7 @@ export const listSubscriptionsRoute = createRoute({
 export const getSubscriptionRoute = createRoute({
   description: 'Get details of a specific subscription',
   method: 'get',
-  path: '/billing/subscriptions/:id',
+  path: '/billing/subscriptions/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -185,7 +185,7 @@ export const getSubscriptionRoute = createRoute({
 export const switchSubscriptionRoute = createRoute({
   description: 'Switch the current subscription to a different price. Automatically handles upgrades (immediate with proration) and downgrades (at period end).',
   method: 'post',
-  path: '/billing/subscriptions/:id/switch',
+  path: '/billing/subscriptions/{id}/switch',
   request: {
     body: {
       content: {
@@ -214,7 +214,7 @@ export const switchSubscriptionRoute = createRoute({
 export const cancelSubscriptionRoute = createRoute({
   description: 'Cancel the subscription either immediately or at the end of the current billing period (default).',
   method: 'post',
-  path: '/billing/subscriptions/:id/cancel',
+  path: '/billing/subscriptions/{id}/cancel',
   request: {
     body: {
       content: {

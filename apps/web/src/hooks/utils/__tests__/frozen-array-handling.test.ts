@@ -30,17 +30,35 @@ import { describe, expect, it } from 'vitest';
 // ============================================================================
 
 /**
+ * Type guard to check if a value is a non-null object that can be frozen
+ */
+function isFreezableObject(value: unknown): value is object {
+  return value !== null && typeof value === 'object';
+}
+
+/**
+ * Safe property accessor for objects during deep freeze
+ * Returns the value if the key exists on the object, with proper typing
+ */
+function getNestedValue<T extends object>(obj: T, key: string): unknown {
+  if (Object.prototype.hasOwnProperty.call(obj, key)) {
+    return obj[key as keyof T];
+  }
+  return undefined;
+}
+
+/**
  * Deep freeze an object and all its nested properties
  * Simulates Immer's Object.freeze() behavior in Zustand stores
  */
-function deepFreeze<T>(obj: T): T {
+function deepFreeze<T extends object>(obj: T): T {
   // Freeze the object itself
   Object.freeze(obj);
 
   Object.getOwnPropertyNames(obj).forEach((prop) => {
-    if (obj !== null && typeof obj === 'object' && prop in obj) {
-      const value = (obj as Record<string, unknown>)[prop];
-      if (value && typeof value === 'object') {
+    if (prop in obj) {
+      const value = getNestedValue(obj, prop);
+      if (isFreezableObject(value)) {
         deepFreeze(value);
       }
     }
@@ -53,7 +71,7 @@ function deepFreeze<T>(obj: T): T {
  * Simulate Zustand store producing frozen message arrays
  * This matches the actual behavior when store.messages is synced to the hook
  */
-function createFrozenMessageArray(messages: UIMessage[]): UIMessage[] {
+function createFrozenMessageArray(messages: UIMessage[]): readonly UIMessage[] {
   const frozen = messages.map(msg => deepFreeze({ ...msg }));
   return Object.freeze(frozen);
 }

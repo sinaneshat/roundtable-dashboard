@@ -27,11 +27,7 @@ import {
 } from '@roundtable/shared';
 import { z } from 'zod';
 
-import type { DbMessageMetadata as MessageMetadata } from '@/services/api';
-import {
-  isAssistantMessageMetadata as isAssistantMetadata,
-  UsageSchema,
-} from '@/services/api';
+import { UsageSchema } from '@/services/api';
 
 // ============================================================================
 // Re-export shared schemas for convenience
@@ -90,18 +86,32 @@ export type PreSearchQueryState = z.infer<typeof PreSearchQueryStateSchema>;
 // Helper Functions
 // ============================================================================
 
+/**
+ * Minimal schema for hasError extraction from assistant metadata
+ * Used when we only need to check if an assistant message has an error
+ */
+const AssistantErrorCheckSchema = z.object({
+  hasError: z.boolean().optional(),
+  role: z.literal(MessageRoles.ASSISTANT),
+});
+
+/**
+ * Check if metadata indicates a message has an error
+ *
+ * Uses Zod safeParse for type-safe validation instead of manual type guards.
+ * Only returns true for assistant messages with hasError === true.
+ *
+ * @param metadata - Raw metadata to check
+ * @returns true if metadata is assistant type with hasError === true
+ */
 export function messageHasError(
   metadata: unknown,
 ): boolean {
-  // First narrow unknown to DbMessageMetadata, then check if assistant
-  if (!metadata || typeof metadata !== 'object' || !('role' in metadata)) {
+  const result = AssistantErrorCheckSchema.safeParse(metadata);
+  if (!result.success) {
     return false;
   }
-  const parsed = metadata as MessageMetadata;
-  if (isAssistantMetadata(parsed)) {
-    return parsed.hasError === true;
-  }
-  return false;
+  return result.data.hasError === true;
 }
 
 // ============================================================================

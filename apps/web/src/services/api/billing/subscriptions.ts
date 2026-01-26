@@ -15,8 +15,8 @@ import type { ServiceOptions } from '@/services/api/types';
 // Type Inference - Endpoint definitions
 // ============================================================================
 
-type ListSubscriptionsEndpoint = ApiClientType['billing']['subscriptions']['$get'];
-type GetSubscriptionEndpoint = ApiClientType['billing']['subscriptions'][':id']['$get'];
+type ListSubscriptionsEndpoint = ApiClientType['billing']['billing']['subscriptions']['$get'];
+type GetSubscriptionEndpoint = ApiClientType['billing']['billing']['subscriptions'][':id']['$get'];
 
 // ============================================================================
 // Type Exports - Request/Response types
@@ -39,7 +39,7 @@ export async function getSubscriptionsService(options?: ServiceOptions): Promise
     bypassCache: options?.bypassCache,
     cookieHeader: options?.cookieHeader,
   });
-  const res = await client.billing.subscriptions.$get();
+  const res = await client.billing.billing.subscriptions.$get();
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to fetch subscriptions: ${res.statusText}`, res.status, res.statusText);
   }
@@ -52,7 +52,7 @@ export async function getSubscriptionsService(options?: ServiceOptions): Promise
  */
 export async function getSubscriptionService(data: GetSubscriptionRequest): Promise<GetSubscriptionResponse> {
   const client = createApiClient();
-  const res = await client.billing.subscriptions[':id'].$get(data);
+  const res = await client.billing.billing.subscriptions[':id'].$get(data);
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to fetch subscription: ${res.statusText}`, res.status, res.statusText);
   }

@@ -10,6 +10,7 @@
 
 import { FinishReasons, MessageRoles, ModelIds, ParticipantStreamStatuses } from '@roundtable/shared';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { z } from 'zod';
 
 import { act, createMockParticipant, createMockStreamingResponse, createMockThread } from '@/lib/testing';
 import { createChatStore } from '@/stores/chat';
@@ -18,11 +19,80 @@ import { createChatStore } from '@/stores/chat';
 // Mock Setup
 // ============================================================================
 
-type TelemetryEvent = {
-  type: 'span_start' | 'span_end' | 'error' | 'metric';
-  name: string;
-  attributes: Record<string, unknown>;
-  timestamp: number;
+/**
+ * Telemetry event types as const array for schema derivation
+ */
+const TELEMETRY_EVENT_TYPES = ['span_start', 'span_end', 'error', 'metric'] as const;
+
+/**
+ * Schema for span_start telemetry event attributes
+ */
+const _SpanStartAttributesSchema = z.object({
+  method: z.string().optional(),
+  parentSpanId: z.string().nullable().optional(),
+  spanId: z.string().optional(),
+  traceId: z.string().optional(),
+  url: z.string().optional(),
+});
+
+type SpanStartAttributes = z.infer<typeof _SpanStartAttributesSchema>;
+
+/**
+ * Schema for span_end telemetry event attributes
+ */
+const _SpanEndAttributesSchema = z.object({
+  durationMs: z.number().optional(),
+  spanId: z.string().optional(),
+  status: z.enum(['ok', 'error']).optional(),
+  traceId: z.string().optional(),
+});
+
+type SpanEndAttributes = z.infer<typeof _SpanEndAttributesSchema>;
+
+/**
+ * Schema for error telemetry event attributes
+ */
+const _ErrorAttributesSchema = z.object({
+  errorMessage: z.string().optional(),
+  errorType: z.string().optional(),
+  spanId: z.string().optional(),
+  stackTrace: z.string().optional(),
+  traceId: z.string().optional(),
+});
+
+type ErrorAttributes = z.infer<typeof _ErrorAttributesSchema>;
+
+/**
+ * Schema for metric telemetry event attributes
+ */
+const _MetricAttributesSchema = z.object({
+  metricName: z.string().optional(),
+  metricUnit: z.string().optional(),
+  metricValue: z.number().optional(),
+  tags: z.record(z.string()).optional(),
+});
+
+type MetricAttributes = z.infer<typeof _MetricAttributesSchema>;
+
+/**
+ * Discriminated union for telemetry event attributes based on event type
+ */
+type TelemetryAttributes = SpanStartAttributes | SpanEndAttributes | ErrorAttributes | MetricAttributes;
+
+/**
+ * Base telemetry event schema
+ */
+const _BaseTelemetryEventSchema = z.object({
+  name: z.string(),
+  timestamp: z.number(),
+  type: z.enum(TELEMETRY_EVENT_TYPES),
+});
+
+/**
+ * Telemetry event with discriminated union for attributes
+ */
+type TelemetryEvent = z.infer<typeof _BaseTelemetryEventSchema> & {
+  attributes: TelemetryAttributes;
 };
 
 const telemetryEvents: TelemetryEvent[] = [];

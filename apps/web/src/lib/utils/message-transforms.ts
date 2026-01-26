@@ -42,6 +42,7 @@ import type {
 } from '@/services/api';
 import { UsageSchema } from '@/services/api';
 
+import { rlog } from './dev-logger';
 import {
   buildAssistantMetadata,
   enrichMessageWithParticipant,
@@ -345,6 +346,9 @@ export function chatMessagesToUIMessages(
       metadata: enrichedMetadata,
     };
   });
+
+  // DEBUG: Track message transformation
+  rlog.moderator('toUI', `total=${messagesWithRoundNumber.length}`);
 
   return messagesWithRoundNumber;
 }

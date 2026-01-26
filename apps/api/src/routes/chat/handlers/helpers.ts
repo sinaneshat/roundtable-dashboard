@@ -4,6 +4,8 @@ import type { UIMessage } from 'ai';
 import { createError } from '@/common/error-handling';
 import type { ChatMessage } from '@/db/validation';
 
+import type { StreamChatRequest } from '../schema';
+
 // ============================================================================
 // LAZY AI SDK LOADING
 // ============================================================================
@@ -132,6 +134,77 @@ export async function chatMessagesToUIMessages(
       {
         errorType: 'validation',
         field: 'messages',
+      },
+    );
+  }
+}
+
+/**
+ * Validate and convert a Zod-validated request message to AI SDK UIMessage type
+ *
+ * TYPE BRIDGE: StreamChatRequest['message'] from Zod validation is structurally
+ * compatible with AI SDK UIMessage, but TypeScript cannot verify this due to
+ * nominal typing differences. This function uses AI SDK's validateUIMessages()
+ * to ensure runtime safety and returns a properly typed UIMessage.
+ *
+ * NOTE: AI SDK v6 UIMessage does NOT have a createdAt field - that's a database
+ * extension used in chatMessagesToUIMessages. This function only handles the
+ * core UIMessage fields: id, role, parts, and optional metadata.
+ *
+ * @param message - Message from StreamChatRequest validation (Zod-inferred type)
+ * @returns Promise resolving to validated UIMessage
+ * @throws Error if message fails AI SDK validation
+ */
+export async function validateRequestMessage(
+  message: StreamChatRequest['message'],
+): Promise<UIMessage> {
+  const { validateUIMessages } = await getAiSdk();
+
+  // Build the message object with required fields
+  // AI SDK v6 UIMessage: { id, role, parts, metadata? }
+  const messageToValidate: UIMessage = {
+    id: message.id,
+    parts: message.parts,
+    role: message.role,
+  };
+
+  // Only include optional metadata if it exists
+  if (message.metadata !== undefined) {
+    messageToValidate.metadata = message.metadata;
+  }
+
+  // NOTE: createdAt from request schema is NOT part of AI SDK UIMessage type
+  // It's used for DB storage but not needed for AI SDK validation
+
+  try {
+    const validated = await validateUIMessages({
+      messages: [messageToValidate],
+    });
+    // validateUIMessages returns array same length as input
+    const result = validated[0];
+    if (!result) {
+      throw createError.badRequest('Message validation returned empty result', {
+        errorType: 'validation',
+        field: 'message',
+      });
+    }
+    return result;
+  } catch (error) {
+    const { TypeValidationError } = await getAiSdk();
+    if (TypeValidationError.isInstance(error)) {
+      throw createError.badRequest(
+        `Invalid message format: ${error.message}`,
+        {
+          errorType: 'validation',
+          field: 'message',
+        },
+      );
+    }
+    throw createError.badRequest(
+      `Invalid message format: ${error instanceof Error ? error.message : 'Unknown validation error'}`,
+      {
+        errorType: 'validation',
+        field: 'message',
       },
     );
   }

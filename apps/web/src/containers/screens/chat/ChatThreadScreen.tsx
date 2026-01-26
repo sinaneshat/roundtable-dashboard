@@ -149,7 +149,6 @@ export default function ChatThreadScreen({
     selectedMode,
     selectedParticipants,
     setSelectedParticipants,
-    storeThread,
     waitingToStartStreaming,
   } = useChatStore(
     useShallow(s => ({
@@ -161,13 +160,9 @@ export default function ChatThreadScreen({
       selectedMode: s.selectedMode,
       selectedParticipants: s.selectedParticipants,
       setSelectedParticipants: s.setSelectedParticipants,
-      storeThread: s.thread,
       waitingToStartStreaming: s.waitingToStartStreaming,
     })),
   );
-
-  // 🔍 DEBUG: Log store state after hydration
-  rlog.init('screen-store', `t=${storeThread?.id?.slice(-8) ?? '-'} slug=${storeThread?.slug ?? '-'} msgs=${messages.length}`);
 
   const { data: modelsData } = useModelsQuery();
   const allEnabledModels = useMemo(() => {

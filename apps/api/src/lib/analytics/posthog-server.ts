@@ -161,14 +161,32 @@ export async function flushPostHog(): Promise<void> {
 // Exception Properties Schema
 // ============================================================================
 
+// ============================================================================
+// PostHog Exception Property Value Types
+// ============================================================================
+
+/**
+ * Allowed value types for PostHog exception properties
+ *
+ * PostHog accepts primitive values and arrays of primitives.
+ * Objects are not supported as property values.
+ */
+const PostHogPropertyValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+  z.array(z.union([z.string(), z.number(), z.boolean()])),
+]);
+
 /**
  * ExceptionPropertiesSchema - Typed exception properties for PostHog
  *
- * ✅ JUSTIFIED .passthrough(): PostHog exception tracking accepts arbitrary
- * custom properties for extensible error context. This schema validates known
- * fields while allowing additional app-specific properties per PostHog's design.
+ * Defines all known fields explicitly with .catchall() for additional
+ * properties that conform to PostHog's value type constraints.
  *
  * Known fields are typed for IDE autocompletion and validation.
+ * Additional properties must be primitives or arrays of primitives.
  */
 export const ExceptionPropertiesSchema = z.object({
   // Common exception context fields
@@ -187,7 +205,7 @@ export const ExceptionPropertiesSchema = z.object({
   source: z.string().optional(),
   threadId: z.string().optional(),
   userId: z.string().optional(),
-}).passthrough();
+}).catchall(PostHogPropertyValueSchema);
 
 export type ExceptionProperties = z.infer<typeof ExceptionPropertiesSchema>;
 

@@ -48,8 +48,10 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
     const cachedThreadData = !isServer ? queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey) : null;
     const hasPrefetchMeta = cachedThreadData?.meta?.requestId === 'prefetch';
 
-    // Early return when flow-controller prefetched data
-    if (hasPrefetchMeta && cachedThreadData?.success) {
+    // Early return when flow-controller prefetched VALID data (must have messages)
+    // CRITICAL: "Shell" data (thread metadata without messages) should NOT trigger early return
+    // This prevents blank screen when sidebar prefetch caches incomplete data
+    if (hasPrefetchMeta && cachedThreadData?.success && cachedThreadData.data.messages.length > 0) {
       const threadData = cachedThreadData.data;
       rlog.init('loader', `prefetch-hit: ${threadData.thread.slug} msgs=${threadData.messages.length}`);
       return {
@@ -81,8 +83,6 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
     const cachedData = queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey);
     const threadId = cachedData?.success && cachedData.data?.thread?.id;
     const threadTitle = cachedData?.success && cachedData.data?.thread?.title ? cachedData.data.thread.title : null;
-
-    rlog.init('loader', `ensured: ${threadTitle} msgs=${cachedData?.success ? cachedData.data.messages.length : 0}`);
 
     let preSearches;
     let changelog;
@@ -198,24 +198,29 @@ function ChatThreadRoute() {
   const isInCreationFlow = useIsInCreationFlow();
 
   // Use loaderData.threadData as initialData for seamless SSR hydration
-  const hasLoaderData = Boolean(loaderData?.threadData);
+  // CRITICAL: Only consider loader data valid if it has messages - prevents blank screen
+  // when sidebar prefetch caches "shell" data (thread metadata without messages)
+  const hasValidLoaderData = Boolean(
+    loaderData?.threadData?.messages?.length && loaderData.threadData.messages.length > 0,
+  );
   const { data: queryData, error, isError, isFetching } = useQuery({
     ...threadBySlugQueryOptions(slug ?? ''),
     enabled: Boolean(slug) && !isInCreationFlow,
-    initialData: hasLoaderData && loaderData.threadData
+    initialData: hasValidLoaderData && loaderData.threadData
       ? { data: loaderData.threadData, success: true as const }
       : undefined,
-    staleTime: hasLoaderData ? 10_000 : 0,
+    staleTime: hasValidLoaderData ? 10_000 : 0,
   });
 
-  // Fallback pattern: loaderData first, then queryData
-  const threadResponse = loaderData?.threadData ?? (queryData?.success ? queryData.data : null);
+  // CRITICAL FIX: Use hasValidLoaderData to decide fallback, not nullish coalescing
+  // ?? only checks for null/undefined, but empty loaderData.threadData (0 messages) should NOT be used
+  const threadResponse = hasValidLoaderData && loaderData?.threadData
+    ? loaderData.threadData
+    : (queryData?.success ? queryData.data : null);
   const streamResumptionState = loaderData?.streamResumption ?? null;
   const changelog = loaderData?.changelog;
   const feedback = loaderData?.feedback;
   const preSearches = loaderData?.preSearches;
-
-  rlog.init('route', `url=${slug} loaderData=${loaderData?.threadData?.thread?.slug ?? '-'}(${loaderData?.threadData?.messages?.length ?? 0}msg) queryData=${queryData?.success ? 'ok' : 'none'}`);
 
   const user = useMemo(() => ({
     id: session?.user?.id ?? '',
@@ -256,10 +261,10 @@ function ChatThreadRoute() {
 
   const { messages, participants, thread } = threadResponse;
 
-  rlog.init('route-pass', `thread=${thread.slug}(${thread.id?.slice(-8)}) msgs=${messages.length} parts=${participants.length}`);
-
+  // Key forces remount on thread change, preventing stale store hydration
   return (
     <ChatThreadScreen
+      key={thread.id}
       thread={thread}
       participants={participants}
       initialMessages={messages}

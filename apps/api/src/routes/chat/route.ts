@@ -127,7 +127,7 @@ export const createThreadRoute = createRoute({
 export const getThreadRoute = createRoute({
   description: 'Get details of a specific chat thread',
   method: 'get',
-  path: '/chat/threads/:id',
+  path: '/chat/threads/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -146,7 +146,7 @@ export const getThreadRoute = createRoute({
 export const updateThreadRoute = createRoute({
   description: 'Update thread title, mode, status, or metadata',
   method: 'patch',
-  path: '/chat/threads/:id',
+  path: '/chat/threads/{id}',
   request: {
     body: {
       content: {
@@ -173,7 +173,7 @@ export const updateThreadRoute = createRoute({
 export const deleteThreadRoute = createRoute({
   description: 'Delete a chat thread (soft delete - sets status to deleted)',
   method: 'delete',
-  path: '/chat/threads/:id',
+  path: '/chat/threads/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -194,7 +194,7 @@ export const deleteThreadRoute = createRoute({
 export const getPublicThreadRoute = createRoute({
   description: 'Get a publicly shared thread without authentication (read-only)',
   method: 'get',
-  path: '/chat/public/:slug',
+  path: '/chat/public/{slug}',
   request: {
     params: ThreadSlugParamSchema,
   },
@@ -231,7 +231,7 @@ export const listPublicThreadSlugsRoute = createRoute({
 export const getThreadBySlugRoute = createRoute({
   description: 'Get thread details by slug for the authenticated user (ensures ownership)',
   method: 'get',
-  path: '/chat/threads/slug/:slug',
+  path: '/chat/threads/slug/{slug}',
   request: {
     params: ThreadSlugParamSchema,
   },
@@ -250,7 +250,7 @@ export const getThreadBySlugRoute = createRoute({
 export const getThreadSlugStatusRoute = createRoute({
   description: 'Lightweight endpoint to check if thread slug has been updated (for polling during AI title generation)',
   method: 'get',
-  path: '/chat/threads/:id/slug-status',
+  path: '/chat/threads/{id}/slug-status',
   request: {
     params: IdParamSchema,
   },
@@ -271,7 +271,7 @@ export const getThreadSlugStatusRoute = createRoute({
 export const addParticipantRoute = createRoute({
   description: 'Add an AI model with a role to the thread',
   method: 'post',
-  path: '/chat/threads/:id/participants',
+  path: '/chat/threads/{id}/participants',
   request: {
     body: {
       content: {
@@ -298,7 +298,7 @@ export const addParticipantRoute = createRoute({
 export const updateParticipantRoute = createRoute({
   description: 'Update participant role, priority, or settings',
   method: 'patch',
-  path: '/chat/participants/:id',
+  path: '/chat/participants/{id}',
   request: {
     body: {
       content: {
@@ -325,7 +325,7 @@ export const updateParticipantRoute = createRoute({
 export const deleteParticipantRoute = createRoute({
   description: 'Remove a participant from the thread',
   method: 'delete',
-  path: '/chat/participants/:id',
+  path: '/chat/participants/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -346,7 +346,7 @@ export const deleteParticipantRoute = createRoute({
 export const getThreadMessagesRoute = createRoute({
   description: 'Retrieve all messages for a thread ordered by creation time',
   method: 'get',
-  path: '/chat/threads/:id/messages',
+  path: '/chat/threads/{id}/messages',
   request: {
     params: IdParamSchema,
   },
@@ -365,7 +365,7 @@ export const getThreadMessagesRoute = createRoute({
 export const getThreadChangelogRoute = createRoute({
   description: 'Retrieve configuration changes (mode, participants) for a thread',
   method: 'get',
-  path: '/chat/threads/:id/changelog',
+  path: '/chat/threads/{id}/changelog',
   request: {
     params: IdParamSchema,
   },
@@ -392,7 +392,7 @@ export const getThreadChangelogRoute = createRoute({
 export const getThreadRoundChangelogRoute = createRoute({
   description: 'Retrieve configuration changes for a specific round. More efficient than fetching all changelogs - used for incremental updates after config changes mid-conversation.',
   method: 'get',
-  path: '/chat/threads/:threadId/rounds/:roundNumber/changelog',
+  path: '/chat/threads/{threadId}/rounds/{roundNumber}/changelog',
   request: {
     params: ThreadRoundParamSchema,
   },
@@ -418,7 +418,7 @@ export const getThreadRoundChangelogRoute = createRoute({
 export const executePreSearchRoute = createRoute({
   description: 'Generate and execute web search queries before participant streaming. Streams search progress in real-time using SSE. Returns completed search immediately if already exists. Follows same architectural pattern as council moderator.',
   method: 'post',
-  path: '/chat/threads/:threadId/rounds/:roundNumber/pre-search',
+  path: '/chat/threads/{threadId}/rounds/{roundNumber}/pre-search',
   request: {
     body: {
       content: {
@@ -700,7 +700,7 @@ export const createCustomRoleRoute = createRoute({
 export const getCustomRoleRoute = createRoute({
   description: 'Get details of a specific custom role',
   method: 'get',
-  path: '/chat/custom-roles/:id',
+  path: '/chat/custom-roles/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -719,7 +719,7 @@ export const getCustomRoleRoute = createRoute({
 export const updateCustomRoleRoute = createRoute({
   description: 'Update custom role name, description, system prompt, or metadata',
   method: 'patch',
-  path: '/chat/custom-roles/:id',
+  path: '/chat/custom-roles/{id}',
   request: {
     body: {
       content: {
@@ -746,7 +746,7 @@ export const updateCustomRoleRoute = createRoute({
 export const deleteCustomRoleRoute = createRoute({
   description: 'Delete a custom role template',
   method: 'delete',
-  path: '/chat/custom-roles/:id',
+  path: '/chat/custom-roles/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -812,7 +812,7 @@ export const createUserPresetRoute = createRoute({
 export const getUserPresetRoute = createRoute({
   description: 'Get details of a specific user preset',
   method: 'get',
-  path: '/chat/user-presets/:id',
+  path: '/chat/user-presets/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -831,7 +831,7 @@ export const getUserPresetRoute = createRoute({
 export const updateUserPresetRoute = createRoute({
   description: 'Update user preset name, model-role pairs, or mode',
   method: 'patch',
-  path: '/chat/user-presets/:id',
+  path: '/chat/user-presets/{id}',
   request: {
     body: {
       content: {
@@ -858,7 +858,7 @@ export const updateUserPresetRoute = createRoute({
 export const deleteUserPresetRoute = createRoute({
   description: 'Delete a user preset from localStorage',
   method: 'delete',
-  path: '/chat/user-presets/:id',
+  path: '/chat/user-presets/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -879,7 +879,7 @@ export const deleteUserPresetRoute = createRoute({
 export const councilModeratorRoundRoute = createRoute({
   description: 'Generate an executive-grade council moderator summary of all participant responses in a round. Streams moderator text in real-time as a chatMessage with metadata.isModerator: true. Frontend renders via ChatMessageList component alongside participant messages. Returns immediately if moderator message already exists for this round.',
   method: 'post',
-  path: '/chat/threads/:threadId/rounds/:roundNumber/moderator',
+  path: '/chat/threads/{threadId}/rounds/{roundNumber}/moderator',
   request: {
     body: {
       content: {
@@ -919,7 +919,7 @@ export const councilModeratorRoundRoute = createRoute({
 export const getRoundStatusRoute = createRoute({
   description: 'Internal endpoint for queue workers to determine next action in round orchestration. Returns current round status, participant completion, and what needs to be triggered next.',
   method: 'get',
-  path: '/chat/threads/:threadId/rounds/:roundNumber/status',
+  path: '/chat/threads/{threadId}/rounds/{roundNumber}/status',
   request: {
     params: ThreadRoundParamSchema,
   },
@@ -943,7 +943,7 @@ export const getRoundStatusRoute = createRoute({
 export const getThreadPreSearchesRoute = createRoute({
   description: 'Retrieve all pre-search results for a thread, showing past search results for each round',
   method: 'get',
-  path: '/chat/threads/:id/pre-searches',
+  path: '/chat/threads/{id}/pre-searches',
   request: {
     params: IdParamSchema,
   },
@@ -963,7 +963,7 @@ export const getThreadPreSearchesRoute = createRoute({
 export const setRoundFeedbackRoute = createRoute({
   description: 'Set or update user feedback for a conversation round. Pass null to remove feedback.',
   method: 'put',
-  path: '/chat/threads/:threadId/rounds/:roundNumber/feedback',
+  path: '/chat/threads/{threadId}/rounds/{roundNumber}/feedback',
   request: {
     body: {
       content: {
@@ -990,7 +990,7 @@ export const setRoundFeedbackRoute = createRoute({
 export const getThreadFeedbackRoute = createRoute({
   description: 'Get all round feedback (likes/dislikes) for a thread for the current user.',
   method: 'get',
-  path: '/chat/threads/:id/feedback',
+  path: '/chat/threads/{id}/feedback',
   request: {
     params: IdParamSchema,
   },
@@ -1033,7 +1033,7 @@ This is the **preferred endpoint** for stream resumption. The frontend doesn't n
 
 **Example**: GET /chat/threads/thread_123/stream?lastChunkIndex=42`,
   method: 'get',
-  path: '/chat/threads/:threadId/stream',
+  path: '/chat/threads/{threadId}/stream',
   request: {
     params: ThreadIdParamSchema,
   },
@@ -1090,7 +1090,7 @@ Returns \`ThreadStreamResumptionState\` with:
 
 **Example**: GET /chat/threads/thread_123/stream-status`,
   method: 'get',
-  path: '/chat/threads/:threadId/stream-status',
+  path: '/chat/threads/{threadId}/stream-status',
   request: {
     params: ThreadIdParamSchema,
   },
@@ -1104,6 +1104,60 @@ Returns \`ThreadStreamResumptionState\` with:
     ...createProtectedRouteResponses(),
   },
   summary: 'Get thread stream resumption state',
+  tags: ['chat'],
+});
+
+/**
+ * GET /chat/threads/:threadId/rounds/:roundNumber/subscribe
+ * ✅ ROBUST STREAMING: Subscribe to stream for pub/sub delivery pattern
+ */
+export const subscribeToStreamRoute = createRoute({
+  description: `Subscribe to a stream for a specific thread and round. Part of the robust streaming resumption system.
+
+**Pub/Sub Delivery Pattern**:
+- Background worker produces chunks to KV buffer
+- Clients subscribe via SSE and receive chunks
+- Supports mid-stream join (replay existing chunks, then live)
+- Returns 202 with retry-after if stream not yet started
+
+**Response Types**:
+- 200 OK with JSON: Status information (queued, active, completed)
+- text/event-stream: SSE stream when active stream is available
+
+**Usage Pattern**:
+1. Client calls subscribe endpoint
+2. If response.status === 'queued', wait retryAfter ms and retry
+3. If response.status === 'active', switch to SSE streaming
+4. If response.status === 'completed', round is done`,
+  method: 'get',
+  path: '/chat/threads/{threadId}/rounds/{roundNumber}/subscribe',
+  request: {
+    params: ThreadRoundParamSchema,
+  },
+  responses: {
+    [HttpStatusCodes.OK]: {
+      content: {
+        'application/json': {
+          schema: createApiResponseSchema(z.object({
+            isActive: z.boolean().optional(),
+            phase: z.enum(['presearch', 'participant', 'moderator']).optional(),
+            retryAfter: z.number().optional(),
+            roundNumber: z.number().optional(),
+            status: z.enum(['queued', 'active', 'completed']),
+            streamId: z.string().optional(),
+          })),
+        },
+        'text/event-stream': {
+          schema: z.any().openapi({
+            description: 'Server-Sent Events (SSE) stream with buffered chunks.',
+          }),
+        },
+      },
+      description: 'Subscription status or active SSE stream',
+    },
+    ...createProtectedRouteResponses(),
+  },
+  summary: 'Subscribe to stream (pub/sub pattern)',
   tags: ['chat'],
 });
 
@@ -1125,7 +1179,7 @@ export const getThreadMemoryEventsRoute = createRoute({
 3. If memories exist, show toast notification
 4. Invalidate project memories query cache`,
   method: 'get',
-  path: '/chat/threads/:threadId/memory-events',
+  path: '/chat/threads/{threadId}/memory-events',
   request: {
     params: ThreadIdParamSchema,
     query: MemoryEventQuerySchema,

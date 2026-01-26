@@ -608,6 +608,9 @@ export const ROUND_ORCHESTRATION_MESSAGE_TYPES = [
   'start-automated-job',
   'continue-automated-job',
   'complete-automated-job',
+  'start-round',
+  'recover-round',
+  'finalize-round',
 ] as const;
 
 // 2. ZOD SCHEMA
@@ -627,10 +630,49 @@ export const RoundOrchestrationMessageTypes = {
   CHECK_ROUND_COMPLETION: 'check-round-completion' as const,
   COMPLETE_AUTOMATED_JOB: 'complete-automated-job' as const,
   CONTINUE_AUTOMATED_JOB: 'continue-automated-job' as const,
+  FINALIZE_ROUND: 'finalize-round' as const,
+  RECOVER_ROUND: 'recover-round' as const,
   START_AUTOMATED_JOB: 'start-automated-job' as const,
+  START_ROUND: 'start-round' as const,
   TRIGGER_MODERATOR: 'trigger-moderator' as const,
   TRIGGER_PARTICIPANT: 'trigger-participant' as const,
   TRIGGER_PRE_SEARCH: 'trigger-pre-search' as const,
+} as const;
+
+// ============================================================================
+// ROUND EXECUTION TABLE STATUS (Database-level round lifecycle tracking)
+// ============================================================================
+
+// 1. ARRAY CONSTANT
+export const ROUND_EXECUTION_TABLE_STATUSES = [
+  'pending',
+  'pre_search',
+  'participants',
+  'moderator',
+  'completed',
+  'failed',
+] as const;
+
+// 2. ZOD SCHEMA
+export const RoundExecutionTableStatusSchema = z.enum(ROUND_EXECUTION_TABLE_STATUSES).openapi({
+  description: 'Database-level status for durable round execution tracking',
+  example: 'participants',
+});
+
+// 3. TYPESCRIPT TYPE
+export type RoundExecutionTableStatus = z.infer<typeof RoundExecutionTableStatusSchema>;
+
+// 4. DEFAULT VALUE
+export const DEFAULT_ROUND_EXECUTION_TABLE_STATUS: RoundExecutionTableStatus = 'pending';
+
+// 5. CONSTANT OBJECT
+export const RoundExecutionTableStatuses = {
+  COMPLETED: 'completed' as const,
+  FAILED: 'failed' as const,
+  MODERATOR: 'moderator' as const,
+  PARTICIPANTS: 'participants' as const,
+  PENDING: 'pending' as const,
+  PRE_SEARCH: 'pre_search' as const,
 } as const;
 
 // ============================================================================

@@ -18,6 +18,7 @@ import {
   chatThread,
   chatThreadChangelog,
   chatUserPreset,
+  roundExecution,
 } from './chat';
 import { chatProject, projectAttachment, projectMemory } from './project';
 import { messageUpload, threadUpload, upload } from './upload';
@@ -102,6 +103,17 @@ export const chatRoundFeedbackRelations = relations(chatRoundFeedback, ({ one })
   }),
   user: one(user, {
     fields: [chatRoundFeedback.userId],
+    references: [user.id],
+  }),
+}));
+
+export const roundExecutionRelations = relations(roundExecution, ({ one }) => ({
+  thread: one(chatThread, {
+    fields: [roundExecution.threadId],
+    references: [chatThread.id],
+  }),
+  user: one(user, {
+    fields: [roundExecution.userId],
     references: [user.id],
   }),
 }));

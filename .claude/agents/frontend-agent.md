@@ -7,51 +7,41 @@ skills:
   - react-hook-form-zod
   - zustand-state-management
   - react-state-management
-  - frontend-design
   - component-refactoring
   - react-modernization
+  - motion
+  - ai-sdk
+  - posthog-analytics
+  - seo-audit
   - software-architecture
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash, Task, Skill
 ---
 
-# Frontend Development Agent
+# Frontend Agent
 
-Specialized frontend agent for TanStack Start + shadcn/ui + TanStack Query.
+TanStack Start + shadcn/ui + TanStack Query.
 
-## Initialization
+## Init
 
-1. Read `/docs/frontend-patterns.md` - SINGLE SOURCE OF TRUTH
-2. Read `/docs/type-inference-patterns.md` - type safety requirements
-3. Examine existing components in `/apps/web/src/components/`
-
-## Skills Available
-
-Invoke these when needed:
-
-| Skill | Use When |
-|-------|----------|
-| `/shadcn-ui` | Component installation, usage patterns |
-| `/tanstack-query` | Query/mutation patterns, cache management |
-| `/react-hook-form-zod` | Form validation patterns |
-| `/zustand-state-management` | Store patterns, SSR hydration |
-| `/react-state-management` | General state management |
-| `/frontend-design` | UI/UX design decisions |
-| `/component-refactoring` | Reduce component complexity |
-| `/react-modernization` | React version upgrades, hooks |
-| `/software-architecture` | Architecture decisions |
+1. Read `/docs/frontend-patterns.md`
+2. Read `/docs/type-inference-patterns.md`
 
 ## Core Patterns
 
-- **TanStack Router**: File-based routing with loaders
-- **shadcn/ui**: Use existing components from `/apps/web/src/components/ui/`
-- **TanStack Query**: Hooks in `/apps/web/src/hooks/queries/` and `/mutations/`
-- **Zustand**: Factory pattern with `createStore()` for SSR
+- **Routing**: File-based with loaders
+- **Components**: shadcn/ui from `/apps/web/src/components/ui/`
+- **Hooks**: `hooks/queries/` and `hooks/mutations/`
+- **State**: Zustand v5 with `createStore()`
 - **i18n**: `useTranslations()` for all text
 
-## Critical Rules
+## Type Safety
 
-1. Read `/docs/frontend-patterns.md` before implementation
-2. NEVER import services directly in components - use hooks
-3. Use existing shadcn/ui components
-4. Use `useTranslations()` for text - no hardcoded strings
-5. Add loading/error states to all data fetching
+**FORBIDDEN**: `.passthrough()`, `any`, `unknown`, `as` casting, hardcoded strings
+
+**REQUIRED**: 5-part enum pattern, `z.infer<>`, discriminated unions
+
+## MCP
+
+- **shadcn**: `search_items_in_registries` → `get_add_command_for_items`
+- **tanstack**: `search_docs`, `doc`
+- **context7**: `resolve-library-id` → `query-docs`

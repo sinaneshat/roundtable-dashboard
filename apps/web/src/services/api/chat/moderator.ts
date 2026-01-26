@@ -16,7 +16,7 @@ import { createApiClient } from '@/lib/api/client';
 // Type Inference
 // ============================================================================
 
-type StreamModeratorEndpoint = ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['moderator']['$post'];
+type StreamModeratorEndpoint = ApiClientType['chatFeature']['chat']['threads'][':threadId']['rounds'][':roundNumber']['moderator']['$post'];
 export type StreamModeratorRequest = InferRequestType<StreamModeratorEndpoint>;
 export type StreamModeratorResponse = InferResponseType<StreamModeratorEndpoint, 200>;
 
@@ -41,5 +41,5 @@ export async function streamModeratorService(
 ) {
   // Use centralized client factory with abort signal support
   const client = createApiClient({ signal: options?.signal });
-  return client.chat.threads[':threadId'].rounds[':roundNumber'].moderator.$post(data);
+  return client.chatFeature.chat.threads[':threadId'].rounds[':roundNumber'].moderator.$post(data);
 }

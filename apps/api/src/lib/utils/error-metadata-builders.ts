@@ -28,20 +28,6 @@ import { z } from 'zod';
 
 import { categorizeErrorMessage } from '@/lib/schemas/error-schemas';
 
-import { isObject } from './type-guards';
-
-// ============================================================================
-// Safe Property Access Helper
-// ============================================================================
-
-/**
- * Safely get a property from a Record using bracket notation
- * This satisfies TS4111 noPropertyAccessFromIndexSignature
- */
-function getRecordProp(obj: Record<string, unknown>, key: string): unknown {
-  return obj[key];
-}
-
 // ============================================================================
 // Schemas & Types
 // ============================================================================
@@ -59,18 +45,33 @@ export const ErrorMetadataFieldsSchema = z.object({
 export type ErrorMetadataFields = z.infer<typeof ErrorMetadataFieldsSchema>;
 
 /**
- * Type guard for AI SDK LanguageModelUsage
- * Validates the object has the expected structure using Zod
+ * Zod schema for AI SDK LanguageModelUsage
+ *
+ * Defines all known fields from AI SDK v5+ LanguageModelUsage type.
+ * All fields are optional to match the SDK's flexible usage patterns.
+ *
+ * @see https://ai-sdk.dev/docs/reference/ai-sdk-core
  */
-const LanguageModelUsageGuardSchema = z.object({
-  inputTokens: z.number().optional(),
-  outputTokens: z.number().optional(),
-}).passthrough();
-// ✅ JUSTIFIED .passthrough(): AI SDK LanguageModelUsage may contain additional
-// fields beyond inputTokens/outputTokens. We validate only the fields we need.
+const LanguageModelUsageSchema = z.object({
+  // Cache-related tokens (OpenAI/Anthropic)
+  cacheCreationInputTokens: z.number().int().nonnegative().optional(),
+  cacheReadInputTokens: z.number().int().nonnegative().optional(),
+
+  // Prompt/completion aliases (compatibility with various providers)
+  completionTokens: z.number().int().nonnegative().optional(),
+
+  // Core token counts (AI SDK v5+)
+  inputTokens: z.number().int().nonnegative().optional(),
+  outputTokens: z.number().int().nonnegative().optional(),
+  promptTokens: z.number().int().nonnegative().optional(),
+
+  // Reasoning tokens (o1/o3 models)
+  reasoningTokens: z.number().int().nonnegative().optional(),
+  totalTokens: z.number().int().nonnegative().optional(),
+});
 
 function isLanguageModelUsage(value: unknown): value is LanguageModelUsage {
-  return LanguageModelUsageGuardSchema.safeParse(value).success;
+  return LanguageModelUsageSchema.safeParse(value).success;
 }
 
 export const OpenRouterErrorContextSchema = z.object({
@@ -164,6 +165,33 @@ export function generateErrorMessage(
 // ============================================================================
 
 /**
+ * Zod schema for arbitrary error object (OpenRouter may return structured errors)
+ *
+ * Uses z.record() instead of .passthrough() for type-safe arbitrary key-value pairs.
+ */
+const ArbitraryErrorObjectSchema = z.record(z.string(), z.unknown());
+
+/**
+ * Zod schema for OpenRouter provider metadata with error fields
+ *
+ * OpenRouter metadata may contain additional fields beyond what we validate.
+ * We only extract the error-related fields we need.
+ */
+const ProviderMetadataErrorSchema = z.object({
+  contentFilter: z.unknown().optional(),
+  error: z.union([z.string(), ArbitraryErrorObjectSchema]).optional(),
+  errorMessage: z.unknown().optional(),
+  moderation: z.unknown().optional(),
+}).partial();
+
+/**
+ * Zod schema for response object with error field
+ */
+const ResponseErrorSchema = z.object({
+  error: z.union([z.string(), ArbitraryErrorObjectSchema]).optional(),
+}).partial();
+
+/**
  * Extract OpenRouter-specific error details from provider metadata
  *
  * Checks multiple possible error field locations:
@@ -193,37 +221,38 @@ export function buildOpenRouterErrorMetadata(
   let openRouterError: string | undefined;
   let errorCategory: string | undefined;
 
-  // Check providerMetadata for OpenRouter-specific errors
-  if (isObject(context.providerMetadata)) {
-    const metadata = context.providerMetadata;
-    const metadataError = getRecordProp(metadata, 'error');
-    if (metadataError) {
+  // Check providerMetadata for OpenRouter-specific errors using Zod
+  const metadataResult = ProviderMetadataErrorSchema.safeParse(context.providerMetadata);
+  if (metadataResult.success) {
+    const metadata = metadataResult.data;
+
+    if (metadata.error) {
       openRouterError
-        = typeof metadataError === 'string'
-          ? metadataError
-          : JSON.stringify(metadataError);
+        = typeof metadata.error === 'string'
+          ? metadata.error
+          : JSON.stringify(metadata.error);
     }
-    const errorMessage = getRecordProp(metadata, 'errorMessage');
-    if (!openRouterError && errorMessage) {
-      openRouterError = String(errorMessage);
+
+    if (!openRouterError && metadata.errorMessage) {
+      openRouterError = String(metadata.errorMessage);
     }
+
     // Check for moderation/content filter errors
-    if (getRecordProp(metadata, 'moderation') || getRecordProp(metadata, 'contentFilter')) {
+    if (metadata.moderation || metadata.contentFilter) {
       errorCategory = ErrorCategorySchema.enum.content_filter;
       openRouterError
         = openRouterError || 'Content was filtered by safety systems';
     }
   }
 
-  // Check response object for errors
-  if (!openRouterError && isObject(context.response)) {
-    const responseRecord = context.response;
-    const responseError = getRecordProp(responseRecord, 'error');
-    if (responseError) {
+  // Check response object for errors using Zod
+  if (!openRouterError) {
+    const responseResult = ResponseErrorSchema.safeParse(context.response);
+    if (responseResult.success && responseResult.data.error) {
       openRouterError
-        = typeof responseError === 'string'
-          ? responseError
-          : JSON.stringify(responseError);
+        = typeof responseResult.data.error === 'string'
+          ? responseResult.data.error
+          : JSON.stringify(responseResult.data.error);
     }
   }
 
@@ -410,6 +439,20 @@ export function isTransientError(
 }
 
 /**
+ * Zod schema for extracting statusCode from error objects
+ */
+const ErrorWithStatusCodeSchema = z.object({
+  statusCode: z.number(),
+}).partial();
+
+/**
+ * Zod schema for Error-like objects with message
+ */
+const ErrorLikeSchema = z.object({
+  message: z.string(),
+}).partial();
+
+/**
  * Check if error is transient based on error object or message
  *
  * Variant that accepts Error object or string for broader compatibility
@@ -433,21 +476,28 @@ export function isTransientErrorFromObject(error: unknown): boolean {
     return true; // No error is treated as transient
   }
 
-  // ✅ TYPE-SAFE: Check HTTP status code if available using type guard
-  let statusCode: number | undefined;
-  if (isObject(error)) {
-    const code = getRecordProp(error, 'statusCode');
-    if (typeof code === 'number') {
-      statusCode = code;
+  // Extract HTTP status code using Zod
+  const statusResult = ErrorWithStatusCodeSchema.safeParse(error);
+  if (statusResult.success && statusResult.data.statusCode !== undefined) {
+    const statusCode = statusResult.data.statusCode;
+    if (statusCode === 429 || statusCode === 503 || statusCode === 502) {
+      return true; // Rate limits and server errors are transient
     }
   }
 
-  if (statusCode === 429 || statusCode === 503 || statusCode === 502) {
-    return true; // Rate limits and server errors are transient
+  // Extract error message using Zod or Error instance check
+  let errorMessage: string;
+  if (error instanceof Error) {
+    errorMessage = error.message;
+  } else {
+    const errorResult = ErrorLikeSchema.safeParse(error);
+    if (errorResult.success && errorResult.data.message) {
+      errorMessage = errorResult.data.message;
+    } else {
+      errorMessage = String(error);
+    }
   }
 
-  // Extract error message
-  const errorMessage = error instanceof Error ? error.message : String(error);
   const errorLower = errorMessage.toLowerCase();
 
   // Permanent error patterns - don't retry (user action required)

@@ -95,6 +95,25 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
       rlog.resume('prefill-detect', `phase=${streamResumptionState.currentPhase} r=${streamResumptionState.roundNumber ?? '-'} nextP=${streamResumptionState.nextParticipantToTrigger ?? '-'} complete=${streamResumptionState.roundComplete ? 1 : 0} preSearch=${streamResumptionState.preSearch?.status ?? '-'} mod=${streamResumptionState.moderator?.status ?? '-'}`);
     }
 
+    // ✅ CRITICAL FIX: Skip if useSyncHydrateStore already initialized this thread
+    // This prevents double initialization when both hooks run on mount
+    const alreadyHydratedBySyncHook = freshState.hasInitiallyLoaded
+      && storeThreadId === threadId
+      && freshState.messages.length >= ssrMessages.length
+      && freshState.participants.length > 0;
+
+    if (alreadyHydratedBySyncHook && !alreadyInitialized) {
+      rlog.init('screen-init', `skip: already hydrated by useSyncHydrateStore t=${threadId?.slice(-8) ?? '-'}`);
+      initializedThreadIdRef.current = threadId ?? null;
+
+      // ✅ FIX: Reset isModeratorStreaming when round is complete
+      const isRoundComplete = streamResumptionState?.currentPhase === 'complete' || !streamResumptionState;
+      if (isRoundComplete) {
+        storeApi.getState().setIsModeratorStreaming(false);
+      }
+      return;
+    }
+
     // ✅ CRITICAL FIX: Skip if store already has this thread with more/equal data
     // This handles navigation from overview→thread after round started streaming
     // ✅ BUG FIX: Also verify critical data exists - hasInitiallyLoaded can be true
@@ -124,6 +143,12 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
         rlog.init('cleanup', `clearing stale pendingMessage after skip`);
         storeApi.getState().setPendingMessage(null);
         storeApi.getState().setExpectedParticipantIds(null);
+      }
+
+      // ✅ FIX: Reset isModeratorStreaming when round is complete
+      const isRoundComplete = streamResumptionState?.currentPhase === 'complete' || !streamResumptionState;
+      if (isRoundComplete) {
+        storeApi.getState().setIsModeratorStreaming(false);
       }
       return;
     }
@@ -170,6 +195,12 @@ export function useScreenInitialization(options: UseScreenInitializationOptions)
       if (initialPreSearches?.length) {
         storeApi.getState().setPreSearches(initialPreSearches);
         rlog.init('presearch-hydrate', `set ${initialPreSearches.length} pre-searches into store`);
+      }
+
+      // ✅ FIX: Reset isModeratorStreaming when round is complete after initialization
+      const isRoundComplete = streamResumptionState?.currentPhase === 'complete' || !streamResumptionState;
+      if (isRoundComplete) {
+        storeApi.getState().setIsModeratorStreaming(false);
       }
     }
 

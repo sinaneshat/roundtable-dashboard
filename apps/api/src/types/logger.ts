@@ -142,6 +142,8 @@ const OperationLogContextSchema = z.object({
   errorMessage: z.string().optional(),
   errors: z.union([z.array(z.string()), z.array(z.record(z.string(), z.unknown()))]).optional(),
   errorStack: z.string().optional(),
+  // Round execution tracking
+  executionId: z.string().optional(),
   expectedPrefix: z.string().optional(),
   failedParticipants: z.number().int().nonnegative().optional(),
   fileCount: z.number().int().nonnegative().optional(),
@@ -198,6 +200,7 @@ const OperationLogContextSchema = z.object({
   uploadId: z.string().optional(),
   uploadIds: z.array(z.string()).optional(),
   uploadIdsCount: z.number().int().nonnegative().optional(),
+  userId: z.string().optional(),
   userMessages: z.number().int().nonnegative().optional(),
 });
 

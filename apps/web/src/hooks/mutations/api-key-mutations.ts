@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
 import { shouldRetryMutation } from '@/hooks/utils';
-import { queryKeys } from '@/lib/data/query-keys';
+import { invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import type { ListApiKeysResponse } from '@/services/api';
 import { createApiKeyService, deleteApiKeyService } from '@/services/api';
 
@@ -15,7 +15,10 @@ export function useCreateApiKeyMutation() {
   return useMutation<CreateApiKeyResult, Error, Parameters<typeof createApiKeyService>[0]>({
     mutationFn: createApiKeyService,
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.apiKeys.all });
+      // Use centralized pattern for API key invalidation
+      invalidationPatterns.apiKeys.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
     },
     retry: false,
     throwOnError: false,
@@ -67,9 +70,9 @@ export function useDeleteApiKeyMutation() {
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.apiKeys.all,
-        refetchType: 'active',
+      // Use centralized pattern for API key invalidation
+      invalidationPatterns.apiKeys.forEach((key) => {
+        void queryClient.invalidateQueries({ queryKey: key, refetchType: 'active' });
       });
     },
     retry: shouldRetryMutation,

@@ -17,10 +17,10 @@ import { createPublicApiClient, ServiceFetchError } from '@/lib/api/client';
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-type ListProductsEndpoint = ApiClientType['billing']['products']['$get'];
+type ListProductsEndpoint = ApiClientType['billing']['billing']['products']['$get'];
 export type ListProductsResponse = InferResponseType<ListProductsEndpoint, 200>;
 
-type GetProductEndpoint = ApiClientType['billing']['products'][':id']['$get'];
+type GetProductEndpoint = ApiClientType['billing']['billing']['products'][':id']['$get'];
 export type GetProductRequest = InferRequestType<GetProductEndpoint>;
 export type GetProductResponse = InferResponseType<GetProductEndpoint, 200>;
 
@@ -36,7 +36,7 @@ export type GetProductResponse = InferResponseType<GetProductEndpoint, 200>;
  */
 export async function getProductsService(): Promise<ListProductsResponse> {
   const client = createPublicApiClient();
-  const res = await client.billing.products.$get();
+  const res = await client.billing.billing.products.$get();
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to fetch products: ${res.statusText}`, res.status, res.statusText);
   }
@@ -51,7 +51,7 @@ export async function getProductsService(): Promise<ListProductsResponse> {
  */
 export async function getProductService(data: GetProductRequest): Promise<GetProductResponse> {
   const client = createPublicApiClient();
-  const res = await client.billing.products[':id'].$get(data);
+  const res = await client.billing.billing.products[':id'].$get(data);
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to fetch product: ${res.statusText}`, res.status, res.statusText);
   }

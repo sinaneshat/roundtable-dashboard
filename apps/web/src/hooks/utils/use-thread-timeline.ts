@@ -3,6 +3,7 @@ import type { UIMessage } from 'ai';
 import { useMemo } from 'react';
 
 import { getParticipantIndex, getRoundNumberFromMetadata, isModeratorMessage } from '@/lib/utils';
+import { rlog } from '@/lib/utils/dev-logger';
 import type { ApiChangelog, StoredPreSearch } from '@/services/api';
 
 /**
@@ -243,6 +244,9 @@ export function useThreadTimeline({
         });
       }
     });
+
+    // DEBUG: Track timeline grouping (debounced to reduce console spam during streaming)
+    rlog.init('timeline', `items=${timeline.length} rounds=${sortedRounds.length}`);
 
     return timeline;
   }, [messages, changelog, preSearches]);

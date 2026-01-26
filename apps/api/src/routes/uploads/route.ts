@@ -68,7 +68,7 @@ export const listUploadsRoute = createRoute({
 export const getUploadRoute = createRoute({
   description: 'Get upload details by ID',
   method: 'get',
-  path: '/uploads/:id',
+  path: '/uploads/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -96,7 +96,7 @@ export const getUploadRoute = createRoute({
 export const getDownloadUrlRoute = createRoute({
   description: 'Get a signed URL for downloading the file. The URL is time-limited and secure.',
   method: 'get',
-  path: '/uploads/:id/download-url',
+  path: '/uploads/{id}/download-url',
   request: {
     params: IdParamSchema,
   },
@@ -123,7 +123,7 @@ export const getDownloadUrlRoute = createRoute({
 export const updateUploadRoute = createRoute({
   description: 'Update upload metadata',
   method: 'patch',
-  path: '/uploads/:id',
+  path: '/uploads/{id}',
   request: {
     body: {
       content: {
@@ -158,7 +158,7 @@ export const updateUploadRoute = createRoute({
 export const deleteUploadRoute = createRoute({
   description: 'Delete an upload and its R2 file',
   method: 'delete',
-  path: '/uploads/:id',
+  path: '/uploads/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -359,7 +359,7 @@ Upload a single part of a multipart upload.
 - Content-Type: application/octet-stream
   `,
   method: 'put',
-  path: '/uploads/multipart/:id/parts',
+  path: '/uploads/multipart/{id}/parts',
   request: {
     body: {
       content: {
@@ -399,7 +399,7 @@ Upload a single part of a multipart upload.
 export const completeMultipartUploadRoute = createRoute({
   description: 'Complete a multipart upload by providing all part ETags',
   method: 'post',
-  path: '/uploads/multipart/:id/complete',
+  path: '/uploads/multipart/{id}/complete',
   request: {
     body: {
       content: {
@@ -435,7 +435,7 @@ export const completeMultipartUploadRoute = createRoute({
 export const abortMultipartUploadRoute = createRoute({
   description: 'Cancel an in-progress multipart upload and clean up parts',
   method: 'delete',
-  path: '/uploads/multipart/:id',
+  path: '/uploads/multipart/{id}',
   request: {
     params: IdParamSchema,
     query: UploadPartParamsSchema.pick({ uploadId: true }),
@@ -470,7 +470,7 @@ export const abortMultipartUploadRoute = createRoute({
 export const downloadUploadRoute = createRoute({
   description: 'Download the file content. Requires authentication - users can only access their own uploads.',
   method: 'get',
-  path: '/uploads/:id/download',
+  path: '/uploads/{id}/download',
   request: {
     params: IdParamSchema,
   },

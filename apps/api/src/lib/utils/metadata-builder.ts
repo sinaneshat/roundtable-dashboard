@@ -16,6 +16,7 @@ import type {
   DbAssistantMessageMetadata,
   DbCitation,
 } from '@/db/schemas/chat-metadata';
+import { DbAssistantMessageMetadataSchema } from '@/db/schemas/chat-metadata';
 import type { RoundNumber } from '@/lib/schemas/round-schemas';
 import type { AvailableSource } from '@/types/citations';
 
@@ -265,35 +266,10 @@ export function createStreamErrorMetadata(
 
 /**
  * Type guard to check if metadata has all required participant fields
+ * Uses Zod schema validation instead of manual type checking
  */
 export function hasRequiredParticipantFields(
   metadata: unknown,
 ): metadata is DbAssistantMessageMetadata {
-  if (!metadata || typeof metadata !== 'object') {
-    return false;
-  }
-
-  return (
-    'roundNumber' in metadata
-    && typeof metadata.roundNumber === 'number'
-    && 'participantId' in metadata
-    && typeof metadata.participantId === 'string'
-    && 'participantIndex' in metadata
-    && typeof metadata.participantIndex === 'number'
-    && 'participantRole' in metadata
-    && (metadata.participantRole === null
-      || typeof metadata.participantRole === 'string')
-    && 'model' in metadata
-    && typeof metadata.model === 'string'
-    && 'finishReason' in metadata
-    && typeof metadata.finishReason === 'string'
-    && 'usage' in metadata
-    && typeof metadata.usage === 'object'
-    && 'hasError' in metadata
-    && typeof metadata.hasError === 'boolean'
-    && 'isTransient' in metadata
-    && typeof metadata.isTransient === 'boolean'
-    && 'isPartialResponse' in metadata
-    && typeof metadata.isPartialResponse === 'boolean'
-  );
+  return DbAssistantMessageMetadataSchema.safeParse(metadata).success;
 }

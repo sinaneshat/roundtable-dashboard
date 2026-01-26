@@ -15,6 +15,7 @@ import type { RouteHandler } from '@hono/zod-openapi';
 import { MessagePartTypes, MessageRoles, PlanTypes, PollingStatuses, RoundExecutionPhases } from '@roundtable/shared/enums';
 import { asc, eq } from 'drizzle-orm';
 
+import { invalidateMessagesCache } from '@/common/cache-utils';
 import { createError } from '@/common/error-handling';
 import { getErrorMessage, getErrorName, toError } from '@/common/error-types';
 import { verifyThreadOwnership } from '@/common/permissions';
@@ -219,6 +220,10 @@ async function generateCouncilModerator(
           target: tables.chatMessage.id,
         });
 
+        // ✅ FIX: Invalidate messages cache so next fetch gets fresh data from D1
+        // Without this, KV cache returns stale data (missing moderator message) on page refresh
+        await invalidateMessagesCache(db, threadId);
+
         // ✅ RESUMABLE STREAMS: Clear thread active stream now that moderator is complete
         // This marks the round as fully complete (participants + moderator done)
         await clearThreadActiveStream(threadId, env);
@@ -396,10 +401,12 @@ async function generateCouncilModerator(
       } catch (error) {
         // Stream already completed successfully - log persistence error
         const errorMsg = error instanceof Error ? error.message : String(error);
-        console.error('[Council Moderator] Failed to persist message:', {
+        const errorStack = error instanceof Error ? error.stack : undefined;
+        console.error('[Moderator] PERSISTENCE FAILED:', {
           error: errorMsg,
           messageId,
           roundNumber,
+          stack: errorStack,
           threadId,
         });
 
@@ -594,14 +601,26 @@ export const councilModeratorRoundHandler: RouteHandler<typeof councilModeratorR
     ]);
 
     if (existingMessage) {
-      // Already exists - return the message data
-      return Responses.raw(c, {
-        id: existingMessage.id,
-        metadata: existingMessage.metadata,
-        parts: existingMessage.parts,
-        role: existingMessage.role,
-        roundNumber: existingMessage.roundNumber,
-      });
+      // Check if the message is complete (has text content)
+      const hasContent = existingMessage.parts?.some(
+        (p: { type: string; text?: string }) => p.type === 'text' && p.text && p.text.length > 0,
+      );
+
+      if (hasContent) {
+        // Already exists with content - return the message data
+        console.info(`[Moderator] existingMessage found with content, returning early id=${existingMessage.id}`);
+        return Responses.raw(c, {
+          id: existingMessage.id,
+          metadata: existingMessage.metadata,
+          parts: existingMessage.parts,
+          role: existingMessage.role,
+          roundNumber: existingMessage.roundNumber,
+        });
+      }
+
+      // Message exists but is incomplete - delete and regenerate
+      console.info(`[Moderator] existingMessage found but incomplete (no content), deleting and regenerating id=${existingMessage.id}`);
+      await db.delete(tables.chatMessage).where(eq(tables.chatMessage.id, messageId));
     }
 
     // =========================================================================

@@ -15,6 +15,7 @@ import {
   threadPreSearchesQueryOptions,
 } from '@/lib/data/query-options';
 import { useTranslations } from '@/lib/i18n';
+import { rlog } from '@/lib/utils/dev-logger';
 import type {
   GetProjectResponse,
   GetThreadBySlugResponse,
@@ -61,13 +62,15 @@ export const Route = createFileRoute('/_protected/chat/projects/$projectId/$slug
     const cachedThreadData = !isServer ? queryClient.getQueryData<GetThreadBySlugResponse>(options.queryKey) : null;
     const hasPrefetchMeta = cachedThreadData?.meta?.requestId === 'prefetch';
 
-    // Early return when flow-controller prefetched data
-    if (hasPrefetchMeta) {
-      const threadData = cachedThreadData?.success ? cachedThreadData.data : null;
+    // Early return when flow-controller prefetched VALID data (must have messages)
+    // CRITICAL: "Shell" data (thread metadata without messages) should NOT trigger early return
+    // This prevents blank screen when sidebar prefetch caches incomplete data
+    if (hasPrefetchMeta && cachedThreadData?.success && cachedThreadData.data.messages.length > 0) {
+      const threadData = cachedThreadData.data;
       return {
         projectName,
-        threadTitle: threadData?.thread?.title ?? null,
-        threadId: threadData?.thread?.id ?? null,
+        threadTitle: threadData.thread?.title ?? null,
+        threadId: threadData.thread?.id ?? null,
         threadData,
         preSearches: undefined,
         changelog: undefined,
@@ -207,21 +210,33 @@ function ProjectThreadRoute() {
 
   const isInCreationFlow = useIsInCreationFlow();
 
-  const hasLoaderData = Boolean(loaderData?.threadData);
+  // CRITICAL: Only consider loader data valid if it has messages - prevents blank screen
+  // when sidebar prefetch caches "shell" data (thread metadata without messages)
+  const hasValidLoaderData = Boolean(
+    loaderData?.threadData?.messages?.length && loaderData.threadData.messages.length > 0,
+  );
   const { data: queryData, error, isError, isFetching } = useQuery({
     ...threadBySlugQueryOptions(slug ?? ''),
     enabled: Boolean(slug) && !isInCreationFlow,
-    initialData: hasLoaderData && loaderData.threadData
+    initialData: hasValidLoaderData && loaderData.threadData
       ? { data: loaderData.threadData, success: true as const }
       : undefined,
-    staleTime: hasLoaderData ? 10_000 : 0,
+    staleTime: hasValidLoaderData ? 10_000 : 0,
   });
 
-  const threadResponse = loaderData?.threadData ?? (queryData?.success ? queryData.data : null);
+  // CRITICAL FIX: Use hasValidLoaderData to decide fallback, not nullish coalescing
+  // ?? only checks for null/undefined, but empty loaderData.threadData (0 messages) should NOT be used
+  const threadResponse = hasValidLoaderData && loaderData?.threadData
+    ? loaderData.threadData
+    : (queryData?.success ? queryData.data : null);
   const streamResumptionState = loaderData?.streamResumption ?? null;
   const changelog = loaderData?.changelog;
   const feedback = loaderData?.feedback;
   const preSearches = loaderData?.preSearches;
+
+  // Debug: Log data source selection
+  const dataSource = hasValidLoaderData ? 'loader' : (queryData?.success ? 'query' : 'none');
+  rlog.init('project-route', `url=${slug} source=${dataSource} loaderValid=${hasValidLoaderData} loaderMsgs=${loaderData?.threadData?.messages?.length ?? 0} queryOk=${queryData?.success ?? false} queryMsgs=${queryData?.success ? queryData.data?.messages?.length ?? 0 : 0}`);
 
   const user = useMemo(() => ({
     id: session?.user?.id ?? '',
@@ -261,8 +276,10 @@ function ProjectThreadRoute() {
 
   const { messages, participants, thread } = threadResponse;
 
+  // Key forces remount on thread change, preventing stale store hydration
   return (
     <ChatThreadScreen
+      key={thread.id}
       thread={thread}
       participants={participants}
       initialMessages={messages}

@@ -39,20 +39,6 @@ import {
 import type { ChatMessage } from '@/db/validation';
 import { AvailableSourceSchema } from '@/types/citations';
 
-import { isObject } from './type-guards';
-
-// ============================================================================
-// Safe Property Access Helper
-// ============================================================================
-
-/**
- * Safely get a property from a Record using bracket notation
- * This satisfies TS4111 noPropertyAccessFromIndexSignature
- */
-function getRecordProp(obj: Record<string, unknown>, key: string): unknown {
-  return obj[key];
-}
-
 // ============================================================================
 // Type Guards with Zod Validation
 // ============================================================================
@@ -208,43 +194,49 @@ export function extractMessageMetadata(
 // ============================================================================
 
 /**
+ * Zod schema for extracting createdAt from message object
+ * Supports both Date objects and ISO strings at message level
+ */
+const MessageCreatedAtSchema = z.object({
+  createdAt: z.union([z.date(), z.string()]).optional(),
+});
+
+/**
+ * Zod schema for extracting createdAt from nested metadata
+ */
+const MetadataCreatedAtSchema = z.object({
+  metadata: z.object({
+    createdAt: z.string().optional(),
+  }).optional(),
+});
+
+/**
  * Extract createdAt from a message or its metadata
  * Returns ISO string or null if not available
  *
  * **REPLACES**: `(m as { createdAt?: Date | string }).createdAt`
  *
- * ✅ TYPE-SAFE: No force casting, handles both UIMessage and extended types
+ * ✅ TYPE-SAFE: Uses Zod validation, no force casting
  * Handles Date objects, ISO strings, and metadata.createdAt field
  *
  * @param message - Message object (UIMessage, ChatMessage, or extended type)
  * @returns ISO date string or null
  */
 export function getCreatedAt(message: unknown): string | null {
-  // ✅ TYPE-SAFE: Use type guard instead of force cast
-  if (!isObject(message)) {
-    return null;
-  }
-
-  // 1. Check direct createdAt property (ChatMessage or extended UIMessage)
-  const msgRecord = message as Record<string, unknown>;
-  const createdAt = getRecordProp(msgRecord, 'createdAt');
-  if (createdAt !== undefined) {
+  // 1. Check direct createdAt property using Zod
+  const directResult = MessageCreatedAtSchema.safeParse(message);
+  if (directResult.success && directResult.data.createdAt !== undefined) {
+    const createdAt = directResult.data.createdAt;
     if (createdAt instanceof Date) {
       return createdAt.toISOString();
     }
-    if (typeof createdAt === 'string') {
-      return createdAt;
-    }
+    return createdAt;
   }
 
-  // 2. Check metadata.createdAt (our custom metadata field)
-  const metadata = getRecordProp(msgRecord, 'metadata');
-  if (isObject(metadata)) {
-    const metadataRecord = metadata as Record<string, unknown>;
-    const metaCreatedAt = getRecordProp(metadataRecord, 'createdAt');
-    if (metaCreatedAt !== undefined && typeof metaCreatedAt === 'string') {
-      return metaCreatedAt;
-    }
+  // 2. Check metadata.createdAt using Zod
+  const metadataResult = MetadataCreatedAtSchema.safeParse(message);
+  if (metadataResult.success && metadataResult.data.metadata?.createdAt) {
+    return metadataResult.data.metadata.createdAt;
   }
 
   return null;
@@ -295,6 +287,13 @@ export function getRoundNumber(metadata: unknown): number | null {
 }
 
 /**
+ * Zod schema for partial participantId extraction during streaming
+ */
+const PartialParticipantIdSchema = z.object({
+  participantId: z.string().min(1),
+}).partial();
+
+/**
  * Extract participantId from metadata (only participant messages)
  * Returns null if not a participant message
  *
@@ -311,22 +310,21 @@ export function getParticipantId(metadata: unknown): string | null {
     return validated.participantId;
   }
 
-  // Fallback: Extract participantId even when full schema validation fails
-  if (!metadata || typeof metadata !== 'object') {
-    return null;
-  }
-
-  const PartialParticipantIdSchema = z.object({
-    participantId: z.string().min(1),
-  });
-
-  const partialResult = PartialParticipantIdSchema.partial().safeParse(metadata);
+  // Fallback: Extract participantId using Zod even when full schema validation fails
+  const partialResult = PartialParticipantIdSchema.safeParse(metadata);
   if (partialResult.success && partialResult.data.participantId) {
     return partialResult.data.participantId;
   }
 
   return null;
 }
+
+/**
+ * Zod schema for partial participantIndex extraction during streaming
+ */
+const PartialParticipantIndexSchema = z.object({
+  participantIndex: z.number().int().nonnegative(),
+}).partial();
 
 /**
  * Extract participantIndex from metadata (only participant messages)
@@ -345,17 +343,8 @@ export function getParticipantIndex(metadata: unknown): number | null {
     return validated.participantIndex;
   }
 
-  // Fallback: Extract participantIndex even when full schema validation fails
-  // This handles race conditions where metadata is partially populated
-  if (!metadata || typeof metadata !== 'object') {
-    return null;
-  }
-
-  const PartialParticipantIndexSchema = z.object({
-    participantIndex: z.number().int().nonnegative(),
-  });
-
-  const partialResult = PartialParticipantIndexSchema.partial().safeParse(metadata);
+  // Fallback: Extract participantIndex using Zod even when full schema validation fails
+  const partialResult = PartialParticipantIndexSchema.safeParse(metadata);
   if (partialResult.success && partialResult.data.participantIndex !== undefined) {
     return partialResult.data.participantIndex;
   }
@@ -397,6 +386,13 @@ export function hasError(metadata: unknown): boolean {
 }
 
 /**
+ * Zod schema for partial availableSources extraction during streaming
+ */
+const PartialAvailableSourcesSchema = z.object({
+  availableSources: z.array(AvailableSourceSchema),
+}).partial();
+
+/**
  * Extract availableSources from metadata (streaming-safe)
  *
  * During streaming, the metadata might not pass full DbAssistantMessageMetadataSchema
@@ -415,20 +411,12 @@ export function getAvailableSources(
     return validated.availableSources;
   }
 
-  // Fallback: Extract availableSources even when full schema validation fails
+  // Fallback: Extract availableSources using Zod even when full schema validation fails
   // This handles streaming metadata that has availableSources but is missing
   // required fields like finishReason or usage
-  if (!metadata || typeof metadata !== 'object') {
-    return null;
-  }
-
-  if ('availableSources' in metadata && Array.isArray(metadata.availableSources)) {
-    // Validate each source with Zod schema
-    const AvailableSourcesArraySchema = z.array(AvailableSourceSchema);
-    const result = AvailableSourcesArraySchema.safeParse(metadata.availableSources);
-    if (result.success && result.data.length > 0) {
-      return result.data;
-    }
+  const partialResult = PartialAvailableSourcesSchema.safeParse(metadata);
+  if (partialResult.success && partialResult.data.availableSources && partialResult.data.availableSources.length > 0) {
+    return partialResult.data.availableSources;
   }
 
   return null;
@@ -448,6 +436,13 @@ export function isPreSearch(metadata: unknown): boolean {
 // ============================================================================
 // Upload Metadata Extraction
 // ============================================================================
+
+/**
+ * Zod schema for extractedText extraction from upload metadata
+ */
+const ExtractedTextSchema = z.object({
+  extractedText: z.string().min(1),
+}).partial();
 
 /**
  * Extract extractedText from upload metadata
@@ -470,22 +465,32 @@ export function isPreSearch(metadata: unknown): boolean {
  * ```
  */
 export function getExtractedText(metadata: unknown): string | null {
-  if (!metadata || typeof metadata !== 'object') {
-    return null;
-  }
-
-  // Use minimal Zod schema for extractedText field extraction
-  const ExtractedTextSchema = z.object({
-    extractedText: z.string().min(1),
-  });
-
-  const result = ExtractedTextSchema.partial().safeParse(metadata);
+  // Use Zod schema for extractedText field extraction
+  const result = ExtractedTextSchema.safeParse(metadata);
   if (result.success && result.data.extractedText) {
     return result.data.extractedText;
   }
 
   return null;
 }
+
+/**
+ * Zod schema for OpenRouter error as string
+ */
+const OpenRouterErrorStringSchema = z.string();
+
+/**
+ * Zod schema for OpenRouter error as record
+ */
+const OpenRouterErrorRecordSchema = z.record(
+  z.string(),
+  z.union([z.string(), z.number(), z.boolean(), z.null()]),
+);
+
+/**
+ * Zod schema for OpenRouter error as object with any values (for fallback conversion)
+ */
+const OpenRouterErrorObjectSchema = z.record(z.string(), z.unknown());
 
 /**
  * Normalize openRouterError to record format
@@ -515,32 +520,26 @@ export function normalizeOpenRouterError(
   }
 
   // If it's a string, wrap it in a record
-  if (typeof openRouterError === 'string') {
-    return { message: openRouterError };
+  const stringResult = OpenRouterErrorStringSchema.safeParse(openRouterError);
+  if (stringResult.success) {
+    return { message: stringResult.data };
   }
 
-  // If it's an object, validate and filter to allowed types
-  if (typeof openRouterError === 'object' && openRouterError !== null) {
-    const OpenRouterErrorRecordSchema = z.record(
-      z.string(),
-      z.union([z.string(), z.number(), z.boolean(), z.null()]),
-    );
+  // If it's a valid record with allowed types, return directly
+  const recordResult = OpenRouterErrorRecordSchema.safeParse(openRouterError);
+  if (recordResult.success) {
+    return recordResult.data;
+  }
 
-    const result = OpenRouterErrorRecordSchema.safeParse(openRouterError);
-    if (result.success) {
-      return result.data;
-    }
-
-    // Fallback: filter unknown values to null
+  // Fallback: parse as object and filter unknown values to null
+  const objectResult = OpenRouterErrorObjectSchema.safeParse(openRouterError);
+  if (objectResult.success) {
     const filtered: Record<string, string | number | boolean | null> = {};
-    for (const [key, value] of Object.entries(openRouterError)) {
-      if (
-        typeof value === 'string'
-        || typeof value === 'number'
-        || typeof value === 'boolean'
-        || value === null
-      ) {
-        filtered[key] = value;
+    for (const [key, value] of Object.entries(objectResult.data)) {
+      // Validate each value using Zod union
+      const validValueResult = z.union([z.string(), z.number(), z.boolean(), z.null()]).safeParse(value);
+      if (validValueResult.success) {
+        filtered[key] = validValueResult.data;
       } else {
         // Convert unsupported types to null
         filtered[key] = null;

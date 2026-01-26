@@ -32,8 +32,11 @@ import type {
   CheckRoundCompletionQueueMessage,
   CompleteAutomatedJobQueueMessage,
   ContinueAutomatedJobQueueMessage,
+  FinalizeRoundQueueMessage,
+  RecoverRoundQueueMessage,
   RoundOrchestrationQueueMessage,
   StartAutomatedJobQueueMessage,
+  StartRoundQueueMessage,
   TriggerModeratorQueueMessage,
   TriggerParticipantQueueMessage,
   TriggerPreSearchQueueMessage,
@@ -54,6 +57,61 @@ const BASE_RETRY_DELAY_SECONDS = 60;
 // ============================================================================
 
 /**
+ * Check if participant should still be triggered by querying round status
+ * Returns true if participant should be triggered, false if already started/completed
+ */
+async function shouldTriggerParticipant(
+  threadId: string,
+  roundNumber: number,
+  participantIndex: number,
+  sessionToken: string,
+  env: CloudflareEnv,
+): Promise<boolean> {
+  const baseUrl = getBaseUrl(env);
+
+  try {
+    const stateResponse = await fetch(
+      `${baseUrl}/api/v1/chat/threads/${threadId}/rounds/${roundNumber}/status`,
+      {
+        headers: buildSessionAuthHeaders(sessionToken),
+        method: 'GET',
+      },
+    );
+
+    if (!stateResponse.ok) {
+      // If status check fails, proceed with trigger (fail-open for reliability)
+      // The streaming endpoint has its own duplicate protection
+      return true;
+    }
+
+    // Lazy-load schema to avoid startup CPU limit
+    const { RoundStatusSchema } = await import('@/routes/chat/schema');
+    const parseResult = RoundStatusSchema.safeParse(await stateResponse.json());
+
+    if (!parseResult.success) {
+      // Invalid response - proceed with trigger
+      return true;
+    }
+
+    const roundState = parseResult.data;
+
+    // ✅ IDEMPOTENCY: Skip if participant is not the next expected participant
+    // This prevents duplicate triggers when both onFinish callback and
+    // checkRoundCompletion queue the same participant in quick succession
+    if (roundState.nextParticipantIndex !== participantIndex) {
+      // Participant either already started/completed, or a different participant is next
+      // LOG: console.log(`[RoundOrchestration] SKIP: P${participantIndex} not next (expected P${roundState.nextParticipantIndex})`);
+      return false;
+    }
+
+    return true;
+  } catch {
+    // On error, proceed with trigger - streaming endpoint will handle duplicates
+    return true;
+  }
+}
+
+/**
  * Trigger a participant stream via internal API call
  */
 async function triggerParticipantStream(
@@ -62,6 +120,20 @@ async function triggerParticipantStream(
 ): Promise<void> {
   const { attachmentIds, participantIndex, roundNumber, sessionToken, threadId } = message;
   const baseUrl = getBaseUrl(env);
+
+  // ✅ IDEMPOTENCY GUARD: Check if participant should still be triggered
+  const shouldTrigger = await shouldTriggerParticipant(
+    threadId,
+    roundNumber,
+    participantIndex,
+    sessionToken,
+    env,
+  );
+
+  if (!shouldTrigger) {
+    // Participant already streaming or completed - skip duplicate trigger
+    return;
+  }
 
   // Build request body matching streaming handler expectations
   const requestBody = {
@@ -317,6 +389,82 @@ async function checkRoundCompletion(
 }
 
 // ============================================================================
+// ROBUST STREAMING RESUMPTION HANDLERS
+// ============================================================================
+
+/**
+ * Start a new round execution
+ * Replaces direct streaming trigger - all AI streaming runs via queue
+ */
+async function handleStartRound(
+  message: StartRoundQueueMessage,
+  env: CloudflareEnv,
+): Promise<void> {
+  const { attachmentIds, roundNumber, sessionToken, threadId, userId, userQuery } = message;
+
+  // Lazy-load services to avoid startup CPU limit
+  const { executeRound } = await import('@/services/streaming/background-stream-execution.service');
+  const { getDbAsync } = await import('@/db');
+
+  const db = await getDbAsync();
+
+  await executeRound({
+    attachmentIds,
+    db,
+    env,
+    queue: env.ROUND_ORCHESTRATION_QUEUE,
+    roundNumber,
+    sessionToken,
+    threadId,
+    userId,
+    userQuery,
+  });
+}
+
+/**
+ * Recover a stalled round execution
+ * Called by scheduled cron or stale stream detection
+ */
+async function handleRecoverRound(
+  message: RecoverRoundQueueMessage,
+  env: CloudflareEnv,
+): Promise<void> {
+  const { executionId, sessionToken } = message;
+
+  // Lazy-load services to avoid startup CPU limit
+  const { recoverRound } = await import('@/services/streaming/background-stream-execution.service');
+  const { getDbAsync } = await import('@/db');
+
+  const db = await getDbAsync();
+
+  await recoverRound(
+    db,
+    executionId,
+    env.ROUND_ORCHESTRATION_QUEUE,
+    sessionToken,
+  );
+}
+
+/**
+ * Finalize a completed round execution
+ * Cleans up KV state and performs any post-completion tasks
+ */
+async function handleFinalizeRound(
+  message: FinalizeRoundQueueMessage,
+  env: CloudflareEnv,
+): Promise<void> {
+  const { executionId } = message;
+
+  // Lazy-load services to avoid startup CPU limit
+  const { finalizeRound } = await import('@/services/streaming/background-stream-execution.service');
+  const { getDbAsync } = await import('@/db');
+
+  const db = await getDbAsync();
+
+  await finalizeRound(db, executionId, env);
+}
+
+// ============================================================================
 // QUEUE CONSUMER HANDLER
 // ============================================================================
 
@@ -339,7 +487,10 @@ async function processQueueMessage(
       CheckRoundCompletionQueueMessageSchema,
       CompleteAutomatedJobQueueMessageSchema,
       ContinueAutomatedJobQueueMessageSchema,
+      FinalizeRoundQueueMessageSchema,
+      RecoverRoundQueueMessageSchema,
       StartAutomatedJobQueueMessageSchema,
+      StartRoundQueueMessageSchema,
       TriggerModeratorQueueMessageSchema,
       TriggerParticipantQueueMessageSchema,
       TriggerPreSearchQueueMessageSchema,
@@ -394,6 +545,27 @@ async function processQueueMessage(
         await handleCompleteAutomatedJob(parsed.data, env);
       } else {
         throw new Error(`Invalid complete-automated-job message: ${parsed.error.message}`);
+      }
+    } else if (messageType === 'start-round') {
+      const parsed = StartRoundQueueMessageSchema.safeParse(body);
+      if (parsed.success) {
+        await handleStartRound(parsed.data, env);
+      } else {
+        throw new Error(`Invalid start-round message: ${parsed.error.message}`);
+      }
+    } else if (messageType === 'recover-round') {
+      const parsed = RecoverRoundQueueMessageSchema.safeParse(body);
+      if (parsed.success) {
+        await handleRecoverRound(parsed.data, env);
+      } else {
+        throw new Error(`Invalid recover-round message: ${parsed.error.message}`);
+      }
+    } else if (messageType === 'finalize-round') {
+      const parsed = FinalizeRoundQueueMessageSchema.safeParse(body);
+      if (parsed.success) {
+        await handleFinalizeRound(parsed.data, env);
+      } else {
+        throw new Error(`Invalid finalize-round message: ${parsed.error.message}`);
       }
     } else {
       throw new Error(`Unhandled message type: ${messageType}`);

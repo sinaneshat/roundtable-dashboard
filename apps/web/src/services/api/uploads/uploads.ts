@@ -19,23 +19,23 @@ import { authenticatedFetch, createApiClient } from '@/lib/api/client';
 // Type Inference - Attachment Operations
 // ============================================================================
 
-type ListAttachmentsEndpoint = ApiClientType['uploads']['$get'];
+type ListAttachmentsEndpoint = ApiClientType['upload']['uploads']['$get'];
 export type ListAttachmentsResponse = InferResponseType<ListAttachmentsEndpoint, 200>;
 export type ListAttachmentsRequest = InferRequestType<ListAttachmentsEndpoint>;
 
-type GetDownloadUrlEndpoint = ApiClientType['uploads'][':id']['download-url']['$get'];
+type GetDownloadUrlEndpoint = ApiClientType['upload']['uploads'][':id']['download-url']['$get'];
 export type GetDownloadUrlResponse = InferResponseType<GetDownloadUrlEndpoint, 200>;
 export type GetDownloadUrlRequest = InferRequestType<GetDownloadUrlEndpoint>;
 
-type GetAttachmentEndpoint = ApiClientType['uploads'][':id']['$get'];
+type GetAttachmentEndpoint = ApiClientType['upload']['uploads'][':id']['$get'];
 export type GetAttachmentResponse = InferResponseType<GetAttachmentEndpoint, 200>;
 export type GetAttachmentRequest = InferRequestType<GetAttachmentEndpoint>;
 
-type UpdateAttachmentEndpoint = ApiClientType['uploads'][':id']['$patch'];
+type UpdateAttachmentEndpoint = ApiClientType['upload']['uploads'][':id']['$patch'];
 export type UpdateAttachmentResponse = InferResponseType<UpdateAttachmentEndpoint, 200>;
 export type UpdateAttachmentRequest = InferRequestType<UpdateAttachmentEndpoint>;
 
-type DeleteAttachmentEndpoint = ApiClientType['uploads'][':id']['$delete'];
+type DeleteAttachmentEndpoint = ApiClientType['upload']['uploads'][':id']['$delete'];
 export type DeleteAttachmentResponse = InferResponseType<DeleteAttachmentEndpoint, 200>;
 export type DeleteAttachmentRequest = InferRequestType<DeleteAttachmentEndpoint>;
 
@@ -43,15 +43,15 @@ export type DeleteAttachmentRequest = InferRequestType<DeleteAttachmentEndpoint>
 // Type Inference - Multipart Upload Operations
 // ============================================================================
 
-type CreateMultipartUploadEndpoint = ApiClientType['uploads']['multipart']['$post'];
+type CreateMultipartUploadEndpoint = ApiClientType['upload']['uploads']['multipart']['$post'];
 export type CreateMultipartUploadResponse = InferResponseType<CreateMultipartUploadEndpoint, 200>;
 export type CreateMultipartUploadRequest = InferRequestType<CreateMultipartUploadEndpoint>;
 
-type CompleteMultipartUploadEndpoint = ApiClientType['uploads']['multipart'][':id']['complete']['$post'];
+type CompleteMultipartUploadEndpoint = ApiClientType['upload']['uploads']['multipart'][':id']['complete']['$post'];
 export type CompleteMultipartUploadResponse = InferResponseType<CompleteMultipartUploadEndpoint, 200>;
 export type CompleteMultipartUploadRequest = InferRequestType<CompleteMultipartUploadEndpoint>;
 
-type AbortMultipartUploadEndpoint = ApiClientType['uploads']['multipart'][':id']['$delete'];
+type AbortMultipartUploadEndpoint = ApiClientType['upload']['uploads']['multipart'][':id']['$delete'];
 export type AbortMultipartUploadResponse = InferResponseType<AbortMultipartUploadEndpoint, 200>;
 export type AbortMultipartUploadRequest = InferRequestType<AbortMultipartUploadEndpoint>;
 
@@ -193,7 +193,7 @@ function isSuccessResponse<T extends { success: boolean }>(
  */
 export async function listAttachmentsService(data?: ListAttachmentsRequest) {
   const client = createApiClient();
-  return parseResponse(client.uploads.$get(data ?? { query: {} }));
+  return parseResponse(client.upload.uploads.$get(data ?? { query: {} }));
 }
 
 /**
@@ -202,7 +202,7 @@ export async function listAttachmentsService(data?: ListAttachmentsRequest) {
  */
 export async function getAttachmentService(data: GetAttachmentRequest) {
   const client = createApiClient();
-  return parseResponse(client.uploads[':id'].$get(data));
+  return parseResponse(client.upload.uploads[':id'].$get(data));
 }
 
 /**
@@ -211,7 +211,7 @@ export async function getAttachmentService(data: GetAttachmentRequest) {
  */
 export async function updateAttachmentService(data: UpdateAttachmentRequest) {
   const client = createApiClient();
-  return parseResponse(client.uploads[':id'].$patch(data));
+  return parseResponse(client.upload.uploads[':id'].$patch(data));
 }
 
 /**
@@ -220,7 +220,7 @@ export async function updateAttachmentService(data: UpdateAttachmentRequest) {
  */
 export async function deleteAttachmentService(data: DeleteAttachmentRequest) {
   const client = createApiClient();
-  return parseResponse(client.uploads[':id'].$delete(data));
+  return parseResponse(client.upload.uploads[':id'].$delete(data));
 }
 
 /**
@@ -229,7 +229,7 @@ export async function deleteAttachmentService(data: DeleteAttachmentRequest) {
  */
 export async function getDownloadUrlService(data: GetDownloadUrlRequest) {
   const client = createApiClient();
-  return parseResponse(client.uploads[':id']['download-url'].$get(data));
+  return parseResponse(client.upload.uploads[':id']['download-url'].$get(data));
 }
 
 // ============================================================================
@@ -340,7 +340,7 @@ export async function secureUploadService(file: File, signal?: AbortSignal): Pro
  */
 export async function createMultipartUploadService(data: CreateMultipartUploadRequest) {
   const client = createApiClient();
-  return parseResponse(client.uploads.multipart.$post(data));
+  return parseResponse(client.upload.uploads.multipart.$post(data));
 }
 
 /**
@@ -385,7 +385,7 @@ export async function uploadPartService(
  */
 export async function completeMultipartUploadService(data: CompleteMultipartUploadRequest) {
   const client = createApiClient();
-  return parseResponse(client.uploads.multipart[':id'].complete.$post(data));
+  return parseResponse(client.upload.uploads.multipart[':id'].complete.$post(data));
 }
 
 /**
@@ -394,5 +394,5 @@ export async function completeMultipartUploadService(data: CompleteMultipartUplo
  */
 export async function abortMultipartUploadService(data: AbortMultipartUploadRequest) {
   const client = createApiClient();
-  return parseResponse(client.uploads.multipart[':id'].$delete(data));
+  return parseResponse(client.upload.uploads.multipart[':id'].$delete(data));
 }

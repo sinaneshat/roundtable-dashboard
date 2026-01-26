@@ -1,3 +1,34 @@
+/**
+ * Multi-Participant Chat Hook
+ *
+ * **ARCHITECTURE NOTE - BACKEND-FIRST MIGRATION IN PROGRESS**:
+ *
+ * This hook contains participant orchestration logic that should eventually
+ * move to the backend. The target architecture is:
+ *
+ * - Backend's round_execution table tracks: which participants responded, current phase
+ * - Backend's queue worker triggers: next participant, moderator
+ * - Frontend SUBSCRIBES to SSE streams, does NOT decide what happens next
+ *
+ * **ORCHESTRATION TO REMOVE** (marked with // TODO: BACKEND-CONTROLLED):
+ * - participantIndexQueue - Backend tracks participant order
+ * - queuedParticipantsThisRoundRef - Backend tracks queued state
+ * - triggeredNextForRef - Backend handles via queue idempotency
+ * - respondedParticipantsRef - Backend's round_execution.participantsCompleted
+ * - triggerNextParticipantWithRefs() - Backend queue auto-triggers
+ * - Round completion detection - Backend state machine
+ *
+ * **KEEP ON FRONTEND**:
+ * - AI SDK integration (useChat, transport, message handling)
+ * - Stream display and RAF-based flushing
+ * - Error display
+ * - File upload handling
+ *
+ * Once backend migration is complete, this hook should be simplified to:
+ * 1. Send user message → backend queues round execution
+ * 2. Subscribe to SSE → display chunks as they arrive
+ * 3. Handle errors → display to user
+ */
 import { useChat } from '@ai-sdk/react';
 import { AiSdkStatuses, FinishReasons, MessagePartTypes, MessageRoles, TextPartStates, UIMessageErrorTypeSchema, UIMessageRoles } from '@roundtable/shared';
 import type { UIMessage } from 'ai';
@@ -8,7 +39,7 @@ import { z } from 'zod';
 
 import { errorCategoryToUIType, ErrorMetadataSchema } from '@/lib/schemas/error-schemas';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
-import { extractValidFileParts, isRenderableContent, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
+import { extractValidFileParts, isRenderableContent, isStreamingPart, isValidFilePartForTransmission } from '@/lib/schemas/message-schemas';
 import { DEFAULT_PARTICIPANT_INDEX } from '@/lib/schemas/participant-schemas';
 import { calculateNextRoundNumber, createErrorUIMessage, deduplicateParticipants, getAssistantMetadata, getAvailableSources, getCurrentRoundNumber, getEnabledParticipants, getParticipantIndex, getRoundNumber, getUserMetadata, isObject, isPreSearch, mergeParticipantMetadata } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
@@ -429,6 +460,7 @@ export function useMultiParticipantChat(
   // Track if we're currently triggering to prevent double triggers
   const isTriggeringRef = useRef<boolean>(false);
 
+  // TODO: BACKEND-CONTROLLED - Remove when backend handles participant ordering
   // ✅ CRITICAL FIX: Use a FIFO queue to prevent race conditions with participant indices
   // The AI SDK processes requests in order, so a queue ensures each transport callback
   // gets the correct participant index regardless of timing or concurrent calls
@@ -441,12 +473,14 @@ export function useMultiParticipantChat(
   // multiple times for the same participant
   const lastUsedParticipantIndex = useRef<number | null>(null);
 
+  // TODO: BACKEND-CONTROLLED - Remove when backend tracks queued participants
   // ✅ RACE CONDITION FIX: Track which participants have been queued this round
   // Prevents duplicate network requests when multiple entry points trigger concurrently
   // Key: participantIndex, Value: true if queued
   // Reset at start of each round (in startRound/sendMessage)
   const queuedParticipantsThisRoundRef = useRef<Set<number>>(new Set());
 
+  // TODO: BACKEND-CONTROLLED - Remove when backend queue handles idempotency
   // ✅ PHANTOM GUARD: Track which (round, participantIndex) pairs have already triggered next participant
   // AI SDK calls onFinish multiple times for the same message (phantom calls)
   // This prevents duplicate triggerNextParticipantWithRefs() calls before round completes
@@ -2135,11 +2169,8 @@ export function useMultiParticipantChat(
           roundIsComplete = false;
           break;
         }
-        // ✅ FIX: Check if message has streaming parts (state='streaming' or partial tool calls)
-        const msgHasStreaming = msg.parts?.some(
-          p => ('state' in p && p.state === 'streaming')
-            || (p.type === 'tool-invocation' && 'toolInvocation' in p && (p.toolInvocation as { state?: string }).state === 'partial-call'),
-        );
+        // ✅ FIX: Check if message has streaming parts using Zod-validated helper
+        const msgHasStreaming = msg.parts?.some(isStreamingPart);
         if (msgHasStreaming) {
           hasStreamingParts = true;
         }
@@ -3173,13 +3204,10 @@ export function useMultiParticipantChat(
         return hasStreamingParts;
       });
 
+      // ✅ TYPE-SAFE: Use Zod-validated helpers for metadata extraction
       const streamingMeta = streamingMessage?.metadata;
-      const streamingParticipantIdx = streamingMeta && typeof streamingMeta === 'object' && 'participantIndex' in streamingMeta
-        ? (streamingMeta.participantIndex as number)
-        : undefined;
-      const streamingRound = streamingMeta && typeof streamingMeta === 'object' && 'roundNumber' in streamingMeta
-        ? (streamingMeta.roundNumber as number)
-        : undefined;
+      const streamingParticipantIdx = getParticipantIndex(streamingMeta) ?? undefined;
+      const streamingRound = getRoundNumber(streamingMeta) ?? undefined;
 
       // Get expected state from prefilled values via refs
       const expectedRound = callbackRefs.resumptionRoundNumber.current;
@@ -3241,6 +3269,14 @@ export function useMultiParticipantChat(
 
       // ✅ FIX V3: Stream has metadata but doesn't match expected - it's STALE
       // This handles the case where AI SDK resumes P1's stream but server expects P0
+
+      // ✅ FIX: Early return if we already stopped a stale stream
+      // Prevents multiple stopAiSdk() calls which trigger phantom onFinish events
+      if (stoppedStaleStreamRef.current) {
+        rlog.resume('sdk-resume', `SKIP: already stopped stale stream`);
+        return 'blocked';
+      }
+
       rlog.resume('sdk-resume', `STOPPING stale stream r${streamingRound} P${streamingParticipantIdx} (expected r${expectedRound} nextP=${expectedNextP})`);
       stoppedStaleStreamRef.current = true; // Signal onFinish to skip processing
       stopAiSdk(); // Stop the stale auto-resumed stream

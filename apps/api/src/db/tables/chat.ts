@@ -3,10 +3,12 @@ import {
   CHAT_MODES,
   DEFAULT_CHAT_MODE,
   DEFAULT_MESSAGE_STATUS,
+  DEFAULT_ROUND_EXECUTION_TABLE_STATUS,
   DEFAULT_THREAD_STATUS,
   FEEDBACK_TYPES,
   MESSAGE_ROLES,
   MESSAGE_STATUSES,
+  ROUND_EXECUTION_TABLE_STATUSES,
   THREAD_STATUSES,
 } from '@roundtable/shared/enums';
 import { sql } from 'drizzle-orm';
@@ -371,6 +373,73 @@ export const chatPreSearch = sqliteTable('chat_pre_search', {
   index('chat_pre_search_status_idx').on(table.status),
   // ✅ UNIQUE CONSTRAINT: Only one pre-search per thread + round
   uniqueIndex('chat_pre_search_thread_round_unique').on(table.threadId, table.roundNumber),
+]);
+
+/**
+ * Round Execution
+ * Tracks round lifecycle with durable state for robust streaming resumption.
+ * Database as source of truth - KV is just a resumption hint.
+ *
+ * Status Flow:
+ * pending → pre_search → participants → moderator → completed
+ *     ↓         ↓            ↓            ↓
+ *   failed    failed       failed       failed
+ *
+ * Key benefits:
+ * - Survives worker timeouts (30s Cloudflare limit)
+ * - Enables self-healing via scheduled recovery
+ * - Idempotent: re-triggering same round/participant is safe
+ */
+export const roundExecution = sqliteTable('round_execution', {
+  // Recovery tracking
+  attempts: integer('attempts').notNull().default(0),
+
+  // Timestamps
+  createdAt: integer('created_at', { mode: 'timestamp_ms' })
+    .defaultNow()
+    .notNull(),
+
+  errorMessage: text('error_message'),
+
+  // Primary key
+  id: text('id').primaryKey(),
+
+  lastAttemptAt: integer('last_attempt_at', { mode: 'timestamp_ms' }),
+  moderatorCompletedAt: integer('moderator_completed_at', { mode: 'timestamp_ms' }),
+  participantsCompleted: integer('participants_completed').notNull().default(0),
+  participantsTotal: integer('participants_total').notNull().default(0),
+
+  // Progress tracking
+  preSearchCompletedAt: integer('pre_search_completed_at', { mode: 'timestamp_ms' }),
+  // Round tracking (0-based)
+  roundNumber: integer('round_number').notNull().default(0),
+  // State machine status
+  status: text('status', { enum: ROUND_EXECUTION_TABLE_STATUSES })
+    .notNull()
+    .default(DEFAULT_ROUND_EXECUTION_TABLE_STATUS),
+
+  // Thread relationship
+  threadId: text('thread_id')
+    .notNull()
+    .references(() => chatThread.id, { onDelete: 'cascade' }),
+
+  updatedAt: integer('updated_at', { mode: 'timestamp_ms' })
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+  // User context for queue messages
+  userId: text('user_id')
+    .notNull()
+    .references(() => user.id, { onDelete: 'cascade' }),
+}, table => [
+  // Unique constraint: one execution per thread + round
+  uniqueIndex('round_execution_thread_round_unique').on(table.threadId, table.roundNumber),
+  // Query optimization indexes
+  index('round_execution_status_idx').on(table.status),
+  index('round_execution_thread_idx').on(table.threadId),
+  index('round_execution_user_idx').on(table.userId),
+  // Recovery cron queries by status + lastAttemptAt
+  index('round_execution_recovery_idx').on(table.status, table.lastAttemptAt),
 ]);
 
 // Relations moved to relations.ts to break circular dependencies

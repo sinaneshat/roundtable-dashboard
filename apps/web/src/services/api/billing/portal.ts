@@ -14,7 +14,7 @@ import { createApiClient, ServiceFetchError } from '@/lib/api/client';
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-type CreatePortalEndpoint = ApiClientType['billing']['portal']['$post'];
+type CreatePortalEndpoint = ApiClientType['billing']['billing']['portal']['$post'];
 export type CreateCustomerPortalSessionRequest = InferRequestType<CreatePortalEndpoint>;
 export type CreateCustomerPortalSessionResponse = InferResponseType<CreatePortalEndpoint, 200>;
 
@@ -31,7 +31,7 @@ export type CreateCustomerPortalSessionResponse = InferResponseType<CreatePortal
  */
 export async function createCustomerPortalSessionService(data: CreateCustomerPortalSessionRequest): Promise<CreateCustomerPortalSessionResponse> {
   const client = createApiClient();
-  const res = await client.billing.portal.$post(data);
+  const res = await client.billing.billing.portal.$post(data);
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to create portal session: ${res.statusText}`, res.status, res.statusText);
   }

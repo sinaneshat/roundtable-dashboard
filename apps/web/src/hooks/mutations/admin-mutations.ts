@@ -4,8 +4,9 @@
  * TanStack Query hooks for admin operations
  */
 
-import { useMutation, useQuery } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 
+import { invalidationPatterns } from '@/lib/data/query-keys';
 import { adminClearUserCacheService, adminSearchUserService } from '@/services/api';
 
 /**
@@ -29,7 +30,16 @@ export function useAdminSearchUsers(query: string, limit = 5) {
  * Used during impersonation to ensure fresh data
  */
 export function useAdminClearUserCacheMutation() {
+  const queryClient = useQueryClient();
+
   return useMutation({
     mutationFn: (userId: string) => adminClearUserCacheService({ json: { userId } }),
+    onSuccess: () => {
+      // Clear client cache to match server cache clear
+      // This ensures UI reflects fresh data after impersonation
+      invalidationPatterns.sessionChange.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
+    },
   });
 }

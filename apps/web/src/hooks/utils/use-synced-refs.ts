@@ -65,6 +65,21 @@ type RefValues = Record<string, NonNullable<object> | string | number | boolean 
  * // Refs are updated synchronously before browser paint
  * ```
  */
+/**
+ * Type-safe initialization helper for refs object
+ * Iterates over keys and creates refs without explicit type casting
+ */
+function initializeRefs<T extends RefValues>(
+  values: T,
+): { [K in keyof T]: React.RefObject<T[K]> } {
+  const keys = Object.keys(values) as Array<keyof T>;
+  const result = {} as { [K in keyof T]: React.RefObject<T[K]> };
+  for (const key of keys) {
+    result[key] = { current: values[key] };
+  }
+  return result;
+}
+
 export function useSyncedRefs<T extends RefValues>(
   values: T,
 ): { [K in keyof T]: React.RefObject<T[K]> } {
@@ -74,23 +89,17 @@ export function useSyncedRefs<T extends RefValues>(
 
   // Initialize refs object lazily on first render
   if (refsRef.current === null) {
-    const result: { [K in keyof T]?: React.RefObject<T[K]> } = {};
-    for (const key in values) {
-      if (Object.prototype.hasOwnProperty.call(values, key)) {
-        const typedKey = key as keyof T;
-        result[typedKey] = { current: values[typedKey] };
-      }
-    }
-    refsRef.current = result as { [K in keyof T]: React.RefObject<T[K]> };
+    refsRef.current = initializeRefs(values);
   }
 
   const refs = refsRef.current;
 
   // Sync all refs with current values using one useLayoutEffect
   useLayoutEffect(() => {
-    for (const key in values) {
-      if (Object.prototype.hasOwnProperty.call(values, key) && Object.prototype.hasOwnProperty.call(refs, key)) {
-        refs[key as keyof T].current = values[key];
+    const keys = Object.keys(values) as Array<keyof T>;
+    for (const key of keys) {
+      if (Object.prototype.hasOwnProperty.call(refs, key)) {
+        refs[key].current = values[key];
       }
     }
   }, [values, refs]);

@@ -29,7 +29,7 @@ import type { UploadItem } from '@/hooks/utils/use-file-upload';
 import type { ExtendedFilePart } from '@/lib/schemas/message-schemas';
 import { extractTextFromMessage } from '@/lib/schemas/message-schemas';
 import type { ParticipantConfig } from '@/lib/schemas/participant-schemas';
-import { getEnabledSortedParticipants, getParticipantIndex, getRoundNumber, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
+import { getEnabledSortedParticipants, getParticipantIndex, getRoundNumber, isModeratorMessage, isObject, shouldPreSearchTimeout, sortByPriority } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ApiChangelog, ChatParticipant, ChatThread, PreSearchQuery, PreSearchResult, StoredPreSearch, WebSearchResultItem } from '@/services/api';
 
@@ -95,6 +95,49 @@ function ensureMapSetEnabled() {
     enableMapSet();
     immerMapSetEnabled = true;
   }
+}
+
+/**
+ * Sort messages within a round: user first, participants by index, moderator LAST
+ *
+ * Sorting order:
+ * 1. Sort by round number (ascending)
+ * 2. Within a round: user messages come first
+ * 3. For assistant messages: moderator messages come LAST (after all participants)
+ * 4. Participant messages sorted by participantIndex
+ */
+function sortMessagesWithinRound(a: UIMessage, b: UIMessage): number {
+  const aRound = getRoundNumber(a.metadata) ?? 0;
+  const bRound = getRoundNumber(b.metadata) ?? 0;
+  if (aRound !== bRound) {
+    return aRound - bRound;
+  }
+
+  // User messages come first within a round
+  if (a.role !== b.role) {
+    return a.role === MessageRoles.USER ? -1 : 1;
+  }
+
+  // For assistant messages, check for moderator
+  if (a.role === MessageRoles.ASSISTANT && b.role === MessageRoles.ASSISTANT) {
+    const aIsModerator = isModeratorMessage(a);
+    const bIsModerator = isModeratorMessage(b);
+
+    // Moderator always comes AFTER participants
+    if (aIsModerator && !bIsModerator) {
+      return 1;
+    }
+    if (!aIsModerator && bIsModerator) {
+      return -1;
+    }
+
+    // Neither is moderator - sort by participantIndex
+    const aPIdx = getParticipantIndex(a.metadata) ?? 999;
+    const bPIdx = getParticipantIndex(b.metadata) ?? 999;
+    return aPIdx - bPIdx;
+  }
+
+  return 0;
 }
 
 /**
@@ -449,9 +492,57 @@ const createThreadSlice: SliceCreator<ThreadSlice> = (set, get) => ({
     const prevMessages = get().messages;
     const newMessages = typeof messages === 'function' ? messages(prevMessages) : messages;
 
+    // ✅ PERF FIX: Early return if message arrays are reference-equal
+    if (prevMessages === newMessages) {
+      return;
+    }
+
     // ✅ PERF FIX: Build Map for O(1) lookup instead of O(n) find per message
     // Previously O(n²) - now O(n) with single Map construction pass
     const prevMessagesById = new Map(prevMessages.map(m => [m.id, m]));
+
+    // ✅ PERF FIX: Check if IDs are identical first (cheap string comparison)
+    // If IDs match, then check if content has actually changed
+    const prevIds = prevMessages.map(m => m.id).join(',');
+    const newIds = newMessages.map(m => m.id).join(',');
+
+    if (prevIds === newIds) {
+      // Same message IDs - check if any content actually changed
+      let contentChanged = false;
+      for (const newMsg of newMessages) {
+        const existingMsg = prevMessagesById.get(newMsg.id);
+        if (!existingMsg) {
+          contentChanged = true;
+          break;
+        }
+        // Compare parts length as a quick proxy for content changes
+        const existingPartsLen = existingMsg.parts?.length ?? 0;
+        const newPartsLen = newMsg.parts?.length ?? 0;
+        if (existingPartsLen !== newPartsLen) {
+          contentChanged = true;
+          break;
+        }
+        // Check if any text part content changed (streaming updates)
+        const existingText = existingMsg.parts?.find(
+          p => p.type === MessagePartTypes.TEXT && 'text' in p,
+        );
+        const newText = newMsg.parts?.find(
+          p => p.type === MessagePartTypes.TEXT && 'text' in p,
+        );
+        const existingTextLen = (existingText && 'text' in existingText) ? existingText.text?.length ?? 0 : 0;
+        const newTextLen = (newText && 'text' in newText) ? newText.text?.length ?? 0 : 0;
+        if (existingTextLen !== newTextLen) {
+          contentChanged = true;
+          break;
+        }
+      }
+
+      if (!contentChanged) {
+        // No actual changes - skip update to prevent re-renders
+        return;
+      }
+    }
+
     const mergedMessages = newMessages.map((newMsg) => {
       const existingMsg = prevMessagesById.get(newMsg.id);
       if (!existingMsg) {
@@ -942,13 +1033,23 @@ const createStreamResumptionSlice: SliceCreator<StreamResumptionSlice> = (set, g
     // This caused the guard `streamResumptionPrefilled && currentResumptionPhase` to be falsy,
     // allowing incomplete-round-resumption to run and re-trigger participants for completed rounds.
     // Now we set the phase to COMPLETE/IDLE so the guard works: `if (phase === COMPLETE) return`.
+    //
+    // ✅ CRITICAL FIX: Also reset isModeratorStreaming when round is complete
+    // Without this, stale isModeratorStreaming=true from previous session causes rendering issues:
+    // - The moderator placeholder IIFE uses isModeratorStreaming to decide visibility
+    // - When true with phase=complete, neither placeholder section nor messageGroups renders moderator properly
     if (serverState.roundComplete || serverState.currentPhase === RoundPhases.COMPLETE || serverState.currentPhase === RoundPhases.IDLE) {
       rlog.phase('prefill-block', 'round complete/idle - blocking resumption');
       set({
         currentResumptionPhase: serverState.currentPhase === RoundPhases.IDLE ? RoundPhases.IDLE : RoundPhases.COMPLETE,
+        // ✅ Reset streaming flags when round is complete to prevent stale state
+        isModeratorStreaming: false,
+        isStreaming: false,
         prefilledForThreadId: threadId,
         resumptionRoundNumber: serverState.roundNumber,
         streamResumptionPrefilled: true,
+        streamingRoundNumber: null,
+        waitingToStartStreaming: false,
       }, false, 'streamResumption/prefillStreamResumptionState_complete');
       return;
     }
@@ -1426,19 +1527,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
         const storeMsgsNotInDb = storeMessages.filter(m => !dbMessageIds.has(m.id));
 
         if (storeMsgsNotInDb.length > 0) {
-          messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort((a, b) => {
-            const aRound = getRoundNumber(a.metadata) ?? 0;
-            const bRound = getRoundNumber(b.metadata) ?? 0;
-            if (aRound !== bRound) {
-              return aRound - bRound;
-            }
-            if (a.role !== b.role) {
-              return a.role === MessageRoles.USER ? -1 : 1;
-            }
-            const aPIdx = getParticipantIndex(a.metadata) ?? 999;
-            const bPIdx = getParticipantIndex(b.metadata) ?? 999;
-            return aPIdx - bPIdx;
-          });
+          messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort(sortMessagesWithinRound);
         } else {
           messagesToSet = newMessages;
         }
@@ -1463,19 +1552,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
           const storeMsgsNotInDb = storeMessages.filter(m => !dbMessageIds.has(m.id));
 
           if (storeMsgsNotInDb.length > 0) {
-            messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort((a, b) => {
-              const aRound = getRoundNumber(a.metadata) ?? 0;
-              const bRound = getRoundNumber(b.metadata) ?? 0;
-              if (aRound !== bRound) {
-                return aRound - bRound;
-              }
-              if (a.role !== b.role) {
-                return a.role === MessageRoles.USER ? -1 : 1;
-              }
-              const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
-              const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
-              return aPIdx - bPIdx;
-            });
+            messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort(sortMessagesWithinRound);
           } else {
             messagesToSet = newMessages;
           }
@@ -1500,19 +1577,7 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
           const storeMsgsNotInDb = storeMessages.filter(m => !dbMessageIds.has(m.id));
 
           if (storeMsgsNotInDb.length > 0) {
-            messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort((a, b) => {
-              const aRound = getRoundNumber(a.metadata) ?? 0;
-              const bRound = getRoundNumber(b.metadata) ?? 0;
-              if (aRound !== bRound) {
-                return aRound - bRound;
-              }
-              if (a.role !== b.role) {
-                return a.role === MessageRoles.USER ? -1 : 1;
-              }
-              const aPIdx = a.metadata && typeof a.metadata === 'object' && 'participantIndex' in a.metadata ? (a.metadata.participantIndex as number) : 999;
-              const bPIdx = b.metadata && typeof b.metadata === 'object' && 'participantIndex' in b.metadata ? (b.metadata.participantIndex as number) : 999;
-              return aPIdx - bPIdx;
-            });
+            messagesToSet = [...newMessages, ...storeMsgsNotInDb].sort(sortMessagesWithinRound);
           } else {
             messagesToSet = newMessages;
           }
@@ -1530,6 +1595,9 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       msg.parts?.some(p => 'state' in p && p.state === TextPartStates.STREAMING),
     );
     rlog.init('initThread', `SET msgs=${messagesToSet.length} parts=${sortedParticipants.length} stale=${hasStaleStreamingParts ? 1 : 0}`);
+
+    // DEBUG: Track thread initialization result
+    rlog.moderator('initThread', `msgs=${messagesToSet.length} parts=${enabledParticipants.length}`);
 
     const formParticipants = enabledParticipants.map((p, index) => ({
       customRoleId: p.customRoleId || undefined,
@@ -1607,7 +1675,40 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
 
     rlog.init('newThreadCheck', `created=${currentState.createdThreadId?.slice(-8) ?? '-'} thread=${thread.id.slice(-8)} pending=${!!currentState.pendingMessage} sent=${currentState.hasSentPendingMessage} waiting=${currentState.waitingToStartStreaming} creating=${currentState.isCreatingThread} isNew=${isNewlyCreatedThread ? 1 : 0}`);
 
-    const preserveStreamingState = isActiveResumption || hasActiveFormSubmission || isNewlyCreatedThread;
+    // ✅ FIX: Detect completed round to prevent stale streaming state after refresh
+    // When user refreshes after round completes, createdThreadId may still match (causing isNewlyCreatedThread=true)
+    // but the round is actually complete. Check if moderator message exists with content.
+    // If round is complete, don't preserve streaming state - there's nothing to stream.
+    const latestRoundNumber = messagesToSet.reduce((max, m) => {
+      const round = getRoundNumber(m.metadata) ?? -1;
+      return Math.max(max, round);
+    }, -1);
+
+    const isRoundActuallyComplete = latestRoundNumber >= 0 && messagesToSet.some((m) => {
+      const meta = m.metadata;
+      if (!meta || typeof meta !== 'object') return false;
+      const isModerator = 'isModerator' in meta && meta.isModerator === true;
+      if (!isModerator) return false;
+      const msgRound = getRoundNumber(meta);
+      if (msgRound !== latestRoundNumber) return false;
+      // Check if moderator message has actual text content (more robust than checking state)
+      // DB messages might not have state field, or it might be in different format
+      const hasContent = m.parts?.some(p =>
+        p.type === 'text' && 'text' in p && typeof p.text === 'string' && p.text.trim().length > 0,
+      );
+      return hasContent;
+    });
+
+    rlog.init('roundCheck', `latestRound=${latestRoundNumber} complete=${isRoundActuallyComplete ? 1 : 0} msgs=${messagesToSet.length} hasMod=${messagesToSet.some(m => m.metadata && typeof m.metadata === 'object' && 'isModerator' in m.metadata) ? 1 : 0}`);
+
+    // Override isNewlyCreatedThread if round is actually complete
+    // This prevents stale streaming state from persisting after refresh
+    const effectiveIsNewlyCreatedThread = isNewlyCreatedThread && !isRoundActuallyComplete;
+    if (isNewlyCreatedThread && isRoundActuallyComplete) {
+      rlog.init('newThreadCheck', `⚠️ OVERRIDE: createdThreadId matches but round r${latestRoundNumber} is complete - clearing stale state`);
+    }
+
+    const preserveStreamingState = isActiveResumption || hasActiveFormSubmission || effectiveIsNewlyCreatedThread;
     const resumptionRoundNumber = validatedResumptionRoundNumber;
 
     // ✅ FIX B2: Validate nextParticipantToTrigger after config change
@@ -1680,14 +1781,15 @@ const createOperationsSlice: SliceCreator<OperationsActions> = (set, get) => ({
       // ✅ CONDITIONAL: Only reset streaming state if NOT resuming or active submission
       // ✅ FIX v4: For newly created threads, FORCE waitingToStartStreaming=true
       // Even if prepareForNewMessage reset it to false, we need it true to trigger streaming
-      waitingToStartStreaming: isNewlyCreatedThread
+      // ✅ FIX v5: Use effectiveIsNewlyCreatedThread which is false when round is actually complete
+      waitingToStartStreaming: effectiveIsNewlyCreatedThread
         ? true
         : (preserveStreamingState ? currentState.waitingToStartStreaming : false),
     }, false, 'operations/initializeThread');
 
     // ✅ DEBUG v7: Log AFTER set() to confirm waitingToStartStreaming value
     const afterState = get();
-    rlog.init('postSet', `wait=${afterState.waitingToStartStreaming ? 1 : 0} isNew=${isNewlyCreatedThread ? 1 : 0} preserve=${preserveStreamingState ? 1 : 0}`);
+    rlog.init('postSet', `wait=${afterState.waitingToStartStreaming ? 1 : 0} isNew=${effectiveIsNewlyCreatedThread ? 1 : 0} preserve=${preserveStreamingState ? 1 : 0} roundComplete=${isRoundActuallyComplete ? 1 : 0}`);
     rlog.flow('init-thread', `DONE t=${thread.id.slice(-8)} wait=${afterState.waitingToStartStreaming ? 1 : 0} pending=${afterState.pendingMessage ? 1 : 0} hasSent=${afterState.hasSentPendingMessage ? 1 : 0} nextP=${afterState.nextParticipantToTrigger !== null ? 1 : 0}`);
   },
 

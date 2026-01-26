@@ -26,14 +26,32 @@ import { getDistinctIdFromCookie, getPostHogClient } from './posthog-server';
 // Log Attributes Schema
 // ============================================================================
 
+// ============================================================================
+// PostHog Log Property Value Types
+// ============================================================================
+
+/**
+ * Allowed value types for PostHog log properties
+ *
+ * PostHog accepts primitive values and arrays of primitives.
+ * Objects are not supported as property values.
+ */
+const PostHogLogPropertyValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.null(),
+  z.array(z.union([z.string(), z.number(), z.boolean()])),
+]);
+
 /**
  * LogAttributesSchema - Typed log attributes for PostHog logging
  *
- * JUSTIFIED .passthrough(): PostHog analytics events accept arbitrary custom
- * properties for extensible logging. This schema validates known fields while
- * allowing additional app-specific properties per PostHog's design.
+ * Defines all known fields explicitly with .catchall() for additional
+ * properties that conform to PostHog's value type constraints.
  *
  * Known fields are typed for IDE autocompletion and validation.
+ * Additional properties must be primitives or arrays of primitives.
  */
 export const LogAttributesSchema = z.object({
   // Common fields across all log types
@@ -59,8 +77,7 @@ export const LogAttributesSchema = z.object({
   tableName: z.string().optional(),
   threadId: z.string().optional(),
   userId: z.string().optional(),
-}).passthrough();
-// JUSTIFIED .passthrough(): PostHog logs accept arbitrary properties for extensible analytics
+}).catchall(PostHogLogPropertyValueSchema);
 
 export type LogAttributes = z.infer<typeof LogAttributesSchema>;
 

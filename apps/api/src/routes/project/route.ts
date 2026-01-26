@@ -76,7 +76,7 @@ export const getProjectLimitsRoute = createRoute({
 export const getProjectRoute = createRoute({
   description: 'Get a single project with attachment and thread counts',
   method: 'get',
-  path: '/projects/:id',
+  path: '/projects/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -126,7 +126,7 @@ export const createProjectRoute = createRoute({
 export const updateProjectRoute = createRoute({
   description: 'Update project name, description, color, or settings',
   method: 'patch',
-  path: '/projects/:id',
+  path: '/projects/{id}',
   request: {
     body: {
       content: {
@@ -156,7 +156,7 @@ export const updateProjectRoute = createRoute({
 export const deleteProjectRoute = createRoute({
   description: 'Delete project and all associated attachments (CASCADE). Also soft-deletes all threads in the project.',
   method: 'delete',
-  path: '/projects/:id',
+  path: '/projects/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -182,7 +182,7 @@ export const deleteProjectRoute = createRoute({
 export const listProjectThreadsRoute = createRoute({
   description: 'Get all threads associated with a project',
   method: 'get',
-  path: '/projects/:id/threads',
+  path: '/projects/{id}/threads',
   request: {
     params: IdParamSchema,
     query: ListProjectThreadsQuerySchema,
@@ -209,7 +209,7 @@ export const listProjectThreadsRoute = createRoute({
 export const listProjectAttachmentsRoute = createRoute({
   description: 'Get all attachments for a project with pagination and filtering',
   method: 'get',
-  path: '/projects/:id/attachments',
+  path: '/projects/{id}/attachments',
   request: {
     params: IdParamSchema,
     query: ListProjectAttachmentsQuerySchema,
@@ -232,7 +232,7 @@ export const listProjectAttachmentsRoute = createRoute({
 export const addAttachmentToProjectRoute = createRoute({
   description: 'Add an existing attachment (from POST /uploads) to a project for RAG indexing. S3/R2 Best Practice: Reference existing uploads instead of direct file upload.',
   method: 'post',
-  path: '/projects/:id/attachments',
+  path: '/projects/{id}/attachments',
   request: {
     body: {
       content: {
@@ -263,7 +263,7 @@ export const addAttachmentToProjectRoute = createRoute({
 export const getProjectAttachmentRoute = createRoute({
   description: 'Get a single attachment from a project with details',
   method: 'get',
-  path: '/projects/:id/attachments/:attachmentId',
+  path: '/projects/{id}/attachments/{attachmentId}',
   request: {
     params: ProjectAttachmentParamSchema,
   },
@@ -285,7 +285,7 @@ export const getProjectAttachmentRoute = createRoute({
 export const updateProjectAttachmentRoute = createRoute({
   description: 'Update project-specific metadata (context, description, tags) for an attachment',
   method: 'patch',
-  path: '/projects/:id/attachments/:attachmentId',
+  path: '/projects/{id}/attachments/{attachmentId}',
   request: {
     body: {
       content: {
@@ -315,7 +315,7 @@ export const updateProjectAttachmentRoute = createRoute({
 export const removeAttachmentFromProjectRoute = createRoute({
   description: 'Remove an attachment reference from a project. The underlying file remains in the uploads system.',
   method: 'delete',
-  path: '/projects/:id/attachments/:attachmentId',
+  path: '/projects/{id}/attachments/{attachmentId}',
   request: {
     params: ProjectAttachmentParamSchema,
   },
@@ -341,7 +341,7 @@ export const removeAttachmentFromProjectRoute = createRoute({
 export const listProjectMemoriesRoute = createRoute({
   description: 'Get all memories for a project with pagination and filtering',
   method: 'get',
-  path: '/projects/:id/memories',
+  path: '/projects/{id}/memories',
   request: {
     params: IdParamSchema,
     query: ListProjectMemoriesQuerySchema,
@@ -364,7 +364,7 @@ export const listProjectMemoriesRoute = createRoute({
 export const createProjectMemoryRoute = createRoute({
   description: 'Create a new memory entry for a project',
   method: 'post',
-  path: '/projects/:id/memories',
+  path: '/projects/{id}/memories',
   request: {
     body: {
       content: {
@@ -394,7 +394,7 @@ export const createProjectMemoryRoute = createRoute({
 export const getProjectMemoryRoute = createRoute({
   description: 'Get a single memory entry from a project',
   method: 'get',
-  path: '/projects/:id/memories/:memoryId',
+  path: '/projects/{id}/memories/{memoryId}',
   request: {
     params: ProjectMemoryParamSchema,
   },
@@ -416,7 +416,7 @@ export const getProjectMemoryRoute = createRoute({
 export const updateProjectMemoryRoute = createRoute({
   description: 'Update a memory entry (content, importance, active status)',
   method: 'patch',
-  path: '/projects/:id/memories/:memoryId',
+  path: '/projects/{id}/memories/{memoryId}',
   request: {
     body: {
       content: {
@@ -446,7 +446,7 @@ export const updateProjectMemoryRoute = createRoute({
 export const deleteProjectMemoryRoute = createRoute({
   description: 'Delete a memory entry from a project',
   method: 'delete',
-  path: '/projects/:id/memories/:memoryId',
+  path: '/projects/{id}/memories/{memoryId}',
   request: {
     params: ProjectMemoryParamSchema,
   },
@@ -472,7 +472,7 @@ export const deleteProjectMemoryRoute = createRoute({
 export const getProjectContextRoute = createRoute({
   description: 'Get aggregated context from memories, cross-chat history, searches, and analyses for RAG',
   method: 'get',
-  path: '/projects/:id/context',
+  path: '/projects/{id}/context',
   request: {
     params: IdParamSchema,
   },

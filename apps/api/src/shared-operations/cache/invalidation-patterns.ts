@@ -3,9 +3,12 @@
  *
  * Consolidated patterns for common mutation cache invalidations.
  * Wraps lower-level cache-utils for common handler patterns.
+ *
+ * Frontend equivalent: apps/web/src/lib/data/query-keys.ts (invalidationPatterns)
  */
 
 import {
+  invalidateAllUserCaches,
   invalidateCreditBalanceCache,
   invalidateMessagesCache,
   invalidatePublicThreadCache,
@@ -20,6 +23,26 @@ type DbInstance = Awaited<ReturnType<typeof getDbAsync>>;
  * Cache invalidation patterns for common mutations
  */
 export const CachePatterns = {
+  // ============================================================================
+  // Billing Operations
+  // ============================================================================
+
+  /**
+   * Invalidate caches after billing/subscription change
+   * Use for checkout, subscription switch, cancellation
+   *
+   * @example
+   * ```ts
+   * await CachePatterns.billingMutation(db, userId);
+   * ```
+   */
+  async billingMutation(db: DbInstance, userId: string): Promise<void> {
+    // Credit balance and subscription status are tied to billing
+    await invalidateCreditBalanceCache(db, userId);
+    // User tier/usage changes with subscription
+    await invalidateAllUserCaches(db, userId);
+  },
+
   /**
    * Invalidate caches after credit balance change (purchase/usage)
    *
@@ -76,6 +99,25 @@ export const CachePatterns = {
       tasks.push(invalidatePublicThreadCache(db, previousSlug, threadId, r2Bucket));
     }
     await Promise.all(tasks);
+  },
+
+  // ============================================================================
+  // Session Operations
+  // ============================================================================
+
+  /**
+   * Invalidate ALL user caches after session change
+   * Use for logout, impersonation start/stop
+   *
+   * Frontend equivalent: invalidationPatterns.sessionChange
+   *
+   * @example
+   * ```ts
+   * await CachePatterns.sessionChange(db, userId);
+   * ```
+   */
+  async sessionChange(db: DbInstance, userId: string): Promise<void> {
+    await invalidateAllUserCaches(db, userId);
   },
 
   /**

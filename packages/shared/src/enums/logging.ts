@@ -326,7 +326,7 @@ export const POSTHOG_LOG_LEVEL_VALUES: Record<PosthogLogLevel, number> = {
 // ============================================================================
 
 // 1. ARRAY CONSTANT
-export const REQUEST_LOG_LEVELS = ['minimal', 'standard', 'verbose'] as const;
+export const REQUEST_LOG_LEVELS = ['none', 'minimal', 'standard', 'verbose'] as const;
 
 // 2. DEFAULT VALUE
 export const DEFAULT_REQUEST_LOG_LEVEL: RequestLogLevel = 'standard';
@@ -343,6 +343,7 @@ export type RequestLogLevel = z.infer<typeof RequestLogLevelSchema>;
 // 5. CONSTANT OBJECT
 export const RequestLogLevels = {
   MINIMAL: 'minimal' as const,
+  NONE: 'none' as const,
   STANDARD: 'standard' as const,
   VERBOSE: 'verbose' as const,
 } as const;
@@ -354,8 +355,8 @@ export function isValidRequestLogLevel(value: unknown): value is RequestLogLevel
 
 // 7. ENVIRONMENT MAPPING
 export const REQUEST_LOG_LEVEL_BY_ENV: Record<string, RequestLogLevel> = {
-  development: RequestLogLevels.VERBOSE,
-  local: RequestLogLevels.VERBOSE,
+  development: RequestLogLevels.NONE,
+  local: RequestLogLevels.NONE,
   preview: RequestLogLevels.STANDARD,
   prod: RequestLogLevels.MINIMAL,
   production: RequestLogLevels.MINIMAL,

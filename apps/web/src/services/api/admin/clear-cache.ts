@@ -14,7 +14,7 @@ import { createApiClient, ServiceFetchError } from '@/lib/api/client';
 // Type Inference - Endpoint definitions
 // ============================================================================
 
-type AdminClearUserCacheEndpoint = ApiClientType['admin']['users']['clear-cache']['$post'];
+type AdminClearUserCacheEndpoint = ApiClientType['admin']['admin']['users']['clear-cache']['$post'];
 
 // ============================================================================
 // Type Exports - Request/Response types inferred from backend
@@ -33,7 +33,7 @@ export type AdminClearUserCacheResponse = InferResponseType<AdminClearUserCacheE
  */
 export async function adminClearUserCacheService(data: AdminClearUserCacheParams) {
   const client = createApiClient();
-  const res = await client.admin.users['clear-cache'].$post(data);
+  const res = await client.admin.admin.users['clear-cache'].$post(data);
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to clear user cache: ${res.statusText}`, res.status, res.statusText);
   }

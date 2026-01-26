@@ -15,7 +15,7 @@ import { createApiClient } from '@/lib/api/client';
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-type GetUsageStatsEndpoint = ApiClientType['usage']['stats']['$get'];
+type GetUsageStatsEndpoint = ApiClientType['utility']['usage']['stats']['$get'];
 export type GetUsageStatsResponse = InferResponseType<GetUsageStatsEndpoint, 200>;
 
 // ============================================================================
@@ -42,7 +42,7 @@ export async function getUserUsageStatsService(options?: {
     bypassCache: options?.bypassCache,
     cookieHeader: options?.cookieHeader,
   });
-  return parseResponse(client.usage.stats.$get());
+  return parseResponse(client.utility.usage.stats.$get());
 }
 
 // ============================================================================

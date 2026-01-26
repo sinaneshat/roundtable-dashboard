@@ -15,15 +15,15 @@ import { createApiClient } from '@/lib/api/client';
 // Type Inference
 // ============================================================================
 
-type AddParticipantEndpoint = ApiClientType['chat']['threads'][':id']['participants']['$post'];
+type AddParticipantEndpoint = ApiClientType['chatMessage']['chat']['threads'][':id']['participants']['$post'];
 export type AddParticipantRequest = InferRequestType<AddParticipantEndpoint>;
 export type AddParticipantResponse = InferResponseType<AddParticipantEndpoint, 200>;
 
-type UpdateParticipantEndpoint = ApiClientType['chat']['participants'][':id']['$patch'];
+type UpdateParticipantEndpoint = ApiClientType['chatMessage']['chat']['participants'][':id']['$patch'];
 export type UpdateParticipantRequest = InferRequestType<UpdateParticipantEndpoint>;
 export type UpdateParticipantResponse = InferResponseType<UpdateParticipantEndpoint, 200>;
 
-type DeleteParticipantEndpoint = ApiClientType['chat']['participants'][':id']['$delete'];
+type DeleteParticipantEndpoint = ApiClientType['chatMessage']['chat']['participants'][':id']['$delete'];
 export type DeleteParticipantRequest = InferRequestType<DeleteParticipantEndpoint>;
 export type DeleteParticipantResponse = InferResponseType<DeleteParticipantEndpoint, 200>;
 
@@ -37,7 +37,7 @@ export type DeleteParticipantResponse = InferResponseType<DeleteParticipantEndpo
  */
 export async function addParticipantService(data: AddParticipantRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat.threads[':id'].participants.$post(data));
+  return parseResponse(client.chatMessage.chat.threads[':id'].participants.$post(data));
 }
 
 /**
@@ -46,7 +46,7 @@ export async function addParticipantService(data: AddParticipantRequest) {
  */
 export async function updateParticipantService(data: UpdateParticipantRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat.participants[':id'].$patch(data));
+  return parseResponse(client.chatMessage.chat.participants[':id'].$patch(data));
 }
 
 /**
@@ -55,5 +55,5 @@ export async function updateParticipantService(data: UpdateParticipantRequest) {
  */
 export async function deleteParticipantService(data: DeleteParticipantRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat.participants[':id'].$delete(data));
+  return parseResponse(client.chatMessage.chat.participants[':id'].$delete(data));
 }

@@ -16,12 +16,12 @@ import type { ServiceOptions } from '@/services/api/types';
 // Type Inference - Endpoint definitions
 // ============================================================================
 
-type ListJobsEndpoint = ApiClientType['admin']['jobs']['$get'];
-type CreateJobEndpoint = ApiClientType['admin']['jobs']['$post'];
-type GetJobEndpoint = ApiClientType['admin']['jobs'][':id']['$get'];
-type UpdateJobEndpoint = ApiClientType['admin']['jobs'][':id']['$patch'];
-type DeleteJobEndpoint = ApiClientType['admin']['jobs'][':id']['$delete'];
-type DiscoverTrendsEndpoint = ApiClientType['admin']['jobs']['trends']['discover']['$post'];
+type ListJobsEndpoint = ApiClientType['admin']['admin']['jobs']['$get'];
+type CreateJobEndpoint = ApiClientType['admin']['admin']['jobs']['$post'];
+type GetJobEndpoint = ApiClientType['admin']['admin']['jobs'][':id']['$get'];
+type UpdateJobEndpoint = ApiClientType['admin']['admin']['jobs'][':id']['$patch'];
+type DeleteJobEndpoint = ApiClientType['admin']['admin']['jobs'][':id']['$delete'];
+type DiscoverTrendsEndpoint = ApiClientType['admin']['admin']['jobs']['trends']['discover']['$post'];
 
 // ============================================================================
 // Type Exports - Request/Response types inferred from backend
@@ -70,7 +70,7 @@ export async function listJobsService(
 ) {
   const client = createApiClient({ cookieHeader: options?.cookieHeader });
   const requestParams = { query: params?.query ?? {} };
-  return parseResponse(client.admin.jobs.$get(requestParams));
+  return parseResponse(client.admin.admin.jobs.$get(requestParams));
 }
 
 /**
@@ -78,7 +78,7 @@ export async function listJobsService(
  */
 export async function createJobService(data: CreateJobParams) {
   const client = createApiClient();
-  return parseResponse(client.admin.jobs.$post(data));
+  return parseResponse(client.admin.admin.jobs.$post(data));
 }
 
 /**
@@ -86,7 +86,7 @@ export async function createJobService(data: CreateJobParams) {
  */
 export async function getJobService(params: GetJobParams, options?: ServiceOptions) {
   const client = createApiClient({ cookieHeader: options?.cookieHeader });
-  return parseResponse(client.admin.jobs[':id'].$get(params));
+  return parseResponse(client.admin.admin.jobs[':id'].$get(params));
 }
 
 /**
@@ -94,7 +94,7 @@ export async function getJobService(params: GetJobParams, options?: ServiceOptio
  */
 export async function updateJobService(params: UpdateJobParams) {
   const client = createApiClient();
-  return parseResponse(client.admin.jobs[':id'].$patch(params));
+  return parseResponse(client.admin.admin.jobs[':id'].$patch(params));
 }
 
 /**
@@ -102,7 +102,7 @@ export async function updateJobService(params: UpdateJobParams) {
  */
 export async function deleteJobService(params: DeleteJobParams) {
   const client = createApiClient();
-  return parseResponse(client.admin.jobs[':id'].$delete(params));
+  return parseResponse(client.admin.admin.jobs[':id'].$delete(params));
 }
 
 /**
@@ -110,5 +110,5 @@ export async function deleteJobService(params: DeleteJobParams) {
  */
 export async function discoverTrendsService(params: DiscoverTrendsParams) {
   const client = createApiClient();
-  return parseResponse(client.admin.jobs.trends.discover.$post(params));
+  return parseResponse(client.admin.admin.jobs.trends.discover.$post(params));
 }

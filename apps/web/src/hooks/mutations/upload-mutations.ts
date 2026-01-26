@@ -153,9 +153,9 @@ export function useDeleteAttachmentMutation() {
       }
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.uploads.all,
-        refetchType: 'active',
+      // Use centralized pattern for upload invalidation
+      invalidationPatterns.uploads.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key, refetchType: 'active' });
       });
     },
     retry: shouldRetryMutation,
@@ -192,8 +192,9 @@ export function useCompleteMultipartUploadMutation() {
   return useMutation<CompleteMultipartUploadResult, Error, Parameters<typeof completeMultipartUploadService>[0]>({
     mutationFn: completeMultipartUploadService,
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.uploads.all,
+      // Use centralized pattern for upload invalidation
+      invalidationPatterns.uploads.forEach((key) => {
+        void queryClient.invalidateQueries({ queryKey: key });
       });
     },
     retry: false,
@@ -207,8 +208,9 @@ export function useAbortMultipartUploadMutation() {
   return useMutation<AbortMultipartUploadResult, Error, Parameters<typeof abortMultipartUploadService>[0]>({
     mutationFn: abortMultipartUploadService,
     onSuccess: () => {
-      void queryClient.invalidateQueries({
-        queryKey: queryKeys.uploads.all,
+      // Use centralized pattern for upload invalidation
+      invalidationPatterns.uploads.forEach((key) => {
+        void queryClient.invalidateQueries({ queryKey: key });
       });
     },
     retry: false,

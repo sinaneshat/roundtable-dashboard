@@ -253,6 +253,96 @@ export const CompleteAutomatedJobQueueMessageSchema = z.object({
 
 export type CompleteAutomatedJobQueueMessage = z.infer<typeof CompleteAutomatedJobQueueMessageSchema>;
 
+// ============================================================================
+// ROBUST STREAMING RESUMPTION QUEUE MESSAGES
+// ============================================================================
+
+/**
+ * Start round queue message schema
+ * Replaces direct streaming trigger - all AI streaming runs via queue.
+ *
+ * Flow:
+ * 1. Client request creates user message and queues START_ROUND
+ * 2. Background worker processes round (pre-search → participants → moderator)
+ * 3. Client subscribes to chunk buffer via SSE
+ *
+ * @see src/workers/round-orchestration-queue.ts - Consumer
+ * @see src/services/streaming/background-stream-execution.service.ts - Executor
+ */
+export const StartRoundQueueMessageSchema = z.object({
+  /** Optional attachment IDs */
+  attachmentIds: z.array(z.string()).optional(),
+  /** Unique message ID for idempotency */
+  messageId: z.string(),
+  /** ISO timestamp when message was queued */
+  queuedAt: z.string(),
+  /** Round number to execute (0-based) */
+  roundNumber: z.number(),
+  /** User's session token for auth - queue consumer uses this as Cookie header */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
+  /** Thread ID */
+  threadId: z.string(),
+  /** Message type discriminator */
+  type: z.literal(RoundOrchestrationMessageTypes.START_ROUND),
+  /** User ID who owns the thread */
+  userId: z.string(),
+  /** User query for this round (if starting with user message) */
+  userQuery: z.string().optional(),
+});
+
+export type StartRoundQueueMessage = z.infer<typeof StartRoundQueueMessageSchema>;
+
+/**
+ * Recover round queue message schema
+ * Sent by scheduled recovery cron or stale stream detection.
+ *
+ * @see src/workers/round-orchestration-queue.ts - Consumer
+ * @see src/workers/round-recovery-cron.ts - Producer (scheduled)
+ */
+export const RecoverRoundQueueMessageSchema = z.object({
+  /** round_execution.id from database */
+  executionId: z.string(),
+  /** Unique message ID for idempotency */
+  messageId: z.string(),
+  /** ISO timestamp when message was queued */
+  queuedAt: z.string(),
+  /** Round number to recover (0-based) */
+  roundNumber: z.number(),
+  /** User's session token for auth - queue consumer uses this as Cookie header */
+  sessionToken: z.string().min(32, 'Session token must be at least 32 characters'),
+  /** Thread ID */
+  threadId: z.string(),
+  /** Message type discriminator */
+  type: z.literal(RoundOrchestrationMessageTypes.RECOVER_ROUND),
+  /** User ID who owns the thread */
+  userId: z.string(),
+});
+
+export type RecoverRoundQueueMessage = z.infer<typeof RecoverRoundQueueMessageSchema>;
+
+/**
+ * Finalize round queue message schema
+ * Sent when round execution completes to perform cleanup.
+ *
+ * @see src/workers/round-orchestration-queue.ts - Consumer
+ */
+export const FinalizeRoundQueueMessageSchema = z.object({
+  /** round_execution.id from database */
+  executionId: z.string(),
+  /** Unique message ID for idempotency */
+  messageId: z.string(),
+  /** ISO timestamp when message was queued */
+  queuedAt: z.string(),
+  /** Round number that completed (0-based) */
+  roundNumber: z.number(),
+  /** Thread ID */
+  threadId: z.string(),
+  /** Message type discriminator */
+  type: z.literal(RoundOrchestrationMessageTypes.FINALIZE_ROUND),
+});
+
+export type FinalizeRoundQueueMessage = z.infer<typeof FinalizeRoundQueueMessageSchema>;
+
 /**
  * Round orchestration queue message union schema
  * Used by queue consumer to route messages to appropriate handlers.
@@ -265,6 +355,9 @@ export const RoundOrchestrationQueueMessageSchema = z.discriminatedUnion('type',
   StartAutomatedJobQueueMessageSchema,
   ContinueAutomatedJobQueueMessageSchema,
   CompleteAutomatedJobQueueMessageSchema,
+  StartRoundQueueMessageSchema,
+  RecoverRoundQueueMessageSchema,
+  FinalizeRoundQueueMessageSchema,
 ]);
 
 export type RoundOrchestrationQueueMessage = z.infer<typeof RoundOrchestrationQueueMessageSchema>;

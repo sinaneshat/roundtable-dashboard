@@ -16,11 +16,11 @@ import { createApiClient } from '@/lib/api/client';
 // Type Inference
 // ============================================================================
 
-type PreSearchEndpoint = ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['pre-search']['$post'];
+type PreSearchEndpoint = ApiClientType['chatFeature']['chat']['threads'][':threadId']['rounds'][':roundNumber']['pre-search']['$post'];
 export type PreSearchRequest = InferRequestType<PreSearchEndpoint>;
 export type PreSearchResponse = InferResponseType<PreSearchEndpoint, 200>;
 
-type GetThreadPreSearchesEndpoint = ApiClientType['chat']['threads'][':id']['pre-searches']['$get'];
+type GetThreadPreSearchesEndpoint = ApiClientType['chatFeature']['chat']['threads'][':id']['pre-searches']['$get'];
 export type GetThreadPreSearchesRequest = InferRequestType<GetThreadPreSearchesEndpoint>;
 export type GetThreadPreSearchesResponse = InferResponseType<GetThreadPreSearchesEndpoint, 200>;
 
@@ -37,7 +37,7 @@ export async function getThreadPreSearchesService(
   options?: { cookieHeader?: string },
 ) {
   const client = createApiClient({ cookieHeader: options?.cookieHeader });
-  return parseResponse(client.chat.threads[':id']['pre-searches'].$get(data));
+  return parseResponse(client.chatFeature.chat.threads[':id']['pre-searches'].$get(data));
 }
 
 /**
@@ -49,7 +49,7 @@ export async function getThreadPreSearchesService(
  */
 export async function executePreSearchStreamService(data: PreSearchRequest) {
   const client = createApiClient();
-  return client.chat.threads[':threadId'].rounds[':roundNumber']['pre-search'].$post(data);
+  return client.chatFeature.chat.threads[':threadId'].rounds[':roundNumber']['pre-search'].$post(data);
 }
 
 // ============================================================================

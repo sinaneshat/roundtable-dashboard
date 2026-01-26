@@ -137,44 +137,64 @@ export async function appendParticipantStreamChunk(
     return;
   }
 
-  try {
-    const chunk: StreamChunk = {
-      data,
-      event: parseSSEEventType(data),
-      timestamp: Date.now(),
-    };
+  // Retry configuration for handling race condition where chunks arrive
+  // before metadata initialization completes in KV
+  const MAX_RETRIES = 3;
+  const RETRY_DELAY_MS = 50;
 
-    const metadataKey = getMetadataKey(streamId);
-    const metadata = parseStreamBufferMetadata(await env.KV.get(metadataKey, 'json'));
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      const chunk: StreamChunk = {
+        data,
+        event: parseSSEEventType(data),
+        timestamp: Date.now(),
+      };
 
-    if (!metadata) {
-      logger?.warn('Stream metadata not found during chunk append', LogHelpers.operation({
-        edgeCase: 'metadata_not_found',
+      const metadataKey = getMetadataKey(streamId);
+      const metadata = parseStreamBufferMetadata(await env.KV.get(metadataKey, 'json'));
+
+      if (!metadata) {
+        if (attempt < MAX_RETRIES - 1) {
+          // Wait and retry - metadata might still be initializing
+          await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+          continue;
+        }
+        logger?.warn('Stream metadata not found after retries', LogHelpers.operation({
+          edgeCase: 'metadata_not_found_after_retries',
+          operationName: 'appendParticipantStreamChunk',
+          retryCount: MAX_RETRIES,
+          streamId,
+        }));
+        return;
+      }
+
+      const chunkIndex = metadata.chunkCount;
+
+      await env.KV.put(
+        getChunkKey(streamId, chunkIndex),
+        JSON.stringify(chunk),
+        { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
+      );
+
+      metadata.chunkCount = chunkIndex + 1;
+      await env.KV.put(metadataKey, JSON.stringify(metadata), {
+        expirationTtl: STREAM_BUFFER_TTL_SECONDS,
+      });
+
+      return; // Success - exit retry loop
+    } catch (error) {
+      if (attempt < MAX_RETRIES - 1) {
+        await new Promise(resolve => setTimeout(resolve, RETRY_DELAY_MS));
+        continue;
+      }
+      logger?.error('Failed to append participant stream chunk', LogHelpers.operation({
+        chunkDataLength: data.length,
+        error: error instanceof Error ? error.message : 'Unknown error',
         operationName: 'appendParticipantStreamChunk',
+        retryCount: MAX_RETRIES,
         streamId,
       }));
-      return;
     }
-
-    const chunkIndex = metadata.chunkCount;
-
-    await env.KV.put(
-      getChunkKey(streamId, chunkIndex),
-      JSON.stringify(chunk),
-      { expirationTtl: STREAM_BUFFER_TTL_SECONDS },
-    );
-
-    metadata.chunkCount = chunkIndex + 1;
-    await env.KV.put(metadataKey, JSON.stringify(metadata), {
-      expirationTtl: STREAM_BUFFER_TTL_SECONDS,
-    });
-  } catch (error) {
-    logger?.error('Failed to append participant stream chunk', LogHelpers.operation({
-      chunkDataLength: data.length,
-      error: error instanceof Error ? error.message : 'Unknown error',
-      operationName: 'appendParticipantStreamChunk',
-      streamId,
-    }));
   }
 }
 

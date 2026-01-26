@@ -192,23 +192,48 @@ export const queryKeys = {
 /**
  * Invalidation patterns for common operations
  * Use these to invalidate related queries after mutations
+ *
+ * IMPORTANT: Always use these patterns instead of direct invalidateQueries calls
+ * This ensures consistent cache behavior across the app
  */
 export const invalidationPatterns = {
+  // ============================================================================
+  // Admin Operations
+  // ============================================================================
+
   adminJobDetail: (jobId: string) => [
     queryKeys.adminJobs.detail(jobId),
     queryKeys.adminJobs.lists(),
   ],
 
-  // Admin jobs operations
   adminJobs: [
     queryKeys.adminJobs.lists(),
   ],
 
-  // After chat operations - invalidate usage stats
-  afterChatOperation: [
-    queryKeys.usage.stats(),
+  // ============================================================================
+  // API Key Operations
+  // ============================================================================
+
+  apiKeyDetail: (keyId: string) => [
+    queryKeys.apiKeys.detail(keyId),
+    queryKeys.apiKeys.lists(),
   ],
 
+  apiKeys: [
+    queryKeys.apiKeys.all,
+  ],
+
+  // ============================================================================
+  // Billing & Subscription Operations
+  // ============================================================================
+
+  /** After checkout session creation - prepare for post-checkout data */
+  checkoutSession: [
+    queryKeys.subscriptions.all,
+    queryKeys.usage.all,
+  ],
+
+  /** After successful checkout sync - full billing state refresh */
   afterCheckout: [
     queryKeys.subscriptions.all,
     queryKeys.products.all,
@@ -216,7 +241,40 @@ export const invalidationPatterns = {
     queryKeys.models.all,
   ],
 
-  // After thread message - invalidate thread detail and usage stats
+  /** After subscription change (switch/cancel) - same as afterCheckout */
+  subscriptionChange: [
+    queryKeys.subscriptions.all,
+    queryKeys.products.all,
+    queryKeys.usage.all,
+    queryKeys.models.all,
+  ],
+
+  // ============================================================================
+  // Custom Role Operations
+  // ============================================================================
+
+  customRoleDetail: (roleId: string) => [
+    queryKeys.customRoles.detail(roleId),
+    queryKeys.customRoles.lists(),
+    queryKeys.userPresets.all, // Presets reference roles
+  ],
+
+  customRoles: [
+    queryKeys.customRoles.lists(),
+    queryKeys.usage.stats(),
+    queryKeys.userPresets.all, // Presets reference roles and become stale when roles change
+  ],
+
+  // ============================================================================
+  // Thread & Chat Operations
+  // ============================================================================
+
+  /** After chat operations - invalidate usage stats */
+  afterChatOperation: [
+    queryKeys.usage.stats(),
+  ],
+
+  /** After thread message - invalidate thread detail and usage stats */
   afterThreadMessage: (threadId: string) => [
     queryKeys.threads.detail(threadId),
     queryKeys.threads.lists(),
@@ -224,30 +282,18 @@ export const invalidationPatterns = {
     queryKeys.usage.stats(),
   ],
 
-  // After upload - invalidate upload list
+  // ============================================================================
+  // Upload Operations
+  // ============================================================================
+
+  /** After upload completion - invalidate upload list */
   afterUpload: () => [
     queryKeys.uploads.lists(),
   ],
 
-  apiKeyDetail: (keyId: string) => [
-    queryKeys.apiKeys.detail(keyId),
-    queryKeys.apiKeys.lists(),
-  ],
-
-  // API Key operations
-  apiKeys: [
-    queryKeys.apiKeys.lists(),
-  ],
-
-  customRoleDetail: (roleId: string) => [
-    queryKeys.customRoles.detail(roleId),
-    queryKeys.customRoles.lists(),
-  ],
-
-  // Custom role operations
-  customRoles: [
-    queryKeys.customRoles.lists(),
-    queryKeys.usage.stats(),
+  /** After any upload mutation (complete, abort, delete) */
+  uploads: [
+    queryKeys.uploads.all,
   ],
 
   // Leave thread - invalidate auxiliary thread-specific caches when navigating away
@@ -348,11 +394,6 @@ export const invalidationPatterns = {
 
   uploadDetail: (uploadId: string) => [
     queryKeys.uploads.detail(uploadId),
-    queryKeys.uploads.lists(),
-  ],
-
-  // Upload (attachment) operations
-  uploads: [
     queryKeys.uploads.lists(),
   ],
 

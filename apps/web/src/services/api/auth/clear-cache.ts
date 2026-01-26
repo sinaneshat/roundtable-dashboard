@@ -14,7 +14,7 @@ import { createApiClient, ServiceFetchError } from '@/lib/api/client';
 // Type Inference - Endpoint definitions
 // ============================================================================
 
-type ClearOwnCacheEndpoint = ApiClientType['auth']['clear-cache']['$post'];
+type ClearOwnCacheEndpoint = ApiClientType['healthAuth']['auth']['clear-cache']['$post'];
 
 // ============================================================================
 // Type Exports - Request/Response types inferred from backend
@@ -32,7 +32,7 @@ export type ClearOwnCacheResponse = InferResponseType<ClearOwnCacheEndpoint, 200
  */
 export async function clearOwnCacheService() {
   const client = createApiClient();
-  const res = await client.auth['clear-cache'].$post({});
+  const res = await client.healthAuth.auth['clear-cache'].$post({});
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to clear own cache: ${res.statusText}`, res.status, res.statusText);
   }

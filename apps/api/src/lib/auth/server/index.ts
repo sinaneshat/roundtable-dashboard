@@ -417,8 +417,8 @@ function getAuth() {
  * This ensures Cloudflare context is available when reading secrets.
  */
 export const auth = new Proxy({} as ReturnType<typeof createAuth>, {
-  async get(_target, prop) {
-    return await getAuth()[prop as keyof ReturnType<typeof createAuth>];
+  get(_target, prop) {
+    return getAuth()[prop as keyof ReturnType<typeof createAuth>];
   },
 });
 

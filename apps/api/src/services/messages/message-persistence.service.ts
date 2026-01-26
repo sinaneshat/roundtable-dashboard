@@ -442,7 +442,17 @@ export async function saveStreamedMessage(params: SaveMessageParams): Promise<vo
     await invalidateMessagesCache(db, threadId);
   } catch (error) {
     // ✅ DEBUG: Log the error instead of silently swallowing
-    console.error(`[PERSIST] FAILED to save message id=${messageId}:`, error);
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    const errorStack = error instanceof Error ? error.stack : undefined;
+    console.error('[PERSIST] FAILED to save message:', {
+      error: errorMsg,
+      messageId,
+      participantId,
+      participantIndex,
+      roundNumber,
+      stack: errorStack,
+      threadId,
+    });
     // Non-blocking - allow round to continue
   }
 }

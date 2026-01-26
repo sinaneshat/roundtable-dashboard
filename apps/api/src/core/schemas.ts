@@ -446,10 +446,14 @@ export const ErrorContextSchema = z.discriminatedUnion('errorType', [
     resourceId: z.string().optional(),
   }),
   z.object({
+    errorMessage: z.string().optional(),
     errorType: z.literal(ErrorContextTypes.QUEUE),
+    executionId: z.string().optional(),
     messageId: z.string().optional(),
     operation: z.string().optional(),
     queueName: z.string().optional(),
+    roundNumber: z.number().optional(),
+    threadId: z.string().optional(),
   }),
 ]).optional().openapi({
   description: 'Type-safe error context information',

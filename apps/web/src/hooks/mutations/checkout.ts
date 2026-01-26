@@ -6,7 +6,7 @@
 
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 
-import { billingInvalidationHelpers, queryKeys } from '@/lib/data/query-keys';
+import { billingInvalidationHelpers, invalidationPatterns, queryKeys } from '@/lib/data/query-keys';
 import { createCheckoutSessionService, getSubscriptionsService, syncAfterCheckoutService } from '@/services/api';
 
 /**
@@ -21,11 +21,10 @@ export function useCreateCheckoutSessionMutation() {
   return useMutation({
     mutationFn: createCheckoutSessionService,
     onSuccess: () => {
-      // Invalidate subscriptions to prepare for post-checkout data
-      queryClient.invalidateQueries({ queryKey: queryKeys.subscriptions.all });
-
-      // Invalidate usage queries since new subscription will have different quota limits
-      queryClient.invalidateQueries({ queryKey: queryKeys.usage.all });
+      // Use centralized pattern: subscriptions + usage
+      invalidationPatterns.checkoutSession.forEach((key) => {
+        queryClient.invalidateQueries({ queryKey: key });
+      });
     },
     retry: false,
     throwOnError: false,
@@ -51,11 +50,13 @@ export function useSyncAfterCheckoutMutation() {
       // Wrap ALL cache operations - failures should NOT prevent success page from showing
       // The sync API succeeded; cache invalidation issues are non-critical
       try {
+        // Step 1: Invalidate products with refetchType: 'all'
         queryClient.invalidateQueries({
           queryKey: queryKeys.products.all,
           refetchType: 'all',
         });
 
+        // Step 2: Fetch fresh subscription data (bypass HTTP cache)
         try {
           const freshSubscriptionsData = await getSubscriptionsService({ bypassCache: true });
           queryClient.setQueryData(queryKeys.subscriptions.current(), freshSubscriptionsData);
@@ -64,6 +65,7 @@ export function useSyncAfterCheckoutMutation() {
           billingInvalidationHelpers.invalidateSubscriptions(queryClient);
         }
 
+        // Step 3: Refresh usage/models with cache bypass (tier-based access)
         await Promise.all([
           billingInvalidationHelpers.refreshUsageStats(queryClient),
           billingInvalidationHelpers.refreshModels(queryClient),

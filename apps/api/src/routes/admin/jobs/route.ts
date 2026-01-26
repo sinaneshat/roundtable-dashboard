@@ -76,7 +76,7 @@ export const createJobRoute = createRoute({
 export const getJobRoute = createRoute({
   description: 'Get details of a specific automated job including thread slug.',
   method: 'get',
-  path: '/admin/jobs/:id',
+  path: '/admin/jobs/{id}',
   request: {
     params: IdParamSchema,
   },
@@ -101,7 +101,7 @@ export const getJobRoute = createRoute({
 export const updateJobRoute = createRoute({
   description: 'Update job settings - cancel a running job or toggle thread visibility.',
   method: 'patch',
-  path: '/admin/jobs/:id',
+  path: '/admin/jobs/{id}',
   request: {
     body: {
       content: {
@@ -133,7 +133,7 @@ export const updateJobRoute = createRoute({
 export const deleteJobRoute = createRoute({
   description: 'Delete an automated job. Optionally delete the associated thread with deleteThread=true.',
   method: 'delete',
-  path: '/admin/jobs/:id',
+  path: '/admin/jobs/{id}',
   request: {
     params: IdParamSchema,
     query: DeleteJobQuerySchema,

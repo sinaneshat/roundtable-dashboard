@@ -64,7 +64,7 @@ export const Route = createFileRoute('/public/chat/$slug')({
   },
   // ✅ ISR CACHING: Long cache with tag-based invalidation
   // Cache invalidation handles visibility changes via KV tags
-  headers: ({ loaderData }): Record<string, string> => {
+  headers: ({ loaderData }): { 'Cache-Control': string; 'Pragma'?: string; 'ETag'?: string } => {
     const errorState = loaderData?.errorState;
 
     // ✅ NO CACHE FOR ERRORS: Don't cache private/not-found responses

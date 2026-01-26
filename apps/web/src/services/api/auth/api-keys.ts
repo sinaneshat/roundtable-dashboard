@@ -15,23 +15,23 @@ import { createApiClient } from '@/lib/api/client';
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-type ListApiKeysEndpoint = ApiClientType['auth']['api-keys']['$get'];
+type ListApiKeysEndpoint = ApiClientType['healthAuth']['auth']['api-keys']['$get'];
 export type ListApiKeysResponse = InferResponseType<ListApiKeysEndpoint, 200>;
 export type ListApiKeysRequest = InferRequestType<ListApiKeysEndpoint>;
 
-type GetApiKeyEndpoint = ApiClientType['auth']['api-keys'][':keyId']['$get'];
+type GetApiKeyEndpoint = ApiClientType['healthAuth']['auth']['api-keys'][':keyId']['$get'];
 export type GetApiKeyResponse = InferResponseType<GetApiKeyEndpoint, 200>;
 export type GetApiKeyRequest = InferRequestType<GetApiKeyEndpoint>;
 
-type CreateApiKeyEndpoint = ApiClientType['auth']['api-keys']['$post'];
+type CreateApiKeyEndpoint = ApiClientType['healthAuth']['auth']['api-keys']['$post'];
 export type CreateApiKeyResponse = InferResponseType<CreateApiKeyEndpoint, 200>;
 export type CreateApiKeyRequest = InferRequestType<CreateApiKeyEndpoint>;
 
-type UpdateApiKeyEndpoint = ApiClientType['auth']['api-keys'][':keyId']['$patch'];
+type UpdateApiKeyEndpoint = ApiClientType['healthAuth']['auth']['api-keys'][':keyId']['$patch'];
 export type UpdateApiKeyResponse = InferResponseType<UpdateApiKeyEndpoint, 200>;
 export type UpdateApiKeyRequest = InferRequestType<UpdateApiKeyEndpoint>;
 
-type DeleteApiKeyEndpoint = ApiClientType['auth']['api-keys'][':keyId']['$delete'];
+type DeleteApiKeyEndpoint = ApiClientType['healthAuth']['auth']['api-keys'][':keyId']['$delete'];
 export type DeleteApiKeyResponse = InferResponseType<DeleteApiKeyEndpoint, 200>;
 export type DeleteApiKeyRequest = InferRequestType<DeleteApiKeyEndpoint>;
 
@@ -45,7 +45,7 @@ export type DeleteApiKeyRequest = InferRequestType<DeleteApiKeyEndpoint>;
  */
 export async function listApiKeysService(data?: ListApiKeysRequest) {
   const client = createApiClient();
-  return parseResponse(client.auth['api-keys'].$get(data ?? {}));
+  return parseResponse(client.healthAuth.auth['api-keys'].$get(data ?? {}));
 }
 
 /**
@@ -54,7 +54,7 @@ export async function listApiKeysService(data?: ListApiKeysRequest) {
  */
 export async function getApiKeyService(data: GetApiKeyRequest) {
   const client = createApiClient();
-  return parseResponse(client.auth['api-keys'][':keyId'].$get(data));
+  return parseResponse(client.healthAuth.auth['api-keys'][':keyId'].$get(data));
 }
 
 /**
@@ -63,7 +63,7 @@ export async function getApiKeyService(data: GetApiKeyRequest) {
  */
 export async function createApiKeyService(data: CreateApiKeyRequest) {
   const client = createApiClient();
-  return parseResponse(client.auth['api-keys'].$post(data));
+  return parseResponse(client.healthAuth.auth['api-keys'].$post(data));
 }
 
 /**
@@ -72,7 +72,7 @@ export async function createApiKeyService(data: CreateApiKeyRequest) {
  */
 export async function updateApiKeyService(data: UpdateApiKeyRequest) {
   const client = createApiClient();
-  return parseResponse(client.auth['api-keys'][':keyId'].$patch(data));
+  return parseResponse(client.healthAuth.auth['api-keys'][':keyId'].$patch(data));
 }
 
 /**
@@ -81,5 +81,5 @@ export async function updateApiKeyService(data: UpdateApiKeyRequest) {
  */
 export async function deleteApiKeyService(data: DeleteApiKeyRequest) {
   const client = createApiClient();
-  return parseResponse(client.auth['api-keys'][':keyId'].$delete(data));
+  return parseResponse(client.healthAuth.auth['api-keys'][':keyId'].$delete(data));
 }

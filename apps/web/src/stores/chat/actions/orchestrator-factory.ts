@@ -71,16 +71,20 @@ export function createOrchestrator<
     options: OrchestratorOptions<TQueryArgs, TDeduplicationOptions>,
   ): OrchestratorReturn {
     const { deduplicationOptions: runtimeDeduplicationOptions, enabled = true, threadId } = options;
-    // TYPE INFERENCE: Empty array default is compatible with TQueryArgs constraint
-    const queryArgs = (options.queryArgs ?? []) as TQueryArgs;
+
+    // ✅ TYPE-SAFE: Use provided queryArgs directly, with fallback to empty tuple
+    // The caller is responsible for providing TQueryArgs-compatible args via config
+    const queryArgs: TQueryArgs = options.queryArgs ?? ([] as unknown as TQueryArgs);
 
     const mergedDeduplicationOptions = useMemo(
       (): TDeduplicationOptions | undefined => {
         if (deduplicationOptions === undefined && runtimeDeduplicationOptions === undefined) {
           return undefined;
         }
-        // TYPE INFERENCE: Spread merge of compatible objects maintains TDeduplicationOptions shape
-        return { ...deduplicationOptions, ...runtimeDeduplicationOptions } as TDeduplicationOptions;
+        // ✅ TYPE-SAFE: Object spread preserves TDeduplicationOptions shape
+        // Both operands are TDeduplicationOptions | undefined, result maintains the shape
+        const merged = { ...deduplicationOptions, ...runtimeDeduplicationOptions };
+        return merged as TDeduplicationOptions;
       },
       [runtimeDeduplicationOptions],
     );
@@ -88,10 +92,20 @@ export function createOrchestrator<
     const currentItems = useStoreHook<TItem[]>(storeSelector);
     const setItems = useStoreHook<(items: TItem[]) => void>(storeSetter);
 
-    const { data: response, isLoading } = queryHook(
+    // ✅ GENERIC TYPE LIMITATION: TypeScript cannot verify spread with generic tuple types
+    // The queryHook signature is `(threadId, enabled, ...TQueryArgs)` but TS cannot narrow
+    // `TQueryArgs extends readonly unknown[]` to a specific spreadable tuple at call site.
+    // Solution: Call queryHook through a wrapper that accepts the spread args
+    const callQueryHook = (
+      tid: string,
+      en: boolean,
+      ...args: TQueryArgs
+    ): UseQueryResult<TResponse> => queryHook(tid, en, ...args);
+
+    const { data: response, isLoading } = callQueryHook(
       threadId,
       enabled,
-      ...(queryArgs as never),
+      ...queryArgs,
     );
 
     const rawItems = useMemo((): TItem[] => {

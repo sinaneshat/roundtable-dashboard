@@ -1,11 +1,30 @@
+/**
+ * Moderator Trigger Hook
+ *
+ * SIMPLIFIED VERSION: Backend controls moderator triggering.
+ *
+ * **ARCHITECTURE**:
+ * - Backend's round_execution state machine moves to MODERATOR phase after participants complete
+ * - Backend queue worker sends TRIGGER_MODERATOR message automatically
+ * - Frontend subscribes to SSE stream and displays content
+ *
+ * This hook previously:
+ * - Watched participant completion and decided WHEN to trigger moderator
+ * - Contained complex retry logic and race condition guards
+ *
+ * Now it ONLY provides:
+ * - A manual `triggerModerator` callback for user-initiated retries
+ * - Stream handling for displaying moderator response (when backend sends it)
+ *
+ * The automatic triggering logic is now in:
+ * - apps/api/src/services/streaming/background-stream-execution.service.ts
+ * - apps/api/src/workers/round-orchestration-queue.ts
+ */
+
 import type { DbModeratorMessageMetadata } from '@roundtable/shared';
 import {
-  FinishReasons,
   MessagePartTypes,
-  MessageRoles,
-  MODERATOR_NAME,
   MODERATOR_PARTICIPANT_INDEX,
-  RoundPhases,
   TextPartStates,
   UIMessageRoles,
 } from '@roundtable/shared';
@@ -19,11 +38,13 @@ import { getRoundNumber, isObject } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import { streamModeratorService } from '@/services/api';
 import type { ChatStoreApi } from '@/stores/chat';
-import { isRoundComplete } from '@/stores/chat';
 
 type UseModeratorTriggerOptions = {
   store: ChatStoreApi;
 };
+
+/** Max retries for moderator streaming */
+const MAX_MODERATOR_RETRIES = 3;
 
 function parseAiSdkStreamLine(line: string): string | null {
   const trimmed = line.trim();
@@ -64,6 +85,12 @@ function parseAiSdkStreamLine(line: string): string | null {
   return null;
 }
 
+/**
+ * Hook for moderator stream handling.
+ *
+ * **NO AUTOMATIC TRIGGERING**: Backend decides when moderator runs.
+ * This hook provides manual trigger for retries and handles stream display.
+ */
 export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
   const { createdThreadId, threadId } = useStore(store, useShallow(s => ({
     createdThreadId: s.createdThreadId,
@@ -73,16 +100,24 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
   const abortControllerRef = useRef<AbortController | null>(null);
   const triggeringRoundRef = useRef<number | null>(null);
   const retryCountRef = useRef<number>(0);
+  // ✅ RACE FIX: Track pending retry timeout to prevent overlapping retries
+  const retryInProgressRef = useRef<NodeJS.Timeout | null>(null);
 
   const effectiveThreadId = threadId || createdThreadId || '';
 
+  /**
+   * Manual trigger for moderator stream.
+   * Used for:
+   * - User-initiated retries
+   * - Edge cases where backend trigger didn't reach frontend
+   *
+   * NOT used for automatic triggering - backend handles that via queue.
+   */
   const triggerModerator = useCallback(async (
     roundNumber: number,
     participantMessageIds: string[],
     isRetry = false,
   ) => {
-    // Capture refs at function start to satisfy require-atomic-updates
-    // These refs are stable (from useRef) but the rule needs const local binding
     const trigRef = triggeringRoundRef;
     const abortRef = abortControllerRef;
     const retryRef = retryCountRef;
@@ -98,57 +133,83 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
     }
 
     const moderatorId = `${freshThreadId}_r${roundNumber}_moderator`;
-    const alreadyTriggered = state.hasModeratorStreamBeenTriggered(moderatorId, roundNumber);
-    rlog.sync('moderator-check', `alreadyTriggered=${alreadyTriggered} isRetry=${isRetry}`);
 
-    if (alreadyTriggered && !isRetry) {
-      if (state.streamingRoundNumber === roundNumber) {
-        const roundComplete = isRoundComplete(state.messages, state.participants, roundNumber);
-        if (roundComplete) {
-          state.completeStreaming();
-        }
-      }
-
+    // Check if already triggering this round
+    if (trigRef.current === roundNumber && !isRetry) {
+      rlog.sync('moderator-skip', `already triggering r${roundNumber}`);
       return;
     }
 
-    if (trigRef.current !== null && !isRetry) {
-      rlog.sync('moderator-skip', `triggeringRef=${trigRef.current}`);
+    // Check retry limit
+    if (isRetry && retryRef.current >= MAX_MODERATOR_RETRIES) {
+      rlog.sync('moderator-skip', `retry limit reached (${retryRef.current})`);
       return;
     }
-    state.markModeratorStreamTriggered(moderatorId, roundNumber);
+
     trigRef.current = roundNumber;
+    if (isRetry) {
+      retryRef.current += 1;
+    } else {
+      retryRef.current = 0;
+    }
 
-    const moderatorPlaceholder: UIMessage = {
-      id: moderatorId,
-      metadata: {
-        isModerator: true,
-        model: MODERATOR_NAME,
-        participantIndex: MODERATOR_PARTICIPANT_INDEX,
-        role: MessageRoles.ASSISTANT,
-        roundNumber,
-      },
-      parts: [],
-      role: UIMessageRoles.ASSISTANT,
-    };
+    // ✅ RACE FIX: Clear any pending retry before starting new request
+    if (retryInProgressRef.current) {
+      clearTimeout(retryInProgressRef.current);
+      retryInProgressRef.current = null;
+    }
 
-    state.setMessages((currentMessages) => {
-      const hasExisting = currentMessages.some(m => m.id === moderatorId);
-      if (hasExisting) {
-        return currentMessages;
-      }
-      return [...currentMessages, moderatorPlaceholder];
-    });
-
+    // Abort previous request
     if (abortRef.current) {
       abortRef.current.abort();
     }
+    abortRef.current = new AbortController();
 
-    const controller = new AbortController();
-    abortRef.current = controller;
+    // Check if moderator message already exists and is complete
+    const existingModerator = state.messages.find((m) => {
+      if (!isObject(m.metadata)) {
+        return false;
+      }
+      return m.metadata.isModerator === true && getRoundNumber(m.metadata) === roundNumber;
+    });
+
+    if (existingModerator) {
+      const isComplete = existingModerator.parts?.every(p =>
+        p.type !== MessagePartTypes.TEXT || p.state === TextPartStates.DONE,
+      );
+      if (isComplete) {
+        rlog.sync('moderator-skip', 'moderator already complete');
+        trigRef.current = null;
+        return;
+      }
+    }
+
+    // Add placeholder message if not exists
+    if (!existingModerator) {
+      const placeholderMessage: UIMessage = {
+        id: moderatorId,
+        metadata: {
+          hasError: false,
+          isModerator: true,
+          model: 'moderator',
+          participantIndex: MODERATOR_PARTICIPANT_INDEX,
+          role: 'assistant',
+          roundNumber,
+        } satisfies DbModeratorMessageMetadata,
+        parts: [{
+          state: TextPartStates.STREAMING,
+          text: '',
+          type: MessagePartTypes.TEXT,
+        }],
+        role: UIMessageRoles.ASSISTANT,
+      };
+
+      store.getState().setIsModeratorStreaming(true);
+      store.getState().setMessages([...state.messages, placeholderMessage]);
+      rlog.sync('moderator-placeholder', `added r${roundNumber}`);
+    }
 
     try {
-      // Use RPC service for type-safe moderator streaming
       const response = await streamModeratorService(
         {
           json: { participantMessageIds },
@@ -157,316 +218,149 @@ export function useModeratorTrigger({ store }: UseModeratorTriggerOptions) {
             threadId: freshThreadId,
           },
         },
-        { signal: controller.signal },
+        { signal: abortRef.current.signal },
       );
 
-      if (!response.ok) {
-        throw new Error(`Moderator request failed: ${response.status}`);
-      }
+      // Handle 202 (retry later)
+      if (response.status === 202) {
+        rlog.sync('moderator-202', 'retry after delay');
+        trigRef.current = null;
 
-      const contentType = response.headers.get('content-type') || '';
-
-      let accumulatedText = '';
-
-      if (contentType.includes('application/json')) {
-        // Could be either: existing moderator message OR 202 polling response
-        // Parse JSON to check if it's a polling response that needs retry
-        const jsonData = await response.json() as {
-          // Polling response shape
-          data?: { status?: string; retryAfterMs?: number; message?: string };
-          // Existing message shape (returned by Responses.raw)
-          id?: string;
-          role?: string;
-          parts?: { type: string; text?: string }[];
-          metadata?: DbModeratorMessageMetadata;
-          roundNumber?: number;
-        };
-        rlog.sync('moderator-json', `status=${response.status} data=${JSON.stringify(jsonData ?? {})}`);
-
-        if (response.status === 202 || jsonData?.data?.status === 'pending') {
-          retryRef.current += 1;
-          if (retryRef.current >= RETRY_LIMITS.MAX_202_RETRIES) {
-            console.error('[Moderator] MAX RETRIES REACHED - messages never appeared in D1', {
-              retryCount: retryRef.current,
-              roundNumber,
-              threadId: freshThreadId.slice(-8),
-            });
-            rlog.sync('moderator-max-retries', `r${roundNumber} gave up after ${retryRef.current} attempts`);
-            retryRef.current = 0;
-            store.getState().completeStreaming();
-            return;
-          }
-          // 202 Accepted - messages not persisted yet, retry after delay
-          const retryAfterMs = jsonData?.data?.retryAfterMs || 1000;
-          rlog.sync('moderator-retry', `202 poll ${retryRef.current}/${RETRY_LIMITS.MAX_202_RETRIES}: ${jsonData?.data?.message ?? 'no message'}, retry in ${retryAfterMs}ms`);
-          await new Promise((resolve) => {
-            setTimeout(resolve, retryAfterMs);
-          });
-          // Retry the request - clear tracking and reset ref so we can trigger again
-
-          trigRef.current = null;
-          store.getState().clearModeratorStreamTracking(roundNumber);
-          // Pass isRetry=true to bypass the already-triggered check
-          await triggerModerator(roundNumber, participantMessageIds, true);
-          return;
+        if (retryRef.current < RETRY_LIMITS.MAX_202_RETRIES) {
+          // ✅ RACE FIX: Track retry timeout to prevent overlapping retries
+          retryInProgressRef.current = setTimeout(() => {
+            retryInProgressRef.current = null;
+            triggerModerator(roundNumber, participantMessageIds, true);
+          }, 1000);
         }
-
-        // Success - reset retry counter
-        retryRef.current = 0;
-
-        // ✅ FIX: Handle existing moderator message returned from backend
-        // Backend returns message shape: { id, role, parts, metadata, roundNumber }
-        if (jsonData?.id && jsonData?.parts && Array.isArray(jsonData.parts)) {
-          const existingText = jsonData.parts
-            .filter((p): p is { type: string; text: string } => p.type === MessagePartTypes.TEXT && typeof p.text === 'string')
-            .map(p => p.text)
-            .join('');
-
-          if (existingText) {
-            rlog.sync('moderator-exists-hydrate', `found existing message with ${existingText.length} chars`);
-            accumulatedText = existingText;
-          }
-        }
-
-        rlog.sync('moderator-exists', `message already exists, no streaming needed`);
-      } else {
-        rlog.sync('moderator-stream-start', `starting stream read, contentType=${contentType}`);
-        const reader = response.body?.getReader();
-        if (reader) {
-          const decoder = new TextDecoder();
-          let buffer = '';
-          let isFirstChunk = true;
-          let rafId: number | null = null;
-          let pendingFlush = false;
-
-          const scheduleFlush = () => {
-            if (pendingFlush || !accumulatedText) {
-              return;
-            }
-            pendingFlush = true;
-
-            rafId = requestAnimationFrame(() => {
-              const textToSet = accumulatedText;
-              store.getState().setMessages(currentMessages =>
-                currentMessages.map(msg =>
-                  msg.id === moderatorId
-                    ? {
-                        ...msg,
-                        parts: [{ state: TextPartStates.STREAMING, text: textToSet, type: MessagePartTypes.TEXT }],
-                      }
-                    : msg,
-                ),
-              );
-              pendingFlush = false;
-              rafId = null;
-            });
-          };
-
-          while (true) {
-            const { done, value } = await reader.read();
-            if (done) {
-              break;
-            }
-
-            const chunk = decoder.decode(value, { stream: true });
-            buffer += chunk;
-
-            const lines = buffer.split('\n');
-            buffer = lines.pop() || '';
-
-            for (const line of lines) {
-              const textDelta = parseAiSdkStreamLine(line);
-              if (textDelta !== null) {
-                accumulatedText += textDelta;
-
-                if (isFirstChunk) {
-                  isFirstChunk = false;
-                  const textToSet = accumulatedText;
-                  store.getState().setMessages(currentMessages =>
-                    currentMessages.map(msg =>
-                      msg.id === moderatorId
-                        ? {
-                            ...msg,
-                            parts: [{ state: TextPartStates.STREAMING, text: textToSet, type: MessagePartTypes.TEXT }],
-                          }
-                        : msg,
-                    ),
-                  );
-                } else {
-                  scheduleFlush();
-                }
-              }
-            }
-          }
-
-          if (rafId !== null) {
-            cancelAnimationFrame(rafId);
-          }
-
-          if (buffer.trim()) {
-            const textDelta = parseAiSdkStreamLine(buffer);
-            if (textDelta !== null) {
-              accumulatedText += textDelta;
-            }
-          }
-        }
-      }
-
-      const finalText = accumulatedText;
-      const moderatorMessageId = `${freshThreadId}_r${roundNumber}_moderator`;
-
-      if (finalText.length > 0) {
-        store.getState().setMessages((currentMessages) => {
-          const hasExistingPlaceholder = currentMessages.some(msg => msg.id === moderatorMessageId);
-
-          if (hasExistingPlaceholder) {
-            return currentMessages.map(msg =>
-              msg.id === moderatorMessageId
-                ? {
-                    ...msg,
-                    metadata: {
-                      ...(msg.metadata && isObject(msg.metadata) ? msg.metadata : {}),
-                      finishReason: FinishReasons.STOP,
-                    },
-                    parts: [{ state: TextPartStates.DONE, text: finalText, type: MessagePartTypes.TEXT }],
-                  }
-                : msg,
-            );
-          } else {
-            const moderatorMessage: UIMessage = {
-              id: moderatorMessageId,
-              metadata: {
-                finishReason: FinishReasons.STOP,
-                isModerator: true,
-                model: MODERATOR_NAME,
-                participantIndex: MODERATOR_PARTICIPANT_INDEX,
-                role: MessageRoles.ASSISTANT,
-                roundNumber,
-              },
-              parts: [{ state: TextPartStates.DONE, text: finalText, type: MessagePartTypes.TEXT }],
-              role: UIMessageRoles.ASSISTANT,
-            };
-            return [...currentMessages, moderatorMessage];
-          }
-        });
-      }
-    } catch (error) {
-      if (error instanceof Error && error.name === 'AbortError') {
         return;
       }
-      console.error('[Moderator] triggerModerator error:', error);
+
+      if (!response.ok || !response.body) {
+        throw new Error(`Moderator stream failed: ${response.status}`);
+      }
+
+      // Stream the response
+      const reader = response.body.getReader();
+      const decoder = new TextDecoder();
+      let fullText = '';
+      let rafId: number | null = null;
+      let pendingText = '';
+
+      const flushText = () => {
+        if (pendingText) {
+          const textToFlush = pendingText;
+          pendingText = '';
+
+          store.getState().setMessages(
+            store.getState().messages.map((m) => {
+              if (m.id !== moderatorId) {
+                return m;
+              }
+              return {
+                ...m,
+                parts: [{
+                  state: TextPartStates.STREAMING,
+                  text: textToFlush,
+                  type: MessagePartTypes.TEXT,
+                }],
+              };
+            }),
+          );
+        }
+        rafId = null;
+      };
+
+      const scheduleFlush = () => {
+        if (rafId === null) {
+          rafId = requestAnimationFrame(flushText);
+        }
+      };
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) {
+            break;
+          }
+
+          const chunk = decoder.decode(value, { stream: true });
+          const lines = chunk.split('\n');
+
+          for (const line of lines) {
+            const text = parseAiSdkStreamLine(line);
+            if (text) {
+              fullText += text;
+              pendingText = fullText;
+              scheduleFlush();
+            }
+          }
+        }
+      } finally {
+        if (rafId !== null) {
+          cancelAnimationFrame(rafId);
+        }
+      }
+
+      // Final update
+      store.getState().setMessages(
+        store.getState().messages.map((m) => {
+          if (m.id !== moderatorId) {
+            return m;
+          }
+          return {
+            ...m,
+            parts: [{
+              state: TextPartStates.DONE,
+              text: fullText,
+              type: MessagePartTypes.TEXT,
+            }],
+          };
+        }),
+      );
+
+      store.getState().completeModeratorStream();
+      rlog.sync('moderator-complete', `r${roundNumber} len=${fullText.length}`);
+    } catch (error) {
+      if (error instanceof Error && error.name === 'AbortError') {
+        rlog.sync('moderator-aborted', `r${roundNumber}`);
+        return;
+      }
+
+      rlog.sync('moderator-error', `r${roundNumber} ${error}`);
+
+      // Retry on error
+      if (retryRef.current < MAX_MODERATOR_RETRIES) {
+        // ✅ RACE FIX: Track retry timeout to prevent overlapping retries
+        retryInProgressRef.current = setTimeout(() => {
+          retryInProgressRef.current = null;
+          triggerModerator(roundNumber, participantMessageIds, true);
+        }, 2000);
+      }
     } finally {
-      const preState = store.getState();
-      rlog.sync('mod-complete-pre', `r${roundNumber} streamR=${preState.streamingRoundNumber ?? '-'} wait=${preState.waitingToStartStreaming ? 1 : 0} nextP=${preState.nextParticipantToTrigger !== null ? 1 : 0}`);
-      store.getState().completeStreaming();
-      const postState = store.getState();
-      rlog.sync('mod-complete-post', `streamR=${postState.streamingRoundNumber ?? '-'} wait=${postState.waitingToStartStreaming ? 1 : 0} nextP=${postState.nextParticipantToTrigger !== null ? 1 : 0} msgs=${postState.messages.length}`);
-
-      trigRef.current = null;
-      abortRef.current = null;
-      retryRef.current = 0;
+      if (trigRef.current === roundNumber) {
+        trigRef.current = null;
+      }
     }
-  }, [store]);
+  }, [effectiveThreadId, store]);
 
+  // Cleanup on unmount
   useEffect(() => {
     return () => {
       if (abortControllerRef.current) {
         abortControllerRef.current.abort();
       }
+      // ✅ RACE FIX: Clear pending retry on unmount
+      if (retryInProgressRef.current) {
+        clearTimeout(retryInProgressRef.current);
+        retryInProgressRef.current = null;
+      }
     };
   }, []);
 
-  const {
-    currentResumptionPhase,
-    isModeratorStreaming,
-    messages,
-    nextParticipantToTrigger,
-    participants,
-    resumptionRoundNumber,
-    waitingToStartStreaming,
-  } = useStore(store, useShallow(s => ({
-    currentResumptionPhase: s.currentResumptionPhase,
-    isModeratorStreaming: s.isModeratorStreaming,
-    messages: s.messages,
-    nextParticipantToTrigger: s.nextParticipantToTrigger,
-    participants: s.participants,
-    resumptionRoundNumber: s.resumptionRoundNumber,
-    waitingToStartStreaming: s.waitingToStartStreaming,
-  })));
-  const resumptionTriggerAttemptedRef = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (!isModeratorStreaming || currentResumptionPhase !== RoundPhases.MODERATOR) {
-      return;
-    }
-
-    if (!effectiveThreadId || resumptionRoundNumber === null) {
-      return;
-    }
-
-    if (triggeringRoundRef.current !== null) {
-      return;
-    }
-
-    if (waitingToStartStreaming || nextParticipantToTrigger !== null) {
-      return;
-    }
-
-    const triggerKey = `${effectiveThreadId}_resumption_${resumptionRoundNumber}`;
-    if (resumptionTriggerAttemptedRef.current === triggerKey) {
-      return;
-    }
-
-    const moderatorExists = messages.some((m) => {
-      if (!isObject(m.metadata)) {
-        return false;
-      }
-      return m.metadata.isModerator === true && getRoundNumber(m.metadata) === resumptionRoundNumber;
-    });
-
-    if (moderatorExists) {
-      resumptionTriggerAttemptedRef.current = triggerKey;
-      store.getState().completeModeratorStream();
-      store.getState().clearStreamResumption();
-      return;
-    }
-
-    const participantMessageIds = messages
-      .filter((m) => {
-        if (m.role !== MessageRoles.ASSISTANT) {
-          return false;
-        }
-        if (!isObject(m.metadata)) {
-          return false;
-        }
-        if (m.metadata.isModerator === true) {
-          return false;
-        }
-        return getRoundNumber(m.metadata) === resumptionRoundNumber;
-      })
-      .map(m => m.id);
-
-    if (participantMessageIds.length < participants.length) {
-      return;
-    }
-
-    resumptionTriggerAttemptedRef.current = triggerKey;
-
-    queueMicrotask(() => {
-      triggerModerator(resumptionRoundNumber, participantMessageIds);
-    });
-  }, [
-    isModeratorStreaming,
-    currentResumptionPhase,
-    resumptionRoundNumber,
-    effectiveThreadId,
-    messages,
-    participants,
-    store,
-    triggerModerator,
-    waitingToStartStreaming,
-    nextParticipantToTrigger,
-  ]);
+  // NOTE: Automatic trigger effect REMOVED
+  // Backend now handles moderator triggering via queue after participants complete.
+  // The triggerModerator callback remains for manual retries if needed.
 
   return {
     isTriggering: triggeringRoundRef.current !== null,

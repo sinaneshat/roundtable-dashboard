@@ -319,9 +319,8 @@ app.use('/uploads/multipart/:id/complete', RateLimiterFactory.create('upload'), 
 app.route('/', apiRoutes);
 
 // ============================================================================
-// Step 6: Re-export route types for RPC client type inference
-// Individual route group types are exported for modular client usage.
-// AppType is the intersection of all groups for unified client usage.
+// Step 6: Re-export route type for RPC client
+// https://hono.dev/docs/guides/rpc
 // ============================================================================
 
 export type {
@@ -331,7 +330,6 @@ export type {
   ChatFeatureRoutesType,
   ChatMessageRoutesType,
   ChatThreadRoutesType,
-  // Individual route group types for modular clients
   HealthAuthRoutesType,
   ProjectRoutesType,
   TestRoutesType,

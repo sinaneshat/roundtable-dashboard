@@ -239,12 +239,11 @@ export function useAddAttachmentToProjectMutation() {
         },
       );
 
-      // Only invalidate project detail for attachment count
+      // Invalidate project detail for attachment count (active observers will refetch)
       queryClient.invalidateQueries({
         queryKey: queryKeys.projects.detail(projectId),
-        refetchType: 'none',
+        refetchType: 'active',
       });
-      queryClient.refetchQueries({ queryKey: queryKeys.projects.detail(projectId) });
     },
     retry: false,
     throwOnError: false,

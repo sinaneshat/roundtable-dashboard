@@ -1028,6 +1028,58 @@ export function isReasoningPartArray(reasoning: unknown): reasoning is Reasoning
 }
 
 // ============================================================================
+// STREAMING STATE DETECTION
+// ============================================================================
+
+/**
+ * Schema for validating tool invocation parts with state
+ * AI SDK uses this internally during streaming for partial tool calls
+ */
+const ToolInvocationPartWithStateSchema = z.object({
+  toolInvocation: z.object({
+    state: z.string().optional(),
+  }),
+  type: z.literal('tool-invocation'),
+});
+
+/**
+ * Schema for parts with streaming state
+ * AI SDK sets state='streaming' during active streaming
+ */
+const PartWithStreamingStateSchema = z.object({
+  state: z.string(),
+});
+
+/**
+ * ✅ TYPE GUARD: Check if a message part is currently streaming
+ *
+ * Detects streaming parts in two ways:
+ * 1. Parts with state='streaming' (text parts during active stream)
+ * 2. Tool invocation parts with state='partial-call' (tool calls in progress)
+ *
+ * @param part - Unknown message part to check
+ * @returns True if the part indicates active streaming
+ *
+ * @example
+ * const isStreaming = message.parts?.some(isStreamingPart);
+ */
+export function isStreamingPart(part: unknown): boolean {
+  // Check for state='streaming' on any part
+  const partWithStateResult = PartWithStreamingStateSchema.safeParse(part);
+  if (partWithStateResult.success && partWithStateResult.data.state === 'streaming') {
+    return true;
+  }
+
+  // Check for tool-invocation with partial-call state
+  const toolInvocationResult = ToolInvocationPartWithStateSchema.safeParse(part);
+  if (toolInvocationResult.success) {
+    return toolInvocationResult.data.toolInvocation.state === 'partial-call';
+  }
+
+  return false;
+}
+
+// ============================================================================
 // NOTE: All exports are done inline above where each type is defined
 // This ensures better tree-shaking and clearer code organization
 // ============================================================================

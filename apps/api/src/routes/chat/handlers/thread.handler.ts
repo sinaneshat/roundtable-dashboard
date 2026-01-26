@@ -2060,6 +2060,23 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
         }),
     ]);
 
+    // DEBUG: Log query results immediately after Promise.all
+    console.info(`[getThreadBySlug:query] threadId=${thread.id} rawParts=${rawParticipants.length} rawMsgs=${rawMessages.length} preSearch=${preSearches.length} cacheTag=${MessageCacheTags.byThread(thread.id)}`);
+
+    // DEBUG: Query DB directly without cache to compare
+    if (rawMessages.length === 0) {
+      const dbMessages = await db
+        .select()
+        .from(tables.chatMessage)
+        .where(eq(tables.chatMessage.threadId, thread.id))
+        .limit(5);
+      const dbParts = await db
+        .select()
+        .from(tables.chatParticipant)
+        .where(eq(tables.chatParticipant.threadId, thread.id));
+      console.info(`[getThreadBySlug:DB-DIRECT] threadId=${thread.id} dbMsgs=${dbMessages.length} dbParts=${dbParts.length} (bypassing cache)`);
+    }
+
     // ✅ DRY: Use enrichWithTierAccess helper (single source of truth)
     const participants = rawParticipants.map((participant: typeof tables.chatParticipant.$inferSelect) => ({
       ...participant,
@@ -2157,6 +2174,9 @@ export const getThreadBySlugHandler: RouteHandler<typeof getThreadBySlugRoute, A
     // HTTP no-cache ensures browser revalidates - server responds fast from KV if tags valid
     c.header('Cache-Control', 'private, no-cache, must-revalidate');
     c.header('CDN-Cache-Control', 'no-store');
+
+    // DEBUG: Log message count
+    console.info(`[getThreadBySlug] slug=${slug} threadId=${thread.id} rawMsgs=${rawMessages.length} msgs=${messages.length} parts=${rawParticipants.length}`);
 
     return Responses.ok(c, {
       messages,

@@ -474,37 +474,29 @@ export type UploadRoutesType = typeof uploadRoutes;
 export type TestRoutesType = typeof testRoutes;
 
 // ============================================================================
-// RUNTIME ROUTE MERGING
+// CHAINED ROUTE COMPOSITION FOR RPC
 //
-// All route groups are merged onto a single app instance at runtime.
+// TS7056 CONSTRAINT: With 100+ routes, TypeScript can't infer `typeof apiRoutes`.
+// We use explicit type annotation + intersection type as workaround.
 // ============================================================================
 
-const apiRoutes: OpenAPIHono<ApiEnv> = createOpenApiApp();
-
-// Mount all route groups at root path (routes define their own paths)
-apiRoutes.route('/', healthAuthRoutes);
-apiRoutes.route('/', billingRoutes);
-apiRoutes.route('/', chatThreadRoutes);
-apiRoutes.route('/', chatMessageRoutes);
-apiRoutes.route('/', chatFeatureRoutes);
-apiRoutes.route('/', projectRoutes);
-apiRoutes.route('/', adminRoutes);
-apiRoutes.route('/', utilityRoutes);
-apiRoutes.route('/', uploadRoutes);
-apiRoutes.route('/', testRoutes);
+const apiRoutes: OpenAPIHono<ApiEnv> = createOpenApiApp()
+  .route('/', healthAuthRoutes)
+  .route('/', billingRoutes)
+  .route('/', chatThreadRoutes)
+  .route('/', chatMessageRoutes)
+  .route('/', chatFeatureRoutes)
+  .route('/', projectRoutes)
+  .route('/', adminRoutes)
+  .route('/', utilityRoutes)
+  .route('/', uploadRoutes)
+  .route('/', testRoutes);
 
 export { apiRoutes };
 
-// ============================================================================
-// TYPE EXPORT FOR RPC CLIENT
-//
-// The AppType is an intersection of all route group types.
-// Each group type is small enough for TypeScript to serialize.
-// The intersection combines them for full RPC type inference.
-// ============================================================================
-
+// Intersection of route types for RPC client type inference
 export type AppType
-  = & HealthAuthRoutesType
+  = HealthAuthRoutesType
     & BillingRoutesType
     & ChatThreadRoutesType
     & ChatMessageRoutesType

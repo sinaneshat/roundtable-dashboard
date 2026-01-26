@@ -159,6 +159,9 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     rlog.sync('hydrate-done', `slug=${afterState.thread?.slug ?? '-'} msgs=${afterState.messages.length} parts=${participants.length}`);
     rlog.init('hydrate-after', `msgs=${afterState.messages.length} parts=${afterState.participants.length}`);
 
+    // DEBUG: Track hydration result
+    rlog.moderator('hydrate', `msgs=${afterState.messages.length} parts=${participants.length}`);
+
     // ✅ CRITICAL FIX: Set pre-searches into store for resumption
     // Without this, streaming trigger finds no pre-search for current round
     if (initialPreSearches?.length) {
@@ -171,6 +174,14 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     if (initialChangelog?.length) {
       state.setChangelogItems(initialChangelog);
       rlog.init('sync-hydrate', `set ${initialChangelog.length} changelog items into store`);
+    }
+
+    // ✅ FIX: Reset isModeratorStreaming when round is complete or no resumption state
+    // Without this, the flag stays true after refresh causing "Waiting for AI response..."
+    const isRoundComplete = streamResumptionState?.currentPhase === 'complete' || !streamResumptionState;
+    if (isRoundComplete) {
+      storeApi.getState().setIsModeratorStreaming(false);
+      rlog.init('sync-hydrate', `reset isModeratorStreaming=false (phase=${streamResumptionState?.currentPhase ?? 'none'})`);
     }
 
     hasHydratedRef.current = true;

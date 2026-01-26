@@ -15,11 +15,11 @@ import { createApiClient } from '@/lib/api/client';
 // Type Inference - Endpoint definitions
 // ============================================================================
 
-type ListUserPresetsEndpoint = ApiClientType['chat']['user-presets']['$get'];
-type CreateUserPresetEndpoint = ApiClientType['chat']['user-presets']['$post'];
-type GetUserPresetEndpoint = ApiClientType['chat']['user-presets'][':id']['$get'];
-type UpdateUserPresetEndpoint = ApiClientType['chat']['user-presets'][':id']['$patch'];
-type DeleteUserPresetEndpoint = ApiClientType['chat']['user-presets'][':id']['$delete'];
+type ListUserPresetsEndpoint = ApiClientType['chatFeature']['chat']['user-presets']['$get'];
+type CreateUserPresetEndpoint = ApiClientType['chatFeature']['chat']['user-presets']['$post'];
+type GetUserPresetEndpoint = ApiClientType['chatFeature']['chat']['user-presets'][':id']['$get'];
+type UpdateUserPresetEndpoint = ApiClientType['chatFeature']['chat']['user-presets'][':id']['$patch'];
+type DeleteUserPresetEndpoint = ApiClientType['chatFeature']['chat']['user-presets'][':id']['$delete'];
 
 // ============================================================================
 // Type Exports - Request/Response types
@@ -46,27 +46,27 @@ export type DeleteUserPresetResponse = InferResponseType<DeleteUserPresetEndpoin
 
 export async function listUserPresetsService(data?: ListUserPresetsRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat['user-presets'].$get(data ?? { query: {} }));
+  return parseResponse(client.chatFeature.chat['user-presets'].$get(data ?? { query: {} }));
 }
 
 export async function createUserPresetService(data: CreateUserPresetRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat['user-presets'].$post(data));
+  return parseResponse(client.chatFeature.chat['user-presets'].$post(data));
 }
 
 export async function getUserPresetService(data: GetUserPresetRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat['user-presets'][':id'].$get(data));
+  return parseResponse(client.chatFeature.chat['user-presets'][':id'].$get(data));
 }
 
 export async function updateUserPresetService(data: UpdateUserPresetRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat['user-presets'][':id'].$patch(data));
+  return parseResponse(client.chatFeature.chat['user-presets'][':id'].$patch(data));
 }
 
 export async function deleteUserPresetService(data: DeleteUserPresetRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat['user-presets'][':id'].$delete(data));
+  return parseResponse(client.chatFeature.chat['user-presets'][':id'].$delete(data));
 }
 
 // ============================================================================

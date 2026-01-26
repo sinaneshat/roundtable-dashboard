@@ -15,23 +15,23 @@ import { createApiClient } from '@/lib/api/client';
 // Type Inference
 // ============================================================================
 
-type ListCustomRolesEndpoint = ApiClientType['chat']['custom-roles']['$get'];
+type ListCustomRolesEndpoint = ApiClientType['chatFeature']['chat']['custom-roles']['$get'];
 export type ListCustomRolesRequest = InferRequestType<ListCustomRolesEndpoint>;
 export type ListCustomRolesResponse = InferResponseType<ListCustomRolesEndpoint, 200>;
 
-type CreateCustomRoleEndpoint = ApiClientType['chat']['custom-roles']['$post'];
+type CreateCustomRoleEndpoint = ApiClientType['chatFeature']['chat']['custom-roles']['$post'];
 export type CreateCustomRoleRequest = InferRequestType<CreateCustomRoleEndpoint>;
 export type CreateCustomRoleResponse = InferResponseType<CreateCustomRoleEndpoint, 200>;
 
-type GetCustomRoleEndpoint = ApiClientType['chat']['custom-roles'][':id']['$get'];
+type GetCustomRoleEndpoint = ApiClientType['chatFeature']['chat']['custom-roles'][':id']['$get'];
 export type GetCustomRoleRequest = InferRequestType<GetCustomRoleEndpoint>;
 export type GetCustomRoleResponse = InferResponseType<GetCustomRoleEndpoint, 200>;
 
-type UpdateCustomRoleEndpoint = ApiClientType['chat']['custom-roles'][':id']['$patch'];
+type UpdateCustomRoleEndpoint = ApiClientType['chatFeature']['chat']['custom-roles'][':id']['$patch'];
 export type UpdateCustomRoleRequest = InferRequestType<UpdateCustomRoleEndpoint>;
 export type UpdateCustomRoleResponse = InferResponseType<UpdateCustomRoleEndpoint, 200>;
 
-type DeleteCustomRoleEndpoint = ApiClientType['chat']['custom-roles'][':id']['$delete'];
+type DeleteCustomRoleEndpoint = ApiClientType['chatFeature']['chat']['custom-roles'][':id']['$delete'];
 export type DeleteCustomRoleRequest = InferRequestType<DeleteCustomRoleEndpoint>;
 export type DeleteCustomRoleResponse = InferResponseType<DeleteCustomRoleEndpoint, 200>;
 
@@ -45,7 +45,7 @@ export type DeleteCustomRoleResponse = InferResponseType<DeleteCustomRoleEndpoin
  */
 export async function listCustomRolesService(args?: ListCustomRolesRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat['custom-roles'].$get(args ?? { query: {} }));
+  return parseResponse(client.chatFeature.chat['custom-roles'].$get(args ?? { query: {} }));
 }
 
 /**
@@ -54,7 +54,7 @@ export async function listCustomRolesService(args?: ListCustomRolesRequest) {
  */
 export async function createCustomRoleService(data: CreateCustomRoleRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat['custom-roles'].$post(data));
+  return parseResponse(client.chatFeature.chat['custom-roles'].$post(data));
 }
 
 /**
@@ -63,7 +63,7 @@ export async function createCustomRoleService(data: CreateCustomRoleRequest) {
  */
 export async function getCustomRoleService(data: GetCustomRoleRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat['custom-roles'][':id'].$get(data));
+  return parseResponse(client.chatFeature.chat['custom-roles'][':id'].$get(data));
 }
 
 /**
@@ -72,7 +72,7 @@ export async function getCustomRoleService(data: GetCustomRoleRequest) {
  */
 export async function updateCustomRoleService(data: UpdateCustomRoleRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat['custom-roles'][':id'].$patch(data));
+  return parseResponse(client.chatFeature.chat['custom-roles'][':id'].$patch(data));
 }
 
 /**
@@ -81,7 +81,7 @@ export async function updateCustomRoleService(data: UpdateCustomRoleRequest) {
  */
 export async function deleteCustomRoleService(data: DeleteCustomRoleRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat['custom-roles'][':id'].$delete(data));
+  return parseResponse(client.chatFeature.chat['custom-roles'][':id'].$delete(data));
 }
 
 // ============================================================================

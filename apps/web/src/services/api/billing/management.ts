@@ -15,11 +15,11 @@ import { createApiClient, ServiceFetchError } from '@/lib/api/client';
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-type SwitchSubscriptionEndpoint = ApiClientType['billing']['subscriptions'][':id']['switch']['$post'];
+type SwitchSubscriptionEndpoint = ApiClientType['billing']['billing']['subscriptions'][':id']['switch']['$post'];
 export type SwitchSubscriptionRequest = InferRequestType<SwitchSubscriptionEndpoint>;
 export type SwitchSubscriptionResponse = InferResponseType<SwitchSubscriptionEndpoint, 200>;
 
-type CancelSubscriptionEndpoint = ApiClientType['billing']['subscriptions'][':id']['cancel']['$post'];
+type CancelSubscriptionEndpoint = ApiClientType['billing']['billing']['subscriptions'][':id']['cancel']['$post'];
 export type CancelSubscriptionRequest = InferRequestType<CancelSubscriptionEndpoint>;
 export type CancelSubscriptionResponse = InferResponseType<CancelSubscriptionEndpoint, 200>;
 
@@ -39,7 +39,7 @@ export type CancelSubscriptionResponse = InferResponseType<CancelSubscriptionEnd
  */
 export async function switchSubscriptionService(data: SwitchSubscriptionRequest): Promise<SwitchSubscriptionResponse> {
   const client = createApiClient();
-  const res = await client.billing.subscriptions[':id'].switch.$post(data);
+  const res = await client.billing.billing.subscriptions[':id'].switch.$post(data);
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to switch subscription: ${res.statusText}`, res.status, res.statusText);
   }
@@ -55,7 +55,7 @@ export async function switchSubscriptionService(data: SwitchSubscriptionRequest)
  */
 export async function cancelSubscriptionService(data: CancelSubscriptionRequest): Promise<CancelSubscriptionResponse> {
   const client = createApiClient();
-  const res = await client.billing.subscriptions[':id'].cancel.$post(data);
+  const res = await client.billing.billing.subscriptions[':id'].cancel.$post(data);
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to cancel subscription: ${res.statusText}`, res.status, res.statusText);
   }

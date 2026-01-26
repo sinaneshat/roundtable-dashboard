@@ -15,11 +15,11 @@ import { createApiClient } from '@/lib/api/client';
 // Type Inference
 // ============================================================================
 
-type SetRoundFeedbackEndpoint = ApiClientType['chat']['threads'][':threadId']['rounds'][':roundNumber']['feedback']['$put'];
+type SetRoundFeedbackEndpoint = ApiClientType['chatFeature']['chat']['threads'][':threadId']['rounds'][':roundNumber']['feedback']['$put'];
 export type SetRoundFeedbackRequest = InferRequestType<SetRoundFeedbackEndpoint>;
 export type SetRoundFeedbackResponse = InferResponseType<SetRoundFeedbackEndpoint, 200>;
 
-type GetThreadFeedbackEndpoint = ApiClientType['chat']['threads'][':id']['feedback']['$get'];
+type GetThreadFeedbackEndpoint = ApiClientType['chatFeature']['chat']['threads'][':id']['feedback']['$get'];
 export type GetThreadFeedbackRequest = InferRequestType<GetThreadFeedbackEndpoint>;
 export type GetThreadFeedbackResponse = InferResponseType<GetThreadFeedbackEndpoint, 200>;
 
@@ -54,7 +54,7 @@ export type RoundFeedbackData = Pick<FeedbackItem, 'roundNumber' | 'feedbackType
  */
 export async function setRoundFeedbackService(data: SetRoundFeedbackRequest) {
   const client = createApiClient();
-  return parseResponse(client.chat.threads[':threadId'].rounds[':roundNumber'].feedback.$put(data));
+  return parseResponse(client.chatFeature.chat.threads[':threadId'].rounds[':roundNumber'].feedback.$put(data));
 }
 
 /**
@@ -66,5 +66,5 @@ export async function getThreadFeedbackService(
   options?: { cookieHeader?: string },
 ) {
   const client = createApiClient({ cookieHeader: options?.cookieHeader });
-  return parseResponse(client.chat.threads[':id'].feedback.$get(data));
+  return parseResponse(client.chatFeature.chat.threads[':id'].feedback.$get(data));
 }

@@ -120,6 +120,7 @@ import {
   handleRoundRegeneration,
   logModeChange,
   logWebSearchToggle,
+  parseRoundCalculationMessage,
 } from '@/services/threads';
 import {
   getUserTier,
@@ -130,7 +131,7 @@ import type { CheckRoundCompletionQueueMessage, TriggerModeratorQueueMessage, Tr
 
 import type { streamChatRoute } from '../route';
 import { StreamChatRequestSchema } from '../schema';
-import { chatMessagesToUIMessages } from './helpers';
+import { chatMessagesToUIMessages, validateRequestMessage } from './helpers';
 
 // Cache the AI SDK module to avoid repeated dynamic imports
 let aiSdkModule: typeof import('ai') | null = null;
@@ -223,6 +224,10 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         throw createError.badRequest('Thread ID is required for streaming', ErrorContextBuilders.validation('threadId'));
       }
 
+      // Validate request message and convert to AI SDK UIMessage type
+      // This ensures runtime type safety for all downstream usages
+      const validatedMessage = await validateRequestMessage(message);
+
       const db = await getDbAsync();
 
       // =========================================================================
@@ -244,12 +249,8 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         // Conditionally include regenerateRound to satisfy exactOptionalPropertyTypes
         calculateRoundNumber({
           db,
-          // ✅ JUSTIFIED DOUBLE CAST (as unknown as RoundCalculationMessage):
-          // UIMessage (AI SDK) has excess properties that fail .strict() schemas.
-          // RoundCalculationMessage only needs {parts, metadata, role} subset.
-          // UIMessage structurally contains these fields, making it runtime-safe.
-          // The .strict() in round.service.ts prevents direct assignment.
-          message: message as unknown as Parameters<typeof import('@/services/threads/round.service').calculateRoundNumber>[0]['message'],
+          // Parse UIMessage to extract only fields needed for round calculation
+          message: parseRoundCalculationMessage(message),
           participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
           threadId,
           ...(regenerateRound !== undefined && { regenerateRound }),
@@ -672,7 +673,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
         baseUrl: new URL(c.req.url).origin,
         db,
         memoryLimits,
-        newMessage: message as import('ai').UIMessage,
+        newMessage: validatedMessage,
         previousDbMessages,
         r2Bucket: c.env.UPLOADS_R2_BUCKET,
         secret: c.env.BETTER_AUTH_SECRET,
@@ -689,7 +690,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
       // Build system prompt with RAG context and citation support
       const userQuery = extractUserQuery([
         ...previousMessages,
-        message as import('ai').UIMessage,
+        validatedMessage,
       ]);
       const baseSystemPrompt
         = participant.settings?.systemPrompt
@@ -1316,6 +1317,16 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               finalReasoningDuration = Math.round((Date.now() - reasoningStartTime) / 1000);
             }
 
+            // ✅ DEBUG: Log persistence attempt
+            console.info('[Streaming] Persisting participant message:', {
+              messageId,
+              participantId: participant.id,
+              participantIndex: participantIndex ?? DEFAULT_PARTICIPANT_INDEX,
+              roundNumber: currentRoundNumber,
+              textLength: finishResult.text?.length ?? 0,
+              threadId,
+            });
+
             await saveStreamedMessage({
               availableSources,
               citationSourceMap,
@@ -1698,7 +1709,7 @@ export const streamChatHandler: RouteHandler<typeof streamChatRoute, ApiEnv>
               // Extract user question from message parts
               const userQuestionText = extractUserQuery([
                 ...previousMessages,
-                message as import('ai').UIMessage,
+                validatedMessage,
               ]);
 
               // Collect participant response from this streaming call

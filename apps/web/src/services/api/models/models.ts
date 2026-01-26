@@ -17,7 +17,7 @@ import type { ServiceOptions } from '@/services/api/types';
 // Type Inference - Endpoint definitions
 // ============================================================================
 
-type ListModelsEndpoint = ApiClientType['models']['$get'];
+type ListModelsEndpoint = ApiClientType['utility']['models']['$get'];
 
 // ============================================================================
 // Type Exports - Response types inferred from backend
@@ -39,7 +39,7 @@ export async function listModelsService(options?: ServiceOptions) {
     bypassCache: options?.bypassCache,
     cookieHeader: options?.cookieHeader,
   });
-  const res = await client.models.$get();
+  const res = await client.utility.models.$get();
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to fetch models: ${res.statusText}`, res.status, res.statusText);
   }
@@ -52,7 +52,7 @@ export async function listModelsService(options?: ServiceOptions) {
  */
 export async function listModelsPublicService() {
   const client = createPublicApiClient();
-  const res = await client.models.$get();
+  const res = await client.utility.models.$get();
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to fetch models: ${res.statusText}`, res.status, res.statusText);
   }

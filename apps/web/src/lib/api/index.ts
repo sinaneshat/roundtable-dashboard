@@ -5,11 +5,10 @@
  * type-safe requests to the @roundtable/api backend.
  */
 
-export type { ApiClientType } from './client';
+export type { ApiClient } from './client';
 export {
   apiClient,
   authenticatedFetch,
   createApiClient,
-  createPublicApiClient,
   ServiceFetchError,
 } from './client';

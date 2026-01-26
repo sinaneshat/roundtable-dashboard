@@ -56,7 +56,7 @@ export const listApiKeysRoute = createRoute({
 export const getApiKeyRoute = createRoute({
   description: 'Get details of a specific API key (without key value)',
   method: 'get',
-  path: '/auth/api-keys/:keyId',
+  path: '/auth/api-keys/{keyId}',
   request: {
     params: ApiKeyIdParamSchema,
   },
@@ -111,7 +111,7 @@ export const createApiKeyRoute = createRoute({
 export const updateApiKeyRoute = createRoute({
   description: 'Update an existing API key settings',
   method: 'patch',
-  path: '/auth/api-keys/:keyId',
+  path: '/auth/api-keys/{keyId}',
   request: {
     body: {
       content: {
@@ -143,7 +143,7 @@ export const updateApiKeyRoute = createRoute({
 export const deleteApiKeyRoute = createRoute({
   description: 'Delete an API key (this action cannot be undone)',
   method: 'delete',
-  path: '/auth/api-keys/:keyId',
+  path: '/auth/api-keys/{keyId}',
   request: {
     params: ApiKeyIdParamSchema,
   },

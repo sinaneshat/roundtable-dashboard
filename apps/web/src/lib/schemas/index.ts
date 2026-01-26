@@ -98,6 +98,7 @@ export {
   isReasoningPart,
   isReasoningPartArray,
   isRenderableContent,
+  isStreamingPart,
   isToolCallPart,
   isToolResultPart,
   isValidFilePartForTransmission,

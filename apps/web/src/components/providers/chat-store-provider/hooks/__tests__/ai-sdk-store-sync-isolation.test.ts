@@ -39,6 +39,13 @@ function isFrozen(obj: object | null | undefined): boolean {
 }
 
 /**
+ * Type guard to check if a value is a non-null object that can be frozen
+ */
+function isFreezableObject(value: unknown): value is object {
+  return value !== null && typeof value === 'object';
+}
+
+/**
  * Deep freeze an object and all its nested properties
  * Simulates Immer's Object.freeze() behavior in Zustand stores
  * (In tests, Immer may not freeze for performance - this simulates production behavior)
@@ -47,8 +54,8 @@ function deepFreeze<T extends object>(obj: T): T {
   Object.freeze(obj);
   Object.getOwnPropertyNames(obj).forEach((prop) => {
     const value = obj[prop as keyof T];
-    if (value && typeof value === 'object') {
-      deepFreeze(value as object);
+    if (isFreezableObject(value)) {
+      deepFreeze(value);
     }
   });
   return obj;
@@ -64,10 +71,21 @@ function simulateStoreFreeze(messages: UIMessage[]): UIMessage[] {
 }
 
 /**
+ * Safe property accessor for objects during frozen check
+ * Uses Object.prototype.hasOwnProperty for type-safe access
+ */
+function getNestedValue<T extends object>(obj: T, key: string): unknown {
+  if (Object.prototype.hasOwnProperty.call(obj, key)) {
+    return obj[key as keyof T];
+  }
+  return undefined;
+}
+
+/**
  * Deep check if any part of the object tree is frozen
  */
 function hasAnyFrozenProperty(obj: unknown, path = ''): string | null {
-  if (obj === null || typeof obj !== 'object') {
+  if (!isFreezableObject(obj)) {
     return null;
   }
 
@@ -76,7 +94,7 @@ function hasAnyFrozenProperty(obj: unknown, path = ''): string | null {
   }
 
   for (const key of Object.keys(obj)) {
-    const value = (obj as Record<string, unknown>)[key];
+    const value = getNestedValue(obj, key);
     const frozenPath = hasAnyFrozenProperty(value, path ? `${path}.${key}` : key);
     if (frozenPath) {
       return frozenPath;

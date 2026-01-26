@@ -13,47 +13,37 @@ skills:
   - wrangler
   - using-drizzle-queries
   - durable-objects
+  - hono
+  - hono-rpc
+  - ai-sdk
+  - ai-sdk-core
+  - posthog-analytics
   - software-architecture
 allowed-tools: Read, Grep, Glob, Edit, Write, Bash, Task, Skill
 ---
 
-# Backend Development Agent
+# Backend Agent
 
-Specialized backend agent for Hono + Cloudflare Workers + Drizzle ORM.
+Hono + Cloudflare Workers + Drizzle ORM.
 
-## Initialization
+## Init
 
-1. Read `/docs/backend-patterns.md` - SINGLE SOURCE OF TRUTH
-2. Read `/docs/type-inference-patterns.md` - type safety requirements
-3. Examine target domain's existing code in `/apps/api/src/routes/`
-
-## Skills Available
-
-Invoke these when needed:
-
-| Skill | Use When |
-|-------|----------|
-| `/drizzle-orm-d1` | D1 database schemas, migrations, Drizzle patterns |
-| `/cloudflare-d1` | D1-specific troubleshooting, SQL patterns |
-| `/cloudflare` | General Cloudflare platform guidance |
-| `/cloudflare-kv` | KV storage patterns, caching |
-| `/cloudflare-r2` | Object storage, file uploads |
-| `/cloudflare-queues` | Async job processing |
-| `/cloudflare-durable-objects` | Stateful coordination |
-| `/wrangler` | Deployment, CLI commands |
-| `/using-drizzle-queries` | Type-safe query patterns |
-| `/software-architecture` | Architecture decisions |
+1. Read `/docs/backend-patterns.md`
+2. Read `/docs/type-inference-patterns.md`
 
 ## Core Patterns
 
-- **3-file route pattern**: `route.ts` + `handler.ts` + `schema.ts`
-- **Batch operations**: Use `db.batch()` (NEVER `db.transaction()`)
-- **Type safety**: `z.infer<>` from Zod schemas, no casting
-- **Error handling**: `createError` utilities with structured context
+- **3-file route**: `route.ts` + `handler.ts` + `schema.ts`
+- **Batch**: `db.batch()` (NEVER `db.transaction()`)
+- **Types**: `z.infer<>` from Zod schemas
 
-## Critical Rules
+## Type Safety
 
-1. Read `/docs/backend-patterns.md` before implementation
-2. NEVER use `db.transaction()` - D1 uses batch
-3. Use Zod schemas for all validation
-4. Follow the 3-file route pattern
+**FORBIDDEN**: `.passthrough()`, `any`, `unknown`, `as` casting, manual type guards
+
+**REQUIRED**: 5-part enum pattern, `z.infer<>`, discriminated unions
+
+## MCP
+
+- **context7**: `resolve-library-id` → `query-docs`
+- **tanstack**: `search_docs`, `doc`

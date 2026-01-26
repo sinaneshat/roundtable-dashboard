@@ -14,11 +14,11 @@ import { createApiClient, ServiceFetchError } from '@/lib/api/client';
 // Type Inference - Automatically derived from backend routes
 // ============================================================================
 
-type CreateCheckoutEndpoint = ApiClientType['billing']['checkout']['$post'];
+type CreateCheckoutEndpoint = ApiClientType['billing']['billing']['checkout']['$post'];
 export type CreateCheckoutSessionRequest = InferRequestType<CreateCheckoutEndpoint>;
 export type CreateCheckoutSessionResponse = InferResponseType<CreateCheckoutEndpoint, 200>;
 
-type SyncAfterCheckoutEndpoint = ApiClientType['billing']['sync-after-checkout']['$post'];
+type SyncAfterCheckoutEndpoint = ApiClientType['billing']['billing']['sync-after-checkout']['$post'];
 export type SyncAfterCheckoutRequest = InferRequestType<SyncAfterCheckoutEndpoint>;
 export type SyncAfterCheckoutResponse = InferResponseType<SyncAfterCheckoutEndpoint, 200>;
 
@@ -32,7 +32,7 @@ export type SyncAfterCheckoutResponse = InferResponseType<SyncAfterCheckoutEndpo
  */
 export async function createCheckoutSessionService(data: CreateCheckoutSessionRequest): Promise<CreateCheckoutSessionResponse> {
   const client = createApiClient();
-  const res = await client.billing.checkout.$post(data);
+  const res = await client.billing.billing.checkout.$post(data);
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to create checkout session: ${res.statusText}`, res.status, res.statusText);
   }
@@ -49,7 +49,7 @@ export async function createCheckoutSessionService(data: CreateCheckoutSessionRe
  */
 export async function syncAfterCheckoutService(data?: SyncAfterCheckoutRequest): Promise<SyncAfterCheckoutResponse> {
   const client = createApiClient();
-  const res = await client.billing['sync-after-checkout'].$post(data ?? {});
+  const res = await client.billing.billing['sync-after-checkout'].$post(data ?? {});
   if (!res.ok) {
     throw new ServiceFetchError(`Failed to sync after checkout: ${res.statusText}`, res.status, res.statusText);
   }

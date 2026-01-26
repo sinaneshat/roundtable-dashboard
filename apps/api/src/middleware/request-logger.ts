@@ -33,6 +33,13 @@ function getLogLevel(): RequestLogLevel {
 }
 
 /**
+ * Check if logging is disabled
+ */
+function isLoggingDisabled(): boolean {
+  return getLogLevel() === RequestLogLevels.NONE;
+}
+
+/**
  * Check if verbose logging is enabled
  */
 function isVerboseLogging(): boolean {
@@ -76,6 +83,12 @@ type RequestLogEntry = {
  * Usage: app.use('*', requestLogger);
  */
 export const requestLogger = createMiddleware<ApiEnv>(async (c, next) => {
+  // Skip logging entirely if disabled (local/development)
+  if (isLoggingDisabled()) {
+    await next();
+    return;
+  }
+
   const startTime = Date.now();
 
   // Process request

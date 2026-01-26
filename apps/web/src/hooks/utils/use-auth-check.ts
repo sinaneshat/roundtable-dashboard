@@ -9,8 +9,17 @@
 
 import { useNavigate } from '@tanstack/react-router';
 import { useCallback, useMemo } from 'react';
+import { z } from 'zod';
 
 import { getSession, signOut, useSession } from '@/lib/auth/client';
+
+/**
+ * Schema for validating error objects with statusCode
+ * Used for type-safe 401 error detection
+ */
+const ErrorWithStatusCodeSchema = z.object({
+  statusCode: z.number(),
+});
 
 export type UseAuthCheckReturn = {
   /** Whether the user is authenticated */
@@ -26,11 +35,15 @@ export type UseAuthCheckReturn = {
 /**
  * Check if an error is a 401 Unauthorized response
  * Supports Hono client DetailedError format
+ * ✅ TYPE-SAFE: Uses Zod validation instead of type casting
  */
 function is401Error(error: unknown): boolean {
-  if (error && typeof error === 'object' && 'statusCode' in error) {
-    return (error as { statusCode: number }).statusCode === 401;
+  // Validate error object with Zod schema
+  const statusCodeResult = ErrorWithStatusCodeSchema.safeParse(error);
+  if (statusCodeResult.success) {
+    return statusCodeResult.data.statusCode === 401;
   }
+  // Fallback: check Error message format
   if (error instanceof Error) {
     const msg = error.message.toLowerCase();
     return msg.startsWith('401 ') || msg === 'unauthorized';

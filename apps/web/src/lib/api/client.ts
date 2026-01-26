@@ -1,13 +1,13 @@
 /**
  * Hono RPC Client
  *
- * Type-safe API client following Hono's RPC pattern for large applications.
- * https://hono.dev/docs/guides/rpc#split-your-application
+ * Type-safe API client using Hono's RPC pattern.
+ * https://hono.dev/docs/guides/rpc
  *
- * Due to TypeScript TS7056 limits, we can't use a single intersection type.
- * Instead, we create individual typed clients that share the same base URL.
+ * Due to TS7056 with 100+ routes, we create separate hc() clients per route group.
+ * Access pattern: client.{clientName}.{routePrefix}.{path}
+ *   e.g., client.billing.billing.products.$get()
  */
-
 import type {
   AdminRoutesType,
   BillingRoutesType,
@@ -34,140 +34,47 @@ export type ClientOptions = {
   bypassCache?: boolean | undefined;
 };
 
-// Individual client types for each route group
-type HealthAuthClient = ReturnType<typeof hc<HealthAuthRoutesType>>;
-type BillingClient = ReturnType<typeof hc<BillingRoutesType>>;
-type ChatThreadClient = ReturnType<typeof hc<ChatThreadRoutesType>>;
-type ChatMessageClient = ReturnType<typeof hc<ChatMessageRoutesType>>;
-type ChatFeatureClient = ReturnType<typeof hc<ChatFeatureRoutesType>>;
-type ProjectClient = ReturnType<typeof hc<ProjectRoutesType>>;
-type AdminClient = ReturnType<typeof hc<AdminRoutesType>>;
-type UtilityClient = ReturnType<typeof hc<UtilityRoutesType>>;
-type UploadClient = ReturnType<typeof hc<UploadRoutesType>>;
-type TestClient = ReturnType<typeof hc<TestRoutesType>>;
+// Individual client types - standard hc<RouteType>() pattern
+export type HealthAuthClient = ReturnType<typeof hc<HealthAuthRoutesType>>;
+export type BillingClient = ReturnType<typeof hc<BillingRoutesType>>;
+export type ChatThreadClient = ReturnType<typeof hc<ChatThreadRoutesType>>;
+export type ChatMessageClient = ReturnType<typeof hc<ChatMessageRoutesType>>;
+export type ChatFeatureClient = ReturnType<typeof hc<ChatFeatureRoutesType>>;
+export type ProjectClient = ReturnType<typeof hc<ProjectRoutesType>>;
+export type AdminClient = ReturnType<typeof hc<AdminRoutesType>>;
+export type UtilityClient = ReturnType<typeof hc<UtilityRoutesType>>;
+export type UploadClient = ReturnType<typeof hc<UploadRoutesType>>;
+export type TestClient = ReturnType<typeof hc<TestRoutesType>>;
 
 /**
- * Combined API client type - intersection of all route group clients
- * Used for type inference in service files
- */
-export type ApiClientType
-  = HealthAuthClient
-    & BillingClient
-    & ChatThreadClient
-    & ChatMessageClient
-    & ChatFeatureClient
-    & ProjectClient
-    & AdminClient
-    & UtilityClient
-    & UploadClient
-    & TestClient;
-
-// ============================================================================
-// Client Factory
-// ============================================================================
-
-// Cache for client instances per config
-const clientCache = new WeakMap<object, ApiClientType>();
-const defaultKey = {};
-
-/**
- * Create type-safe API client
+ * API Client interface - separate clients per route group
  *
- * Creates typed clients for each route group and merges them via Proxy.
- * Hono's hc() returns Proxy objects - we need a meta-proxy to delegate.
+ * Access patterns:
+ *   client.billing.billing.products.$get()
+ *   client.chatThread.chat.threads.$get()
+ *   client.chatMessage.chat.threads['{id}'].messages.$get()
+ *   client.chatFeature.chat['custom-roles'].$get()
+ *   client.admin.admin.users.search.$get()
+ *   client.healthAuth.auth.me.$get()
+ *   client.utility.models.$get()
+ *   client.project.projects.$get()
+ *   client.upload.uploads.$get()
  */
-export function createApiClient(options?: ClientOptions): ApiClientType {
-  // Use cached client for default options
-  const cacheKey = options ?? defaultKey;
-  const cached = !options ? clientCache.get(cacheKey) : undefined;
-  if (cached) {
-    return cached;
-  }
-
-  const baseUrl = getApiBaseUrl();
-  const config = {
-    fetch: buildFetch(options),
-    headers: buildHeaders(options),
-  };
-
-  // Create typed clients for each route group
-  const clients = {
-    admin: hc<AdminRoutesType>(baseUrl, config),
-    billing: hc<BillingRoutesType>(baseUrl, config),
-    chatFeature: hc<ChatFeatureRoutesType>(baseUrl, config),
-    chatMessage: hc<ChatMessageRoutesType>(baseUrl, config),
-    chatThread: hc<ChatThreadRoutesType>(baseUrl, config),
-    healthAuth: hc<HealthAuthRoutesType>(baseUrl, config),
-    project: hc<ProjectRoutesType>(baseUrl, config),
-    test: hc<TestRoutesType>(baseUrl, config),
-    upload: hc<UploadRoutesType>(baseUrl, config),
-    utility: hc<UtilityRoutesType>(baseUrl, config),
-  };
-
-  // Route namespace to client mapping
-  const namespaceMap: Record<string, keyof typeof clients> = {
-    admin: 'admin',
-    auth: 'healthAuth',
-    billing: 'billing',
-    chat: 'chatThread', // Primary, will check others too
-    credits: 'utility',
-    health: 'healthAuth',
-    mcp: 'utility',
-    models: 'utility',
-    og: 'healthAuth',
-    projects: 'project',
-    system: 'healthAuth',
-    test: 'test',
-    uploads: 'upload',
-    usage: 'utility',
-  };
-
-  // Chat namespace needs special handling (spans 3 clients)
-  const chatClients = [clients.chatThread, clients.chatMessage, clients.chatFeature];
-
-  const proxy = new Proxy({} as ApiClientType, {
-    get(_, prop: string) {
-      // Handle chat namespace - try all chat clients
-      if (prop === 'chat') {
-        return new Proxy({}, {
-          get(_, chatProp: string) {
-            for (const client of chatClients) {
-              const chatNs = (client as Record<string, unknown>).chat as Record<string, unknown> | undefined;
-              if (chatNs?.[chatProp] !== undefined) {
-                return chatNs[chatProp];
-              }
-            }
-            return undefined;
-          },
-        });
-      }
-
-      // Direct namespace mapping
-      const clientKey = namespaceMap[prop];
-      if (clientKey) {
-        return (clients[clientKey] as Record<string, unknown>)[prop];
-      }
-
-      // Fallback: search all clients
-      for (const client of Object.values(clients)) {
-        const val = (client as Record<string, unknown>)[prop];
-        if (val !== undefined) {
-          return val;
-        }
-      }
-
-      return undefined;
-    },
-  });
-
-  if (!options) {
-    clientCache.set(cacheKey, proxy);
-  }
-
-  return proxy;
+// eslint-disable-next-line ts/consistent-type-definitions
+export interface ApiClientType {
+  admin: AdminClient;
+  billing: BillingClient;
+  chatFeature: ChatFeatureClient;
+  chatMessage: ChatMessageClient;
+  chatThread: ChatThreadClient;
+  healthAuth: HealthAuthClient;
+  project: ProjectClient;
+  test: TestClient;
+  upload: UploadClient;
+  utility: UtilityClient;
 }
 
-export const createPublicApiClient = createApiClient;
+export type ApiClient = ApiClientType;
 
 // ============================================================================
 // Helpers
@@ -196,6 +103,45 @@ function buildFetch(options?: ClientOptions): typeof fetch {
 }
 
 // ============================================================================
+// Client Factory
+// ============================================================================
+
+let cachedClient: ApiClientType | null = null;
+
+export function createApiClient(options?: ClientOptions): ApiClientType {
+  if (!options && cachedClient) {
+    return cachedClient;
+  }
+
+  const baseUrl = getApiBaseUrl();
+  const config = {
+    fetch: buildFetch(options),
+    headers: buildHeaders(options),
+  };
+
+  const client: ApiClientType = {
+    admin: hc<AdminRoutesType>(baseUrl, config),
+    billing: hc<BillingRoutesType>(baseUrl, config),
+    chatFeature: hc<ChatFeatureRoutesType>(baseUrl, config),
+    chatMessage: hc<ChatMessageRoutesType>(baseUrl, config),
+    chatThread: hc<ChatThreadRoutesType>(baseUrl, config),
+    healthAuth: hc<HealthAuthRoutesType>(baseUrl, config),
+    project: hc<ProjectRoutesType>(baseUrl, config),
+    test: hc<TestRoutesType>(baseUrl, config),
+    upload: hc<UploadRoutesType>(baseUrl, config),
+    utility: hc<UtilityRoutesType>(baseUrl, config),
+  };
+
+  if (!options) {
+    cachedClient = client;
+  }
+
+  return client;
+}
+
+export const createPublicApiClient = createApiClient;
+
+// ============================================================================
 // Non-RPC Fetch (multipart/binary)
 // ============================================================================
 
@@ -210,9 +156,6 @@ export class ServiceFetchError extends Error {
   }
 }
 
-/**
- * Type for authenticated fetch init options (extends RequestInit)
- */
 type AuthenticatedFetchInit = RequestInit & {
   searchParams?: Record<string, string>;
 };

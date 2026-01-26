@@ -48,6 +48,11 @@ export class CloudflareKVCache extends Cache {
       const prefixedKey = this.getPrefixedKey(key);
       const cached = await this.kv.get<unknown[]>(prefixedKey, 'json');
 
+      // DEBUG: Log cache get operations
+      const isHit = cached !== null;
+      const itemCount = Array.isArray(cached) ? cached.length : 0;
+      console.info(`[Cache:get] key=${key.slice(0, 50)}... hit=${isHit} items=${itemCount}`);
+
       if (cached !== null) {
         return cached;
       }
@@ -71,6 +76,10 @@ export class CloudflareKVCache extends Cache {
 
       // Calculate expiration
       const ttl = this.calculateTtl(config);
+
+      // DEBUG: Log cache put operations
+      const itemCount = Array.isArray(response) ? response.length : 1;
+      console.info(`[Cache:put] key=${hashedQuery.slice(0, 50)}... isTag=${isTag} items=${itemCount} ttl=${ttl} tables=${tables.join(',')}`);
 
       // Store in KV with expiration
       await this.kv.put(prefixedKey, JSON.stringify(response), {
@@ -116,11 +125,16 @@ export class CloudflareKVCache extends Cache {
       }
 
       if (keysToInvalidate.size > 0) {
+        // DEBUG: Log what keys we're actually deleting
+        console.info(`[Cache:onMutate] deleting ${keysToInvalidate.size} keys: ${Array.from(keysToInvalidate).join(', ')}`);
+
         await Promise.all(
           Array.from(keysToInvalidate).map(async key =>
             await this.kv.delete(this.getPrefixedKey(key)),
           ),
         );
+      } else {
+        console.info(`[Cache:onMutate] no keys to invalidate for tags=${tagsArray.join(',')} tables=${tablesArray.join(',')}`);
       }
     } catch (error) {
       console.error('[Cache] Error during invalidation:', error);
@@ -131,6 +145,10 @@ export class CloudflareKVCache extends Cache {
     tables?: string | string[] | TableType | TableType[];
     tags?: string | string[];
   }): Promise<void> {
+    // DEBUG: Log invalidation requests
+    const tagsArray = Array.isArray(params.tags) ? params.tags : params.tags ? [params.tags] : [];
+    console.info(`[Cache:invalidate] tags=${tagsArray.join(',')}`);
+
     await this.onMutate({
       tables: params.tables ?? [],
       tags: params.tags ?? [],
