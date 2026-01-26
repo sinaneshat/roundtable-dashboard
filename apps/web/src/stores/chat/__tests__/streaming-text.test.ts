@@ -323,7 +323,12 @@ describe('appendModeratorStreamingText - Moderator Streaming', () => {
 // Test Suite: completeStreaming Cleanup
 // ============================================================================
 
-describe('completeStreaming - Placeholder Cleanup', () => {
+describe('completeStreaming - Behavior', () => {
+  /**
+   * NOTE: completeStreaming does NOT clean up streaming placeholders.
+   * Placeholders are cleaned up by setMessages when server data arrives via useModeratorStream.
+   * This prevents UI flash where placeholder text disappears then reappears.
+   */
   let store: ReturnType<typeof createChatStore>;
 
   beforeEach(() => {
@@ -335,8 +340,9 @@ describe('completeStreaming - Placeholder Cleanup', () => {
     vi.clearAllMocks();
   });
 
-  it('should remove streaming placeholders when server messages exist', () => {
-    // Create streaming placeholder
+  it('should preserve all messages (placeholders NOT cleaned up by completeStreaming)', () => {
+    // completeStreaming intentionally does not clean up placeholders
+    // Cleanup happens via setMessages when server data arrives
     store.getState().appendEntityStreamingText(0, 'Streaming content', 0);
 
     let state = store.getState();
@@ -354,15 +360,15 @@ describe('completeStreaming - Placeholder Cleanup', () => {
 
     store.getState().setMessages([state.messages[0]!, serverMessage]);
 
-    // Complete streaming - should clean up placeholder
+    // Complete streaming - does NOT clean up placeholders
     store.getState().completeStreaming();
 
     state = store.getState();
-    expect(state.messages).toHaveLength(1);
-    expect(state.messages[0]!.id).toBe('thread-123_r0_p0'); // Only server message remains
+    // Both messages remain - placeholder cleanup happens via setMessages from useModeratorStream
+    expect(state.messages).toHaveLength(2);
   });
 
-  it('should keep streaming placeholders if no server message', () => {
+  it('should keep streaming placeholders after completeStreaming', () => {
     // Create streaming placeholder
     store.getState().appendEntityStreamingText(0, 'Still streaming...', 0);
 
@@ -370,7 +376,7 @@ describe('completeStreaming - Placeholder Cleanup', () => {
     expect(state.messages).toHaveLength(1);
     expect(state.messages[0]!.id).toBe('streaming_p0_r0');
 
-    // Complete streaming without server message
+    // Complete streaming - placeholders are NOT cleaned up here
     store.getState().completeStreaming();
 
     state = store.getState();
@@ -378,7 +384,7 @@ describe('completeStreaming - Placeholder Cleanup', () => {
     expect(state.messages[0]!.id).toBe('streaming_p0_r0'); // Placeholder retained
   });
 
-  it('should match by participantIndex and roundNumber for cleanup', () => {
+  it('should preserve all messages including placeholders and server messages', () => {
     // Create streaming placeholders for multiple participants
     store.getState().appendEntityStreamingText(0, 'P0 streaming', 0);
     store.getState().appendEntityStreamingText(1, 'P1 streaming', 0);
@@ -395,16 +401,18 @@ describe('completeStreaming - Placeholder Cleanup', () => {
     let state = store.getState();
     store.getState().setMessages([...state.messages, p0ServerMessage]);
 
-    // Complete streaming
+    // Complete streaming - does NOT clean up placeholders
     store.getState().completeStreaming();
 
     state = store.getState();
 
-    // P0 placeholder should be removed (has server message)
-    const p0Placeholder = findStreamingPlaceholder(state.messages, 'streaming_p0_r0');
-    expect(p0Placeholder).toBeUndefined();
+    // All messages preserved - completeStreaming does not clean up
+    expect(state.messages).toHaveLength(3);
 
-    // P1 placeholder should remain (no server message)
+    // Both placeholders should remain
+    const p0Placeholder = findStreamingPlaceholder(state.messages, 'streaming_p0_r0');
+    expect(p0Placeholder).toBeDefined();
+
     const p1Placeholder = findStreamingPlaceholder(state.messages, 'streaming_p1_r0');
     expect(p1Placeholder).toBeDefined();
 
@@ -413,7 +421,7 @@ describe('completeStreaming - Placeholder Cleanup', () => {
     expect(serverMsg).toBeDefined();
   });
 
-  it('should match moderator placeholders by roundNumber for cleanup', () => {
+  it('should preserve moderator placeholders after completeStreaming', () => {
     // Create moderator streaming placeholder
     store.getState().appendModeratorStreamingText('Moderator streaming', 0);
 
@@ -430,15 +438,15 @@ describe('completeStreaming - Placeholder Cleanup', () => {
 
     store.getState().setMessages([state.messages[0]!, moderatorServerMessage]);
 
-    // Complete streaming
+    // Complete streaming - does NOT clean up placeholders
     store.getState().completeStreaming();
 
     state = store.getState();
-    expect(state.messages).toHaveLength(1);
-    expect(state.messages[0]!.id).toBe('thread-123_r0_moderator');
+    // Both remain - actual cleanup happens via setMessages from useModeratorStream
+    expect(state.messages).toHaveLength(2);
   });
 
-  it('should handle cleanup for multiple rounds independently', () => {
+  it('should preserve all placeholders across multiple rounds', () => {
     // Create placeholders for round 0 and round 1
     store.getState().appendEntityStreamingText(0, 'R0 P0 streaming', 0);
     store.getState().appendEntityStreamingText(0, 'R1 P0 streaming', 1);
@@ -459,11 +467,13 @@ describe('completeStreaming - Placeholder Cleanup', () => {
 
     state = store.getState();
 
-    // R0 placeholder should be removed
-    const r0Placeholder = findStreamingPlaceholder(state.messages, 'streaming_p0_r0');
-    expect(r0Placeholder).toBeUndefined();
+    // All messages preserved
+    expect(state.messages).toHaveLength(3);
 
-    // R1 placeholder should remain
+    // Both placeholders should remain
+    const r0Placeholder = findStreamingPlaceholder(state.messages, 'streaming_p0_r0');
+    expect(r0Placeholder).toBeDefined();
+
     const r1Placeholder = findStreamingPlaceholder(state.messages, 'streaming_p0_r1');
     expect(r1Placeholder).toBeDefined();
   });

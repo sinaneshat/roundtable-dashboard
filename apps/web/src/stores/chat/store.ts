@@ -343,14 +343,6 @@ export function createChatStore() {
          */
         onParticipantComplete: (participantIndex: number) => {
           const state = get();
-
-          // ✅ GUARD: Prevent transition if not in PARTICIPANTS phase
-          // This handles late callbacks after round is already complete
-          if (state.phase !== ChatPhases.PARTICIPANTS) {
-            rlog.phase('onParticipantComplete', `SKIP - not in PARTICIPANTS phase (current=${state.phase})`);
-            return;
-          }
-
           const enabledCount = state.participants.filter(p => p.isEnabled).length;
           const roundNumber = state.currentRoundNumber ?? 0;
           const isRound1 = roundNumber === 0;
@@ -701,6 +693,7 @@ export function createChatStore() {
                 const firstPart = msg.parts[0];
                 if (firstPart && 'text' in firstPart && typeof firstPart.text === 'string') {
                   firstPart.text = firstPart.text + text;
+                  rlog.stream('check', `P${participantIndex} r${roundNumber} APPEND +${text.length} chars → ${firstPart.text.length} total`);
                 }
               }
             } else {
@@ -759,6 +752,7 @@ export function createChatStore() {
                 const firstPart = msg.parts[0];
                 if (firstPart && 'text' in firstPart && typeof firstPart.text === 'string') {
                   firstPart.text = firstPart.text + text;
+                  rlog.stream('check', `Moderator r${roundNumber} APPEND +${text.length} chars → ${firstPart.text.length} total`);
                 }
               }
             } else {
