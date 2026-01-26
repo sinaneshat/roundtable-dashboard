@@ -1,3 +1,4 @@
+import type { Linter } from 'eslint';
 /**
  * Base ESLint configuration factory using @antfu/eslint-config
  * Maximum strict rules for code quality. Type checking via `check-types`.
@@ -6,15 +7,14 @@ import antfu from '@antfu/eslint-config';
 import drizzlePlugin from 'eslint-plugin-drizzle';
 import promisePlugin from 'eslint-plugin-promise';
 import securityPlugin from 'eslint-plugin-security';
+
 import simpleImportSort from 'eslint-plugin-simple-import-sort';
 
-import type { Linter } from 'eslint';
-
-type ConfigOptions = {
+interface ConfigOptions {
   drizzle?: boolean;
   ignores?: string[];
   react?: boolean;
-};
+}
 
 const baseIgnores = [
   '**/dist/**',

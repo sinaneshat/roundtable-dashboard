@@ -1,12 +1,8 @@
 {
   "name": "@roundtable/eslint-config",
+  "type": "module",
   "version": "1.0.0",
   "private": true,
-  "type": "module",
-  "scripts": {
-    "lint": "eslint .",
-    "lint:fix": "eslint . --fix"
-  },
   "exports": {
     ".": "./src/index.ts",
     "./base": "./src/base.ts",
@@ -17,6 +13,10 @@
   "files": [
     "src"
   ],
+  "scripts": {
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix"
+  },
   "peerDependencies": {
     "eslint": "^9.0.0",
     "typescript": "^5.0.0"

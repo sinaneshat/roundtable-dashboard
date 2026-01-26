@@ -1,10 +1,10 @@
+import type { Linter } from 'eslint';
+
 /**
  * ESLint configuration for API package (Hono + Cloudflare Workers + Drizzle)
  * Includes strict backend rules and Drizzle ORM safety
  */
 import vitestPlugin from 'eslint-plugin-vitest';
-
-import type { Linter } from 'eslint';
 
 import { createConfig } from './base';
 

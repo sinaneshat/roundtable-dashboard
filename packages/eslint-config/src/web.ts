@@ -1,3 +1,4 @@
+import type { Linter } from 'eslint';
 /**
  * ESLint configuration for Web package (TanStack Start + React + shadcn)
  *
@@ -11,9 +12,8 @@ import pluginRouter from '@tanstack/eslint-plugin-router';
 import playwrightPlugin from 'eslint-plugin-playwright';
 import tailwindPlugin from 'eslint-plugin-tailwindcss';
 import testingLibraryPlugin from 'eslint-plugin-testing-library';
-import vitestPlugin from 'eslint-plugin-vitest';
 
-import type { Linter } from 'eslint';
+import vitestPlugin from 'eslint-plugin-vitest';
 
 import { createConfig } from './base';
 
@@ -89,7 +89,7 @@ export async function createWebConfig(): Promise<Linter.Config[]> {
     files: ['**/__tests__/**/*', '**/*.test.*', '**/*.spec.*'],
     plugins: {
       'testing-library': testingLibraryPlugin,
-      vitest: vitestPlugin,
+      'vitest': vitestPlugin,
     },
     rules: {
       // Relaxed for tests only
