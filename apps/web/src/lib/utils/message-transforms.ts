@@ -24,6 +24,8 @@ import {
   FinishReasonSchema,
   MessagePartTypes,
   MessageRoles,
+  MODERATOR_NAME,
+  MODERATOR_PARTICIPANT_INDEX,
   TextPartStates,
   UIMessageErrorTypeSchema,
   UIMessageRoles,
@@ -84,6 +86,87 @@ const _UIMessageWithParticipantMetadataSchema = z.custom<UIMessage>().and(
 type UIMessageWithParticipantMetadata = z.infer<typeof _UIMessageWithParticipantMetadataSchema>;
 
 const UNKNOWN_FALLBACK = 'unknown' as const;
+
+// ============================================================================
+// Moderator Detection
+// ============================================================================
+
+/**
+ * Check if a message is a moderator message
+ *
+ * Detects moderator messages by:
+ * 1. Message ID containing "moderator"
+ * 2. Existing isModerator: true in metadata
+ * 3. participantIndex === MODERATOR_PARTICIPANT_INDEX (-99)
+ */
+function isModeratorMessage(message: UIMessage): boolean {
+  // Check ID pattern
+  if (message.id?.toLowerCase().includes('moderator')) {
+    return true;
+  }
+
+  // Check existing metadata
+  if (message.metadata && typeof message.metadata === 'object') {
+    const meta = message.metadata as Record<string, unknown>;
+    if (meta.isModerator === true) {
+      return true;
+    }
+    if (meta.participantIndex === MODERATOR_PARTICIPANT_INDEX) {
+      return true;
+    }
+  }
+
+  return false;
+}
+
+/**
+ * Enrich a message with moderator metadata
+ * Uses DbModeratorMessageMetadata structure (not DbAssistantMessageMetadata)
+ */
+function enrichModeratorMessage(message: UIMessage, roundNumber: number): UIMessage {
+  const existingMeta = getAssistantMetadata(message.metadata);
+
+  // Build moderator-specific metadata (matches DbModeratorMessageMetadataSchema)
+  const moderatorMeta: {
+    createdAt?: string;
+    finishReason?: FinishReason;
+    hasError: boolean;
+    isModerator: true;
+    model: string;
+    participantIndex: number;
+    role: typeof UIMessageRoles.ASSISTANT;
+    roundNumber: number;
+    usage?: { completionTokens: number; promptTokens: number; totalTokens: number };
+  } = {
+    hasError: existingMeta?.hasError ?? false,
+    isModerator: true,
+    model: MODERATOR_NAME,
+    participantIndex: MODERATOR_PARTICIPANT_INDEX,
+    role: UIMessageRoles.ASSISTANT,
+    roundNumber,
+  };
+
+  // Conditionally add optional fields
+  if (existingMeta?.createdAt) {
+    moderatorMeta.createdAt = existingMeta.createdAt;
+  }
+  if (existingMeta?.finishReason) {
+    moderatorMeta.finishReason = existingMeta.finishReason;
+  }
+  if (existingMeta?.usage) {
+    // Ensure all fields are present with defaults
+    moderatorMeta.usage = {
+      completionTokens: existingMeta.usage.completionTokens ?? 0,
+      promptTokens: existingMeta.usage.promptTokens ?? 0,
+      totalTokens: existingMeta.usage.totalTokens ?? 0,
+    };
+  }
+
+  return {
+    ...message,
+    metadata: moderatorMeta,
+  };
+}
 
 // ============================================================================
 // Type Guards
@@ -292,6 +375,12 @@ export function chatMessagesToUIMessages(
               ),
             };
           }
+
+          // Check if this is a moderator message (no participantId but is moderator)
+          if (!participant && isModeratorMessage(message)) {
+            rlog.moderator('toUI-mod-enrich', `id=${message.id?.slice(-8)} round=${explicitRound} enriching as moderator`);
+            return enrichModeratorMessage(message, explicitRound);
+          }
         }
       }
 
@@ -353,6 +442,43 @@ export function chatMessagesToUIMessages(
               roundNumber: currentRound ?? 0,
             },
           );
+        } else if (isModeratorMessage(message)) {
+          // Check if this is a moderator message (no participantId but is moderator)
+          rlog.moderator('toUI-mod-enrich-fallback', `id=${message.id?.slice(-8)} round=${currentRound} enriching as moderator`);
+          const existingMeta = getAssistantMetadata(message.metadata);
+          // Build moderator-specific metadata (matches DbModeratorMessageMetadataSchema)
+          const modMeta: {
+            createdAt?: string;
+            finishReason?: FinishReason;
+            hasError: boolean;
+            isModerator: true;
+            model: string;
+            participantIndex: number;
+            role: typeof UIMessageRoles.ASSISTANT;
+            roundNumber: number;
+            usage?: { completionTokens: number; promptTokens: number; totalTokens: number };
+          } = {
+            hasError: existingMeta?.hasError ?? false,
+            isModerator: true,
+            model: MODERATOR_NAME,
+            participantIndex: MODERATOR_PARTICIPANT_INDEX,
+            role: UIMessageRoles.ASSISTANT,
+            roundNumber: currentRound ?? 0,
+          };
+          if (existingMeta?.createdAt) {
+            modMeta.createdAt = existingMeta.createdAt;
+          }
+          if (existingMeta?.finishReason) {
+            modMeta.finishReason = existingMeta.finishReason;
+          }
+          if (existingMeta?.usage) {
+            modMeta.usage = {
+              completionTokens: existingMeta.usage.completionTokens ?? 0,
+              promptTokens: existingMeta.usage.promptTokens ?? 0,
+              totalTokens: existingMeta.usage.totalTokens ?? 0,
+            };
+          }
+          enrichedMetadata = modMeta;
         } else {
           enrichedMetadata = null;
         }

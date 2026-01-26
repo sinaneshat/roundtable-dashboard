@@ -212,30 +212,16 @@ export function ChatStoreProvider({ children }: ChatStoreProviderProps) {
 
   // AI SDK hook - simplified, only for P0 message sending
   const chat = useMultiParticipantChat({
-    acknowledgeStreamFinish: () => {},
-    clearAnimations: () => {},
-    completeAnimation: () => {},
     enableWebSearch,
-    getPreSearches: () => store.getState().preSearches,
-    hasEarlyOptimisticMessage: false,
     messages: initialMessages,
     mode: thread?.mode,
-    nextParticipantToTrigger: null,
-    onComplete: () => {}, // Backend handles completion via subscription
     onError: handleError,
-    onReconcileWithActiveStream: () => {},
-    onResumedStreamComplete: () => {},
     participants,
     pendingAttachmentIds,
     pendingFileParts,
-    resumptionRoundNumber: null,
-    setHasSentPendingMessage: () => {},
     setIsStreaming: value => store.getState().setIsStreaming(value),
-    setNextParticipantToTrigger: () => {},
-    setParticipantHandoffInProgress: () => {},
     setPendingAttachmentIds: value => store.getState().setPendingAttachmentIds(value),
     setPendingFileParts: value => store.getState().setPendingFileParts(value),
-    streamResumptionPrefilled: false,
     threadId: effectiveThreadId,
   });
 

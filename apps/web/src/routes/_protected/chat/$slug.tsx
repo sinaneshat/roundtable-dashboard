@@ -7,7 +7,6 @@ import ChatThreadScreen from '@/containers/screens/chat/ChatThreadScreen';
 import { useSession } from '@/lib/auth/client';
 import { getAppBaseUrl } from '@/lib/config/base-urls';
 import {
-  streamResumptionQueryOptions,
   threadBySlugQueryOptions,
   threadChangelogQueryOptions,
   threadFeedbackQueryOptions,
@@ -18,9 +17,7 @@ import { rlog } from '@/lib/utils/dev-logger';
 import type {
   GetThreadBySlugResponse,
   GetThreadFeedbackResponse,
-  GetThreadStreamResumptionStateResponse,
 } from '@/services/api';
-import { useIsInCreationFlow } from '@/stores/chat';
 
 export const Route = createFileRoute('/_protected/chat/$slug')({
   component: ChatThreadRoute,
@@ -87,24 +84,20 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
     let preSearches;
     let changelog;
     let feedback;
-    let streamResumption;
 
     if (threadId) {
-      const streamOptions = streamResumptionQueryOptions(threadId);
       const changelogOptions = threadChangelogQueryOptions(threadId);
       const feedbackOptions = threadFeedbackQueryOptions(threadId);
       const preSearchesOptions = threadPreSearchesQueryOptions(threadId);
 
       if (isServer) {
         // On server, await all for proper hydration
-        const [streamResult, changelogResult, feedbackResult, preSearchesResult] = await Promise.all([
-          queryClient.ensureQueryData(streamOptions).catch(() => null),
+        const [changelogResult, feedbackResult, preSearchesResult] = await Promise.all([
           queryClient.ensureQueryData(changelogOptions).catch(() => null),
           queryClient.ensureQueryData(feedbackOptions).catch(() => null),
           queryClient.ensureQueryData(preSearchesOptions).catch(() => null),
         ]);
 
-        streamResumption = streamResult?.success ? streamResult.data : undefined;
         changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
         feedback = feedbackResult?.success ? feedbackResult.data : undefined;
         preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
@@ -124,16 +117,10 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
         changelog = changelogResult?.success ? changelogResult.data?.items : undefined;
         preSearches = preSearchesResult?.success ? preSearchesResult.data?.items : undefined;
 
-        const cachedStream = queryClient.getQueryData<GetThreadStreamResumptionStateResponse>(streamOptions.queryKey);
         const cachedFeedback = queryClient.getQueryData<GetThreadFeedbackResponse>(feedbackOptions.queryKey);
-
-        streamResumption = cachedStream?.success ? cachedStream.data : undefined;
         feedback = cachedFeedback?.success ? cachedFeedback.data : undefined;
 
-        // Prefetch missing auxiliary data in background
-        if (!cachedStream) {
-          queryClient.prefetchQuery(streamOptions).catch(() => {});
-        }
+        // Prefetch missing feedback data in background
         if (!cachedFeedback) {
           queryClient.prefetchQuery(feedbackOptions).catch(() => {});
         }
@@ -148,7 +135,6 @@ export const Route = createFileRoute('/_protected/chat/$slug')({
       preSearches,
       changelog,
       feedback,
-      streamResumption,
     };
   },
 
@@ -195,8 +181,6 @@ function ChatThreadRoute() {
   const { data: session } = useSession();
   const loaderData = Route.useLoaderData();
 
-  const isInCreationFlow = useIsInCreationFlow();
-
   // Use loaderData.threadData as initialData for seamless SSR hydration
   // CRITICAL: Only consider loader data valid if it has messages - prevents blank screen
   // when sidebar prefetch caches "shell" data (thread metadata without messages)
@@ -205,7 +189,7 @@ function ChatThreadRoute() {
   );
   const { data: queryData, error, isError, isFetching } = useQuery({
     ...threadBySlugQueryOptions(slug ?? ''),
-    enabled: Boolean(slug) && !isInCreationFlow,
+    enabled: Boolean(slug),
     initialData: hasValidLoaderData && loaderData.threadData
       ? { data: loaderData.threadData, success: true as const }
       : undefined,
@@ -217,7 +201,6 @@ function ChatThreadRoute() {
   const threadResponse = hasValidLoaderData && loaderData?.threadData
     ? loaderData.threadData
     : (queryData?.success ? queryData.data : null);
-  const streamResumptionState = loaderData?.streamResumption ?? null;
   const changelog = loaderData?.changelog;
   const feedback = loaderData?.feedback;
   const preSearches = loaderData?.preSearches;
@@ -270,7 +253,6 @@ function ChatThreadRoute() {
       initialMessages={messages}
       slug={slug ?? ''}
       user={user}
-      streamResumptionState={streamResumptionState}
       initialChangelog={changelog}
       initialFeedback={feedback}
       initialPreSearches={preSearches}

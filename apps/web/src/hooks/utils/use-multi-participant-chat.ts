@@ -62,28 +62,6 @@ export type UseMultiParticipantChatOptions = {
   setPendingFileParts?: (value: ExtendedFilePart[] | null) => void;
   /** Callback to clear pending attachment IDs on navigation */
   setPendingAttachmentIds?: (value: string[] | null) => void;
-  // Legacy props kept for compatibility (no-ops)
-  acknowledgeStreamFinish?: () => void;
-  clearAnimations?: () => void;
-  completeAnimation?: (participantIndex: number) => void;
-  getPreSearches?: () => { roundNumber: number; status: string; createdAt: string }[];
-  hasEarlyOptimisticMessage?: boolean;
-  nextParticipantToTrigger?: number | null;
-  onComplete?: (messages: UIMessage[]) => void;
-  onPreSearchComplete?: (data: { successfulSearches: number; totalResults: number }) => void;
-  onPreSearchError?: (data: { error: string }) => void;
-  onPreSearchQuery?: (data: { query: string; rationale: string; index: number; total: number }) => void;
-  onPreSearchResult?: (data: { query: string; resultCount: number; index: number }) => void;
-  onPreSearchStart?: (data: { userQuery: string; totalQueries: number }) => void;
-  onReconcileWithActiveStream?: (streamingParticipantIndex: number) => void;
-  onResumedStreamComplete?: (roundNumber: number, participantIndex: number) => void;
-  onRetry?: (roundNumber: number) => void;
-  regenerateRoundNumber?: number;
-  resumptionRoundNumber?: number | null;
-  setHasSentPendingMessage?: (value: boolean) => void;
-  setNextParticipantToTrigger?: (value: { index: number; participantId: string } | number | null) => void;
-  setParticipantHandoffInProgress?: (value: boolean) => void;
-  streamResumptionPrefilled?: boolean;
 };
 
 /**
@@ -263,7 +241,8 @@ export function useMultiParticipantChat(
       rlog.stuck('ai-sdk', `error: ${error.message}`);
       callbackRefs.onError.current?.(error);
     },
-    resume: true,
+    // resume: false - Disabled: backend-first architecture uses useRoundSubscription for stream resumption
+    // Enabling resume causes 404 errors when navigating between threads (stale thread IDs)
     transport,
   });
 

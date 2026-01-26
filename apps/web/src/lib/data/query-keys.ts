@@ -152,7 +152,6 @@ export const queryKeys = {
         ? [...queryKeys.threads.all, 'sidebar', 'search', search] as const
         : [...queryKeys.threads.all, 'sidebar'] as const,
     slugStatus: (id: string) => QueryKeyFactory.action('threads', 'slug-status', id),
-    streamResumption: (id: string) => QueryKeyFactory.action('threads', 'stream-resumption', id),
   },
 
   // Uploads (Centralized file storage)
@@ -294,13 +293,6 @@ export const invalidationPatterns = {
   /** After any upload mutation (complete, abort, delete) */
   uploads: [
     queryKeys.uploads.all,
-  ],
-
-  // Leave thread - invalidate auxiliary thread-specific caches when navigating away
-  // NOTE: We do NOT invalidate bySlug() or detail() - those should stay cached for snappy navigation
-  // Only invalidate ephemeral data that shouldn't persist across sessions
-  leaveThread: (threadId: string) => [
-    queryKeys.threads.streamResumption(threadId), // Ephemeral streaming state
   ],
 
   productDetail: (productId: string) => [

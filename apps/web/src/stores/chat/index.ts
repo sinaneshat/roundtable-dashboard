@@ -87,24 +87,7 @@ export {
 // Helper functions and hooks used by screens
 // ============================================================================
 
-/** Screen initialization hook - simplified for backend-first architecture */
-export function useScreenInitialization(_options?: unknown) {
-  return {
-    isInitialized: true,
-    isLoading: false,
-  };
-}
-
-/** Check if all participants complete for round - simplified stub */
-export function areAllParticipantsCompleteForRound(
-  _messages: unknown[],
-  _participants: unknown[],
-  _roundNumber: number,
-): boolean {
-  return true;
-}
-
-/** Get moderator message for round - simplified stub */
+/** Get moderator message for round */
 export function getModeratorMessageForRound<T>(
   messages: T[],
   roundNumber: number,
@@ -124,8 +107,6 @@ type SyncHydrateOptions = {
   initialMessages: UIMessage[];
   initialPreSearches?: StoredPreSearch[];
   initialChangelog?: ApiChangelog[];
-  streamResumptionState?: unknown;
-  mode?: 'thread' | 'overview';
 };
 
 /**
@@ -196,14 +177,4 @@ export function useSyncHydrateStore(options: SyncHydrateOptions): void {
     threadIdRef.current = thread.id;
     rlog.init('useSyncHydrateStore', `COMPLETE tid=${thread.id.slice(-8)}`);
   }, [storeApi, options]);
-}
-
-/** Check if in creation flow - simplified hook */
-export function useIsInCreationFlow(): boolean {
-  return false;
-}
-
-/** Get status priority - simplified stub */
-export function getStatusPriority(_status: string): number {
-  return 0;
 }

@@ -18,7 +18,6 @@ export * from './participant';
 export * from './participant-message-lookup';
 export * from './queue-utils';
 export * from './round-utils';
-export * from './ssr-message-verification';
 export * from './state-merge';
 export * from './subscription-helpers';
 export * from './type-guards';

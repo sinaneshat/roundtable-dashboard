@@ -51,7 +51,7 @@ import {
 } from '@/lib/utils';
 import dynamic from '@/lib/utils/dynamic';
 import type { GetProjectResponse, Model } from '@/services/api';
-import { useAutoModeAnalysis, useChatFormActions, useOverviewActions, useScreenInitialization } from '@/stores/chat';
+import { useAutoModeAnalysis, useChatFormActions, useOverviewActions } from '@/stores/chat';
 
 import { ChatView } from '../chat/ChatView';
 
@@ -177,8 +177,7 @@ export default function ProjectChatScreen({ project, projectId }: ProjectChatScr
   const { analyzeAndApply } = useAutoModeAnalysis(false); // Don't sync to preferences for project chats
   const formActions = useChatFormActions();
 
-  // ✅ FLOW CONTROL: Initialize screen mode and handle URL updates
-  useScreenInitialization({ mode: ScreenModes.OVERVIEW });
+  // Handle URL updates for overview actions
   useOverviewActions({ projectId });
 
   const allEnabledModels = useMemo(() => {

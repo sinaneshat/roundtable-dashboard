@@ -18,13 +18,11 @@
  * Location: /src/stores/chat/actions/navigation-reset.ts
  * Used by: ChatNav component
  */
-import { useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@tanstack/react-router';
 import { useCallback, useEffect, useRef } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
 import { useChatStore } from '@/components/providers/chat-store-provider/context';
-import { invalidationPatterns } from '@/lib/data/query-keys';
 
 /**
  * Hook that provides a callback to reset store when navigating to new chat
@@ -42,27 +40,18 @@ import { invalidationPatterns } from '@/lib/data/query-keys';
  */
 export function useNavigationReset() {
   // Batch store state and actions with useShallow for performance
-  const { createdThreadId, resetToNewChat, thread } = useChatStore(useShallow(s => ({
-    createdThreadId: s.createdThreadId,
+  const { resetToNewChat } = useChatStore(useShallow(s => ({
     resetToNewChat: s.resetToNewChat,
-    thread: s.thread,
   })));
   const { pathname } = useLocation();
   const previousPathnameRef = useRef(pathname);
-  const queryClient = useQueryClient();
 
-  // Shared reset logic - invalidate queries and reset store
+  // Shared reset logic - reset store state
   // Note: preferences are stored in useModelPreferencesStore (cookie-persisted)
   // and don't need to be passed to resetToNewChat
   const doReset = useCallback(() => {
-    const effectiveThreadId = thread?.id || createdThreadId;
-    if (effectiveThreadId) {
-      invalidationPatterns.leaveThread(effectiveThreadId).forEach((key) => {
-        queryClient.invalidateQueries({ queryKey: key });
-      });
-    }
     resetToNewChat();
-  }, [thread, createdThreadId, queryClient, resetToNewChat]);
+  }, [resetToNewChat]);
 
   // Reset store when navigating FROM thread screen TO /chat
   useEffect(() => {

@@ -64,7 +64,6 @@ import {
   useAutoModeAnalysis,
   useChatFormActions,
   useOverviewActions,
-  useScreenInitialization,
 } from '@/stores/chat';
 
 import { ChatView } from './ChatView';
@@ -621,9 +620,6 @@ export default function ChatOverviewScreen() {
   useEffect(() => {
     setThreadActions(threadActions);
   }, [threadActions, setThreadActions]);
-
-  // Screen initialization is now a no-op stub - initialization handled differently
-  useScreenInitialization();
 
   const pendingMessage = useChatStore(s => s.pendingMessage);
 

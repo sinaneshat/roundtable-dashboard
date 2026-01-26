@@ -1108,60 +1108,6 @@ Returns \`ThreadStreamResumptionState\` with:
 });
 
 /**
- * GET /chat/threads/:threadId/rounds/:roundNumber/subscribe
- * ✅ ROBUST STREAMING: Subscribe to stream for pub/sub delivery pattern
- */
-export const subscribeToStreamRoute = createRoute({
-  description: `Subscribe to a stream for a specific thread and round. Part of the robust streaming resumption system.
-
-**Pub/Sub Delivery Pattern**:
-- Background worker produces chunks to KV buffer
-- Clients subscribe via SSE and receive chunks
-- Supports mid-stream join (replay existing chunks, then live)
-- Returns 202 with retry-after if stream not yet started
-
-**Response Types**:
-- 200 OK with JSON: Status information (queued, active, completed)
-- text/event-stream: SSE stream when active stream is available
-
-**Usage Pattern**:
-1. Client calls subscribe endpoint
-2. If response.status === 'queued', wait retryAfter ms and retry
-3. If response.status === 'active', switch to SSE streaming
-4. If response.status === 'completed', round is done`,
-  method: 'get',
-  path: '/chat/threads/{threadId}/rounds/{roundNumber}/subscribe',
-  request: {
-    params: ThreadRoundParamSchema,
-  },
-  responses: {
-    [HttpStatusCodes.OK]: {
-      content: {
-        'application/json': {
-          schema: createApiResponseSchema(z.object({
-            isActive: z.boolean().optional(),
-            phase: z.enum(['presearch', 'participant', 'moderator']).optional(),
-            retryAfter: z.number().optional(),
-            roundNumber: z.number().optional(),
-            status: z.enum(['queued', 'active', 'completed']),
-            streamId: z.string().optional(),
-          })),
-        },
-        'text/event-stream': {
-          schema: z.any().openapi({
-            description: 'Server-Sent Events (SSE) stream with buffered chunks.',
-          }),
-        },
-      },
-      description: 'Subscription status or active SSE stream',
-    },
-    ...createProtectedRouteResponses(),
-  },
-  summary: 'Subscribe to stream (pub/sub pattern)',
-  tags: ['chat'],
-});
-
-/**
  * GET /chat/threads/:threadId/memory-events
  * ✅ MEMORY EVENTS: Poll for memory creation events after round completes
  */

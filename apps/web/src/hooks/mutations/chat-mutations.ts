@@ -386,7 +386,6 @@ export function useDeleteThreadMutation() {
       queryClient.removeQueries({ queryKey: queryKeys.threads.feedback(threadId) });
       queryClient.removeQueries({ queryKey: queryKeys.threads.changelog(threadId) });
       queryClient.removeQueries({ queryKey: queryKeys.threads.preSearches(threadId) });
-      queryClient.removeQueries({ queryKey: queryKeys.threads.streamResumption(threadId) });
       queryClient.removeQueries({ queryKey: queryKeys.threads.slugStatus(threadId) });
 
       if (slug) {

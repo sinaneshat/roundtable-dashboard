@@ -1,4 +1,4 @@
-import { ChatModeSchema, isCompletionFinishReason, UploadStatuses } from '@roundtable/shared';
+import { isCompletionFinishReason, UploadStatuses } from '@roundtable/shared';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useShallow } from 'zustand/react/shallow';
 
@@ -23,13 +23,11 @@ import {
 } from '@/lib/utils';
 import { rlog } from '@/lib/utils/dev-logger';
 import dynamic from '@/lib/utils/dynamic';
-import type { ApiMessage, ApiParticipant, ChangelogItem, ChatThread, GetThreadMemoryEventsResponse, Model, RoundFeedbackData, StoredPreSearch, ThreadDetailData, ThreadStreamResumptionState } from '@/services/api';
+import type { ApiMessage, ApiParticipant, ChangelogItem, ChatThread, GetThreadMemoryEventsResponse, Model, RoundFeedbackData, StoredPreSearch, ThreadDetailData } from '@/services/api';
 import { getThreadMemoryEventsService } from '@/services/api';
 import {
-  areAllParticipantsCompleteForRound,
   getModeratorMessageForRound,
   useChatFormActions,
-  useScreenInitialization,
   useSyncHydrateStore,
 } from '@/stores/chat';
 
@@ -57,7 +55,6 @@ type ChatThreadScreenProps = {
   initialMessages: ApiMessage[];
   slug: string;
   user: ThreadDetailData['user'];
-  streamResumptionState?: ThreadStreamResumptionState | null;
   /** Pre-searched data prefetched on server for SSR hydration */
   initialPreSearches?: StoredPreSearch[];
   /** Changelog items prefetched on server for SSR hydration */
@@ -101,7 +98,6 @@ export default function ChatThreadScreen({
   initialPreSearches,
   participants,
   slug,
-  streamResumptionState,
   thread,
   user,
 }: ChatThreadScreenProps) {
@@ -125,9 +121,7 @@ export default function ChatThreadScreen({
     initialChangelog,
     initialMessages: uiMessages,
     initialPreSearches,
-    mode: 'thread',
     participants,
-    streamResumptionState,
     thread,
   });
 
@@ -146,7 +140,6 @@ export default function ChatThreadScreen({
     isStreaming,
     messages,
     pendingMessage,
-    selectedMode,
     selectedParticipants,
     setSelectedParticipants,
     waitingToStartStreaming,
@@ -157,7 +150,6 @@ export default function ChatThreadScreen({
       isStreaming: s.isStreaming,
       messages: s.messages,
       pendingMessage: s.pendingMessage,
-      selectedMode: s.selectedMode,
       selectedParticipants: s.selectedParticipants,
       setSelectedParticipants: s.setSelectedParticipants,
       waitingToStartStreaming: s.waitingToStartStreaming,
@@ -311,43 +303,15 @@ export default function ChatThreadScreen({
 
   const formActions = useChatFormActions();
 
-  const { isRegenerating, regeneratingRoundNumber } = useChatStore(
-    useShallow(s => ({
-      isRegenerating: s.isRegenerating,
-      regeneratingRoundNumber: s.regeneratingRoundNumber,
-    })),
-  );
-
-  const chatMode = useMemo(() => {
-    if (selectedMode) {
-      return selectedMode;
-    }
-    const parsed = ChatModeSchema.safeParse(thread.mode);
-    return parsed.success ? parsed.data : undefined;
-  }, [selectedMode, thread.mode]);
-
-  useScreenInitialization({
-    chatMode,
-    enableOrchestrator: !isRegenerating && !isModeratorStreaming,
-    initialMessages: uiMessages,
-    initialPreSearches,
-    isRegeneration: regeneratingRoundNumber !== null,
-    mode: 'thread',
-    participants,
-    regeneratingRoundNumber,
-    streamResumptionState,
-    thread,
-  });
-
+  // Check if waiting for moderator (no moderator message for current round)
+  // Backend-first architecture: subscriptions will update UI when moderator streams
   const isAwaitingModerator = useMemo(() => {
     if (messages.length === 0 || participants.length === 0) {
       return false;
     }
-
     const currentRound = getCurrentRoundNumber(messages);
-    const allParticipantsComplete = areAllParticipantsCompleteForRound(messages, participants, currentRound);
     const moderatorExists = getModeratorMessageForRound(messages, currentRound) !== undefined;
-    return allParticipantsComplete && !moderatorExists;
+    return !moderatorExists;
   }, [messages, participants]);
 
   // ✅ MEMORY EVENTS: Poll for memory creation after moderator completes

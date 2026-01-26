@@ -15,12 +15,10 @@
  * 3. Paint → user sees correct content
  */
 
-import { useQueryClient } from '@tanstack/react-query';
 import { useLocation } from '@tanstack/react-router';
 import type { RefObject } from 'react';
 import { useLayoutEffect } from 'react';
 
-import { invalidationPatterns } from '@/lib/data/query-keys';
 import { rlog } from '@/lib/utils/dev-logger';
 import type { ChatStoreApi } from '@/stores/chat';
 
@@ -37,7 +35,6 @@ export function useNavigationCleanup({
   store,
 }: UseNavigationCleanupParams) {
   const { pathname } = useLocation();
-  const queryClient = useQueryClient();
 
   // CRITICAL: Must be useLayoutEffect to run BEFORE child's useSyncHydrateStore
   useLayoutEffect(() => {
@@ -93,17 +90,6 @@ export function useNavigationCleanup({
       currentState.clearAllPreSearchTracking();
     }
 
-    // Invalidate only ephemeral data (like stream resumption state)
-    // NOTE: We do NOT invalidate thread data cache - it should stay for snappy navigation
-    if (isNavigatingBetweenThreads || isLeavingThread) {
-      const oldThreadId = currentState.thread?.id || currentState.createdThreadId;
-      if (oldThreadId) {
-        invalidationPatterns.leaveThread(oldThreadId).forEach((key) => {
-          queryClient.invalidateQueries({ queryKey: key });
-        });
-      }
-    }
-
     // ✅ FIX: Immediate reset when navigating between threads
     // remountDeps handles component remounting so store starts fresh
     if (isNavigatingBetweenThreads) {
@@ -134,5 +120,5 @@ export function useNavigationCleanup({
     }
 
     prevPathnameRef.current = pathname;
-  }, [pathname, store, prevPathnameRef, queryClient]);
+  }, [pathname, store, prevPathnameRef]);
 }

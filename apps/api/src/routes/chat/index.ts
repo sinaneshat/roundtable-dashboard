@@ -40,9 +40,6 @@ export {
   resumeThreadStreamHandler,
 } from './handlers/stream-resume.handler';
 export {
-  subscribeToStreamHandler,
-} from './handlers/stream-subscribe.handler';
-export {
   subscribeToModeratorStreamHandler,
   subscribeToParticipantStreamHandler,
   subscribeToPreSearchStreamHandler,

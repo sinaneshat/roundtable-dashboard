@@ -7,7 +7,6 @@ import type {
   GetThreadChangelogResponse,
   GetThreadFeedbackResponse,
   GetThreadPreSearchesResponse,
-  GetThreadStreamResumptionStateResponse,
   ListThreadsResponse,
 } from '@/services/api';
 import {
@@ -15,7 +14,6 @@ import {
   getThreadChangelogService,
   getThreadFeedbackService,
   getThreadPreSearchesService,
-  getThreadStreamResumptionStateService,
   listThreadsService,
 } from '@/services/api';
 
@@ -23,7 +21,6 @@ import type { ServerFnErrorResponse } from './schemas';
 import { idSchema, slugSchema } from './schemas';
 
 type GetThreadBySlugResult = GetThreadBySlugResponse | ServerFnErrorResponse;
-type GetStreamResumptionStateResult = GetThreadStreamResumptionStateResponse | ServerFnErrorResponse;
 type GetThreadChangelogResult = GetThreadChangelogResponse | ServerFnErrorResponse;
 type GetThreadFeedbackResult = GetThreadFeedbackResponse | ServerFnErrorResponse;
 type GetThreadPreSearchesResult = GetThreadPreSearchesResponse | ServerFnErrorResponse;
@@ -34,15 +31,6 @@ export const getThreadBySlug = createServerFn({ method: 'GET' })
   .handler(async ({ context, data }): Promise<GetThreadBySlugResult> => {
     return await getThreadBySlugService(
       { param: { slug: data } },
-      { cookieHeader: context.cookieHeader },
-    );
-  });
-
-export const getStreamResumptionState = createServerFn({ method: 'GET' })
-  .inputValidator(zodValidator(idSchema))
-  .handler(async ({ context, data }): Promise<GetStreamResumptionStateResult> => {
-    return await getThreadStreamResumptionStateService(
-      { param: { threadId: data } },
       { cookieHeader: context.cookieHeader },
     );
   });
