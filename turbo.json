@@ -31,24 +31,22 @@
       "dependsOn": ["build"],
       "inputs": ["src/**", "wrangler.jsonc"]
     },
-    "transit": {
-      "dependsOn": ["^transit"]
-    },
     "check-types": {
       "dependsOn": ["^build"],
       "inputs": ["src/**", "*.config.*", "*.json", "*.d.ts"]
     },
     "lint": {
-      "dependsOn": ["transit"],
-      "inputs": ["src/**", "*.config.*"]
+      "inputs": ["src/**", "*.config.*", "eslint.config.ts"],
+      "outputs": []
     },
     "lint:fix": {
-      "dependsOn": ["transit"],
-      "inputs": ["src/**", "*.config.*"]
+      "inputs": ["src/**", "*.config.*", "eslint.config.ts"],
+      "outputs": [],
+      "cache": false
     },
     "test": {
-      "dependsOn": ["transit"],
-      "inputs": ["src/**", "*.config.*"]
+      "inputs": ["src/**", "*.config.*"],
+      "outputs": ["coverage/**"]
     },
     "test:watch": {
       "cache": false,

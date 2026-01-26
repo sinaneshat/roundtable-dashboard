@@ -1,70 +1,69 @@
 {
-  "task.allowAutomaticTasks": "on",
-  "editor.tabSize": 2,
-  "editor.detectIndentation": false,
-  // ESLint flat config and monorepo support
-  "eslint.useFlatConfig": true,
-  "eslint.workingDirectories": [
-    { "pattern": "apps/*" },
-    { "pattern": "packages/*" }
-  ],
-  "search.exclude": {
-    "package-lock.json": true,
-    ".claude": true,
-    ".agents": true
-  },
-  // TypeScript
-  "typescript.tsdk": "node_modules/typescript/lib",
-  "typescript.enablePromptUseWorkspaceTsdk": true,
-  "typescript.preferences.autoImportFileExcludePatterns": [
-    "next/router.d.ts",
-    "next/dist/client/router.d.ts",
-    "lucide-react",
-    ".claude/**/*",
-    ".agents/**/*"
-  ],
-  "typescript.preferences.preferTypeOnlyAutoImports": true,
-  // Disable the default formatter, use ESLint instead
+  // Disable prettier, use eslint for formatting
   "prettier.enable": false,
   "editor.formatOnSave": false,
-  // Auto fix with ESLint on save - EXCLUDE .claude and .agents
-  "editor.codeActionsOnSave": [
-    "source.addMissingImports",
-    "source.fixAll.eslint",
-    "source.organizeImports"
+
+  // Auto fix with eslint
+  "editor.codeActionsOnSave": {
+    "source.fixAll.eslint": "explicit",
+    "source.organizeImports": "never"
+  },
+
+  // ESLint flat config for monorepo
+  "eslint.useFlatConfig": true,
+  "eslint.runtime": "node",
+  "eslint.workingDirectories": [
+    { "directory": "apps/api", "changeProcessCWD": true },
+    { "directory": "apps/web", "changeProcessCWD": true },
+    { "directory": "packages/shared", "changeProcessCWD": true },
+    { "directory": "packages/eslint-config", "changeProcessCWD": true }
   ],
+
+  // Silent stylistic rules in IDE, but still auto fix them
+  "eslint.rules.customizations": [
+    { "rule": "style/*", "severity": "off", "fixable": true },
+    { "rule": "*-indent", "severity": "off", "fixable": true },
+    { "rule": "*-spacing", "severity": "off", "fixable": true },
+    { "rule": "*-spaces", "severity": "off", "fixable": true },
+    { "rule": "*-order", "severity": "off", "fixable": true },
+    { "rule": "*-dangle", "severity": "off", "fixable": true },
+    { "rule": "*-newline", "severity": "off", "fixable": true },
+    { "rule": "*quotes", "severity": "off", "fixable": true },
+    { "rule": "*semi", "severity": "off", "fixable": true }
+  ],
+
   // Enable eslint for all supported languages
-  "eslint.format.enable": true,
   "eslint.validate": [
     "javascript",
     "javascriptreact",
     "typescript",
     "typescriptreact",
-    "vue",
     "html",
     "markdown",
     "json",
     "jsonc",
-    "yaml",
-    "toml",
-    "xml",
-    "gql",
-    "graphql",
-    "astro",
-    "css",
-    "less",
-    "scss",
-    "pcss",
-    "postcss",
-    "github-actions-workflow"
+    "yaml"
   ],
-  // Exclude .claude and .agents from ESLint
-  "eslint.options": {
-    "ignorePattern": [".claude/**/*", ".agents/**/*"]
+
+  // TypeScript
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.enablePromptUseWorkspaceTsdk": true,
+
+  // Tailwind CSS
+  "files.associations": {
+    "*.css": "tailwindcss"
   },
-  // Exclude from file watcher
-  "files.watcherExclude": {
-    ".claude/**": true,
-    ".agents/**": true
+  "tailwindCSS.experimental.classRegex": [
+    ["cva\\(([^)]*)\\)", "[\"'`]([^\"'`]*).*?[\"'`]"],
+    ["cx\\(([^)]*)\\)", "(?:'|\"|`)([^']*)(?:'|\"|`)"]
+  ],
+
+  // Search exclusions
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/dist": true,
+    "**/.output": true,
+    "**/.turbo": true,
+    "**/coverage": true
   }
 }

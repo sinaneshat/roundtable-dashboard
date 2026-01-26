@@ -1,12 +1,10 @@
+/**
+ * lint-staged configuration
+ * Uses turbo for parallel lint and type-check across all packages
+ */
 module.exports = {
-  'apps/api/**/*.ts': (files) => [
-    `cd apps/api && eslint --fix --no-warn-ignored ${files.map(f => f.replace(/^.*apps\/api\//, '')).join(' ')}`,
+  '*.{ts,tsx}': () => [
+    'bun run lint:fix',
+    'bun run check-types',
   ],
-  'apps/web/**/*.{ts,tsx}': (files) => [
-    `cd apps/web && eslint --fix --no-warn-ignored ${files.map(f => f.replace(/^.*apps\/web\//, '')).join(' ')}`,
-  ],
-  'packages/shared/**/*.ts': (files) => [
-    `cd packages/shared && eslint --fix --no-warn-ignored ${files.map(f => f.replace(/^.*packages\/shared\//, '')).join(' ')}`,
-  ],
-  '*.{ts,tsx}': () => 'bun run check-types',
 };
